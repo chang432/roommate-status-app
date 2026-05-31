@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>York Terrace Roomie Status · Login</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="card">
+    <!-- Roof brandmark for a homey touch -->
+    <div class="brandmark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 11.5 12 4l9 7.5" />
+        <path d="M5 10.5V20h14v-9.5" />
+        <path d="M10 20v-5h4v5" />
+      </svg>
+    </div>
+
+    <h1 class="title">York Terrace<br />Roomie Status</h1>
+    <p class="subtitle">Welcome home — pick your name to sign in.</p>
+
+    <!-- Roommate name slider: scroll/swipe horizontally, tap to select -->
+    <div class="roomies">
+      <span class="field-label">Who's logging in?</span>
+      <div class="roomies-track" id="roomies">
+        <button class="roomie" type="button"><span class="avatar av-1">A</span><span class="name">Andre</span></button>
+        <button class="roomie is-selected" type="button"><span class="avatar av-2">J</span><span class="name">Jordan</span></button>
+        <button class="roomie" type="button"><span class="avatar av-3">M</span><span class="name">Maya</span></button>
+        <button class="roomie" type="button"><span class="avatar av-4">S</span><span class="name">Sam</span></button>
+        <button class="roomie" type="button"><span class="avatar av-5">P</span><span class="name">Priya</span></button>
+        <button class="roomie" type="button"><span class="avatar av-6">L</span><span class="name">Leo</span></button>
+      </div>
+    </div>
+
+    <!-- Password -->
+    <div class="input-wrap">
+      <label class="field-label" for="password">Password</label>
+      <input class="input" id="password" type="password" placeholder="Enter your password" />
+    </div>
+
+    <button class="btn" type="button">Sign in</button>
+
+    <p class="footnote">Just the six of us · 1024 York Terrace</p>
+  </main>
+
+  <script>
+    // Mockup-only interaction: clicking a roommate card selects it.
+    const track = document.getElementById('roomies');
+    track.addEventListener('click', (e) => {
+      const card = e.target.closest('.roomie');
+      if (!card) return;
+      track.querySelectorAll('.roomie').forEach(r => r.classList.remove('is-selected'));
+      card.classList.add('is-selected');
+      card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
+  </script>
+</body>
+</html>

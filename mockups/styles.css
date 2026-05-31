@@ -1,0 +1,219 @@
+/* Shared cozy/minimal theme for the York Terrace Roomie Status mockups.
+   Kept in one file so every mockup page reuses the same tokens & components. */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Nunito:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Warm, homey palette */
+  --bg-top: #f6ecdd;
+  --bg-bottom: #efdfca;
+  --card: #fffdf8;
+  --ink: #3d342a;          /* warm near-black for text */
+  --ink-soft: #8a7c6a;     /* muted warm grey for secondary text */
+  --line: #e7dccb;         /* hairline borders */
+  --accent: #c97b5a;       /* terracotta */
+  --accent-deep: #b3613f;
+  --accent-soft: #f3e1d6;  /* terracotta tint */
+  --sage: #8a9a7b;         /* secondary accent */
+
+  --radius-lg: 28px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 18px 50px -18px rgba(94, 66, 41, 0.35);
+  --shadow-soft: 0 6px 18px -8px rgba(94, 66, 41, 0.3);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: 'Nunito', system-ui, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 600px at 80% -10%, #fff6ea 0%, transparent 60%),
+    linear-gradient(160deg, var(--bg-top), var(--bg-bottom));
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Card shell --------------------------------------------------------- */
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 40px 34px 34px;
+}
+
+/* Little roof motif above the title for the "household" feel */
+.brandmark {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+.brandmark svg { width: 30px; height: 30px; }
+
+.title {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 28px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-align: center;
+  margin: 0 0 6px;
+}
+.subtitle {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  margin: 0 0 28px;
+}
+
+/* --- Field labels ------------------------------------------------------- */
+.field-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 10px 2px;
+}
+
+/* --- Roommate name slider ---------------------------------------------- */
+.roomies {
+  position: relative;
+  margin-bottom: 24px;
+}
+.roomies-track {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 6px 2px 14px;
+  scrollbar-width: none;
+}
+.roomies-track::-webkit-scrollbar { display: none; }
+
+.roomie {
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  width: 92px;
+  padding: 14px 10px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fff;
+  cursor: pointer;
+  text-align: center;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.roomie:hover { transform: translateY(-2px); }
+
+.roomie .avatar {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 9px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: 'Fraunces', serif;
+  font-size: 19px;
+  font-weight: 600;
+  color: #fff;
+}
+.roomie .name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Selected state */
+.roomie.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-2px);
+}
+
+/* Avatar color rotation for warmth */
+.av-1 { background: #c97b5a; }
+.av-2 { background: #8a9a7b; }
+.av-3 { background: #d6a35c; }
+.av-4 { background: #9d7b9c; }
+.av-5 { background: #6f9a9a; }
+.av-6 { background: #c4736f; }
+
+/* Soft fades on the slider edges to hint scrollability */
+.roomies::before,
+.roomies::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 14px;
+  width: 26px;
+  pointer-events: none;
+  z-index: 1;
+}
+.roomies::before { left: 0;  background: linear-gradient(90deg, var(--card), transparent); }
+.roomies::after  { right: 0; background: linear-gradient(270deg, var(--card), transparent); }
+
+/* --- Password field ----------------------------------------------------- */
+.input-wrap {
+  position: relative;
+  margin-bottom: 26px;
+}
+.input {
+  width: 100%;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.input::placeholder { color: #b6a995; }
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(201, 123, 90, 0.14);
+}
+
+/* --- Login button ------------------------------------------------------- */
+.btn {
+  width: 100%;
+  font: inherit;
+  font-weight: 700;
+  font-size: 15.5px;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 15px 16px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: background .18s ease, transform .12s ease;
+}
+.btn:hover { background: var(--accent-deep); }
+.btn:active { transform: translateY(1px); }
+
+.footnote {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  margin: 18px 0 0;
+}
