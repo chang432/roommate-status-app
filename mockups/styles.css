@@ -217,3 +217,255 @@ body {
   font-size: 12.5px;
   margin: 18px 0 0;
 }
+
+/* ======================================================================
+   STATUS PAGE
+   ====================================================================== */
+
+/* The status page needs a wider, top-aligned layout than the login card. */
+body.status-body {
+  display: block;
+  padding: 0;
+}
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 40px 22px 64px;
+}
+
+/* --- Page header -------------------------------------------------------- */
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.page-head .brandmark { margin: 0; width: 46px; height: 46px; }
+.page-head .brandmark svg { width: 26px; height: 26px; }
+.page-title {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: -0.01em;
+  margin: 0;
+  line-height: 1.1;
+}
+.page-sub {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  margin: 2px 0 0;
+}
+
+/* --- "3+ available" notification banner -------------------------------- */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(120deg, #eef3e7, #e7efdd);
+  border: 1px solid #d6e2c5;
+  color: #50603f;
+  border-radius: var(--radius-md);
+  padding: 13px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 22px 0 26px;
+}
+.banner .pulse {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--status-green, #5aa469);
+  box-shadow: 0 0 0 0 rgba(90, 164, 105, .6);
+  animation: pulse 1.8s infinite;
+  flex: 0 0 auto;
+}
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(90, 164, 105, .5); }
+  70%  { box-shadow: 0 0 0 9px rgba(90, 164, 105, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(90, 164, 105, 0); }
+}
+
+/* --- Section labels ----------------------------------------------------- */
+.section-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 2px 12px;
+}
+
+/* --- Status dots -------------------------------------------------------- */
+:root {
+  --status-green: #5aa469;   /* available */
+  --status-red:   #cf6b5e;   /* not available */
+  --status-purple:#9a78b8;   /* custom */
+}
+.dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.dot.available { background: var(--status-green); }
+.dot.busy      { background: var(--status-red); }
+.dot.custom    { background: var(--status-purple); }
+
+/* --- Roommate status cards (rectangle grid) ---------------------------- */
+.roomie-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.status-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  padding: 18px 18px;
+}
+.status-card .info { min-width: 0; }
+.status-card .who {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.status-card .who .name {
+  font-weight: 700;
+  font-size: 15.5px;
+  color: var(--ink);
+}
+.status-card .status-text {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- "You" card (full width, highlighted, with edit) ------------------- */
+.you-card {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, #fffdf8, var(--accent-soft));
+  border: 1.5px solid #ecc9b6;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 22px 22px;
+  margin-bottom: 26px;
+}
+.you-card .avatar {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: 'Fraunces', serif;
+  font-size: 23px; font-weight: 600; color: #fff;
+  flex: 0 0 auto;
+}
+.you-card .info { flex: 1 1 auto; min-width: 0; }
+.you-card .who .name { font-size: 18px; }
+.you-card .you-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  background: #fff;
+  border: 1px solid #ecc9b6;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.you-card .status-text { font-size: 14.5px; white-space: normal; }
+
+/* Edit button (outline style to differ from the primary login button) */
+.btn-edit {
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent-deep);
+  background: #fff;
+  border: 1.5px solid #e6c2ad;
+  border-radius: 999px;
+  padding: 9px 16px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background .18s ease, transform .12s ease;
+}
+.btn-edit:hover { background: #fff3ec; }
+.btn-edit:active { transform: translateY(1px); }
+
+/* --- Edit panel (revealed when editing your status) -------------------- */
+.edit-panel {
+  grid-column: 1 / -1;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  padding: 20px;
+  margin: -10px 0 26px;
+}
+.edit-panel[hidden] { display: none; }
+.edit-panel h3 {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 16px;
+  margin: 0 0 14px;
+}
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 13px 15px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.choice:hover { border-color: #d9c9b3; }
+.choice.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.choice .custom-input {
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 14px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+}
+.choice .custom-input:focus { outline: none; }
+.edit-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+.btn-save {
+  flex: 1 1 auto;
+  font: inherit; font-weight: 700; font-size: 15px;
+  color: #fff; background: var(--accent); border: none;
+  border-radius: var(--radius-sm); padding: 13px; cursor: pointer;
+}
+.btn-save:hover { background: var(--accent-deep); }
+.btn-cancel {
+  font: inherit; font-weight: 700; font-size: 15px;
+  color: var(--ink-soft); background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm); padding: 13px 18px; cursor: pointer;
+}
+
+/* Stack the grid on small screens */
+@media (max-width: 520px) {
+  .roomie-grid { grid-template-columns: 1fr; }
+  .you-card { flex-wrap: wrap; }
+  .you-card .btn-edit { width: 100%; }
+}

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>York Terrace Roomie Status</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="status-body">
+  <div class="page">
+
+    <!-- Header -->
+    <header class="page-head">
+      <div class="brandmark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 11.5 12 4l9 7.5" />
+          <path d="M5 10.5V20h14v-9.5" />
+          <path d="M10 20v-5h4v5" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="page-title">York Terrace Roomie Status</h1>
+        <p class="page-sub">Tuesday evening · who's around?</p>
+      </div>
+    </header>
+
+    <!-- Notification banner: shown when 3+ roommates are available -->
+    <div class="banner">
+      <span class="pulse"></span>
+      3 roomies are free to hang right now — perfect time to gather!
+    </div>
+
+    <!-- YOU: top card, highlighted, with edit control -->
+    <div class="you-card" id="you">
+      <span class="avatar av-2">J</span>
+      <div class="info">
+        <div class="who">
+          <span class="dot available" id="you-dot"></span>
+          <span class="name">Jordan</span>
+          <span class="you-tag">You</span>
+        </div>
+        <div class="status-text" id="you-status">Available to hang</div>
+      </div>
+      <button class="btn-edit" id="edit-btn" type="button">Edit status</button>
+    </div>
+
+    <!-- Edit panel: revealed by the Edit button -->
+    <div class="edit-panel" id="edit-panel" hidden>
+      <h3>Set your status</h3>
+
+      <button class="choice is-active" type="button" data-status="available" data-label="Available to hang">
+        <span class="dot available"></span> Available to hang
+      </button>
+
+      <button class="choice" type="button" data-status="busy" data-label="Busy with something">
+        <span class="dot busy"></span> Busy with something
+      </button>
+
+      <label class="choice" data-status="custom">
+        <span class="dot custom"></span>
+        <input class="custom-input" id="custom-input" type="text" placeholder="Custom message…" />
+      </label>
+
+      <div class="edit-actions">
+        <button class="btn-save" id="save-btn" type="button">Save status</button>
+        <button class="btn-cancel" id="cancel-btn" type="button">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Everyone else -->
+    <p class="section-label">The household</p>
+    <div class="roomie-grid">
+
+      <div class="status-card">
+        <div class="info">
+          <div class="who"><span class="dot available"></span><span class="name">Andre</span></div>
+          <div class="status-text">Available to hang</div>
+        </div>
+      </div>
+
+      <div class="status-card">
+        <div class="info">
+          <div class="who"><span class="dot custom"></span><span class="name">Maya</span></div>
+          <div class="status-text">At the gym till 7</div>
+        </div>
+      </div>
+
+      <div class="status-card">
+        <div class="info">
+          <div class="who"><span class="dot busy"></span><span class="name">Sam</span></div>
+          <div class="status-text">Busy with something</div>
+        </div>
+      </div>
+
+      <div class="status-card">
+        <div class="info">
+          <div class="who"><span class="dot available"></span><span class="name">Priya</span></div>
+          <div class="status-text">Available to hang</div>
+        </div>
+      </div>
+
+      <div class="status-card">
+        <div class="info">
+          <div class="who"><span class="dot busy"></span><span class="name">Leo</span></div>
+          <div class="status-text">Busy with something</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Mockup-only interaction: open the edit panel, pick a status, and
+    // reflect the choice back onto the "You" card.
+    const panel   = document.getElementById('edit-panel');
+    const youDot  = document.getElementById('you-dot');
+    const youText = document.getElementById('you-status');
+    const choices = panel.querySelectorAll('.choice');
+    const customInput = document.getElementById('custom-input');
+
+    document.getElementById('edit-btn').addEventListener('click', () => { panel.hidden = false; });
+    document.getElementById('cancel-btn').addEventListener('click', () => { panel.hidden = true; });
+
+    // Highlight the chosen option.
+    choices.forEach(choice => {
+      choice.addEventListener('click', () => {
+        choices.forEach(c => c.classList.remove('is-active'));
+        choice.classList.add('is-active');
+        if (choice.dataset.status === 'custom') customInput.focus();
+      });
+    });
+
+    document.getElementById('save-btn').addEventListener('click', () => {
+      const active = panel.querySelector('.choice.is-active');
+      const status = active.dataset.status;          // available | busy | custom
+      const label  = status === 'custom'
+        ? (customInput.value.trim() || 'Custom message')
+        : active.dataset.label;
+
+      youDot.className = 'dot ' + status;            // recolor the dot
+      youText.textContent = label;
+      panel.hidden = true;
+    });
+  </script>
+</body>
+</html>
