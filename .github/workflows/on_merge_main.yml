@@ -102,7 +102,7 @@ jobs:
             EOF
             cat > /root/.aws/config <<EOF
             [default]
-            region=${AWS_REGION}
+            region=${AWS_REGION:-us-east-1}
             EOF
 
             # --- Clone the repo if it isn't already on the VPS --------------

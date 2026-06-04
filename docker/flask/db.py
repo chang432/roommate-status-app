@@ -56,6 +56,18 @@ _SEED = [
 _table = None
 _table_lock = threading.Lock()
 
+# Region the DynamoDB table lives in. Falls back to us-east-1 when the standard
+# AWS region vars are unset/blank so a missing/empty AWS_REGION can't leave
+# boto3 with an empty signing region (which fails as InvalidSignatureException:
+# "Credential should be scoped to a valid region").
+DEFAULT_REGION = "us-east-1"
+
+
+def _region() -> str:
+    """Resolve the AWS region, defaulting to us-east-1 when none is configured."""
+    region = (os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "").strip()
+    return region or DEFAULT_REGION
+
 
 def _get_table():
     """Return the cached DynamoDB Table resource, creating it on first use."""
@@ -63,7 +75,7 @@ def _get_table():
     if _table is None:
         with _table_lock:
             if _table is None:
-                _table = boto3.resource("dynamodb").Table(TABLE_NAME)
+                _table = boto3.resource("dynamodb", region_name=_region()).Table(TABLE_NAME)
     return _table
 
 
