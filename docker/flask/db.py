@@ -43,11 +43,11 @@ TABLE_NAME = os.environ.get("ROOMMATE_TABLE", "RoommateStatus")
 # Initial household roster. Used only by seed()/reset(); once seeded, DynamoDB
 # is the source of truth and these values are not consulted again.
 _SEED = [
-    {"id": "andre", "name": "Andre", "status": "available", "statusText": ""},
-    {"id": "sheryl", "name": "Sheryl", "status": "available", "statusText": ""},
-    {"id": "kayla", "name": "Kayla", "status": "custom", "statusText": "At the gym till 7"},
+    {"id": "andre", "name": "Andre", "status": "busy", "statusText": ""},
+    {"id": "sheryl", "name": "Sheryl", "status": "busy", "statusText": ""},
+    {"id": "kayla", "name": "Kayla", "status": "busy", "statusText": ""},
     {"id": "ting", "name": "Ting", "status": "busy", "statusText": ""},
-    {"id": "isabella", "name": "Isabella", "status": "available", "statusText": ""},
+    {"id": "isabella", "name": "Isabella", "status": "busy", "statusText": ""},
 ]
 
 # The boto3 Table resource is created lazily and cached. Lazy creation keeps
