@@ -1,8 +1,8 @@
 # Roomie Status — Flask Backend
 
-A small Flask server implementing the API the frontend calls. Data is a simple
-in-memory mock (`db.py`) for now; swap that module for a real database later
-without touching the routes.
+A small Flask server implementing the API the frontend calls. Data is stored in
+DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
+`db.py` so the routes stay storage-agnostic.
 
 ## Endpoints
 
@@ -19,12 +19,30 @@ password **`roomie`** until real auth is added.
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).
 
+## Data store
+
+Backed by the DynamoDB table from `infrastructure/dynamodb-table.yaml` (one item
+per roommate, keyed by `id`). Configuration:
+
+| Env var          | Default          | Purpose                              |
+| ---------------- | ---------------- | ------------------------------------ |
+| `ROOMMATE_TABLE` | `RoommateStatus` | Table name                           |
+| `AWS_REGION`     | —                | Region (or use your AWS config/SSO)  |
+
+Credentials resolve via the standard AWS chain. The deploy script lives in
+`infrastructure/`; once the table exists, seed the initial household **once**:
+
+```bash
+python seed.py           # idempotent — safe to re-run
+```
+
 ## Run locally
 
 ```bash
 cd docker/flask
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+python seed.py           # one-time, after the table is deployed
 python app.py            # serves on http://localhost:8000
 ```
 
@@ -46,8 +64,10 @@ docker run -p 8000:8000 roomie-backend   # Gunicorn on :8000
 
 ## Tests
 
+DynamoDB is mocked with `moto`, so tests need no AWS access:
+
 ```bash
 cd docker/flask
-pip install pytest
+pip install -r requirements-dev.txt
 python -m pytest -v
 ```

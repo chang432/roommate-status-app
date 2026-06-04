@@ -4,12 +4,40 @@ Run with:  python -m pytest   (or: python test_app.py)
 
 Covers the three frontend-facing endpoints plus their error paths, asserting
 the exact response shapes the frontend (frontend/src/api/client.js) depends on.
+DynamoDB is mocked with moto, so these run hermetically with no real AWS calls.
 """
 
+import os
+
+# moto and boto3 need *some* region/credentials present before any client is
+# built; these dummy values are never sent anywhere (moto intercepts them).
+os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
+os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")
+
+import boto3
 import pytest
+from moto import mock_aws
 
 import db
 from app import create_app
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _dynamodb():
+    """Stand up a mocked DynamoDB table for the whole test session.
+
+    Mirrors the key schema in infrastructure/dynamodb-table.yaml. Kept open for
+    the session so db.py's cached table resource stays valid across tests.
+    """
+    with mock_aws():
+        boto3.resource("dynamodb").create_table(
+            TableName=db.TABLE_NAME,
+            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+            AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        yield
 
 
 @pytest.fixture()

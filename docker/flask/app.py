@@ -7,8 +7,8 @@ frontend/src/api/client.js):
     GET  /api/roommates                -> [ { "id", "name", "status", "statusText" }, ... ]
     PUT  /api/roommates/<id>/status    -> the full, updated household list
 
-Data is backed by the in-memory mock in db.py; replace that module with a real
-datastore later without touching these routes.
+Data is backed by DynamoDB via db.py; all datastore access is encapsulated in
+that module so these routes stay storage-agnostic.
 """
 
 from __future__ import annotations

@@ -18,6 +18,11 @@ services:
       - "8000"
     ports:
       - "8000:8000"
+    environment:
+      # DynamoDB table the backend reads/writes (infrastructure/dynamodb-table.yaml).
+      - ROOMMATE_TABLE=${ROOMMATE_TABLE:-RoommateStatus}
+      # Region for boto3. Override to match where the table was deployed.
+      - AWS_REGION=${AWS_REGION:-us-east-1}
     volumes:
       # Mount the host's AWS credentials read-only so boto3 in the Flask app can
       # use them. The container runs as root, so they land in /root/.aws where
