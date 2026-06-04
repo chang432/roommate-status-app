@@ -21,6 +21,9 @@ availability to hang out. Built from the mockups in `../mockups`.
 
 ## Getting started
 
+Start the [Flask backend](../docker/flask) first (it serves the API on
+`http://localhost:8000`, the Vite proxy target), then run the frontend:
+
 ```bash
 cd frontend
 npm install
@@ -32,8 +35,8 @@ Priya, Leo) with the demo password **`roomie`**.
 
 ## Backend / API
 
-There is no server yet. All backend calls live in `src/api/client.js`, which
-targets placeholder REST endpoints under `/api`:
+All backend calls live in `src/api/client.js`, which targets the Flask server
+(`../docker/flask`) under `/api`:
 
 | Function            | Method & path                     |
 | ------------------- | --------------------------------- |
@@ -41,13 +44,11 @@ targets placeholder REST endpoints under `/api`:
 | `getRoommates`      | `GET /api/roommates`              |
 | `updateStatus`      | `PUT /api/roommates/:id/status`   |
 
-Until a real backend exists, these fall back to an in-memory mock
-(`src/api/mock.js`) so the UI is fully functional; status changes persist to
-`localStorage` for the session. To point at a real API:
+In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
+Point at a different server with `VITE_API_TARGET`:
 
 ```bash
-# Run your server behind the Vite proxy and disable the mock
-VITE_USE_MOCK=false VITE_API_TARGET=http://localhost:8000 npm run dev
+VITE_API_TARGET=http://localhost:9000 npm run dev
 ```
 
 ## Scripts
