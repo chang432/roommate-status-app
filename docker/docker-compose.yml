@@ -3,7 +3,7 @@
 #
 # Run from the docker/ folder:
 #   docker compose up --build
-# then open http://localhost:8080
+# then open http://localhost
 
 services:
   flask:
@@ -39,7 +39,9 @@ services:
     image: roomie-frontend
     container_name: roomie-frontend
     ports:
-      - "8080:80"
+      # Serve on the host's default HTTP port so the site is reachable at the
+      # bare host/IP (no :port suffix needed).
+      - "80:80"
     depends_on:
       - flask
     restart: unless-stopped

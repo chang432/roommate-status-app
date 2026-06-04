@@ -20,7 +20,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # --- Config -----------------------------------------------------------------
 COMPOSE_FILE="$ROOT_DIR/docker/docker-compose.yml"
 BACKEND_PORT="8000"
-FRONTEND_PORT="8080"
+FRONTEND_PORT="80"
 HEALTH_URL="http://localhost:${BACKEND_PORT}/api/health"
 APP_URL="http://localhost:${FRONTEND_PORT}"
 
