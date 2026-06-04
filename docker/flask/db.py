@@ -18,6 +18,7 @@ who already exists, so it is safe to re-run.
 from __future__ import annotations
 
 import os
+import re
 import threading
 
 import boto3
@@ -62,11 +63,18 @@ _table_lock = threading.Lock()
 # "Credential should be scoped to a valid region").
 DEFAULT_REGION = "us-east-1"
 
+# AWS region identifiers look like "us-east-1" / "eu-central-1". Anything that
+# doesn't match this shape (blank, accidental quotes, internal whitespace, a
+# typo) is treated as unset so we fall back to DEFAULT_REGION rather than sign
+# requests with a bad region — which AWS rejects as InvalidSignatureException:
+# "Credential should be scoped to a valid region".
+_REGION_RE = re.compile(r"^[a-z]{2}-[a-z]+-\d+$")
+
 
 def _region() -> str:
-    """Resolve the AWS region, defaulting to us-east-1 when none is configured."""
+    """Resolve the AWS region, defaulting to us-east-1 when none is valid."""
     region = (os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "").strip()
-    return region or DEFAULT_REGION
+    return region if _REGION_RE.match(region) else DEFAULT_REGION
 
 
 def _get_table():

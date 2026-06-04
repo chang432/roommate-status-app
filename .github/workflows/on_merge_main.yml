@@ -128,7 +128,11 @@ jobs:
             # logs in the foreground, and tears the stack down on exit). `up -d`
             # returns immediately and leaves the stack running.
             COMPOSE_FILE="${APP_DIR}/docker/docker-compose.yml"
-            docker compose -f "${COMPOSE_FILE}" up --build -d
+            # Clean rebuild + restart on every deploy: tear the old stack down
+            # first, then rebuild the images from the freshly pulled source and
+            # force-recreate the containers so nothing stale survives.
+            docker compose -f "${COMPOSE_FILE}" down --remove-orphans || true
+            docker compose -f "${COMPOSE_FILE}" up --build -d --force-recreate
 
             # --- Confirm the stack actually came up -------------------------
             echo "Waiting for backend health (up to ~4 min)…"

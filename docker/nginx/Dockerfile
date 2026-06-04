@@ -25,6 +25,11 @@ COPY docker/nginx/nginx.conf /etc/nginx/conf.d/default.conf
 # Static assets produced by the build stage.
 COPY --from=build /app/dist /usr/share/nginx/html
 
+# Make every asset world-readable and dirs traversable. The build stage's umask
+# can otherwise leave files the nginx worker (user "nginx") can't open, which
+# shows up as: open() ".../roof.svg" failed (13: Permission denied).
+RUN chmod -R a+rX /usr/share/nginx/html
+
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
