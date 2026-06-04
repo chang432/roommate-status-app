@@ -49,19 +49,19 @@ def client():
 
 
 def test_login_success(client):
-    res = client.post("/api/login", json={"name": "Jordan", "password": "roomie"})
+    res = client.post("/api/login", json={"name": "Sheryl", "password": "roomie"})
     assert res.status_code == 200
-    assert res.get_json() == {"user": {"id": "jordan", "name": "Jordan"}}
+    assert res.get_json() == {"user": {"id": "sheryl", "name": "Sheryl"}}
 
 
 def test_login_is_case_insensitive(client):
-    res = client.post("/api/login", json={"name": "  jOrDaN ", "password": "roomie"})
+    res = client.post("/api/login", json={"name": "  sHeRyL ", "password": "roomie"})
     assert res.status_code == 200
-    assert res.get_json()["user"]["id"] == "jordan"
+    assert res.get_json()["user"]["id"] == "sheryl"
 
 
 def test_login_bad_password(client):
-    res = client.post("/api/login", json={"name": "Jordan", "password": "nope"})
+    res = client.post("/api/login", json={"name": "Sheryl", "password": "nope"})
     assert res.status_code == 401
     assert "error" in res.get_json()
 
@@ -75,35 +75,35 @@ def test_get_roommates(client):
     res = client.get("/api/roommates")
     assert res.status_code == 200
     data = res.get_json()
-    assert len(data) == 6
+    assert len(data) == 5
     # Shape the frontend relies on.
     assert set(data[0]) == {"id", "name", "status", "statusText"}
 
 
 def test_update_status_to_busy_clears_text(client):
     res = client.put(
-        "/api/roommates/jordan/status",
+        "/api/roommates/sheryl/status",
         json={"status": "busy", "statusText": "ignored"},
     )
     assert res.status_code == 200
-    jordan = next(r for r in res.get_json() if r["id"] == "jordan")
-    assert jordan["status"] == "busy"
-    assert jordan["statusText"] == ""  # fixed statuses drop custom text
+    sheryl = next(r for r in res.get_json() if r["id"] == "sheryl")
+    assert sheryl["status"] == "busy"
+    assert sheryl["statusText"] == ""  # fixed statuses drop custom text
 
 
 def test_update_status_custom_keeps_text(client):
     res = client.put(
-        "/api/roommates/sam/status",
+        "/api/roommates/ting/status",
         json={"status": "custom", "statusText": "  Cooking dinner  "},
     )
     assert res.status_code == 200
-    sam = next(r for r in res.get_json() if r["id"] == "sam")
-    assert sam["status"] == "custom"
-    assert sam["statusText"] == "Cooking dinner"  # trimmed, preserved
+    ting = next(r for r in res.get_json() if r["id"] == "ting")
+    assert ting["status"] == "custom"
+    assert ting["statusText"] == "Cooking dinner"  # trimmed, preserved
 
 
 def test_update_status_invalid(client):
-    res = client.put("/api/roommates/jordan/status", json={"status": "napping"})
+    res = client.put("/api/roommates/sheryl/status", json={"status": "napping"})
     assert res.status_code == 400
 
 

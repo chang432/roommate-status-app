@@ -44,11 +44,10 @@ TABLE_NAME = os.environ.get("ROOMMATE_TABLE", "RoommateStatus")
 # is the source of truth and these values are not consulted again.
 _SEED = [
     {"id": "andre", "name": "Andre", "status": "available", "statusText": ""},
-    {"id": "jordan", "name": "Jordan", "status": "available", "statusText": ""},
-    {"id": "maya", "name": "Maya", "status": "custom", "statusText": "At the gym till 7"},
-    {"id": "sam", "name": "Sam", "status": "busy", "statusText": ""},
-    {"id": "priya", "name": "Priya", "status": "available", "statusText": ""},
-    {"id": "leo", "name": "Leo", "status": "busy", "statusText": ""},
+    {"id": "sheryl", "name": "Sheryl", "status": "available", "statusText": ""},
+    {"id": "kayla", "name": "Kayla", "status": "custom", "statusText": "At the gym till 7"},
+    {"id": "ting", "name": "Ting", "status": "busy", "statusText": ""},
+    {"id": "isabella", "name": "Isabella", "status": "available", "statusText": ""},
 ]
 
 # The boto3 Table resource is created lazily and cached. Lazy creation keeps
