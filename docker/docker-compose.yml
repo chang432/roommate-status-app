@@ -1,0 +1,35 @@
+# Builds and runs the full Roomie Status stack: the Flask backend and the
+# nginx container that serves the React frontend and proxies /api to Flask.
+#
+# Run from the docker/ folder:
+#   docker compose up --build
+# then open http://localhost:8080
+
+services:
+  flask:
+    build:
+      # Flask Dockerfile and source live in docker/flask.
+      context: ./flask
+    image: roomie-backend
+    container_name: roomie-backend
+    expose:
+      # Reachable to other compose services (nginx) as flask:8000. Also mapped
+      # to the host below for direct backend access / debugging.
+      - "8000"
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  nginx:
+    build:
+      # Context is the repo root so the build can reach frontend/ and the
+      # nginx config under docker/nginx.
+      context: ..
+      dockerfile: docker/nginx/Dockerfile
+    image: roomie-frontend
+    container_name: roomie-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - flask
+    restart: unless-stopped

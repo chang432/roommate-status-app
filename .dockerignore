@@ -1,0 +1,14 @@
+# Used by the nginx image build (context = repo root). Keep the build context
+# small and avoid copying host artifacts that the multi-stage build rebuilds.
+**/node_modules
+**/.venv
+**/venv
+**/__pycache__
+**/.pytest_cache
+frontend/dist
+.git
+.DS_Store
+**/*.md
+infrastructure
+mockups
+docker/flask
