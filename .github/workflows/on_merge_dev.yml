@@ -1,0 +1,128 @@
+name: Deploy dev app to Hetzner "dev" VPS
+
+# Single workflow that runs on a merge to the dev branch. It:
+#   1. Finds the Hetzner VPS named "dev" (fails the run if it doesn't exist).
+#   2. SSHes in and clones this repo (only if it isn't already present).
+#   3. Rebuilds and runs the stack via start.sh (detached, infra step skipped).
+on:
+  push:
+    branches: [ "dev" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-dev-vps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup hcloud CLI
+        run: |
+          set -euo pipefail
+
+          HCLOUD_VERSION="$(curl -fsSL https://api.github.com/repos/hetznercloud/cli/releases/latest | jq -r .tag_name)"
+          curl -fsSL "https://github.com/hetznercloud/cli/releases/download/${HCLOUD_VERSION}/hcloud-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          sudo tar -C /usr/local/bin -xzf /tmp/hcloud.tar.gz hcloud
+          rm /tmp/hcloud.tar.gz
+          hcloud version
+
+          HCLOUD_TOKEN=${{ secrets.HCLOUD_TOKEN }} hcloud context create --token-from-env roommate-status-ci-context
+
+      - name: Find the "dev" VPS
+        id: find_dev_vps
+        run: |
+          set -euo pipefail
+
+          # hcloud server describe accepts a name or id; a non-zero exit means
+          # there is no server named "dev".
+          if ! hcloud server describe dev -o json > /tmp/dev_vps.json 2>/dev/null; then
+            echo "::error::No Hetzner VPS named 'dev' exists. Create it before deploying."
+            exit 1
+          fi
+
+          DEV_VPS_IP="$(jq -r '.public_net.ipv4.ip' /tmp/dev_vps.json)"
+          if [ -z "${DEV_VPS_IP}" ] || [ "${DEV_VPS_IP}" = "null" ]; then
+            echo "::error::Found a 'dev' VPS but it has no public IPv4 address."
+            exit 1
+          fi
+
+          echo "dev VPS public IP: ${DEV_VPS_IP}"
+          echo "dev_vps_ip=${DEV_VPS_IP}" >> "$GITHUB_OUTPUT"
+
+      - name: SSH in, clone if needed, rebuild and run
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          REPO_FULL: ${{ github.repository }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          BRANCH: dev
+          GH_PAT_REPO_READ: ${{ secrets.GH_PAT_REPO_READ }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        with:
+          host: ${{ steps.find_dev_vps.outputs.dev_vps_ip }}
+          username: root
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          envs: REPO_FULL,REPO_NAME,BRANCH,GH_PAT_REPO_READ,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION
+          script: |
+            set -euo pipefail
+
+            # --- AWS credentials for the Flask container --------------------
+            # docker-compose mounts ${HOME}/.aws (=/root/.aws as root) read-only
+            # into the Flask container so boto3 can reach DynamoDB. Materialize
+            # the creds passed from GitHub secrets so that mount is populated.
+            umask 077
+            mkdir -p /root/.aws
+            cat > /root/.aws/credentials <<EOF
+            [default]
+            aws_access_key_id=${AWS_ACCESS_KEY_ID}
+            aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}
+            EOF
+            cat > /root/.aws/config <<EOF
+            [default]
+            region=${AWS_REGION}
+            EOF
+
+            # --- Clone the repo if it isn't already on the VPS --------------
+            APP_DIR="/opt/${REPO_NAME}"
+            CLONE_URL="https://${GH_PAT_REPO_READ}@github.com/${REPO_FULL}.git"
+            if [ -d "${APP_DIR}/.git" ]; then
+              # Already cloned: fast-forward to the latest dev so the merge that
+              # triggered this run is what actually gets deployed.
+              echo "Repo already present at ${APP_DIR}; updating to origin/${BRANCH}."
+              cd "${APP_DIR}"
+              git remote set-url origin "${CLONE_URL}"
+              git fetch --no-tags origin "${BRANCH}"
+              git reset --hard "origin/${BRANCH}"
+            else
+              echo "Cloning ${REPO_FULL} (${BRANCH}) into ${APP_DIR}."
+              git clone --branch "${BRANCH}" "${CLONE_URL}" "${APP_DIR}"
+              cd "${APP_DIR}"
+            fi
+
+            # --- Rebuild and run the stack ----------------------------------
+            # Run the compose commands directly (detached) rather than start.sh,
+            # which is built for interactive local dev (it deploys infra, tails
+            # logs in the foreground, and tears the stack down on exit). `up -d`
+            # returns immediately and leaves the stack running.
+            COMPOSE_FILE="${APP_DIR}/docker/docker-compose.yml"
+            docker compose -f "${COMPOSE_FILE}" up --build -d
+
+            # --- Confirm the stack actually came up -------------------------
+            echo "Waiting for backend health (up to ~4 min)…"
+            ok=0
+            for _ in $(seq 1 120); do
+              if curl -fsS http://localhost:8000/api/health >/dev/null 2>&1; then
+                ok=1
+                break
+              fi
+              sleep 2
+            done
+
+            if [ "${ok}" -ne 1 ]; then
+              echo "Backend did not become healthy. Recent start.log:"
+              tail -n 60 "${APP_DIR}/start.log" || true
+              exit 1
+            fi
+            echo "Deploy succeeded; the dev stack is running."
