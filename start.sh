@@ -2,9 +2,10 @@
 #
 # start.sh — one command to run the whole stack for local development.
 #
-#   1. Builds the Flask backend Docker image and runs it in the background.
-#   2. Waits for the backend to become healthy.
-#   3. Installs frontend deps (if needed) and starts the React dev server.
+#   1. Deploys the DynamoDB CloudFormation stack via the infrastructure venv.
+#   2. Builds the Flask backend Docker image and runs it in the background.
+#   3. Waits for the backend to become healthy.
+#   4. Installs frontend deps (if needed) and starts the React dev server.
 #
 # The backend container is stopped automatically when you quit the dev server
 # (Ctrl+C). Run from anywhere: `./start.sh`.
@@ -38,7 +39,16 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# --- 1. Build & run the Flask backend ---------------------------------------
+# --- 1. Deploy the DynamoDB CloudFormation stack ----------------------------
+# The backend reads/writes the RoommateStatus table, so ensure it exists first.
+INFRA_DIR="$ROOT_DIR/infrastructure"
+INFRA_PYTHON="$INFRA_DIR/.venv/bin/python"
+[ -x "$INFRA_PYTHON" ] || die "Infrastructure venv not found at $INFRA_PYTHON. Create it: cd infrastructure && python -m venv .venv && .venv/bin/pip install -r requirements.txt"
+
+log "Deploying DynamoDB CloudFormation stack…"
+( cd "$INFRA_DIR" && "$INFRA_PYTHON" deploy.py )
+
+# --- 2. Build & run the Flask backend ---------------------------------------
 log "Building backend image ($IMAGE_NAME)…"
 docker build -t "$IMAGE_NAME" "$ROOT_DIR/docker/flask"
 
@@ -48,7 +58,7 @@ docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 log "Starting backend on http://localhost:${BACKEND_PORT}…"
 docker run -d --name "$CONTAINER_NAME" -p "${BACKEND_PORT}:8000" "$IMAGE_NAME" >/dev/null
 
-# --- 2. Wait for the backend to be healthy ----------------------------------
+# --- 3. Wait for the backend to be healthy ----------------------------------
 log "Waiting for backend to be ready…"
 for attempt in $(seq 1 30); do
   if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
@@ -62,7 +72,7 @@ for attempt in $(seq 1 30); do
   sleep 1
 done
 
-# --- 3. Install deps & run the frontend dev server --------------------------
+# --- 4. Install deps & run the frontend dev server --------------------------
 cd "$ROOT_DIR/frontend"
 
 if [ ! -d node_modules ]; then
