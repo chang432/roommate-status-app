@@ -49,7 +49,7 @@ services:
       # Public hostname the TLS cert is issued for. Required; the stack refuses
       # to start without it so Caddy never tries to provision a cert for a
       # placeholder. Each VPS sets its own (dev. vs apex).
-      - SITE_DOMAIN=${SITE_DOMAIN:?Set SITE_DOMAIN to the public hostname for TLS}
+      - SITE_DOMAIN=${SITE_DOMAIN:-dev.roomie-status.eu}
       # Region for the AWS SDK used by the route53 DNS plugin. Route 53 is
       # global, but the SDK still needs a region configured.
       - AWS_REGION=${AWS_REGION:-us-east-1}
