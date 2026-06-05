@@ -36,12 +36,12 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # Pick the deployment — this selects the template, stack name, and table.
-# Defaults to dev when --deployment is omitted.
-python deploy.py
-python deploy.py --deployment main
+# Defaults to dev when no flag is given.
+python deploy.py          # same as --dev
+python deploy.py --main
 
 # Optionally override the region or stack name:
-python deploy.py --deployment main --region us-east-1
+python deploy.py --main --region us-east-1
 ```
 
 The script creates the stack if it doesn't exist, updates it otherwise (a no-op
@@ -52,7 +52,8 @@ name and ARN.
 
 | Flag           | Default                  | Description                                  |
 | -------------- | ------------------------ | -------------------------------------------- |
-| `--deployment` | `dev`                    | `dev` or `main` — selects template + stack   |
+| `--dev`        | _(default)_              | Select the dev deployment (template + stack) |
+| `--main`       |                          | Select the main deployment (template + stack) |
 | `--stack-name` | per deployment           | Override the CloudFormation stack name       |
 | `--template`   | per deployment           | Override the template path                   |
 | `--region`     | from AWS config          | Target AWS region                            |

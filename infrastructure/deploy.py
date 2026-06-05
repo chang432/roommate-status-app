@@ -4,8 +4,8 @@
 There are two independent deployments, each with its own template and its own
 DynamoDB table (see dynamodb-table-dev.yaml / dynamodb-table-main.yaml):
 
-    --deployment dev   -> stack "roomie-dynamodb-dev",  table "RoommateStatus-dev"
-    --deployment main  -> stack "roomie-dynamodb-main", table "RoommateStatus-main"
+    --dev   -> stack "roomie-dynamodb-dev",  table "RoommateStatus-dev"
+    --main  -> stack "roomie-dynamodb-main", table "RoommateStatus-main"
 
 Creates the stack if it doesn't exist, otherwise updates it, then waits for the
 operation to finish and prints the stack outputs.
@@ -15,8 +15,8 @@ variables, a shared credentials file, or an instance/SSO profile) — the same
 resolution boto3 uses by default.
 
 Examples:
-    python deploy.py                       # defaults to the dev deployment
-    python deploy.py --deployment main --region us-east-1
+    python deploy.py                  # defaults to the dev deployment
+    python deploy.py --main --region us-east-1
 """
 
 from __future__ import annotations
@@ -48,12 +48,25 @@ DEPLOYMENTS = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Deploy a DynamoDB CloudFormation stack.")
-    parser.add_argument(
-        "--deployment",
-        default="dev",
-        choices=sorted(DEPLOYMENTS),
-        help="Which deployment to provision: 'dev' (default) or 'main'. Selects the template and stack name.",
+    # Pick the deployment with a flag: --dev (default) or --main. They're
+    # mutually exclusive and resolve to args.deployment so the rest of the code
+    # is unchanged.
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument(
+        "--dev",
+        dest="deployment",
+        action="store_const",
+        const="dev",
+        help="Provision the dev deployment (default): stack 'roomie-dynamodb-dev', table 'RoommateStatus-dev'.",
     )
+    target.add_argument(
+        "--main",
+        dest="deployment",
+        action="store_const",
+        const="main",
+        help="Provision the main deployment: stack 'roomie-dynamodb-main', table 'RoommateStatus-main'.",
+    )
+    parser.set_defaults(deployment="dev")
     # Both default to None so the deployment's built-in values are used unless
     # explicitly overridden.
     parser.add_argument("--stack-name", default=None, help="Override the CloudFormation stack name.")

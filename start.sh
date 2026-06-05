@@ -72,7 +72,7 @@ INFRA_PYTHON="$INFRA_DIR/.venv/bin/python"
 [ -x "$INFRA_PYTHON" ] || die "Infrastructure venv not found at $INFRA_PYTHON. Create it: cd infrastructure && python -m venv .venv && .venv/bin/pip install -r requirements.txt"
 
 log "Deploying DynamoDB CloudFormation stack (${DEPLOYMENT})…"
-( cd "$INFRA_DIR" && "$INFRA_PYTHON" deploy.py --deployment "$DEPLOYMENT" )
+( cd "$INFRA_DIR" && "$INFRA_PYTHON" deploy.py "--${DEPLOYMENT}" )
 
 # --- 2. Build & start the full stack ----------------------------------------
 # Detached so we can health-check below, then we tail logs in the foreground.
