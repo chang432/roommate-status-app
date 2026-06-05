@@ -20,24 +20,28 @@ import pytest
 from moto import mock_aws
 
 import db
+import push
 from app import create_app
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _dynamodb():
-    """Stand up a mocked DynamoDB table for the whole test session.
+    """Stand up mocked DynamoDB tables for the whole test session.
 
-    Mirrors the key schema in the infrastructure templates
-    (infrastructure/dynamodb-table-{dev,main}.yaml). Kept open for the session
-    so db.py's cached table resource stays valid across tests.
+    Mirrors the infrastructure templates (infrastructure/dynamodb-table-{dev,
+    main}.yaml), which provision both the roommate table and the push
+    subscriptions table — push.py no longer creates the latter itself. Kept open
+    for the session so the modules' cached table resources stay valid.
     """
     with mock_aws():
-        boto3.resource("dynamodb").create_table(
-            TableName=db.TABLE_NAME,
-            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
-            AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
-            BillingMode="PAY_PER_REQUEST",
-        )
+        ddb = boto3.resource("dynamodb")
+        for table_name in (db.TABLE_NAME, push.TABLE_NAME):
+            ddb.create_table(
+                TableName=table_name,
+                KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+                AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
+                BillingMode="PAY_PER_REQUEST",
+            )
         yield
 
 

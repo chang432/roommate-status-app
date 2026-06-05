@@ -6,9 +6,10 @@ protocol + VAPID (works for installed PWAs on iOS 16.4+, Android, and desktop).
 
 Subscriptions are stored in their own DynamoDB table — separate from the
 roommate table so the household scan in db.py stays clean — keyed by a hash of
-the push endpoint. The table is created on first use so this PoC needs no extra
-CloudFormation/deploy step (the app's AWS creds need dynamodb:CreateTable plus
-CRUD on the table; see docs/manual setup).
+the push endpoint. The table is provisioned by CloudFormation alongside the
+roommate table (infrastructure/dynamodb-table-{dev,main}.yaml), so it must
+already exist; this module never creates it. The app's IAM only needs item
+access on the table (PutItem / DeleteItem / Scan).
 
 Configuration (env):
     VAPID_PUBLIC_KEY   - base64url application server public key (sent to browser)
@@ -30,7 +31,6 @@ import os
 import threading
 
 import boto3
-from botocore.exceptions import ClientError
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from pywebpush import WebPushException, webpush
@@ -84,32 +84,19 @@ def _private_key_pem() -> str:
 
 
 # --- Subscription storage (DynamoDB) ----------------------------------------
-def _ensure_table():
-    """Return the subscriptions Table, creating it on first use if missing."""
+def _get_table():
+    """Return the cached subscriptions Table resource, built lazily.
+
+    Mirrors db._get_table: the boto3 Table resource is lazy, so this issues no
+    AWS call. The table is created by CloudFormation (not here) and must already
+    exist — a missing table surfaces as ResourceNotFoundException on first use.
+    """
     global _table
-    if _table is not None:
-        return _table
-    with _table_lock:
-        if _table is not None:
-            return _table
-        ddb = boto3.resource("dynamodb", region_name=_region())
-        table = ddb.Table(TABLE_NAME)
-        try:
-            table.load()
-        except ClientError as err:
-            if err.response["Error"]["Code"] != "ResourceNotFoundException":
-                raise
-            client = ddb.meta.client
-            client.create_table(
-                TableName=TABLE_NAME,
-                KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
-                AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
-                BillingMode="PAY_PER_REQUEST",
-            )
-            client.get_waiter("table_exists").wait(TableName=TABLE_NAME)
-            table = ddb.Table(TABLE_NAME)
-        _table = table
-        return _table
+    if _table is None:
+        with _table_lock:
+            if _table is None:
+                _table = boto3.resource("dynamodb", region_name=_region()).Table(TABLE_NAME)
+    return _table
 
 
 def _endpoint_id(endpoint: str) -> str:
@@ -122,7 +109,7 @@ def save_subscription(subscription: dict) -> None:
     endpoint = subscription.get("endpoint")
     if not endpoint:
         raise ValueError("subscription is missing an endpoint")
-    _ensure_table().put_item(
+    _get_table().put_item(
         Item={
             "id": _endpoint_id(endpoint),
             "endpoint": endpoint,
@@ -133,12 +120,12 @@ def save_subscription(subscription: dict) -> None:
 
 
 def _delete_by_id(item_id: str) -> None:
-    _ensure_table().delete_item(Key={"id": item_id})
+    _get_table().delete_item(Key={"id": item_id})
 
 
 def list_subscriptions() -> list[dict]:
     """Return every stored PushSubscription as a dict."""
-    table = _ensure_table()
+    table = _get_table()
     resp = table.scan()
     items = resp.get("Items", [])
     while "LastEvaluatedKey" in resp:
@@ -162,7 +149,7 @@ def notify_all(title: str, body: str, url: str = "/") -> dict:
     payload = json.dumps({"title": title, "body": body, "url": url})
     sent = pruned = failed = 0
 
-    table = _ensure_table()
+    table = _get_table()
     resp = table.scan()
     items = resp.get("Items", [])
     while "LastEvaluatedKey" in resp:
