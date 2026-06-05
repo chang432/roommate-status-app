@@ -15,7 +15,7 @@ variables, a shared credentials file, or an instance/SSO profile) — the same
 resolution boto3 uses by default.
 
 Examples:
-    python deploy.py --deployment dev
+    python deploy.py                       # defaults to the dev deployment
     python deploy.py --deployment main --region us-east-1
 """
 
@@ -50,9 +50,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Deploy a DynamoDB CloudFormation stack.")
     parser.add_argument(
         "--deployment",
-        required=True,
+        default="dev",
         choices=sorted(DEPLOYMENTS),
-        help="Which deployment to provision: 'dev' or 'main'. Selects the template and stack name.",
+        help="Which deployment to provision: 'dev' (default) or 'main'. Selects the template and stack name.",
     )
     # Both default to None so the deployment's built-in values are used unless
     # explicitly overridden.
