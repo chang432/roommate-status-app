@@ -30,10 +30,10 @@ export const STATUS_DOT_CLASS = {
   [STATUS.OOH]: 'bg-status-amber',
 }
 
-// Number of available roommates that triggers the "gather!" banner + push.
-// PROJECT.md specifies 3; this PoC uses 2 so the flow is easy to exercise.
-// Keep in sync with the backend (AVAILABLE_THRESHOLD env, default 2).
-export const AVAILABLE_THRESHOLD = 2
+// Number of available roommates that triggers the "gather!" banner + push
+// (PROJECT.md: "3 or more"). Keep in sync with the backend
+// (AVAILABLE_THRESHOLD env, default 3).
+export const AVAILABLE_THRESHOLD = 3
 
 // The label shown for a roommate's current status.
 export function statusLabel(roommate) {

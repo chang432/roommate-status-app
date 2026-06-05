@@ -35,10 +35,9 @@ import push
 # Cap proposal text so a notification body stays sane.
 MAX_ACTIVITY_LEN = 280
 
-# Number of available roommates that triggers the "gather" push. PROJECT.md
-# specifies 3; this PoC defaults to 2 (override with AVAILABLE_THRESHOLD) so the
-# notification path is easy to exercise with a small household.
-PUSH_THRESHOLD = int(os.environ.get("AVAILABLE_THRESHOLD", "2"))
+# Number of available roommates that triggers the "gather" push (PROJECT.md:
+# "3 or more"). Override with the AVAILABLE_THRESHOLD env var.
+PUSH_THRESHOLD = int(os.environ.get("AVAILABLE_THRESHOLD", "3"))
 
 
 def create_app() -> Flask:
