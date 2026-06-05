@@ -1,0 +1,42 @@
+# Caddy site config for the Roomie Status app.
+#
+# Serves the static React/Vite bundle, proxies /api to the Flask backend, and
+# terminates TLS with a Let's Encrypt cert obtained via the DNS-01 challenge
+# against Route 53. The public hostname comes from the SITE_DOMAIN env var so
+# the same image can serve the dev and main VPSs (dev. vs apex domain).
+#
+# Credentials for the Route 53 TXT-record writes are read from the standard AWS
+# chain (the mounted ~/.aws or AWS_* env vars), exactly like the Flask backend.
+
+{$SITE_DOMAIN} {
+	# Compress responses; zstd preferred, gzip fallback.
+	encode zstd gzip
+
+	# API calls go to the Flask container (service name from docker-compose).
+	# The /api prefix is preserved because the Flask routes are mounted under it.
+	handle /api/* {
+		reverse_proxy flask:8000
+	}
+
+	# Everything else is the single-page app: serve the static bundle and fall
+	# back to index.html so client-side (react-router) routes resolve instead of
+	# 404ing on deep links / refreshes.
+	handle {
+		root * /srv
+
+		# Cache Vite's fingerprinted assets aggressively; filenames are hashed.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} /index.html
+		file_server
+	}
+
+	# DNS-01 via Route 53: no inbound port 80 needed for issuance, and this is
+	# the only challenge type that can mint wildcard certs. The resolver is set
+	# explicitly so the propagation check doesn't depend on the VPS's resolver.
+	tls {
+		dns route53
+		resolvers 1.1.1.1
+	}
+}

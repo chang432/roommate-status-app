@@ -3,10 +3,15 @@
 # start.sh — one command to run the whole stack for local development.
 #
 #   1. Deploys the DynamoDB CloudFormation stack via the infrastructure venv.
-#   2. Builds & starts the full app via docker compose (Flask backend + nginx
-#      serving the React frontend and proxying /api to Flask).
+#   2. Builds & starts the full app via docker compose (Flask backend + Caddy
+#      serving the React frontend, proxying /api to Flask, and terminating TLS).
 #   3. Waits for the backend to become healthy.
 #   4. Tails the stack logs in the foreground.
+#
+# Caddy issues a real Let's Encrypt cert via DNS-01/Route 53, so SITE_DOMAIN
+# must be set to a public hostname whose Route 53 zone the mounted AWS creds can
+# write to. For domainless UI-only work, run the Vite dev server instead
+# (cd frontend && npm run dev), which proxies /api to the backend.
 #
 # The whole stack is torn down automatically when you quit (Ctrl+C).
 # Run from anywhere: `./start.sh`.
@@ -20,9 +25,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # --- Config -----------------------------------------------------------------
 COMPOSE_FILE="$ROOT_DIR/docker/docker-compose.yml"
 BACKEND_PORT="8000"
-FRONTEND_PORT="80"
 HEALTH_URL="http://localhost:${BACKEND_PORT}/api/health"
-APP_URL="http://localhost:${FRONTEND_PORT}"
+APP_URL="https://${SITE_DOMAIN:-<set SITE_DOMAIN>}"
 
 # docker compose is run with an explicit -f so it works from any directory;
 # relative build contexts in the compose file resolve against the file's dir.
@@ -37,6 +41,8 @@ die()  { printf '\033[1;31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
 command -v docker >/dev/null 2>&1 || die "docker is not installed or not on PATH."
 docker info >/dev/null 2>&1 || die "Docker daemon isn't running. Start Docker and retry."
 docker compose version >/dev/null 2>&1 || die "docker compose (v2) is not available. Update Docker Desktop / the compose plugin."
+# Caddy can't provision a TLS cert without a real, Route 53-managed hostname.
+[ -n "${SITE_DOMAIN:-}" ] || die "SITE_DOMAIN is not set. Export the public hostname Caddy should issue a cert for, e.g. SITE_DOMAIN=dev.example.com ./start.sh"
 
 # --- Cleanup: tear the whole stack down when this script exits --------------
 cleanup() {
@@ -56,7 +62,7 @@ log "Deploying DynamoDB CloudFormation stack…"
 
 # --- 2. Build & start the full stack ----------------------------------------
 # Detached so we can health-check below, then we tail logs in the foreground.
-log "Building & starting the stack (Flask + nginx/React)…"
+log "Building & starting the stack (Flask + Caddy/React)…"
 "${COMPOSE[@]}" up --build -d
 
 # --- 3. Wait for the backend to be healthy ----------------------------------

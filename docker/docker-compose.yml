@@ -1,9 +1,10 @@
 # Builds and runs the full Roomie Status stack: the Flask backend and the
-# nginx container that serves the React frontend and proxies /api to Flask.
+# Caddy container that serves the React frontend, proxies /api to Flask, and
+# terminates HTTPS with a Let's Encrypt cert (DNS-01 via Route 53).
 #
-# Run from the docker/ folder:
-#   docker compose up --build
-# then open http://localhost
+# SITE_DOMAIN must be set to the public hostname the cert is issued for, e.g.
+#   SITE_DOMAIN=dev.example.com docker compose up --build
+# then open https://$SITE_DOMAIN
 
 services:
   flask:
@@ -13,14 +14,16 @@ services:
     image: roomie-backend
     container_name: roomie-backend
     expose:
-      # Reachable to other compose services (nginx) as flask:8000. Also mapped
+      # Reachable to other compose services (caddy) as flask:8000. Also mapped
       # to the host below for direct backend access / debugging.
       - "8000"
     ports:
       - "8000:8000"
     environment:
-      # DynamoDB table the backend reads/writes (infrastructure/dynamodb-table.yaml).
-      - ROOMMATE_TABLE=${ROOMMATE_TABLE:-RoommateStatus}
+      # DynamoDB table the backend reads/writes. Defaults to the production
+      # table (infrastructure/dynamodb-table-main.yaml); the dev deployment
+      # overrides ROOMMATE_TABLE to RoommateStatus-dev.
+      - ROOMMATE_TABLE=${ROOMMATE_TABLE:-RoommateStatus-main}
       # Region for boto3. Override to match where the table was deployed.
       - AWS_REGION=${AWS_REGION:-us-east-1}
     volumes:
@@ -30,18 +33,38 @@ services:
       - "${HOME}/.aws:/root/.aws:ro"
     restart: unless-stopped
 
-  nginx:
+  caddy:
     build:
       # Context is the repo root so the build can reach frontend/ and the
-      # nginx config under docker/nginx.
+      # Caddyfile under docker/caddy.
       context: ..
-      dockerfile: docker/nginx/Dockerfile
+      dockerfile: docker/caddy/Dockerfile
     image: roomie-frontend
     container_name: roomie-frontend
     ports:
-      # Serve on the host's default HTTP port so the site is reachable at the
-      # bare host/IP (no :port suffix needed).
+      # 80 for the automatic HTTP->HTTPS redirect, 443 for the TLS-served site.
       - "80:80"
+      - "443:443"
+    environment:
+      # Public hostname the TLS cert is issued for. Required; the stack refuses
+      # to start without it so Caddy never tries to provision a cert for a
+      # placeholder. Each VPS sets its own (dev. vs apex).
+      - SITE_DOMAIN=${SITE_DOMAIN:?Set SITE_DOMAIN to the public hostname for TLS}
+      # Region for the AWS SDK used by the route53 DNS plugin. Route 53 is
+      # global, but the SDK still needs a region configured.
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+    volumes:
+      # Same read-only AWS creds the Flask app uses; the route53 DNS-01 plugin
+      # reads them to write the ACME TXT records.
+      - "${HOME}/.aws:/root/.aws:ro"
+      # Persist issued certs + ACME account across rebuilds so every deploy
+      # doesn't re-issue (and risk hitting Let's Encrypt rate limits).
+      - "caddy_data:/data"
+      - "caddy_config:/config"
     depends_on:
       - flask
     restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
