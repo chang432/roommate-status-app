@@ -45,3 +45,17 @@ export async function updateStatus(id, status, statusText) {
     body: JSON.stringify({ status, statusText }),
   })
 }
+
+// GET /api/push/public-key — the VAPID public key needed to subscribe.
+export async function getVapidPublicKey() {
+  return request('/push/public-key')
+}
+
+// POST /api/push/subscribe — register this device's PushSubscription so the
+// backend can notify it. A PushSubscription serializes to { endpoint, keys }.
+export async function savePushSubscription(subscription) {
+  return request('/push/subscribe', {
+    method: 'POST',
+    body: JSON.stringify(subscription),
+  })
+}

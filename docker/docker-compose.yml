@@ -26,6 +26,14 @@ services:
       - ROOMMATE_TABLE=${ROOMMATE_TABLE:-RoommateStatus-main}
       # Region for boto3. Override to match where the table was deployed.
       - AWS_REGION=${AWS_REGION:-us-east-1}
+      # Web Push (VAPID) keys for notifications. Generate with
+      # docker/flask/gen_vapid.py and set as secrets/env. Empty => push disabled
+      # (the app still runs; /api/push/* report "not configured").
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:andre888chang@gmail.com}
+      # Available-roommate count that triggers the gather push (PoC default 2).
+      - AVAILABLE_THRESHOLD=${AVAILABLE_THRESHOLD:-2}
     volumes:
       # Mount the host's AWS credentials read-only so boto3 in the Flask app can
       # use them. The container runs as root, so they land in /root/.aws where

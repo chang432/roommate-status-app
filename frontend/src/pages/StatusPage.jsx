@@ -4,6 +4,7 @@ import YouCard from '../components/YouCard.jsx'
 import EditPanel from '../components/EditPanel.jsx'
 import StatusCard from '../components/StatusCard.jsx'
 import NotificationBanner from '../components/NotificationBanner.jsx'
+import EnableNotifications from '../components/EnableNotifications.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getRoommates, updateStatus } from '../api/client.js'
 import { availableCount, AVAILABLE_THRESHOLD } from '../utils/status.js'
@@ -96,6 +97,8 @@ export default function StatusPage() {
         <p className="mt-10 text-center text-[14px] text-ink-soft">Loading the household…</p>
       ) : (
         <>
+          <EnableNotifications />
+
           {showBanner && <NotificationBanner count={freeCount} />}
 
           {me && (

@@ -28,8 +28,10 @@ export const STATUS_DOT_CLASS = {
   [STATUS.CUSTOM]: 'bg-status-purple',
 }
 
-// Number of available roommates that triggers the "gather!" notification.
-export const AVAILABLE_THRESHOLD = 3
+// Number of available roommates that triggers the "gather!" banner + push.
+// PROJECT.md specifies 3; this PoC uses 2 so the flow is easy to exercise.
+// Keep in sync with the backend (AVAILABLE_THRESHOLD env, default 2).
+export const AVAILABLE_THRESHOLD = 2
 
 // Resolve the text shown for a roommate: custom messages use their stored text,
 // fixed statuses fall back to the default label.

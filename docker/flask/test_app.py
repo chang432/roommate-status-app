@@ -119,6 +119,35 @@ def test_health(client):
     assert res.get_json()["status"] == "ok"
 
 
+# --- Web Push (PoC) ---------------------------------------------------------
+# VAPID keys are not set in the test env, so push is "not configured": the
+# key/test endpoints should 503, while subscribe (pure storage) still works.
+def test_push_public_key_unconfigured(client):
+    res = client.get("/api/push/public-key")
+    assert res.status_code == 503
+
+
+def test_push_subscribe_stores(client):
+    sub = {"endpoint": "https://example.com/ep/abc", "keys": {"p256dh": "x", "auth": "y"}}
+    res = client.post("/api/push/subscribe", json=sub)
+    assert res.status_code == 200
+    assert res.get_json() == {"ok": True}
+
+    import push
+
+    assert any(s["endpoint"] == sub["endpoint"] for s in push.list_subscriptions())
+
+
+def test_push_subscribe_rejects_missing_endpoint(client):
+    res = client.post("/api/push/subscribe", json={"keys": {}})
+    assert res.status_code == 400
+
+
+def test_push_test_unconfigured(client):
+    res = client.post("/api/push/test")
+    assert res.status_code == 503
+
+
 if __name__ == "__main__":
     import sys
 

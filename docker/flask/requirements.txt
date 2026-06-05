@@ -2,3 +2,5 @@ Flask==3.0.3
 flask-cors==4.0.1
 gunicorn==22.0.0
 boto3==1.34.162
+# Web Push (VAPID) for notifications. Pulls in py-vapid, http-ece, cryptography.
+pywebpush==2.0.0
