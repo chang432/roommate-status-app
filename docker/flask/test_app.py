@@ -90,26 +90,37 @@ def test_get_roommates(client):
     assert set(data[0]) == {"id", "name", "status", "statusText"}
 
 
-def test_update_status_to_busy_clears_text(client):
-    res = client.put(
-        "/api/roommates/sheryl/status",
-        json={"status": "busy", "statusText": "ignored"},
-    )
-    assert res.status_code == 200
-    sheryl = next(r for r in res.get_json() if r["id"] == "sheryl")
-    assert sheryl["status"] == "busy"
-    assert sheryl["statusText"] == ""  # fixed statuses drop custom text
-
-
-def test_update_status_custom_keeps_text(client):
+def test_update_status_keeps_note(client):
+    # Any status may carry a supplemental note that is preserved (trimmed by the
+    # route) and shown alongside the status.
     res = client.put(
         "/api/roommates/ting/status",
-        json={"status": "custom", "statusText": "  Cooking dinner  "},
+        json={"status": "busy", "statusText": "  Cooking dinner  "},
     )
     assert res.status_code == 200
     ting = next(r for r in res.get_json() if r["id"] == "ting")
-    assert ting["status"] == "custom"
+    assert ting["status"] == "busy"
     assert ting["statusText"] == "Cooking dinner"  # trimmed, preserved
+
+
+def test_update_status_without_note_clears_text(client):
+    res = client.put(
+        "/api/roommates/sheryl/status",
+        json={"status": "available", "statusText": ""},
+    )
+    assert res.status_code == 200
+    sheryl = next(r for r in res.get_json() if r["id"] == "sheryl")
+    assert sheryl["status"] == "available"
+    assert sheryl["statusText"] == ""
+
+
+def test_update_status_custom_now_invalid(client):
+    # "custom" was removed as a status; it must be rejected.
+    res = client.put(
+        "/api/roommates/ting/status",
+        json={"status": "custom", "statusText": "anything"},
+    )
+    assert res.status_code == 400
 
 
 def test_update_status_invalid(client):

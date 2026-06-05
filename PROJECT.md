@@ -11,4 +11,8 @@ A private react webapp that will be used by a household where each roommate can 
 **status**
 - Available to hang
 - Busy with something
-- Custom message
+- Sleeping
+- OOH (Out Of House)
+
+Each status can carry an optional supplemental note that is shown alongside it
+for everyone (e.g. "back by 9pm").

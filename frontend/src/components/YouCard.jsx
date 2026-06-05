@@ -1,10 +1,11 @@
 import Avatar from './Avatar.jsx'
 import StatusDot from './StatusDot.jsx'
-import { statusText } from '../utils/status.js'
+import { statusLabel, statusNote } from '../utils/status.js'
 
 // The signed-in roommate's own card: highlighted, full-width, with an Edit
 // button that opens the status editor.
 export default function YouCard({ roommate, avatarColor, onEdit }) {
+  const note = statusNote(roommate)
   return (
     <div className="flex flex-wrap items-center gap-4 rounded-lg border-[1.5px] border-[#ecc9b6] bg-gradient-to-br from-card to-accent-soft p-[22px] shadow-card">
       <Avatar name={roommate.name} color={avatarColor} size={56} />
@@ -16,7 +17,9 @@ export default function YouCard({ roommate, avatarColor, onEdit }) {
             You
           </span>
         </div>
-        <div className="mt-[3px] text-[14.5px] text-ink-soft">{statusText(roommate)}</div>
+        <div className="mt-[3px] text-[14.5px] text-ink-soft">{statusLabel(roommate)}</div>
+        {/* Supplemental note attached to your current status, if any. */}
+        {note && <div className="mt-[2px] text-[14px] text-ink">{note}</div>}
       </div>
       <button
         type="button"
