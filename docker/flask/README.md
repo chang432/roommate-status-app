@@ -13,8 +13,9 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `PUT  /api/roommates/<id>/status` | `{ status, statusText }` | full updated household list              |
 | `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
 
-`status` is one of `available`, `busy`, `custom`. Every roommate shares the demo
-password **`roomie`** until real auth is added.
+`status` is one of `available`, `busy`, `sleeping`, `ooh`. Any status may carry
+an optional `statusText` note that is shown alongside it. Every roommate shares
+the demo password **`roomie`** until real auth is added.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).

@@ -25,8 +25,9 @@ import boto3
 from botocore.exceptions import ClientError
 
 # Allowed status values. Mirrors the frontend's STATUS enum (utils/status.js):
-# available, busy, sleeping, ooh (out of house), or a free-form custom message.
-VALID_STATUSES = {"available", "busy", "sleeping", "ooh", "custom"}
+# available, busy, sleeping, ooh (out of house). Any status may carry an
+# optional supplemental note in `statusText`.
+VALID_STATUSES = {"available", "busy", "sleeping", "ooh"}
 
 # Demo password shared by every roommate. A real backend would store per-user
 # salted password hashes; that work is deferred. Passwords are intentionally
@@ -134,11 +135,11 @@ def find_by_name(name: str) -> dict | None:
 def update_status(roommate_id: str, status: str, status_text: str = "") -> list[dict] | None:
     """Update one roommate's status and return the full updated household.
 
-    Custom statuses keep their text; fixed statuses clear it (matching the
-    frontend). Returns None if the id is unknown — enforced with a conditional
-    write so we don't silently create a roommate that doesn't exist.
+    Any status may carry a supplemental note (`status_text`); it is stored as-is
+    so everyone sees it alongside the status. Returns None if the id is unknown
+    — enforced with a conditional write so we don't silently create a roommate
+    that doesn't exist.
     """
-    text = status_text if status == "custom" else ""
     try:
         _get_table().update_item(
             Key={"id": roommate_id},
@@ -146,7 +147,7 @@ def update_status(roommate_id: str, status: str, status_text: str = "") -> list[
             # placeholder.
             UpdateExpression="SET #s = :s, statusText = :t",
             ExpressionAttributeNames={"#s": "status"},
-            ExpressionAttributeValues={":s": status, ":t": text},
+            ExpressionAttributeValues={":s": status, ":t": status_text},
             ConditionExpression="attribute_exists(id)",
         )
     except ClientError as err:

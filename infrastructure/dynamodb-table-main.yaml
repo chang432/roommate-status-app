@@ -1,12 +1,16 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  DynamoDB table for the "main" (production) deployment of the York Terrace
-  Roomie Status app. Stores one item per roommate, keyed by a stable string id
-  (e.g. "jordan"). Non-key attributes such as name, status, and statusText are
-  schemaless and written by the app.
+  DynamoDB tables for the "main" (production) deployment of the York Terrace
+  Roomie Status app:
+    - RoommateStatus-main: one item per roommate, keyed by a stable string id
+      (e.g. "jordan"); name/status/statusText are schemaless, written by the app.
+    - RoommateStatus-main-pushsubs: one item per Web Push subscription, keyed by
+      a hash of the push endpoint (see docker/flask/push.py).
+    - RoommateStatus-main-activities: one item per proposed activity, keyed by a
+      generated id (see docker/flask/activities.py).
 
   This is the "-main" half of the dev/main split (see dynamodb-table-dev.yaml
-  for the dev table). The table name is fixed per template so the two
+  for the dev tables). Table names are fixed per template so the two
   deployments can never accidentally share data.
 
 Resources:
@@ -39,15 +43,90 @@ Resources:
         - Key: Environment
           Value: main
 
+  # Web Push subscriptions for the production deployment. Separate table (not
+  # the roommate table) so the household scan stays clean. Keyed by a hash of
+  # the push endpoint; the subscription JSON lives in a non-key attribute.
+  PushSubscriptionsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-main-pushsubs
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: main
+
+  # Proposed activities for the production deployment. Separate table; one item
+  # per proposal, keyed by a generated id. The app shows only the most recent few.
+  ActivitiesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-main-activities
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: main
+
 Outputs:
   TableName:
-    Description: Name of the created DynamoDB table.
+    Description: Name of the roommate-status DynamoDB table.
     Value: !Ref RoommateStatusTable
     Export:
       Name: !Sub "${AWS::StackName}-TableName"
 
   TableArn:
-    Description: ARN of the created DynamoDB table.
+    Description: ARN of the roommate-status DynamoDB table.
     Value: !GetAtt RoommateStatusTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-TableArn"
+
+  PushTableName:
+    Description: Name of the push-subscriptions DynamoDB table.
+    Value: !Ref PushSubscriptionsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-PushTableName"
+
+  PushTableArn:
+    Description: ARN of the push-subscriptions DynamoDB table.
+    Value: !GetAtt PushSubscriptionsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PushTableArn"
+
+  ActivitiesTableName:
+    Description: Name of the proposed-activities DynamoDB table.
+    Value: !Ref ActivitiesTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ActivitiesTableName"
+
+  ActivitiesTableArn:
+    Description: ARN of the proposed-activities DynamoDB table.
+    Value: !GetAtt ActivitiesTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ActivitiesTableArn"

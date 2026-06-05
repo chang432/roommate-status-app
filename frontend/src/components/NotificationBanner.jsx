@@ -1,5 +1,5 @@
-// Shown when the available-to-hang count crosses the threshold (PROJECT.md:
-// "Whenever 3 or more status's are available, a notification is sent").
+// Shown when the available-to-hang count crosses AVAILABLE_THRESHOLD
+// (utils/status.js). PROJECT.md specifies 3; this PoC uses 2.
 export default function NotificationBanner({ count }) {
   return (
     <div className="mb-[26px] mt-[22px] flex items-center gap-[10px] rounded-md border border-[#d6e2c5] bg-gradient-to-br from-[#eef3e7] to-[#e7efdd] px-4 py-[13px] text-[14px] font-semibold text-[#50603f]">

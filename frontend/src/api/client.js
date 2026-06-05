@@ -45,3 +45,40 @@ export async function updateStatus(id, status, statusText) {
     body: JSON.stringify({ status, statusText }),
   })
 }
+
+// GET /api/push/public-key — the VAPID public key needed to subscribe.
+export async function getVapidPublicKey() {
+  return request('/push/public-key')
+}
+
+// POST /api/push/subscribe — register this device's PushSubscription so the
+// backend can notify it. A PushSubscription serializes to { endpoint, keys }.
+export async function savePushSubscription(subscription) {
+  return request('/push/subscribe', {
+    method: 'POST',
+    body: JSON.stringify(subscription),
+  })
+}
+
+// GET /api/activities — the most recent proposed activities, newest first.
+export async function getActivities() {
+  return request('/activities')
+}
+
+// POST /api/activities — propose an activity (also pushes it to everyone).
+// Returns the refreshed recent list.
+export async function proposeActivity(text, proposedBy) {
+  return request('/activities', {
+    method: 'POST',
+    body: JSON.stringify({ text, proposedBy }),
+  })
+}
+
+// POST /api/activities/:id/notify — re-push an existing activity to everyone as
+// "<emphasizedBy> emphasized <activity>". Anyone can emphasize any activity.
+export async function notifyActivity(id, emphasizedBy) {
+  return request(`/activities/${id}/notify`, {
+    method: 'POST',
+    body: JSON.stringify({ emphasizedBy }),
+  })
+}

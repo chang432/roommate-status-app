@@ -1,22 +1,43 @@
 """Flask backend for the York Terrace Roomie Status app.
 
-Implements exactly the three endpoints the frontend calls (see
-frontend/src/api/client.js):
+Implements the endpoints the frontend calls (see frontend/src/api/client.js):
 
     POST /api/login                    -> { "user": { "id", "name" } }
     GET  /api/roommates                -> [ { "id", "name", "status", "statusText" }, ... ]
     PUT  /api/roommates/<id>/status    -> the full, updated household list
 
-Data is backed by DynamoDB via db.py; all datastore access is encapsulated in
-that module so these routes stay storage-agnostic.
+Plus the Web Push (PoC) endpoints:
+
+    GET  /api/push/public-key          -> { "publicKey": <VAPID public key> }
+    POST /api/push/subscribe           -> { "ok": true }  (stores a subscription)
+    POST /api/push/test                -> { "sent", "pruned", "failed" }
+
+And the proposed-activities feed:
+
+    GET  /api/activities               -> [ { "id", "text", "proposedBy", "createdAt" }, ... ]
+    POST /api/activities               -> the updated recent list (and pushes it)
+
+Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
+in push.py; proposals are in activities.py. Routes stay storage-agnostic.
 """
 
 from __future__ import annotations
 
+import os
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+import activities
 import db
+import push
+
+# Cap proposal text so a notification body stays sane.
+MAX_ACTIVITY_LEN = 280
+
+# Number of available roommates that triggers the "gather" push (PROJECT.md:
+# "3 or more"). Override with the AVAILABLE_THRESHOLD env var.
+PUSH_THRESHOLD = int(os.environ.get("AVAILABLE_THRESHOLD", "3"))
 
 
 def create_app() -> Flask:
@@ -76,13 +97,109 @@ def create_app() -> Flask:
         if roommates is None:
             return jsonify({"error": f"Unknown roommate: {roommate_id}"}), 404
 
-        # When enough roommates are free, this is where a real backend would push
-        # a notification to everyone (PROJECT.md). For now we just log it.
+        # When enough roommates are free, push a "gather!" notification to every
+        # subscribed device. Sending is best-effort: a push failure must not
+        # fail the status update the user just made.
         free = db.available_count(roommates)
-        if free >= db.AVAILABLE_THRESHOLD:
+        if free >= PUSH_THRESHOLD:
             app.logger.info("Notification: %d roommates are available — time to gather!", free)
+            try:
+                push.notify_all(
+                    title="Roomies are free!",
+                    body=f"{free} roomies are around right now — perfect time to gather.",
+                    url="/",
+                )
+            except Exception:  # noqa: BLE001 - never let push break the request
+                app.logger.exception("Failed to send gather notification")
 
         return jsonify(roommates)
+
+    # --- Web Push (PoC) -----------------------------------------------------
+    @app.get("/api/push/public-key")
+    def push_public_key():
+        """Hand the browser the VAPID public key it needs to subscribe."""
+        if not push.is_configured():
+            return jsonify({"error": "Push is not configured on the server."}), 503
+        return jsonify({"publicKey": push.VAPID_PUBLIC_KEY})
+
+    @app.post("/api/push/subscribe")
+    def push_subscribe():
+        """Store a browser PushSubscription so we can notify this device."""
+        subscription = request.get_json(silent=True) or {}
+        if not subscription.get("endpoint"):
+            return jsonify({"error": "Invalid subscription (no endpoint)."}), 400
+        push.save_subscription(subscription)
+        return jsonify({"ok": True})
+
+    @app.post("/api/push/test")
+    def push_test():
+        """Send a test notification to every subscribed device (PoC helper)."""
+        if not push.is_configured():
+            return jsonify({"error": "Push is not configured on the server."}), 503
+        result = push.notify_all(
+            title="Roomie Status test",
+            body="If you can see this, push notifications work 🎉",
+            url="/",
+        )
+        return jsonify(result)
+
+    # --- Proposed activities ------------------------------------------------
+    @app.get("/api/activities")
+    def get_activities():
+        """Return the most recent proposed activities, newest first."""
+        return jsonify(activities.list_recent())
+
+    @app.post("/api/activities")
+    def propose_activity():
+        """Store a new proposal, push it to everyone, return the recent list."""
+        body = request.get_json(silent=True) or {}
+        text = (body.get("text") or "").strip()
+        proposed_by = (body.get("proposedBy") or "Someone").strip() or "Someone"
+
+        if not text:
+            return jsonify({"error": "An activity is required."}), 400
+        if len(text) > MAX_ACTIVITY_LEN:
+            return jsonify({"error": f"Keep it under {MAX_ACTIVITY_LEN} characters."}), 400
+
+        activities.add_activity(text, proposed_by)
+
+        # Notify every subscribed device. Best-effort: a push failure must not
+        # fail the proposal the user just made.
+        try:
+            push.notify_all(
+                title="New activity proposed 🎉",
+                body=f"{proposed_by}: {text}",
+                url="/",
+            )
+        except Exception:  # noqa: BLE001 - never let push break the request
+            app.logger.exception("Failed to send activity notification")
+
+        # Return the refreshed list so the UI updates in one round-trip.
+        return jsonify(activities.list_recent())
+
+    @app.post("/api/activities/<activity_id>/notify")
+    def emphasize_activity(activity_id: str):
+        """Re-push an existing activity as "<user> emphasized <activity>".
+
+        Anyone can emphasize any activity, not just its proposer. The activity
+        text comes from the stored item (not the client) so the notification
+        always matches a real proposal.
+        """
+        body = request.get_json(silent=True) or {}
+        emphasized_by = (body.get("emphasizedBy") or "Someone").strip() or "Someone"
+
+        activity = activities.get(activity_id)
+        if activity is None:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        if not push.is_configured():
+            return jsonify({"error": "Push is not configured on the server."}), 503
+
+        result = push.notify_all(
+            title="Activity emphasized 👀",
+            body=f"{emphasized_by} emphasized {activity['text']}",
+            url="/",
+        )
+        return jsonify(result)
 
     return app
 

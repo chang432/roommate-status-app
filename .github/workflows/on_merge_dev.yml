@@ -63,12 +63,17 @@ jobs:
           SITE_DOMAIN: ${{ vars.DEV_SITE_DOMAIN }}
           # dev deployment uses its own DynamoDB table (dynamodb-table-dev.yaml).
           ROOMMATE_TABLE: RoommateStatus-dev
+          # Web Push (VAPID) keys; empty => push disabled. Generate with
+          # docker/flask/gen_vapid.py and store as repo secrets.
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
         with:
           host: ${{ steps.find_dev_vps.outputs.dev_vps_ip }}
           username: root
           key: ${{ secrets.SSH_KEY }}
           port: 22
-          envs: REPO_FULL,REPO_NAME,BRANCH,GH_PAT_REPO_READ,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,SITE_DOMAIN,ROOMMATE_TABLE
+          envs: REPO_FULL,REPO_NAME,BRANCH,GH_PAT_REPO_READ,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,SITE_DOMAIN,ROOMMATE_TABLE,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY,VAPID_SUBJECT
           script: |
             set -euo pipefail
 
