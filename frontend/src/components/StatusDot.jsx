@@ -6,6 +6,7 @@ import { STATUS, STATUS_DOT_CLASS } from '../utils/status.js'
 const STATUS_ICON = {
   [STATUS.BUSY]: '/busy.png',
   [STATUS.OOH]: '/ooh.png',
+  [STATUS.SLEEPING]: '/sleeping.png',
 }
 
 function maskStyle(src) {
