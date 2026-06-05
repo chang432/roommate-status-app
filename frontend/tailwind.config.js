@@ -20,6 +20,8 @@ export default {
         'status-green': '#5aa469',
         'status-red': '#cf6b5e',
         'status-purple': '#9a78b8',
+        'status-blue': '#6a86b8',
+        'status-amber': '#d39a4f',
       },
       fontFamily: {
         display: ['Fraunces', 'Georgia', 'serif'],
