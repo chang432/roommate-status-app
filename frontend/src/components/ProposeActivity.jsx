@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { getActivities, proposeActivity } from '../api/client.js'
+import { getActivities, proposeActivity, notifyActivity } from '../api/client.js'
 
 // Short relative time, e.g. "just now", "5m", "3h", "2d".
 function timeAgo(createdAt) {
@@ -22,6 +22,10 @@ export default function ProposeActivity() {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  // Per-activity notify state: the id currently sending, and the id just sent
+  // (briefly shown as a confirmation).
+  const [notifyingId, setNotifyingId] = useState(null)
+  const [sentId, setSentId] = useState(null)
 
   // Load the recent feed on mount.
   useEffect(() => {
@@ -50,6 +54,22 @@ export default function ProposeActivity() {
       setError('Could not send your proposal. Try again.')
     } finally {
       setSending(false)
+    }
+  }
+
+  // Re-push an existing activity as "<you> emphasized <activity>".
+  async function handleNotify(activity) {
+    if (notifyingId) return
+    setNotifyingId(activity.id)
+    setError('')
+    try {
+      await notifyActivity(activity.id, user.name)
+      setSentId(activity.id)
+      setTimeout(() => setSentId((cur) => (cur === activity.id ? null : cur)), 2000)
+    } catch {
+      setError('Could not send the notification. Try again.')
+    } finally {
+      setNotifyingId(null)
     }
   }
 
@@ -90,12 +110,22 @@ export default function ProposeActivity() {
           activities.map((a) => (
             <div
               key={a.id}
-              className="rounded-sm border border-line bg-card px-[14px] py-[10px]"
+              className="flex items-center gap-[10px] rounded-sm border border-line bg-card px-[14px] py-[10px]"
             >
-              <p className="text-[14px] text-ink">{a.text}</p>
-              <p className="mt-[2px] text-[12px] text-ink-soft">
-                {a.proposedBy} · {timeAgo(a.createdAt)}
-              </p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] text-ink">{a.text}</p>
+                <p className="mt-[2px] text-[12px] text-ink-soft">
+                  {a.proposedBy} · {timeAgo(a.createdAt)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleNotify(a)}
+                disabled={notifyingId === a.id}
+                className="flex-none rounded-full border border-[#d6e2c5] bg-[#eef3e7] px-[13px] py-[7px] text-[12.5px] font-bold text-[#50603f] transition hover:brightness-95 disabled:opacity-60"
+              >
+                {notifyingId === a.id ? 'Sending…' : sentId === a.id ? 'Sent ✓' : '🔔 Notify'}
+              </button>
             </div>
           ))
         )}

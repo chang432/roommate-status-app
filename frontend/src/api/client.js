@@ -73,3 +73,12 @@ export async function proposeActivity(text, proposedBy) {
     body: JSON.stringify({ text, proposedBy }),
   })
 }
+
+// POST /api/activities/:id/notify — re-push an existing activity to everyone as
+// "<emphasizedBy> emphasized <activity>". Anyone can emphasize any activity.
+export async function notifyActivity(id, emphasizedBy) {
+  return request(`/activities/${id}/notify`, {
+    method: 'POST',
+    body: JSON.stringify({ emphasizedBy }),
+  })
+}

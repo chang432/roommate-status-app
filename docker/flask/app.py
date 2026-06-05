@@ -178,6 +178,30 @@ def create_app() -> Flask:
         # Return the refreshed list so the UI updates in one round-trip.
         return jsonify(activities.list_recent())
 
+    @app.post("/api/activities/<activity_id>/notify")
+    def emphasize_activity(activity_id: str):
+        """Re-push an existing activity as "<user> emphasized <activity>".
+
+        Anyone can emphasize any activity, not just its proposer. The activity
+        text comes from the stored item (not the client) so the notification
+        always matches a real proposal.
+        """
+        body = request.get_json(silent=True) or {}
+        emphasized_by = (body.get("emphasizedBy") or "Someone").strip() or "Someone"
+
+        activity = activities.get(activity_id)
+        if activity is None:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        if not push.is_configured():
+            return jsonify({"error": "Push is not configured on the server."}), 503
+
+        result = push.notify_all(
+            title="Activity emphasized 👀",
+            body=f"{emphasized_by} emphasized {activity['text']}",
+            url="/",
+        )
+        return jsonify(result)
+
     return app
 
 

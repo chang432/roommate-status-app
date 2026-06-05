@@ -77,6 +77,12 @@ def add_activity(text: str, proposed_by: str = "Someone") -> dict:
     return _project(item)
 
 
+def get(activity_id: str) -> dict | None:
+    """Return one proposal by id, or None if it doesn't exist."""
+    item = _get_table().get_item(Key={"id": activity_id}).get("Item")
+    return _project(item) if item else None
+
+
 def list_recent(limit: int = RECENT_LIMIT) -> list[dict]:
     """Return the most recent proposals, newest first."""
     table = _get_table()

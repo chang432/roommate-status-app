@@ -212,6 +212,21 @@ def test_propose_activity_rejects_too_long(client):
     assert res.status_code == 400
 
 
+def test_emphasize_unknown_activity_404(client):
+    res = client.post("/api/activities/nope/notify", json={"emphasizedBy": "Andre"})
+    assert res.status_code == 404
+
+
+def test_emphasize_existing_activity_unconfigured_503(client):
+    # Push isn't configured in tests, so emphasizing a real activity reports 503
+    # (the activity must still be found first — a 404 here would mean the lookup
+    # failed).
+    created = client.post("/api/activities", json={"text": "Bowling"}).get_json()
+    activity_id = created[0]["id"]
+    res = client.post(f"/api/activities/{activity_id}/notify", json={"emphasizedBy": "Kayla"})
+    assert res.status_code == 503
+
+
 def test_activities_recent_newest_first_capped(client):
     # Insert 6 proposals with controlled, increasing timestamps for determinism.
     table = activities._get_table()
