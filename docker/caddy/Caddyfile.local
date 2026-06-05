@@ -1,0 +1,27 @@
+# Local-dev Caddy config: serve the app over plain HTTP on localhost so Caddy
+# never contacts Let's Encrypt. Mounted over the baked-in Caddyfile by
+# docker-compose.local.yml (see start.sh). The production Caddyfile (DNS-01 via
+# Route 53) is used only on the VPS.
+#
+# http://localhost is a browser "secure context", so service workers / the push
+# API still work locally without a cert — the real iPhone test needs the VPS.
+
+:80 {
+	encode zstd gzip
+
+	# API calls go to the Flask container (service name from docker-compose).
+	handle /api/* {
+		reverse_proxy flask:8000
+	}
+
+	# Single-page app: serve the static bundle, fall back to index.html.
+	handle {
+		root * /srv
+
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} /index.html
+		file_server
+	}
+}

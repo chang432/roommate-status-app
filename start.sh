@@ -4,14 +4,16 @@
 #
 #   1. Deploys the DynamoDB CloudFormation stack via the infrastructure venv.
 #   2. Builds & starts the full app via docker compose (Flask backend + Caddy
-#      serving the React frontend, proxying /api to Flask, and terminating TLS).
+#      serving the React frontend and proxying /api to Flask).
 #   3. Waits for the backend to become healthy.
 #   4. Tails the stack logs in the foreground.
 #
-# Caddy issues a real Let's Encrypt cert via DNS-01/Route 53, so SITE_DOMAIN
-# must be set to a public hostname whose Route 53 zone the mounted AWS creds can
-# write to. For domainless UI-only work, run the Vite dev server instead
-# (cd frontend && npm run dev), which proxies /api to the backend.
+# Local dev uses docker-compose.local.yml, which serves the app over plain HTTP
+# on http://localhost — Caddy never contacts Let's Encrypt, so no domain, cert,
+# or AWS Route 53 access is needed here. (The production DNS-01 cert lives only
+# on the VPS, via the base docker-compose.yml the deploy workflow runs.)
+# http://localhost is still a browser secure context, so service workers / the
+# push API work locally; the real iPhone push test needs the VPS deploy.
 #
 # The whole stack is torn down automatically when you quit (Ctrl+C).
 # Run from anywhere: `./start.sh`.
@@ -24,13 +26,20 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- Config -----------------------------------------------------------------
 COMPOSE_FILE="$ROOT_DIR/docker/docker-compose.yml"
+COMPOSE_LOCAL_FILE="$ROOT_DIR/docker/docker-compose.local.yml"
 BACKEND_PORT="8000"
 HEALTH_URL="http://localhost:${BACKEND_PORT}/api/health"
-APP_URL="https://${SITE_DOMAIN:-<set SITE_DOMAIN>}"
+APP_URL="http://localhost"
 
-# docker compose is run with an explicit -f so it works from any directory;
-# relative build contexts in the compose file resolve against the file's dir.
-COMPOSE=(docker compose -f "$COMPOSE_FILE")
+# The base compose file requires SITE_DOMAIN (for the VPS's TLS cert). Locally
+# the override serves plain HTTP and ignores it, but the variable still has to
+# be set so the base file's interpolation guard passes — give it a placeholder.
+export SITE_DOMAIN="${SITE_DOMAIN:-localhost}"
+
+# docker compose is run with explicit -f files so it works from any directory;
+# relative build contexts resolve against the first file's dir. The local
+# override is layered second so its settings win.
+COMPOSE=(docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_LOCAL_FILE")
 
 # Local dev targets the "dev" deployment: the RoommateStatus-dev DynamoDB table
 # (infrastructure/dynamodb-table-dev.yaml). Exporting ROOMMATE_TABLE points the
@@ -47,8 +56,6 @@ die()  { printf '\033[1;31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
 command -v docker >/dev/null 2>&1 || die "docker is not installed or not on PATH."
 docker info >/dev/null 2>&1 || die "Docker daemon isn't running. Start Docker and retry."
 docker compose version >/dev/null 2>&1 || die "docker compose (v2) is not available. Update Docker Desktop / the compose plugin."
-# Caddy can't provision a TLS cert without a real, Route 53-managed hostname.
-[ -n "${SITE_DOMAIN:-}" ] || die "SITE_DOMAIN is not set. Export the public hostname Caddy should issue a cert for, e.g. SITE_DOMAIN=dev.example.com ./start.sh"
 
 # --- Cleanup: tear the whole stack down when this script exits --------------
 cleanup() {
