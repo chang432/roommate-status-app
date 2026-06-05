@@ -4,6 +4,7 @@ import { STATUS, STATUS_DOT_CLASS } from '../utils/status.js'
 // transparent-background PNG silhouette (served from public/); it's used as a
 // CSS mask over the status color, so the icon "takes on" the dot's color.
 const STATUS_ICON = {
+  [STATUS.AVAILABLE]: '/available.png',
   [STATUS.BUSY]: '/busy.png',
   [STATUS.OOH]: '/ooh.png',
   [STATUS.SLEEPING]: '/sleeping.png',
