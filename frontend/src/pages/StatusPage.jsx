@@ -5,6 +5,7 @@ import EditPanel from '../components/EditPanel.jsx'
 import StatusCard from '../components/StatusCard.jsx'
 import NotificationBanner from '../components/NotificationBanner.jsx'
 import EnableNotifications from '../components/EnableNotifications.jsx'
+import ProposeActivity from '../components/ProposeActivity.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getRoommates, updateStatus } from '../api/client.js'
 import { availableCount, AVAILABLE_THRESHOLD } from '../utils/status.js'
@@ -128,6 +129,8 @@ export default function StatusPage() {
               <StatusCard key={roommate.id} roommate={roommate} />
             ))}
           </div>
+
+          <ProposeActivity />
         </>
       )}
     </div>

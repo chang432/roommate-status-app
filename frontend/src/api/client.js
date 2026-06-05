@@ -59,3 +59,17 @@ export async function savePushSubscription(subscription) {
     body: JSON.stringify(subscription),
   })
 }
+
+// GET /api/activities — the most recent proposed activities, newest first.
+export async function getActivities() {
+  return request('/activities')
+}
+
+// POST /api/activities — propose an activity (also pushes it to everyone).
+// Returns the refreshed recent list.
+export async function proposeActivity(text, proposedBy) {
+  return request('/activities', {
+    method: 'POST',
+    body: JSON.stringify({ text, proposedBy }),
+  })
+}

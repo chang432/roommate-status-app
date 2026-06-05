@@ -19,6 +19,7 @@ import boto3
 import pytest
 from moto import mock_aws
 
+import activities
 import db
 import push
 from app import create_app
@@ -29,13 +30,13 @@ def _dynamodb():
     """Stand up mocked DynamoDB tables for the whole test session.
 
     Mirrors the infrastructure templates (infrastructure/dynamodb-table-{dev,
-    main}.yaml), which provision both the roommate table and the push
-    subscriptions table — push.py no longer creates the latter itself. Kept open
-    for the session so the modules' cached table resources stay valid.
+    main}.yaml), which provision the roommate, push-subscriptions, and
+    activities tables — the modules don't create them. Kept open for the session
+    so the modules' cached table resources stay valid.
     """
     with mock_aws():
         ddb = boto3.resource("dynamodb")
-        for table_name in (db.TABLE_NAME, push.TABLE_NAME):
+        for table_name in (db.TABLE_NAME, push.TABLE_NAME, activities.TABLE_NAME):
             ddb.create_table(
                 TableName=table_name,
                 KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
@@ -48,6 +49,10 @@ def _dynamodb():
 @pytest.fixture()
 def client():
     db.reset()  # Isolate each test from prior status mutations.
+    # Clear proposed activities so each test starts from an empty feed.
+    table = activities._get_table()
+    for item in table.scan().get("Items", []):
+        table.delete_item(Key={"id": item["id"]})
     app = create_app()
     app.config.update(TESTING=True)
     return app.test_client()
@@ -183,6 +188,43 @@ def _b64url(raw: bytes) -> str:
     import base64
 
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+# --- Proposed activities ----------------------------------------------------
+def test_propose_activity_creates_and_returns_list(client):
+    res = client.post(
+        "/api/activities", json={"text": "  Taco night  ", "proposedBy": "Andre"}
+    )
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data[0]["text"] == "Taco night"  # trimmed
+    assert data[0]["proposedBy"] == "Andre"
+    assert isinstance(data[0]["createdAt"], int)
+
+
+def test_propose_activity_rejects_empty(client):
+    res = client.post("/api/activities", json={"text": "   "})
+    assert res.status_code == 400
+
+
+def test_propose_activity_rejects_too_long(client):
+    res = client.post("/api/activities", json={"text": "x" * 281})
+    assert res.status_code == 400
+
+
+def test_activities_recent_newest_first_capped(client):
+    # Insert 6 proposals with controlled, increasing timestamps for determinism.
+    table = activities._get_table()
+    for i in range(6):
+        table.put_item(
+            Item={"id": f"a{i}", "text": f"activity {i}", "proposedBy": "x", "createdAt": 1000 + i}
+        )
+    res = client.get("/api/activities")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert len(data) == 5  # capped at RECENT_LIMIT
+    # Newest (highest createdAt) first; oldest ("activity 0") dropped.
+    assert [d["text"] for d in data] == [f"activity {i}" for i in (5, 4, 3, 2, 1)]
 
 
 if __name__ == "__main__":

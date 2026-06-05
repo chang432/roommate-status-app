@@ -12,8 +12,13 @@ Plus the Web Push (PoC) endpoints:
     POST /api/push/subscribe           -> { "ok": true }  (stores a subscription)
     POST /api/push/test                -> { "sent", "pruned", "failed" }
 
+And the proposed-activities feed:
+
+    GET  /api/activities               -> [ { "id", "text", "proposedBy", "createdAt" }, ... ]
+    POST /api/activities               -> the updated recent list (and pushes it)
+
 Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
-encapsulated in push.py. Routes stay storage-agnostic.
+in push.py; proposals are in activities.py. Routes stay storage-agnostic.
 """
 
 from __future__ import annotations
@@ -23,8 +28,12 @@ import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+import activities
 import db
 import push
+
+# Cap proposal text so a notification body stays sane.
+MAX_ACTIVITY_LEN = 280
 
 # Number of available roommates that triggers the "gather" push. PROJECT.md
 # specifies 3; this PoC defaults to 2 (override with AVAILABLE_THRESHOLD) so the
@@ -134,6 +143,40 @@ def create_app() -> Flask:
             url="/",
         )
         return jsonify(result)
+
+    # --- Proposed activities ------------------------------------------------
+    @app.get("/api/activities")
+    def get_activities():
+        """Return the most recent proposed activities, newest first."""
+        return jsonify(activities.list_recent())
+
+    @app.post("/api/activities")
+    def propose_activity():
+        """Store a new proposal, push it to everyone, return the recent list."""
+        body = request.get_json(silent=True) or {}
+        text = (body.get("text") or "").strip()
+        proposed_by = (body.get("proposedBy") or "Someone").strip() or "Someone"
+
+        if not text:
+            return jsonify({"error": "An activity is required."}), 400
+        if len(text) > MAX_ACTIVITY_LEN:
+            return jsonify({"error": f"Keep it under {MAX_ACTIVITY_LEN} characters."}), 400
+
+        activities.add_activity(text, proposed_by)
+
+        # Notify every subscribed device. Best-effort: a push failure must not
+        # fail the proposal the user just made.
+        try:
+            push.notify_all(
+                title="New activity proposed 🎉",
+                body=f"{proposed_by}: {text}",
+                url="/",
+            )
+        except Exception:  # noqa: BLE001 - never let push break the request
+            app.logger.exception("Failed to send activity notification")
+
+        # Return the refreshed list so the UI updates in one round-trip.
+        return jsonify(activities.list_recent())
 
     return app
 
