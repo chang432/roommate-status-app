@@ -1,9 +1,12 @@
-// Status model shared across the app. The three statuses come from PROJECT.md:
-// available, busy, and a free-form custom message.
+// Status model shared across the app. Statuses come from PROJECT.md
+// (available, busy, custom) plus two fixed statuses: sleeping and OOH
+// (out of house).
 
 export const STATUS = {
   AVAILABLE: 'available',
   BUSY: 'busy',
+  SLEEPING: 'sleeping',
+  OOH: 'ooh',
   CUSTOM: 'custom',
 }
 
@@ -12,12 +15,16 @@ export const STATUS = {
 export const STATUS_LABEL = {
   [STATUS.AVAILABLE]: 'Available to hang',
   [STATUS.BUSY]: 'Busy with something',
+  [STATUS.SLEEPING]: 'Sleeping',
+  [STATUS.OOH]: 'OOH (Out Of House)',
 }
 
 // Tailwind dot color per status (see tailwind.config.js palette).
 export const STATUS_DOT_CLASS = {
   [STATUS.AVAILABLE]: 'bg-status-green',
   [STATUS.BUSY]: 'bg-status-red',
+  [STATUS.SLEEPING]: 'bg-status-blue',
+  [STATUS.OOH]: 'bg-status-amber',
   [STATUS.CUSTOM]: 'bg-status-purple',
 }
 

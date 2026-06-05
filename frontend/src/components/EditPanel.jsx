@@ -42,6 +42,14 @@ export default function EditPanel({ roommate, onSave, onCancel, saving }) {
         <StatusDot status={STATUS.BUSY} /> Busy with something
       </button>
 
+      <button type="button" className={`${choiceClass(STATUS.SLEEPING)} mb-[10px]`} onClick={() => setStatus(STATUS.SLEEPING)}>
+        <StatusDot status={STATUS.SLEEPING} /> Sleeping
+      </button>
+
+      <button type="button" className={`${choiceClass(STATUS.OOH)} mb-[10px]`} onClick={() => setStatus(STATUS.OOH)}>
+        <StatusDot status={STATUS.OOH} /> OOH (Out Of House)
+      </button>
+
       <label className={`${choiceClass(STATUS.CUSTOM)} mb-[10px] cursor-text`}>
         <StatusDot status={STATUS.CUSTOM} />
         <input

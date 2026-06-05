@@ -24,9 +24,9 @@ import threading
 import boto3
 from botocore.exceptions import ClientError
 
-# Allowed status values. Mirrors the frontend's STATUS enum (utils/status.js)
-# and PROJECT.md: available, busy, or a free-form custom message.
-VALID_STATUSES = {"available", "busy", "custom"}
+# Allowed status values. Mirrors the frontend's STATUS enum (utils/status.js):
+# available, busy, sleeping, ooh (out of house), or a free-form custom message.
+VALID_STATUSES = {"available", "busy", "sleeping", "ooh", "custom"}
 
 # Demo password shared by every roommate. A real backend would store per-user
 # salted password hashes; that work is deferred. Passwords are intentionally
