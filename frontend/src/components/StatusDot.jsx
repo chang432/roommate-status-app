@@ -1,28 +1,36 @@
 import { STATUS, STATUS_DOT_CLASS } from '../utils/status.js'
 
-// Mask the busy icon (a transparent-background PNG silhouette) so it renders
-// filled with the busy status color instead of plain white — i.e. the dot's
-// color is "painted" onto the image shape.
-const BUSY_MASK_STYLE = {
-  WebkitMaskImage: 'url(/busy.png)',
-  maskImage: 'url(/busy.png)',
-  WebkitMaskSize: 'contain',
-  maskSize: 'contain',
-  WebkitMaskRepeat: 'no-repeat',
-  maskRepeat: 'no-repeat',
-  WebkitMaskPosition: 'center',
-  maskPosition: 'center',
+// Statuses that render a tinted icon instead of a plain dot. Each value is a
+// transparent-background PNG silhouette (served from public/); it's used as a
+// CSS mask over the status color, so the icon "takes on" the dot's color.
+const STATUS_ICON = {
+  [STATUS.BUSY]: '/busy.png',
+  [STATUS.OOH]: '/ooh.png',
 }
 
-// Status indicator shown to the left of a roommate. For "busy" this is the busy
-// icon tinted with the busy color; every other status is a small colored dot.
+function maskStyle(src) {
+  return {
+    WebkitMaskImage: `url(${src})`,
+    maskImage: `url(${src})`,
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+  }
+}
+
+// Status indicator shown to the left of a roommate. Statuses in STATUS_ICON
+// render their icon tinted with the status color; the rest are a colored dot.
 export default function StatusDot({ status, className = '' }) {
-  if (status === STATUS.BUSY) {
+  const icon = STATUS_ICON[status]
+  if (icon) {
     return (
       <span
         aria-hidden="true"
-        style={BUSY_MASK_STYLE}
-        className={`h-[16px] w-[16px] flex-none ${STATUS_DOT_CLASS[STATUS.BUSY]} ${className}`}
+        style={maskStyle(icon)}
+        className={`h-[16px] w-[16px] flex-none ${STATUS_DOT_CLASS[status]} ${className}`}
       />
     )
   }
