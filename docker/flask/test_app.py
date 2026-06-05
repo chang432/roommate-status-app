@@ -152,6 +152,39 @@ def test_push_test_unconfigured(client):
     assert res.status_code == 503
 
 
+def test_vapid_private_key_loads_through_pywebpush():
+    """gen_vapid's private key must load via pywebpush's own code path.
+
+    Regression guard: webpush() loads the key with Vapid.from_string(), which
+    expects the base64url raw scalar — not a PEM. This is exactly the call that
+    crashed when push.py handed it a PEM.
+    """
+    from py_vapid import Vapid01
+
+    import gen_vapid
+
+    public_key, private_key = gen_vapid.generate()
+    vapid = Vapid01.from_string(private_key=private_key)  # must not raise
+
+    # The loaded key's public point must match the generated public key, or the
+    # browser's subscription (bound to that public key) would reject our pushes.
+    from cryptography.hazmat.primitives import serialization
+
+    loaded_public = vapid.public_key.public_bytes(
+        serialization.Encoding.X962,
+        serialization.PublicFormat.UncompressedPoint,
+    )
+    assert _b64url(loaded_public) == public_key
+    # And it can actually sign a VAPID header.
+    assert "Authorization" in vapid.sign({"aud": "https://example.com", "sub": "mailto:x@y.z"})
+
+
+def _b64url(raw: bytes) -> str:
+    import base64
+
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
 if __name__ == "__main__":
     import sys
 

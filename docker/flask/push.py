@@ -23,7 +23,6 @@ VAPID keys are generated once with gen_vapid.py; see that script.
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import logging
@@ -31,8 +30,6 @@ import os
 import threading
 
 import boto3
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
 from pywebpush import WebPushException, webpush
 
 # Reuse db's region resolution so push and roommate data sign requests the same
@@ -59,28 +56,6 @@ _table_lock = threading.Lock()
 def is_configured() -> bool:
     """True when both VAPID keys are present so pushes can actually be sent."""
     return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
-
-
-# --- VAPID key handling -----------------------------------------------------
-def _b64url_decode(value: str) -> bytes:
-    """Decode unpadded base64url (the encoding used for VAPID keys)."""
-    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
-
-
-def _private_key_pem() -> str:
-    """Build a PKCS8 PEM from the base64url raw private scalar.
-
-    pywebpush/py_vapid parse PEM robustly across versions, so we convert the
-    compact single-line env value (easy to pass as a secret) into PEM here
-    rather than depending on their raw-key parsing.
-    """
-    private_value = int.from_bytes(_b64url_decode(VAPID_PRIVATE_KEY), "big")
-    key = ec.derive_private_key(private_value, ec.SECP256R1())
-    return key.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption(),
-    ).decode()
 
 
 # --- Subscription storage (DynamoDB) ----------------------------------------
@@ -145,7 +120,6 @@ def notify_all(title: str, body: str, url: str = "/") -> dict:
         log.warning("Push not configured (VAPID keys missing); skipping notify_all.")
         return {"sent": 0, "pruned": 0, "failed": 0}
 
-    pem = _private_key_pem()
     payload = json.dumps({"title": title, "body": body, "url": url})
     sent = pruned = failed = 0
 
@@ -164,7 +138,9 @@ def notify_all(title: str, body: str, url: str = "/") -> dict:
             webpush(
                 subscription_info=json.loads(raw),
                 data=payload,
-                vapid_private_key=pem,
+                # VAPID_PRIVATE_KEY is the base64url raw P-256 scalar from
+                # gen_vapid.py; pywebpush's Vapid.from_string loads it directly.
+                vapid_private_key=VAPID_PRIVATE_KEY,
                 vapid_claims={"sub": VAPID_SUBJECT},
                 timeout=10,
             )
@@ -179,6 +155,12 @@ def notify_all(title: str, body: str, url: str = "/") -> dict:
             else:
                 failed += 1
                 log.warning("Push send failed (%s): %s", status, err)
+        except Exception as err:  # noqa: BLE001 - one bad sub must not stop the batch
+            # Network errors, encryption issues, etc. Count and move on so a
+            # single bad subscription never fails the whole notify (or the
+            # request that triggered it).
+            failed += 1
+            log.warning("Push send error: %s", err)
 
     log.info("notify_all: sent=%d pruned=%d failed=%d", sent, pruned, failed)
     return {"sent": sent, "pruned": pruned, "failed": failed}
