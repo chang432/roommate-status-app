@@ -7,7 +7,7 @@ string `id` (e.g. "jordan"), with schemaless `name`, `status`, and `statusText`
 attributes written by this app.
 
 Configuration (resolved at call time, not import time):
-    ROOMMATE_TABLE  - table name (default "RoommateStatus")
+    ROOMMATE_TABLE  - table name (default "RoommateStatus-main")
     AWS_REGION / standard AWS config chain - region & credentials
 
 The table starts empty after deploy; run seed.py (or call seed()) once to load
@@ -37,9 +37,10 @@ DEMO_PASSWORD = "roomie"
 # (PROJECT.md: "Whenever 3 or more status's are available...").
 AVAILABLE_THRESHOLD = 3
 
-# Table name is read from the environment so the same image can point at a
-# dev/staging/prod table without code changes.
-TABLE_NAME = os.environ.get("ROOMMATE_TABLE", "RoommateStatus")
+# Table name is read from the environment so the same image can point at the
+# dev or main table without code changes. Defaults to the production table; the
+# dev deployment sets ROOMMATE_TABLE=RoommateStatus-dev.
+TABLE_NAME = os.environ.get("ROOMMATE_TABLE", "RoommateStatus-main")
 
 # Initial household roster. Used only by seed()/reset(); once seeded, DynamoDB
 # is the source of truth and these values are not consulted again.

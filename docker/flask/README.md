@@ -21,13 +21,15 @@ where a real backend would push a notification to everyone (see PROJECT.md).
 
 ## Data store
 
-Backed by the DynamoDB table from `infrastructure/dynamodb-table.yaml` (one item
-per roommate, keyed by `id`). Configuration:
+Backed by a per-deployment DynamoDB table — `RoommateStatus-dev` or
+`RoommateStatus-main` (see `infrastructure/dynamodb-table-dev.yaml` and
+`dynamodb-table-main.yaml`) — one item per roommate, keyed by `id`.
+Configuration:
 
-| Env var          | Default          | Purpose                              |
-| ---------------- | ---------------- | ------------------------------------ |
-| `ROOMMATE_TABLE` | `RoommateStatus` | Table name                           |
-| `AWS_REGION`     | —                | Region (or use your AWS config/SSO)  |
+| Env var          | Default               | Purpose                              |
+| ---------------- | --------------------- | ------------------------------------ |
+| `ROOMMATE_TABLE` | `RoommateStatus-main` | Table name                           |
+| `AWS_REGION`     | —                     | Region (or use your AWS config/SSO)  |
 
 Credentials resolve via the standard AWS chain. The deploy script lives in
 `infrastructure/`; once the table exists, seed the initial household **once**:

@@ -59,14 +59,27 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
+          # Public hostname Caddy issues the TLS cert for on this VPS.
+          SITE_DOMAIN: ${{ vars.MAIN_SITE_DOMAIN }}
+          # main deployment uses its own DynamoDB table (dynamodb-table-main.yaml).
+          ROOMMATE_TABLE: RoommateStatus-main
         with:
           host: ${{ steps.find_main_vps.outputs.main_vps_ip }}
           username: root
           key: ${{ secrets.SSH_KEY }}
           port: 22
-          envs: REPO_FULL,REPO_NAME,BRANCH,GH_PAT_REPO_READ,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION
+          envs: REPO_FULL,REPO_NAME,BRANCH,GH_PAT_REPO_READ,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,SITE_DOMAIN,ROOMMATE_TABLE
           script: |
             set -euo pipefail
+
+            # --- Require the TLS hostname before doing any work -------------
+            # Caddy needs SITE_DOMAIN to issue the cert; fail loudly and early
+            # (with a clear message) rather than mid-deploy if the repo var is
+            # missing. Set it under Settings > Variables > MAIN_SITE_DOMAIN.
+            if [ -z "${SITE_DOMAIN:-}" ]; then
+              echo "SITE_DOMAIN is empty. Set the MAIN_SITE_DOMAIN repository variable." >&2
+              exit 1
+            fi
 
             # --- Ensure Docker is installed ---------------------------------
             # The "main" VPS may be a bare box; install Docker + the compose
@@ -89,10 +102,11 @@ jobs:
             docker --version
             docker compose version
 
-            # --- AWS credentials for the Flask container --------------------
+            # --- AWS credentials for the Flask + Caddy containers -----------
             # docker-compose mounts ${HOME}/.aws (=/root/.aws as root) read-only
-            # into the Flask container so boto3 can reach DynamoDB. Materialize
-            # the creds passed from GitHub secrets so that mount is populated.
+            # into both the Flask container (boto3 -> DynamoDB) and the Caddy
+            # container (route53 DNS-01 -> TLS cert). Materialize the creds
+            # passed from GitHub secrets so that mount is populated.
             umask 077
             mkdir -p /root/.aws
             cat > /root/.aws/credentials <<EOF

@@ -1,0 +1,13 @@
+# Local-dev override for docker-compose.yml. Swaps Caddy to serve plain HTTP on
+# localhost so it never touches Let's Encrypt / Route 53 (no public cert churn,
+# no rate-limit burn, no /etc/hosts games). Layer it on top of the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+#
+# start.sh does this automatically. The base file (what the deploy workflow runs
+# with an explicit single -f) keeps the production DNS-01 config untouched.
+services:
+  caddy:
+    # Replace the baked-in DNS-01 Caddyfile with the plain-HTTP local one.
+    volumes:
+      - "./caddy/Caddyfile.local:/etc/caddy/Caddyfile:ro"

@@ -1,33 +1,24 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  DynamoDB table for the York Terrace Roomie Status app. Stores one item per
-  roommate, keyed by a stable string id (e.g. "jordan"). Non-key attributes
-  such as name, status, and statusText are schemaless and written by the app.
+  DynamoDB table for the "dev" deployment of the York Terrace Roomie Status
+  app. Stores one item per roommate, keyed by a stable string id (e.g.
+  "jordan"). Non-key attributes such as name, status, and statusText are
+  schemaless and written by the app.
 
-Parameters:
-  TableName:
-    Type: String
-    Default: RoommateStatus
-    Description: Name of the DynamoDB table to create.
-    AllowedPattern: "[a-zA-Z0-9_.-]+"
-    MinLength: 3
-    MaxLength: 255
-
-  Environment:
-    Type: String
-    Default: dev
-    AllowedValues: [dev, staging, prod]
-    Description: Deployment environment, applied as a tag.
+  This is the "-dev" half of the dev/main split (see dynamodb-table-main.yaml
+  for the production table). The table name is fixed per template so the two
+  deployments can never accidentally share data.
 
 Resources:
   RoommateStatusTable:
     Type: AWS::DynamoDB::Table
-    # Keep the table (and its data) if the stack is deleted; flip to Delete for
-    # throwaway/dev stacks if you prefer automatic teardown.
+    # Keep the table (and its data) if the stack is deleted. Even on dev,
+    # retaining avoids surprise data loss; delete the table manually when you
+    # really want a clean slate.
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      TableName: !Ref TableName
+      TableName: RoommateStatus-dev
       # On-demand capacity: no throughput to manage, pay only for what's used —
       # a good fit for a tiny household app with bursty, low traffic.
       BillingMode: PAY_PER_REQUEST
@@ -47,7 +38,7 @@ Resources:
         - Key: Application
           Value: roomie-status
         - Key: Environment
-          Value: !Ref Environment
+          Value: dev
 
 Outputs:
   TableName:
