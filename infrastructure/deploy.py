@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Deploy the DynamoDB CloudFormation stack.
+"""Deploy a DynamoDB CloudFormation stack for the dev or main environment.
+
+There are two independent deployments, each with its own template and its own
+DynamoDB table (see dynamodb-table-dev.yaml / dynamodb-table-main.yaml):
+
+    --deployment dev   -> stack "roomie-dynamodb-dev",  table "RoommateStatus-dev"
+    --deployment main  -> stack "roomie-dynamodb-main", table "RoommateStatus-main"
 
 Creates the stack if it doesn't exist, otherwise updates it, then waits for the
 operation to finish and prints the stack outputs.
@@ -9,9 +15,8 @@ variables, a shared credentials file, or an instance/SSO profile) — the same
 resolution boto3 uses by default.
 
 Examples:
-    python deploy.py
-    python deploy.py --stack-name roomie-prod --table-name RoommateStatus \\
-        --environment prod --region us-east-1
+    python deploy.py --deployment dev
+    python deploy.py --deployment main --region us-east-1
 """
 
 from __future__ import annotations
@@ -23,21 +28,36 @@ import sys
 import boto3
 from botocore.exceptions import ClientError, WaiterError
 
-# Default template lives next to this script.
-DEFAULT_TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dynamodb-table.yaml")
+# Templates live next to this script.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+# Each deployment is fully described by its own template + stack name. The table
+# name itself is baked into the template, so there is nothing per-environment to
+# pass as a CloudFormation parameter — picking the deployment picks everything.
+DEPLOYMENTS = {
+    "dev": {
+        "template": os.path.join(_HERE, "dynamodb-table-dev.yaml"),
+        "stack_name": "roomie-dynamodb-dev",
+    },
+    "main": {
+        "template": os.path.join(_HERE, "dynamodb-table-main.yaml"),
+        "stack_name": "roomie-dynamodb-main",
+    },
+}
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Deploy the DynamoDB CloudFormation stack.")
-    parser.add_argument("--stack-name", default="roomie-dynamodb", help="CloudFormation stack name.")
-    parser.add_argument("--template", default=DEFAULT_TEMPLATE, help="Path to the CloudFormation template.")
-    parser.add_argument("--table-name", default="RoommateStatus", help="DynamoDB table name (TableName parameter).")
+    parser = argparse.ArgumentParser(description="Deploy a DynamoDB CloudFormation stack.")
     parser.add_argument(
-        "--environment",
-        default="dev",
-        choices=["dev", "staging", "prod"],
-        help="Environment tag (Environment parameter).",
+        "--deployment",
+        required=True,
+        choices=sorted(DEPLOYMENTS),
+        help="Which deployment to provision: 'dev' or 'main'. Selects the template and stack name.",
     )
+    # Both default to None so the deployment's built-in values are used unless
+    # explicitly overridden.
+    parser.add_argument("--stack-name", default=None, help="Override the CloudFormation stack name.")
+    parser.add_argument("--template", default=None, help="Override the path to the CloudFormation template.")
     parser.add_argument(
         "--region",
         default=os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION"),
@@ -61,16 +81,14 @@ def stack_exists(cfn, stack_name: str) -> bool:
     return status != "REVIEW_IN_PROGRESS"
 
 
-def deploy(cfn, args, template_body: str) -> bool:
+def deploy(cfn, stack_name: str, template_body: str) -> bool:
     """Create or update the stack. Returns True if a change was submitted."""
-    params = [
-        {"ParameterKey": "TableName", "ParameterValue": args.table_name},
-        {"ParameterKey": "Environment", "ParameterValue": args.environment},
-    ]
-    common = dict(StackName=args.stack_name, TemplateBody=template_body, Parameters=params)
+    # The table name and tags are fixed in the template, so no parameters are
+    # passed here.
+    common = dict(StackName=stack_name, TemplateBody=template_body)
 
-    if stack_exists(cfn, args.stack_name):
-        print(f"Updating existing stack '{args.stack_name}'…")
+    if stack_exists(cfn, stack_name):
+        print(f"Updating existing stack '{stack_name}'…")
         try:
             cfn.update_stack(**common)
         except ClientError as err:
@@ -81,12 +99,12 @@ def deploy(cfn, args, template_body: str) -> bool:
             raise
         waiter_name = "stack_update_complete"
     else:
-        print(f"Creating new stack '{args.stack_name}'…")
+        print(f"Creating new stack '{stack_name}'…")
         cfn.create_stack(**common)
         waiter_name = "stack_create_complete"
 
     print("Waiting for CloudFormation to finish…")
-    cfn.get_waiter(waiter_name).wait(StackName=args.stack_name)
+    cfn.get_waiter(waiter_name).wait(StackName=stack_name)
     return True
 
 
@@ -103,8 +121,13 @@ def print_outputs(cfn, stack_name: str) -> None:
 def main() -> int:
     args = parse_args()
 
+    # Resolve everything from the chosen deployment, allowing explicit overrides.
+    cfg = DEPLOYMENTS[args.deployment]
+    stack_name = args.stack_name or cfg["stack_name"]
+    template = args.template or cfg["template"]
+
     try:
-        with open(args.template, "r", encoding="utf-8") as fh:
+        with open(template, "r", encoding="utf-8") as fh:
             template_body = fh.read()
     except OSError as err:
         print(f"Could not read template: {err}", file=sys.stderr)
@@ -114,9 +137,9 @@ def main() -> int:
     cfn = boto3.client("cloudformation", region_name=args.region)
 
     try:
-        deploy(cfn, args, template_body)
-        print(f"\nStack '{args.stack_name}' is ready.")
-        print_outputs(cfn, args.stack_name)
+        deploy(cfn, stack_name, template_body)
+        print(f"\nStack '{stack_name}' is ready.")
+        print_outputs(cfn, stack_name)
     except (ClientError, WaiterError) as err:
         print(f"\nDeployment failed: {err}", file=sys.stderr)
         return 1

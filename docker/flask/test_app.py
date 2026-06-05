@@ -27,8 +27,9 @@ from app import create_app
 def _dynamodb():
     """Stand up a mocked DynamoDB table for the whole test session.
 
-    Mirrors the key schema in infrastructure/dynamodb-table.yaml. Kept open for
-    the session so db.py's cached table resource stays valid across tests.
+    Mirrors the key schema in the infrastructure templates
+    (infrastructure/dynamodb-table-{dev,main}.yaml). Kept open for the session
+    so db.py's cached table resource stays valid across tests.
     """
     with mock_aws():
         boto3.resource("dynamodb").create_table(

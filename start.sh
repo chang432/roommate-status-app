@@ -32,6 +32,12 @@ APP_URL="https://${SITE_DOMAIN:-<set SITE_DOMAIN>}"
 # relative build contexts in the compose file resolve against the file's dir.
 COMPOSE=(docker compose -f "$COMPOSE_FILE")
 
+# Local dev targets the "dev" deployment: the RoommateStatus-dev DynamoDB table
+# (infrastructure/dynamodb-table-dev.yaml). Exporting ROOMMATE_TABLE points the
+# Flask container at the dev table regardless of the compose default.
+DEPLOYMENT="dev"
+export ROOMMATE_TABLE="RoommateStatus-dev"
+
 # --- Pretty logging ---------------------------------------------------------
 log()  { printf '\033[1;36m▶ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }
@@ -52,13 +58,14 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # --- 1. Deploy the DynamoDB CloudFormation stack ----------------------------
-# The backend reads/writes the RoommateStatus table, so ensure it exists first.
+# The backend reads/writes the RoommateStatus-dev table, so ensure it exists
+# first by deploying the dev stack.
 INFRA_DIR="$ROOT_DIR/infrastructure"
 INFRA_PYTHON="$INFRA_DIR/.venv/bin/python"
 [ -x "$INFRA_PYTHON" ] || die "Infrastructure venv not found at $INFRA_PYTHON. Create it: cd infrastructure && python -m venv .venv && .venv/bin/pip install -r requirements.txt"
 
-log "Deploying DynamoDB CloudFormation stack…"
-( cd "$INFRA_DIR" && "$INFRA_PYTHON" deploy.py )
+log "Deploying DynamoDB CloudFormation stack (${DEPLOYMENT})…"
+( cd "$INFRA_DIR" && "$INFRA_PYTHON" deploy.py --deployment "$DEPLOYMENT" )
 
 # --- 2. Build & start the full stack ----------------------------------------
 # Detached so we can health-check below, then we tail logs in the foreground.

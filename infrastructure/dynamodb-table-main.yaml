@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  DynamoDB table for the "main" (production) deployment of the York Terrace
+  Roomie Status app. Stores one item per roommate, keyed by a stable string id
+  (e.g. "jordan"). Non-key attributes such as name, status, and statusText are
+  schemaless and written by the app.
+
+  This is the "-main" half of the dev/main split (see dynamodb-table-dev.yaml
+  for the dev table). The table name is fixed per template so the two
+  deployments can never accidentally share data.
+
+Resources:
+  RoommateStatusTable:
+    Type: AWS::DynamoDB::Table
+    # Keep the table (and its data) if the stack is deleted — this is the
+    # production table, so never tear it down automatically.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-main
+      # On-demand capacity: no throughput to manage, pay only for what's used —
+      # a good fit for a tiny household app with bursty, low traffic.
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      # Encrypt at rest with an AWS-owned key (no extra cost).
+      SSESpecification:
+        SSEEnabled: true
+      # Continuous backups so a bad write can be rolled back.
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: main
+
+Outputs:
+  TableName:
+    Description: Name of the created DynamoDB table.
+    Value: !Ref RoommateStatusTable
+    Export:
+      Name: !Sub "${AWS::StackName}-TableName"
+
+  TableArn:
+    Description: ARN of the created DynamoDB table.
+    Value: !GetAtt RoommateStatusTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TableArn"
