@@ -145,6 +145,9 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
             const isMember = members.some(
               (m) => m.toLowerCase() === user.name.toLowerCase()
             )
+            // The proposer is permanently part of their own activity, so they
+            // get no Join/Leave button.
+            const isProposer = a.proposedBy.toLowerCase() === user.name.toLowerCase()
             const expanded = expandedId === a.id
             return (
               <div
@@ -191,21 +194,23 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                   >
                     {sentId === a.id ? '✓' : '🔔'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleToggleMember(a, isMember)
-                    }}
-                    disabled={joiningId === a.id}
-                    className={`flex-none rounded-full border px-[14px] py-[8px] text-[12.5px] font-bold transition hover:brightness-95 disabled:opacity-60 ${
-                      isMember
-                        ? 'border-line bg-white text-ink-soft'
-                        : 'border-accent bg-accent text-white'
-                    }`}
-                  >
-                    {isMember ? 'Leave' : 'Join'}
-                  </button>
+                  {!isProposer && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleMember(a, isMember)
+                      }}
+                      disabled={joiningId === a.id}
+                      className={`flex-none rounded-full border px-[14px] py-[8px] text-[12.5px] font-bold transition hover:brightness-95 disabled:opacity-60 ${
+                        isMember
+                          ? 'border-line bg-white text-ink-soft'
+                          : 'border-accent bg-accent text-white'
+                      }`}
+                    >
+                      {isMember ? 'Leave' : 'Join'}
+                    </button>
+                  )}
                 </div>
 
                 {expanded && (
