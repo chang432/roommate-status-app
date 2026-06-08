@@ -16,9 +16,9 @@ And the proposed-activities feed:
 
     GET  /api/activities               -> [ { "id", "text", "proposedBy", "createdAt", "members" }, ... ]
     POST /api/activities               -> the updated recent list (and pushes it)
-    POST /api/activities/<id>/join     -> the updated recent list
+    POST /api/activities/<id>/join     -> the updated recent list (and pushes it)
     POST /api/activities/<id>/leave    -> the updated recent list
-    POST /api/activities/<id>/comments -> the updated recent list
+    POST /api/activities/<id>/comments -> the updated recent list (and pushes it)
 
 Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
 in push.py; proposals are in activities.py. Routes stay storage-agnostic.
@@ -191,8 +191,21 @@ def create_app() -> Flask:
         name = (body.get("name") or "").strip()
         if not name:
             return jsonify({"error": "A name is required."}), 400
-        if activities.join(activity_id, name) is None:
+        activity = activities.join(activity_id, name)
+        if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+
+        # Let everyone know someone's in. Best-effort: a push failure must not
+        # fail the join. (Leaving is intentionally quiet — no notification.)
+        try:
+            push.notify_all(
+                title="Someone joined an activity 🙌",
+                body=f"{name} joined {activity['text']}",
+                url="/",
+            )
+        except Exception:  # noqa: BLE001 - never let push break the request
+            app.logger.exception("Failed to send join notification")
+
         # Consistent read so the updated member list is reflected immediately.
         return jsonify(activities.list_recent(consistent=True))
 
@@ -220,8 +233,21 @@ def create_app() -> Flask:
             return jsonify({"error": "A comment is required."}), 400
         if len(text) > MAX_COMMENT_LEN:
             return jsonify({"error": f"Keep it under {MAX_COMMENT_LEN} characters."}), 400
-        if activities.add_comment(activity_id, author, text) is None:
+        activity = activities.add_comment(activity_id, author, text)
+        if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+
+        # Notify everyone of the new comment. Best-effort: a push failure must
+        # not fail the comment the user just posted.
+        try:
+            push.notify_all(
+                title="New comment 💬",
+                body=f"{author} on “{activity['text']}”: {text}",
+                url="/",
+            )
+        except Exception:  # noqa: BLE001 - never let push break the request
+            app.logger.exception("Failed to send comment notification")
+
         # Consistent read so the new comment is reflected immediately.
         return jsonify(activities.list_recent(consistent=True))
 

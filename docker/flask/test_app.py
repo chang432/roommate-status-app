@@ -311,6 +311,65 @@ def test_comment_unknown_activity_404(client):
     assert res.status_code == 404
 
 
+def _capture_notifications(monkeypatch):
+    """Replace push.notify_all with a recorder; return the list of its kwargs.
+
+    The routes call push.notify_all by attribute at request time, so patching it
+    on the push module captures the calls without needing VAPID keys.
+    """
+    calls = []
+
+    def fake_notify_all(**kwargs):
+        calls.append(kwargs)
+        return {"sent": 0, "pruned": 0, "failed": 0}
+
+    monkeypatch.setattr(push, "notify_all", fake_notify_all)
+    return calls
+
+
+def test_join_notifies_everyone(client, monkeypatch):
+    created = client.post(
+        "/api/activities", json={"text": "Picnic", "proposedBy": "Andre"}
+    ).get_json()
+    activity_id = created[0]["id"]
+
+    calls = _capture_notifications(monkeypatch)
+    res = client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    assert res.status_code == 200
+    assert len(calls) == 1
+    assert "Kayla" in calls[0]["body"] and "Picnic" in calls[0]["body"]
+
+
+def test_leave_does_not_notify(client, monkeypatch):
+    created = client.post(
+        "/api/activities", json={"text": "Picnic", "proposedBy": "Andre"}
+    ).get_json()
+    activity_id = created[0]["id"]
+    client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+
+    calls = _capture_notifications(monkeypatch)
+    res = client.post(f"/api/activities/{activity_id}/leave", json={"name": "Kayla"})
+    assert res.status_code == 200
+    assert calls == []  # leaving is intentionally quiet
+
+
+def test_comment_notifies_everyone(client, monkeypatch):
+    created = client.post(
+        "/api/activities", json={"text": "Movie night", "proposedBy": "Andre"}
+    ).get_json()
+    activity_id = created[0]["id"]
+
+    calls = _capture_notifications(monkeypatch)
+    res = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"author": "Kayla", "text": "Count me in"},
+    )
+    assert res.status_code == 200
+    assert len(calls) == 1
+    body = calls[0]["body"]
+    assert "Kayla" in body and "Count me in" in body and "Movie night" in body
+
+
 def test_join_requires_name(client):
     created = client.post("/api/activities", json={"text": "Hike"}).get_json()
     res = client.post(f"/api/activities/{created[0]['id']}/join", json={"name": "  "})
