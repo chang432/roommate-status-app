@@ -175,7 +175,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                   </div>
                   {/* Member count — at least 1 since the proposer auto-joins. */}
                   <span
-                    className="flex-none rounded-full bg-accent-soft px-[10px] py-[5px] text-[12.5px] font-bold text-accent-deep"
+                    className="flex-none text-[13px] font-bold text-ink-soft"
                     title={`${members.length} joined`}
                   >
                     👥 {members.length}

@@ -126,13 +126,20 @@ def get(activity_id: str) -> dict | None:
     return _project(item) if item else None
 
 
-def list_recent(limit: int = RECENT_LIMIT) -> list[dict]:
-    """Return the most recent proposals, newest first."""
+def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
+    """Return the most recent proposals, newest first.
+
+    Pass consistent=True for the response that follows a write (propose / join /
+    leave): DynamoDB scans are eventually consistent by default, so a plain scan
+    right after an update can return the pre-write member list, leaving the UI
+    showing a stale count. A strongly-consistent read avoids that. The default
+    (eventual) read is fine for the plain GET feed.
+    """
     table = _get_table()
-    resp = table.scan()
+    resp = table.scan(ConsistentRead=consistent)
     items = resp.get("Items", [])
     while "LastEvaluatedKey" in resp:
-        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
+        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"], ConsistentRead=consistent)
         items.extend(resp.get("Items", []))
     items.sort(key=lambda i: int(i["createdAt"]), reverse=True)
     return [_project(i) for i in items[:limit]]

@@ -177,7 +177,8 @@ def create_app() -> Flask:
             app.logger.exception("Failed to send activity notification")
 
         # Return the refreshed list so the UI updates in one round-trip.
-        return jsonify(activities.list_recent())
+        # Consistent read so the just-created proposal is always included.
+        return jsonify(activities.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/join")
     def join_activity(activity_id: str):
@@ -188,7 +189,8 @@ def create_app() -> Flask:
             return jsonify({"error": "A name is required."}), 400
         if activities.join(activity_id, name) is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
-        return jsonify(activities.list_recent())
+        # Consistent read so the updated member list is reflected immediately.
+        return jsonify(activities.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/leave")
     def leave_activity(activity_id: str):
@@ -199,7 +201,8 @@ def create_app() -> Flask:
             return jsonify({"error": "A name is required."}), 400
         if activities.leave(activity_id, name) is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
-        return jsonify(activities.list_recent())
+        # Consistent read so the updated member list is reflected immediately.
+        return jsonify(activities.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/notify")
     def emphasize_activity(activity_id: str):
