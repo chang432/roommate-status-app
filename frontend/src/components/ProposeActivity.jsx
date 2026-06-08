@@ -16,7 +16,10 @@ function timeAgo(createdAt) {
 // "Propose an activity": a text field + Send button that pushes the proposal to
 // everyone, with the most recent proposals listed below (newest nearest the
 // input).
-export default function ProposeActivity() {
+// `refreshSignal` is a counter the parent bumps on pull-to-refresh; bumping it
+// re-fetches the recent feed without remounting (so a half-typed proposal and
+// any inline notify state are preserved).
+export default function ProposeActivity({ refreshSignal = 0 }) {
   const { user } = useAuth()
   const [activities, setActivities] = useState([])
   const [text, setText] = useState('')
@@ -27,7 +30,7 @@ export default function ProposeActivity() {
   const [notifyingId, setNotifyingId] = useState(null)
   const [sentId, setSentId] = useState(null)
 
-  // Load the recent feed on mount.
+  // Load the recent feed on mount, and again whenever the parent refreshes.
   useEffect(() => {
     let active = true
     getActivities()
@@ -38,7 +41,7 @@ export default function ProposeActivity() {
     return () => {
       active = false
     }
-  }, [])
+  }, [refreshSignal])
 
   async function handleSubmit(e) {
     e.preventDefault()
