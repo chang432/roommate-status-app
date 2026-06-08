@@ -39,6 +39,17 @@ Credentials resolve via the standard AWS chain. The deploy script lives in
 python seed.py           # idempotent — safe to re-run
 ```
 
+## TODO before going public
+
+- **Bound comment storage on proposed activities.** Comments are appended to an
+  activity's `comments` list with no cap, so the stored list grows without
+  limit even though the API/UI only ever show the most recent few
+  (`activities.COMMENTS_LIMIT`). Within a single household this is fine, but if
+  the app is opened to the public it's an unbounded-growth risk (item size,
+  cost, and eventually DynamoDB's 400 KB item limit). Cap the stored list —
+  e.g. trim to the newest `COMMENTS_LIMIT` on write, or move comments to their
+  own table keyed by activity id with pagination.
+
 ## Run locally
 
 ```bash
