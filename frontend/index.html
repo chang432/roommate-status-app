@@ -7,10 +7,13 @@
          and iOS won't auto-zoom when a small-font input is focused. (Mobile
          Safari ignores user-scalable in a browser tab for accessibility, but
          honors it in a standalone home-screen PWA — which is the target here.)
+         minimum-scale pins the launch scale to exactly 1 so the standalone PWA
+         opens fully zoomed out (whole device width) instead of magnified — on
+         iOS initial-scale alone is sometimes ignored on first paint.
          viewport-fit=cover lets content extend under the notch/home indicator. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
 
     <!-- PWA: installable + push-capable. theme-color tints the iOS status bar. -->
