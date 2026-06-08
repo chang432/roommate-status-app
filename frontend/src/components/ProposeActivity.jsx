@@ -251,7 +251,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                     max-height. `inert` while collapsed keeps the hidden controls
                     out of the tab order and unclickable. */}
                 <div
-                  className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
+                  className={`grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none ${
                     expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
                   }`}
                 >
