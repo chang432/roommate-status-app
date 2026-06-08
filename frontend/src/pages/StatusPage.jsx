@@ -86,10 +86,21 @@ export default function StatusPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[640px] px-[22px] pb-16 pt-10">
+    <>
+      {/* Lives off-screen above the top; the pull drags it into view. */}
       <PullToRefreshIndicator pull={pull} refreshing={refreshing} threshold={threshold} />
 
-      <header className="mb-2 flex items-center gap-[14px]">
+      <div
+        className="mx-auto max-w-[640px] px-[22px] pb-16 pt-10"
+        style={{
+          // Push the whole page down with the pull so the dots are revealed in
+          // the gap above the content rather than overlaying it. A transform
+          // here would capture the fixed indicator, which is why it sits outside.
+          transform: pull ? `translateY(${pull}px)` : undefined,
+          transition: pull > 0 && !refreshing ? 'none' : 'transform 260ms ease',
+        }}
+      >
+        <header className="mb-2 flex items-center gap-[14px]">
         <Brandmark className="h-[46px] w-[46px]" iconClassName="h-[26px] w-[26px]" />
         <div className="flex-1">
           <h1 className="font-display text-[24px] font-semibold leading-[1.1] -tracking-[0.01em]">
@@ -151,6 +162,7 @@ export default function StatusPage() {
           <ProposeActivity refreshSignal={refreshSignal} />
         </>
       )}
-    </div>
+      </div>
+    </>
   )
 }
