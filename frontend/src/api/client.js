@@ -82,3 +82,21 @@ export async function notifyActivity(id, emphasizedBy) {
     body: JSON.stringify({ emphasizedBy }),
   })
 }
+
+// POST /api/activities/:id/join — add the named roommate to an activity.
+// Returns the refreshed recent list (with updated member counts).
+export async function joinActivity(id, name) {
+  return request(`/activities/${id}/join`, {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+}
+
+// POST /api/activities/:id/leave — remove the named roommate from an activity.
+// Returns the refreshed recent list.
+export async function leaveActivity(id, name) {
+  return request(`/activities/${id}/leave`, {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+}

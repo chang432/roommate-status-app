@@ -14,8 +14,10 @@ Plus the Web Push (PoC) endpoints:
 
 And the proposed-activities feed:
 
-    GET  /api/activities               -> [ { "id", "text", "proposedBy", "createdAt" }, ... ]
+    GET  /api/activities               -> [ { "id", "text", "proposedBy", "createdAt", "members" }, ... ]
     POST /api/activities               -> the updated recent list (and pushes it)
+    POST /api/activities/<id>/join     -> the updated recent list
+    POST /api/activities/<id>/leave    -> the updated recent list
 
 Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
 in push.py; proposals are in activities.py. Routes stay storage-agnostic.
@@ -175,6 +177,28 @@ def create_app() -> Flask:
             app.logger.exception("Failed to send activity notification")
 
         # Return the refreshed list so the UI updates in one round-trip.
+        return jsonify(activities.list_recent())
+
+    @app.post("/api/activities/<activity_id>/join")
+    def join_activity(activity_id: str):
+        """Add the caller to an activity's members; return the refreshed list."""
+        body = request.get_json(silent=True) or {}
+        name = (body.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "A name is required."}), 400
+        if activities.join(activity_id, name) is None:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        return jsonify(activities.list_recent())
+
+    @app.post("/api/activities/<activity_id>/leave")
+    def leave_activity(activity_id: str):
+        """Remove the caller from an activity's members; return the refreshed list."""
+        body = request.get_json(silent=True) or {}
+        name = (body.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "A name is required."}), 400
+        if activities.leave(activity_id, name) is None:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
         return jsonify(activities.list_recent())
 
     @app.post("/api/activities/<activity_id>/notify")

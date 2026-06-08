@@ -22,6 +22,7 @@ import time
 import uuid
 
 import boto3
+from botocore.exceptions import ClientError
 
 # Reuse db's region resolution so all tables sign requests the same way.
 from db import _region
@@ -54,27 +55,69 @@ def _project(item: dict) -> dict:
     """Shape a raw DynamoDB item to what the frontend expects.
 
     createdAt is stored as a number (epoch millis) and comes back as a Decimal,
-    which isn't JSON-serializable — cast it to int here.
+    which isn't JSON-serializable — cast it to int here. `members` is a DynamoDB
+    string set (unordered, and absent once empty) so we present it as a stable,
+    sorted list; when it's missing we fall back to the proposer, keeping the
+    count at least 1 (the creator is always a member) and covering legacy items
+    written before join/leave existed.
     """
+    members = item.get("members")
+    members = sorted(members) if members else [item.get("proposedBy", "Someone")]
     return {
         "id": item["id"],
         "text": item["text"],
         "proposedBy": item.get("proposedBy", "Someone"),
         "createdAt": int(item["createdAt"]),
+        "members": members,
     }
 
 
 def add_activity(text: str, proposed_by: str = "Someone") -> dict:
     """Store a new proposal and return it. Caller is responsible for validation."""
+    proposer = proposed_by or "Someone"
     item = {
         "id": uuid.uuid4().hex,
         "text": text,
-        "proposedBy": proposed_by or "Someone",
+        "proposedBy": proposer,
         # Epoch millis drives newest-first ordering in list_recent().
         "createdAt": int(time.time() * 1000),
+        # The proposer joins automatically, so the count starts at 1.
+        "members": {proposer},
     }
     _get_table().put_item(Item=item)
     return _project(item)
+
+
+def _set_membership(activity_id: str, name: str, op: str) -> dict | None:
+    """Add or remove `name` from an activity's members; return it, or None.
+
+    `op` is "ADD" (join) or "DELETE" (leave). Both are atomic and idempotent at
+    the DynamoDB level — joining twice or leaving when absent is a no-op. None
+    means the activity doesn't exist.
+    """
+    try:
+        resp = _get_table().update_item(
+            Key={"id": activity_id},
+            UpdateExpression=f"{op} members :m",
+            ExpressionAttributeValues={":m": {name}},
+            ConditionExpression="attribute_exists(id)",
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None  # Unknown activity id.
+        raise
+    return _project(resp["Attributes"])
+
+
+def join(activity_id: str, name: str) -> dict | None:
+    """Add `name` to an activity's members. None if the activity is unknown."""
+    return _set_membership(activity_id, name, "ADD")
+
+
+def leave(activity_id: str, name: str) -> dict | None:
+    """Remove `name` from an activity's members. None if the activity is unknown."""
+    return _set_membership(activity_id, name, "DELETE")
 
 
 def get(activity_id: str) -> dict | None:

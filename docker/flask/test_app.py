@@ -211,6 +211,38 @@ def test_propose_activity_creates_and_returns_list(client):
     assert data[0]["text"] == "Taco night"  # trimmed
     assert data[0]["proposedBy"] == "Andre"
     assert isinstance(data[0]["createdAt"], int)
+    # The proposer is auto-joined, so membership starts at exactly them.
+    assert data[0]["members"] == ["Andre"]
+
+
+def test_join_and_leave_activity(client):
+    created = client.post(
+        "/api/activities", json={"text": "Board games", "proposedBy": "Andre"}
+    ).get_json()
+    activity_id = created[0]["id"]
+
+    joined = client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    assert joined.status_code == 200
+    assert sorted(joined.get_json()[0]["members"]) == ["Andre", "Kayla"]
+
+    # Joining again is idempotent — no duplicate member.
+    again = client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    assert sorted(again.get_json()[0]["members"]) == ["Andre", "Kayla"]
+
+    left = client.post(f"/api/activities/{activity_id}/leave", json={"name": "Kayla"})
+    assert left.status_code == 200
+    assert left.get_json()[0]["members"] == ["Andre"]
+
+
+def test_join_requires_name(client):
+    created = client.post("/api/activities", json={"text": "Hike"}).get_json()
+    res = client.post(f"/api/activities/{created[0]['id']}/join", json={"name": "  "})
+    assert res.status_code == 400
+
+
+def test_join_unknown_activity_404(client):
+    res = client.post("/api/activities/nope/join", json={"name": "Andre"})
+    assert res.status_code == 404
 
 
 def test_propose_activity_rejects_empty(client):
