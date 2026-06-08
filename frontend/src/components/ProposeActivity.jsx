@@ -221,11 +221,11 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                     {members.length === 0 ? (
                       <p className="text-[13px] text-ink-soft">No one yet.</p>
                     ) : (
-                      <div className="grid grid-cols-2 gap-[8px] max-[400px]:grid-cols-1">
+                      <div className="flex flex-wrap gap-[8px]">
                         {members.map((name) => (
                           <span
                             key={name}
-                            className="truncate rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink"
+                            className="rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink"
                           >
                             {name}
                           </span>
