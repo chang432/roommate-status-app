@@ -19,8 +19,11 @@ export default function PullToRefreshIndicator({ pull, refreshing, threshold }) 
   // pull passes the threshold that actually triggers a refresh.
   const progress = Math.min(pull / threshold, 1)
 
-  // Rest above the top edge (negative), then ride down with the pull.
-  const translate = pull - pillHeight
+  // Park fully above the top edge — the pill's height plus a small gap so it
+  // sits just clear of the content once pulled in — then ride down with the
+  // pull. GAP keeps the dots from sitting flush against the page content.
+  const GAP = 12
+  const translate = pull - pillHeight - GAP
 
   return (
     <div
@@ -35,7 +38,7 @@ export default function PullToRefreshIndicator({ pull, refreshing, threshold }) 
     >
       <div
         ref={pillRef}
-        className="mt-3 flex items-center gap-[6px] rounded-full bg-card px-[15px] py-[10px] shadow-card"
+        className="flex items-center gap-[6px] rounded-full bg-card px-[15px] py-[10px] shadow-card"
       >
         {[0, 1, 2].map((i) => (
           <span
