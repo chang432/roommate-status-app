@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/roof.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Lock the scale so the installed PWA can't be pinch-/double-tap-zoomed,
+         and iOS won't auto-zoom when a small-font input is focused. (Mobile
+         Safari ignores user-scalable in a browser tab for accessibility, but
+         honors it in a standalone home-screen PWA — which is the target here.)
+         viewport-fit=cover lets content extend under the notch/home indicator. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
 
     <!-- PWA: installable + push-capable. theme-color tints the iOS status bar. -->
     <link rel="manifest" href="/manifest.webmanifest" />
