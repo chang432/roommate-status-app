@@ -286,6 +286,11 @@ def test_comments_capped_oldest_first(client):
     # Only the 5 most recent, still oldest-first (msg 2..6).
     assert [c["text"] for c in comments] == [f"msg {i}" for i in range(2, 7)]
 
+    # The cap is on storage, not just the projection: the raw item holds at most
+    # COMMENTS_LIMIT comments, with the oldest dropped as new ones arrive.
+    stored = activities._get_table().get_item(Key={"id": activity_id})["Item"]["comments"]
+    assert [c["text"] for c in stored] == [f"msg {i}" for i in range(2, 7)]
+
 
 def test_comment_requires_text_and_author(client):
     created = client.post("/api/activities", json={"text": "Bowling"}).get_json()
