@@ -141,17 +141,9 @@ def add_comment(activity_id: str, author: str, text: str) -> dict | None:
     """Append a comment to an activity; return it, or None if unknown.
 
     Comments are stored as an ordered DynamoDB list of {author, text, createdAt}
-    maps, oldest first. The stored list is hard-capped at COMMENTS_LIMIT: when an
-    activity already has that many, the oldest is dropped before the new one is
-    appended, so an item never grows past the few comments the UI shows.
-
-    Capping requires a read-modify-write (DynamoDB can't slice a list in an
-    update expression), so this reads the current comments, trims to the newest
-    COMMENTS_LIMIT - 1, appends the new one, and writes the whole list back. A
-    strongly-consistent read keeps the trim accurate, and attribute_exists(id)
-    both rejects unknown ids (-> None) and guards against the activity being
-    deleted between the read and the write. At household scale, near-simultaneous
-    comments are rare enough that the small read-modify-write race is acceptable.
+    maps and appended atomically with list_append, so concurrent comments don't
+    clobber each other. if_not_exists seeds an empty list for activities (legacy
+    or otherwise) that have never been commented on.
     """
     comment = {
         "author": author,
@@ -160,25 +152,17 @@ def add_comment(activity_id: str, author: str, text: str) -> dict | None:
         # UI shows comments in and powers its relative timestamps.
         "createdAt": int(time.time() * 1000),
     }
-    item = _get_table().get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None:
-        return None  # Unknown activity id.
-    existing = list(item.get("comments") or [])
-    # Keep only enough of the newest existing comments that appending one lands
-    # us at exactly COMMENTS_LIMIT (guard the slice: a [-0:] would keep all).
-    keep = COMMENTS_LIMIT - 1
-    new_comments = (existing[-keep:] if keep > 0 else []) + [comment]
     try:
         resp = _get_table().update_item(
             Key={"id": activity_id},
-            UpdateExpression="SET comments = :c",
-            ExpressionAttributeValues={":c": new_comments},
+            UpdateExpression="SET comments = list_append(if_not_exists(comments, :empty), :c)",
+            ExpressionAttributeValues={":c": [comment], ":empty": []},
             ConditionExpression="attribute_exists(id)",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            return None  # Deleted between the read and the write.
+            return None  # Unknown activity id.
         raise
     return _project(resp["Attributes"])
 
