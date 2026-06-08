@@ -245,93 +245,107 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                   )}
                 </div>
 
-                {expanded && (
-                  <div className="mt-[12px] border-t border-line pt-[12px]">
-                    <p className="mb-[8px] text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft">
-                      Who’s in
-                    </p>
-                    {members.length === 0 ? (
-                      <p className="text-[13px] text-ink-soft">No one yet.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-[8px]">
-                        {members.map((name) => (
-                          <span
-                            key={name}
-                            className="rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink"
-                          >
-                            {name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Comments — the activity's most recent messages (oldest
-                        first, newest nearest the input) plus a box to add one.
-                        Clicks/keys are kept inside so typing or focusing the
-                        input doesn't toggle the surrounding card. */}
-                    <div
-                      className="mt-[14px] border-t border-line pt-[12px]"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
+                {/* Expandable panel. Kept mounted (not conditionally rendered)
+                    so its height can animate via the grid 0fr→1fr trick, which
+                    slides smoothly to the content's natural height with no magic
+                    max-height. `inert` while collapsed keeps the hidden controls
+                    out of the tab order and unclickable. */}
+                <div
+                  className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
+                    expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                  }`}
+                >
+                  <div
+                    className="min-h-0 overflow-hidden"
+                    {...(!expanded ? { inert: '' } : {})}
+                  >
+                    <div className="mt-[12px] border-t border-line pt-[12px]">
                       <p className="mb-[8px] text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft">
-                        Comments
+                        Who’s in
                       </p>
-                      {(a.comments ?? []).length === 0 ? (
-                        <p className="mb-[10px] text-[13px] text-ink-soft">
-                          No comments yet.
-                        </p>
+                      {members.length === 0 ? (
+                        <p className="text-[13px] text-ink-soft">No one yet.</p>
                       ) : (
-                        <ul className="mb-[10px] space-y-[8px]">
-                          {a.comments.map((c, i) => (
-                            <li key={`${c.createdAt}-${i}`} className="text-[13px]">
-                              <span className="font-bold text-ink">{c.author}</span>{' '}
-                              <span className="text-[11px] text-ink-soft">
-                                {timeAgo(c.createdAt)}
-                              </span>
-                              <p className="text-ink">{c.text}</p>
-                            </li>
+                        <div className="flex flex-wrap gap-[8px]">
+                          {members.map((name) => (
+                            <span
+                              key={name}
+                              className="rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink"
+                            >
+                              {name}
+                            </span>
                           ))}
-                        </ul>
+                        </div>
                       )}
-                      <form
-                        onSubmit={(e) => handleComment(e, a)}
-                        className="flex gap-[8px]"
+
+                      {/* Comments — the activity's most recent messages (oldest
+                          first, newest nearest the input) plus a box to add one.
+                          Clicks/keys are kept inside so typing or focusing the
+                          input doesn't toggle the surrounding card. */}
+                      <div
+                        className="mt-[14px] border-t border-line pt-[12px]"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                       >
-                        <input
-                          type="text"
-                          value={commentText}
-                          onChange={(e) => setCommentText(e.target.value)}
-                          maxLength={280}
-                          placeholder="Add a comment…"
-                          className="flex-1 rounded-sm border border-line bg-white px-[12px] py-[8px] text-[13px] text-ink outline-none transition placeholder:text-[#b6a995] focus:border-accent"
-                        />
-                        <button
-                          type="submit"
-                          disabled={commentingId === a.id || !commentText.trim()}
-                          aria-label="Send comment"
-                          className="flex flex-none items-center justify-center rounded-sm bg-accent px-[12px] py-[8px] text-white transition hover:bg-accent-deep disabled:opacity-60"
+                        <p className="mb-[8px] text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft">
+                          Comments
+                        </p>
+                        {(a.comments ?? []).length === 0 ? (
+                          <p className="mb-[10px] text-[13px] text-ink-soft">
+                            No comments yet.
+                          </p>
+                        ) : (
+                          <ul className="mb-[10px] space-y-[8px]">
+                            {a.comments.map((c, i) => (
+                              <li key={`${c.createdAt}-${i}`} className="text-[13px]">
+                                <span className="font-bold text-ink">{c.author}</span>{' '}
+                                <span className="text-[11px] text-ink-soft">
+                                  {timeAgo(c.createdAt)}
+                                </span>
+                                <p className="text-ink">{c.text}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        <form
+                          onSubmit={(e) => handleComment(e, a)}
+                          className="flex gap-[8px]"
                         >
-                          {/* Paper-plane send icon (Feather "send"). */}
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
+                          <input
+                            type="text"
+                            value={commentText}
+                            onChange={(e) => setCommentText(e.target.value)}
+                            maxLength={280}
+                            placeholder="Add a comment…"
+                            className="flex-1 rounded-sm border border-line bg-white px-[12px] py-[8px] text-[13px] text-ink outline-none transition placeholder:text-[#b6a995] focus:border-accent"
+                          />
+                          <button
+                            type="submit"
+                            disabled={commentingId === a.id || !commentText.trim()}
+                            aria-label="Send comment"
+                            className="flex flex-none items-center justify-center rounded-sm bg-accent px-[12px] py-[8px] text-white transition hover:bg-accent-deep disabled:opacity-60"
                           >
-                            <line x1="22" y1="2" x2="11" y2="13" />
-                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                          </svg>
-                        </button>
-                      </form>
+                            {/* Paper-plane send icon (Feather "send"). */}
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <line x1="22" y1="2" x2="11" y2="13" />
+                              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                            </svg>
+                          </button>
+                        </form>
+                      </div>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             )
           })
