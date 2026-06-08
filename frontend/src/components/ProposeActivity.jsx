@@ -125,9 +125,12 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                 type="button"
                 onClick={() => handleNotify(a)}
                 disabled={notifyingId === a.id}
-                className="flex-none rounded-full border border-[#d6e2c5] bg-[#eef3e7] px-[13px] py-[7px] text-[12.5px] font-bold text-[#50603f] transition hover:brightness-95 disabled:opacity-60"
+                // Icon-only: text is dropped in favor of the bell; aria-label
+                // keeps it accessible, and a ✓ briefly confirms a sent notify.
+                aria-label="Notify everyone"
+                className="flex-none rounded-full border border-[#d6e2c5] bg-[#eef3e7] px-[12px] py-[8px] text-[14px] font-bold text-[#50603f] transition hover:brightness-95 disabled:opacity-60"
               >
-                {notifyingId === a.id ? 'Sending…' : sentId === a.id ? 'Sent ✓' : '🔔 Notify'}
+                {sentId === a.id ? '✓' : '🔔'}
               </button>
             </div>
           ))
