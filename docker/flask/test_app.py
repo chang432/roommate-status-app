@@ -250,6 +250,67 @@ def test_legacy_activity_without_members_keeps_proposer(client):
     assert sorted(joined.get_json()[0]["members"]) == ["Isabella", "Kayla"]
 
 
+def test_comment_on_activity(client):
+    created = client.post(
+        "/api/activities", json={"text": "Movie night", "proposedBy": "Andre"}
+    ).get_json()
+    activity_id = created[0]["id"]
+
+    # A fresh activity has an empty comments list in the projected shape.
+    assert created[0]["comments"] == []
+
+    posted = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"author": "Kayla", "text": "  I'm in!  "},
+    )
+    assert posted.status_code == 200
+    comments = posted.get_json()[0]["comments"]
+    assert len(comments) == 1
+    assert comments[0]["author"] == "Kayla"
+    assert comments[0]["text"] == "I'm in!"  # trimmed
+    assert isinstance(comments[0]["createdAt"], int)
+
+
+def test_comments_capped_oldest_first(client):
+    created = client.post("/api/activities", json={"text": "Hike"}).get_json()
+    activity_id = created[0]["id"]
+
+    for i in range(7):
+        client.post(
+            f"/api/activities/{activity_id}/comments",
+            json={"author": "Andre", "text": f"msg {i}"},
+        )
+
+    feed = client.get("/api/activities").get_json()
+    comments = feed[0]["comments"]
+    # Only the 5 most recent, still oldest-first (msg 2..6).
+    assert [c["text"] for c in comments] == [f"msg {i}" for i in range(2, 7)]
+
+
+def test_comment_requires_text_and_author(client):
+    created = client.post("/api/activities", json={"text": "Bowling"}).get_json()
+    activity_id = created[0]["id"]
+    assert (
+        client.post(
+            f"/api/activities/{activity_id}/comments", json={"author": "Andre", "text": "  "}
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            f"/api/activities/{activity_id}/comments", json={"author": "  ", "text": "hi"}
+        ).status_code
+        == 400
+    )
+
+
+def test_comment_unknown_activity_404(client):
+    res = client.post(
+        "/api/activities/nope/comments", json={"author": "Andre", "text": "hi"}
+    )
+    assert res.status_code == 404
+
+
 def test_join_requires_name(client):
     created = client.post("/api/activities", json={"text": "Hike"}).get_json()
     res = client.post(f"/api/activities/{created[0]['id']}/join", json={"name": "  "})

@@ -30,6 +30,9 @@ from db import _region
 # How many recent proposals the feed returns / the UI shows.
 RECENT_LIMIT = 5
 
+# How many of an activity's most recent comments the feed returns / the UI shows.
+COMMENTS_LIMIT = 5
+
 TABLE_NAME = os.environ.get("ACTIVITIES_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-activities"
 )
@@ -64,12 +67,25 @@ def _project(item: dict) -> dict:
     """
     proposer = item.get("proposedBy", "Someone")
     members = sorted(set(item.get("members") or set()) | {proposer})
+    # Comments are an ordered list of {author, text, createdAt} maps (oldest
+    # first). Expose only the most recent COMMENTS_LIMIT, still oldest-first so
+    # the UI can render them top-to-bottom with the newest nearest the input.
+    # createdAt comes back as a Decimal, so cast it like the activity's own.
+    comments = [
+        {
+            "author": c.get("author", "Someone"),
+            "text": c.get("text", ""),
+            "createdAt": int(c["createdAt"]),
+        }
+        for c in (item.get("comments") or [])[-COMMENTS_LIMIT:]
+    ]
     return {
         "id": item["id"],
         "text": item["text"],
         "proposedBy": item.get("proposedBy", "Someone"),
         "createdAt": int(item["createdAt"]),
         "members": members,
+        "comments": comments,
     }
 
 
@@ -119,6 +135,36 @@ def join(activity_id: str, name: str) -> dict | None:
 def leave(activity_id: str, name: str) -> dict | None:
     """Remove `name` from an activity's members. None if the activity is unknown."""
     return _set_membership(activity_id, name, "DELETE")
+
+
+def add_comment(activity_id: str, author: str, text: str) -> dict | None:
+    """Append a comment to an activity; return it, or None if unknown.
+
+    Comments are stored as an ordered DynamoDB list of {author, text, createdAt}
+    maps and appended atomically with list_append, so concurrent comments don't
+    clobber each other. if_not_exists seeds an empty list for activities (legacy
+    or otherwise) that have never been commented on.
+    """
+    comment = {
+        "author": author,
+        "text": text,
+        # Epoch millis, mirroring an activity's createdAt — drives the order the
+        # UI shows comments in and powers its relative timestamps.
+        "createdAt": int(time.time() * 1000),
+    }
+    try:
+        resp = _get_table().update_item(
+            Key={"id": activity_id},
+            UpdateExpression="SET comments = list_append(if_not_exists(comments, :empty), :c)",
+            ExpressionAttributeValues={":c": [comment], ":empty": []},
+            ConditionExpression="attribute_exists(id)",
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None  # Unknown activity id.
+        raise
+    return _project(resp["Attributes"])
 
 
 def get(activity_id: str) -> dict | None:

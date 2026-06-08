@@ -100,3 +100,12 @@ export async function leaveActivity(id, name) {
     body: JSON.stringify({ name }),
   })
 }
+
+// POST /api/activities/:id/comments — add a comment to an activity.
+// Returns the refreshed recent list (each activity carries its latest comments).
+export async function commentOnActivity(id, author, text) {
+  return request(`/activities/${id}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ author, text }),
+  })
+}

@@ -18,6 +18,7 @@ And the proposed-activities feed:
     POST /api/activities               -> the updated recent list (and pushes it)
     POST /api/activities/<id>/join     -> the updated recent list
     POST /api/activities/<id>/leave    -> the updated recent list
+    POST /api/activities/<id>/comments -> the updated recent list
 
 Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
 in push.py; proposals are in activities.py. Routes stay storage-agnostic.
@@ -36,6 +37,9 @@ import push
 
 # Cap proposal text so a notification body stays sane.
 MAX_ACTIVITY_LEN = 280
+
+# Cap comment text the same way proposal text is capped.
+MAX_COMMENT_LEN = 280
 
 # Number of available roommates that triggers the "gather" push (PROJECT.md:
 # "3 or more"). Override with the AVAILABLE_THRESHOLD env var.
@@ -202,6 +206,23 @@ def create_app() -> Flask:
         if activities.leave(activity_id, name) is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
         # Consistent read so the updated member list is reflected immediately.
+        return jsonify(activities.list_recent(consistent=True))
+
+    @app.post("/api/activities/<activity_id>/comments")
+    def comment_on_activity(activity_id: str):
+        """Append a comment to an activity; return the refreshed recent list."""
+        body = request.get_json(silent=True) or {}
+        author = (body.get("author") or "").strip()
+        text = (body.get("text") or "").strip()
+        if not author:
+            return jsonify({"error": "A name is required."}), 400
+        if not text:
+            return jsonify({"error": "A comment is required."}), 400
+        if len(text) > MAX_COMMENT_LEN:
+            return jsonify({"error": f"Keep it under {MAX_COMMENT_LEN} characters."}), 400
+        if activities.add_comment(activity_id, author, text) is None:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        # Consistent read so the new comment is reflected immediately.
         return jsonify(activities.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/notify")
