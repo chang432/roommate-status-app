@@ -56,13 +56,14 @@ def _project(item: dict) -> dict:
 
     createdAt is stored as a number (epoch millis) and comes back as a Decimal,
     which isn't JSON-serializable — cast it to int here. `members` is a DynamoDB
-    string set (unordered, and absent once empty) so we present it as a stable,
-    sorted list; when it's missing we fall back to the proposer, keeping the
-    count at least 1 (the creator is always a member) and covering legacy items
-    written before join/leave existed.
+    string set (unordered, and absent once empty); we always union the proposer
+    into it and present a stable, sorted list. Unioning the proposer means the
+    creator is always counted as a member (count >= 1) with no stored-data
+    migration: legacy items written before join/leave simply have no members
+    attribute, and even after someone joins one the proposer is still included.
     """
-    members = item.get("members")
-    members = sorted(members) if members else [item.get("proposedBy", "Someone")]
+    proposer = item.get("proposedBy", "Someone")
+    members = sorted(set(item.get("members") or set()) | {proposer})
     return {
         "id": item["id"],
         "text": item["text"],

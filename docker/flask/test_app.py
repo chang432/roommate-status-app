@@ -234,6 +234,22 @@ def test_join_and_leave_activity(client):
     assert left.get_json()[0]["members"] == ["Andre"]
 
 
+def test_legacy_activity_without_members_keeps_proposer(client):
+    # Simulate an item written before the members attribute existed: it has no
+    # `members` set at all. Reads should still credit the proposer, and joining
+    # must not drop them.
+    table = activities._get_table()
+    table.put_item(
+        Item={"id": "legacy", "text": "Old plan", "proposedBy": "Isabella", "createdAt": 1}
+    )
+
+    feed = client.get("/api/activities").get_json()
+    assert feed[0]["members"] == ["Isabella"]
+
+    joined = client.post("/api/activities/legacy/join", json={"name": "Kayla"})
+    assert sorted(joined.get_json()[0]["members"]) == ["Isabella", "Kayla"]
+
+
 def test_join_requires_name(client):
     created = client.post("/api/activities", json={"text": "Hike"}).get_json()
     res = client.post(f"/api/activities/{created[0]['id']}/join", json={"name": "  "})
