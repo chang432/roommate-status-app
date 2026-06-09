@@ -22,12 +22,16 @@ import time
 import uuid
 
 import boto3
+from botocore.exceptions import ClientError
 
 # Reuse db's region resolution so all tables sign requests the same way.
 from db import _region
 
 # How many recent proposals the feed returns / the UI shows.
 RECENT_LIMIT = 5
+
+# How many of an activity's most recent comments the feed returns / the UI shows.
+COMMENTS_LIMIT = 5
 
 TABLE_NAME = os.environ.get("ACTIVITIES_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-activities"
@@ -54,27 +58,113 @@ def _project(item: dict) -> dict:
     """Shape a raw DynamoDB item to what the frontend expects.
 
     createdAt is stored as a number (epoch millis) and comes back as a Decimal,
-    which isn't JSON-serializable — cast it to int here.
+    which isn't JSON-serializable — cast it to int here. `members` is a DynamoDB
+    string set (unordered, and absent once empty); we always union the proposer
+    into it and present a stable, sorted list. Unioning the proposer means the
+    creator is always counted as a member (count >= 1) with no stored-data
+    migration: legacy items written before join/leave simply have no members
+    attribute, and even after someone joins one the proposer is still included.
     """
+    proposer = item.get("proposedBy", "Someone")
+    members = sorted(set(item.get("members") or set()) | {proposer})
+    # Comments are an ordered list of {author, text, createdAt} maps (oldest
+    # first). Expose only the most recent COMMENTS_LIMIT, still oldest-first so
+    # the UI can render them top-to-bottom with the newest nearest the input.
+    # createdAt comes back as a Decimal, so cast it like the activity's own.
+    comments = [
+        {
+            "author": c.get("author", "Someone"),
+            "text": c.get("text", ""),
+            "createdAt": int(c["createdAt"]),
+        }
+        for c in (item.get("comments") or [])[-COMMENTS_LIMIT:]
+    ]
     return {
         "id": item["id"],
         "text": item["text"],
         "proposedBy": item.get("proposedBy", "Someone"),
         "createdAt": int(item["createdAt"]),
+        "members": members,
+        "comments": comments,
     }
 
 
 def add_activity(text: str, proposed_by: str = "Someone") -> dict:
     """Store a new proposal and return it. Caller is responsible for validation."""
+    proposer = proposed_by or "Someone"
     item = {
         "id": uuid.uuid4().hex,
         "text": text,
-        "proposedBy": proposed_by or "Someone",
+        "proposedBy": proposer,
         # Epoch millis drives newest-first ordering in list_recent().
         "createdAt": int(time.time() * 1000),
+        # The proposer joins automatically, so the count starts at 1.
+        "members": {proposer},
     }
     _get_table().put_item(Item=item)
     return _project(item)
+
+
+def _set_membership(activity_id: str, name: str, op: str) -> dict | None:
+    """Add or remove `name` from an activity's members; return it, or None.
+
+    `op` is "ADD" (join) or "DELETE" (leave). Both are atomic and idempotent at
+    the DynamoDB level — joining twice or leaving when absent is a no-op. None
+    means the activity doesn't exist.
+    """
+    try:
+        resp = _get_table().update_item(
+            Key={"id": activity_id},
+            UpdateExpression=f"{op} members :m",
+            ExpressionAttributeValues={":m": {name}},
+            ConditionExpression="attribute_exists(id)",
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None  # Unknown activity id.
+        raise
+    return _project(resp["Attributes"])
+
+
+def join(activity_id: str, name: str) -> dict | None:
+    """Add `name` to an activity's members. None if the activity is unknown."""
+    return _set_membership(activity_id, name, "ADD")
+
+
+def leave(activity_id: str, name: str) -> dict | None:
+    """Remove `name` from an activity's members. None if the activity is unknown."""
+    return _set_membership(activity_id, name, "DELETE")
+
+
+def add_comment(activity_id: str, author: str, text: str) -> dict | None:
+    """Append a comment to an activity; return it, or None if unknown.
+
+    Comments are stored as an ordered DynamoDB list of {author, text, createdAt}
+    maps and appended atomically with list_append, so concurrent comments don't
+    clobber each other. if_not_exists seeds an empty list for activities (legacy
+    or otherwise) that have never been commented on.
+    """
+    comment = {
+        "author": author,
+        "text": text,
+        # Epoch millis, mirroring an activity's createdAt — drives the order the
+        # UI shows comments in and powers its relative timestamps.
+        "createdAt": int(time.time() * 1000),
+    }
+    try:
+        resp = _get_table().update_item(
+            Key={"id": activity_id},
+            UpdateExpression="SET comments = list_append(if_not_exists(comments, :empty), :c)",
+            ExpressionAttributeValues={":c": [comment], ":empty": []},
+            ConditionExpression="attribute_exists(id)",
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None  # Unknown activity id.
+        raise
+    return _project(resp["Attributes"])
 
 
 def get(activity_id: str) -> dict | None:
@@ -83,13 +173,20 @@ def get(activity_id: str) -> dict | None:
     return _project(item) if item else None
 
 
-def list_recent(limit: int = RECENT_LIMIT) -> list[dict]:
-    """Return the most recent proposals, newest first."""
+def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
+    """Return the most recent proposals, newest first.
+
+    Pass consistent=True for the response that follows a write (propose / join /
+    leave): DynamoDB scans are eventually consistent by default, so a plain scan
+    right after an update can return the pre-write member list, leaving the UI
+    showing a stale count. A strongly-consistent read avoids that. The default
+    (eventual) read is fine for the plain GET feed.
+    """
     table = _get_table()
-    resp = table.scan()
+    resp = table.scan(ConsistentRead=consistent)
     items = resp.get("Items", [])
     while "LastEvaluatedKey" in resp:
-        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
+        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"], ConsistentRead=consistent)
         items.extend(resp.get("Items", []))
     items.sort(key=lambda i: int(i["createdAt"]), reverse=True)
     return [_project(i) for i in items[:limit]]

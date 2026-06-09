@@ -14,8 +14,11 @@ Plus the Web Push (PoC) endpoints:
 
 And the proposed-activities feed:
 
-    GET  /api/activities               -> [ { "id", "text", "proposedBy", "createdAt" }, ... ]
+    GET  /api/activities               -> [ { "id", "text", "proposedBy", "createdAt", "members" }, ... ]
     POST /api/activities               -> the updated recent list (and pushes it)
+    POST /api/activities/<id>/join     -> the updated recent list (and pushes it)
+    POST /api/activities/<id>/leave    -> the updated recent list
+    POST /api/activities/<id>/comments -> the updated recent list (and pushes it)
 
 Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
 in push.py; proposals are in activities.py. Routes stay storage-agnostic.
@@ -34,6 +37,9 @@ import push
 
 # Cap proposal text so a notification body stays sane.
 MAX_ACTIVITY_LEN = 280
+
+# Cap comment text the same way proposal text is capped.
+MAX_COMMENT_LEN = 280
 
 # Number of available roommates that triggers the "gather" push (PROJECT.md:
 # "3 or more"). Override with the AVAILABLE_THRESHOLD env var.
@@ -175,7 +181,75 @@ def create_app() -> Flask:
             app.logger.exception("Failed to send activity notification")
 
         # Return the refreshed list so the UI updates in one round-trip.
-        return jsonify(activities.list_recent())
+        # Consistent read so the just-created proposal is always included.
+        return jsonify(activities.list_recent(consistent=True))
+
+    @app.post("/api/activities/<activity_id>/join")
+    def join_activity(activity_id: str):
+        """Add the caller to an activity's members; return the refreshed list."""
+        body = request.get_json(silent=True) or {}
+        name = (body.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "A name is required."}), 400
+        activity = activities.join(activity_id, name)
+        if activity is None:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+
+        # Let everyone know someone's in. Best-effort: a push failure must not
+        # fail the join. (Leaving is intentionally quiet — no notification.)
+        try:
+            push.notify_all(
+                title="Someone joined an activity 🙌",
+                body=f"{name} joined {activity['text']}",
+                url="/",
+            )
+        except Exception:  # noqa: BLE001 - never let push break the request
+            app.logger.exception("Failed to send join notification")
+
+        # Consistent read so the updated member list is reflected immediately.
+        return jsonify(activities.list_recent(consistent=True))
+
+    @app.post("/api/activities/<activity_id>/leave")
+    def leave_activity(activity_id: str):
+        """Remove the caller from an activity's members; return the refreshed list."""
+        body = request.get_json(silent=True) or {}
+        name = (body.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "A name is required."}), 400
+        if activities.leave(activity_id, name) is None:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        # Consistent read so the updated member list is reflected immediately.
+        return jsonify(activities.list_recent(consistent=True))
+
+    @app.post("/api/activities/<activity_id>/comments")
+    def comment_on_activity(activity_id: str):
+        """Append a comment to an activity; return the refreshed recent list."""
+        body = request.get_json(silent=True) or {}
+        author = (body.get("author") or "").strip()
+        text = (body.get("text") or "").strip()
+        if not author:
+            return jsonify({"error": "A name is required."}), 400
+        if not text:
+            return jsonify({"error": "A comment is required."}), 400
+        if len(text) > MAX_COMMENT_LEN:
+            return jsonify({"error": f"Keep it under {MAX_COMMENT_LEN} characters."}), 400
+        activity = activities.add_comment(activity_id, author, text)
+        if activity is None:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+
+        # Notify everyone of the new comment. Best-effort: a push failure must
+        # not fail the comment the user just posted.
+        try:
+            push.notify_all(
+                title="New comment 💬",
+                body=f"{author} on “{activity['text']}”: {text}",
+                url="/",
+            )
+        except Exception:  # noqa: BLE001 - never let push break the request
+            app.logger.exception("Failed to send comment notification")
+
+        # Consistent read so the new comment is reflected immediately.
+        return jsonify(activities.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/notify")
     def emphasize_activity(activity_id: str):

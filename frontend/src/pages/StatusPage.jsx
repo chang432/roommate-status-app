@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Brandmark from '../components/Brandmark.jsx'
 import YouCard from '../components/YouCard.jsx'
 import EditPanel from '../components/EditPanel.jsx'
@@ -6,8 +6,10 @@ import StatusCard from '../components/StatusCard.jsx'
 import NotificationBanner from '../components/NotificationBanner.jsx'
 import EnableNotifications from '../components/EnableNotifications.jsx'
 import ProposeActivity from '../components/ProposeActivity.jsx'
+import PullToRefreshIndicator from '../components/PullToRefreshIndicator.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getRoommates, updateStatus } from '../api/client.js'
+import { usePullToRefresh } from '../utils/usePullToRefresh.js'
 import { availableCount, AVAILABLE_THRESHOLD } from '../utils/status.js'
 import { avatarColor } from '../utils/avatar.js'
 
@@ -28,18 +30,32 @@ export default function StatusPage() {
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Bumped on each pull-to-refresh so child feeds (activities) re-fetch too.
+  const [refreshSignal, setRefreshSignal] = useState(0)
+
+  // Fetch the household; shared by the initial load and pull-to-refresh.
+  const loadRoommates = useCallback(async () => {
+    try {
+      setRoommates(await getRoommates())
+      setError('')
+    } catch {
+      setError('Could not load roommate statuses.')
+    }
+  }, [])
 
   // Load the household on mount.
   useEffect(() => {
-    let active = true
-    getRoommates()
-      .then((list) => active && setRoommates(list))
-      .catch(() => active && setError('Could not load roommate statuses.'))
-      .finally(() => active && setLoading(false))
-    return () => {
-      active = false
-    }
-  }, [])
+    loadRoommates().finally(() => setLoading(false))
+  }, [loadRoommates])
+
+  // Pull down from the top to refresh — the only reload affordance for the app
+  // running standalone from the homescreen. Also nudges children to re-fetch.
+  const handleRefresh = useCallback(async () => {
+    await loadRoommates()
+    setRefreshSignal((n) => n + 1)
+  }, [loadRoommates])
+
+  const { pull, refreshing, threshold } = usePullToRefresh(handleRefresh)
 
   // Split the list into "you" and everyone else, preserving the original index
   // so avatar colors stay stable.
@@ -70,8 +86,21 @@ export default function StatusPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[640px] px-[22px] pb-16 pt-10">
-      <header className="mb-2 flex items-center gap-[14px]">
+    <>
+      {/* Lives off-screen above the top; the pull drags it into view. */}
+      <PullToRefreshIndicator pull={pull} refreshing={refreshing} threshold={threshold} />
+
+      <div
+        className="mx-auto max-w-[640px] px-[22px] pb-16 pt-10"
+        style={{
+          // Push the whole page down with the pull so the dots are revealed in
+          // the gap above the content rather than overlaying it. A transform
+          // here would capture the fixed indicator, which is why it sits outside.
+          transform: pull ? `translateY(${pull}px)` : undefined,
+          transition: pull > 0 && !refreshing ? 'none' : 'transform 260ms ease',
+        }}
+      >
+        <header className="mb-2 flex items-center gap-[14px]">
         <Brandmark className="h-[46px] w-[46px]" iconClassName="h-[26px] w-[26px]" />
         <div className="flex-1">
           <h1 className="font-display text-[24px] font-semibold leading-[1.1] -tracking-[0.01em]">
@@ -130,9 +159,10 @@ export default function StatusPage() {
             ))}
           </div>
 
-          <ProposeActivity />
+          <ProposeActivity refreshSignal={refreshSignal} />
         </>
       )}
-    </div>
+      </div>
+    </>
   )
 }

@@ -211,6 +211,174 @@ def test_propose_activity_creates_and_returns_list(client):
     assert data[0]["text"] == "Taco night"  # trimmed
     assert data[0]["proposedBy"] == "Andre"
     assert isinstance(data[0]["createdAt"], int)
+    # The proposer is auto-joined, so membership starts at exactly them.
+    assert data[0]["members"] == ["Andre"]
+
+
+def test_join_and_leave_activity(client):
+    created = client.post(
+        "/api/activities", json={"text": "Board games", "proposedBy": "Andre"}
+    ).get_json()
+    activity_id = created[0]["id"]
+
+    joined = client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    assert joined.status_code == 200
+    assert sorted(joined.get_json()[0]["members"]) == ["Andre", "Kayla"]
+
+    # Joining again is idempotent — no duplicate member.
+    again = client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    assert sorted(again.get_json()[0]["members"]) == ["Andre", "Kayla"]
+
+    left = client.post(f"/api/activities/{activity_id}/leave", json={"name": "Kayla"})
+    assert left.status_code == 200
+    assert left.get_json()[0]["members"] == ["Andre"]
+
+
+def test_legacy_activity_without_members_keeps_proposer(client):
+    # Simulate an item written before the members attribute existed: it has no
+    # `members` set at all. Reads should still credit the proposer, and joining
+    # must not drop them.
+    table = activities._get_table()
+    table.put_item(
+        Item={"id": "legacy", "text": "Old plan", "proposedBy": "Isabella", "createdAt": 1}
+    )
+
+    feed = client.get("/api/activities").get_json()
+    assert feed[0]["members"] == ["Isabella"]
+
+    joined = client.post("/api/activities/legacy/join", json={"name": "Kayla"})
+    assert sorted(joined.get_json()[0]["members"]) == ["Isabella", "Kayla"]
+
+
+def test_comment_on_activity(client):
+    created = client.post(
+        "/api/activities", json={"text": "Movie night", "proposedBy": "Andre"}
+    ).get_json()
+    activity_id = created[0]["id"]
+
+    # A fresh activity has an empty comments list in the projected shape.
+    assert created[0]["comments"] == []
+
+    posted = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"author": "Kayla", "text": "  I'm in!  "},
+    )
+    assert posted.status_code == 200
+    comments = posted.get_json()[0]["comments"]
+    assert len(comments) == 1
+    assert comments[0]["author"] == "Kayla"
+    assert comments[0]["text"] == "I'm in!"  # trimmed
+    assert isinstance(comments[0]["createdAt"], int)
+
+
+def test_comments_capped_oldest_first(client):
+    created = client.post("/api/activities", json={"text": "Hike"}).get_json()
+    activity_id = created[0]["id"]
+
+    for i in range(7):
+        client.post(
+            f"/api/activities/{activity_id}/comments",
+            json={"author": "Andre", "text": f"msg {i}"},
+        )
+
+    feed = client.get("/api/activities").get_json()
+    comments = feed[0]["comments"]
+    # Only the 5 most recent, still oldest-first (msg 2..6).
+    assert [c["text"] for c in comments] == [f"msg {i}" for i in range(2, 7)]
+
+
+def test_comment_requires_text_and_author(client):
+    created = client.post("/api/activities", json={"text": "Bowling"}).get_json()
+    activity_id = created[0]["id"]
+    assert (
+        client.post(
+            f"/api/activities/{activity_id}/comments", json={"author": "Andre", "text": "  "}
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            f"/api/activities/{activity_id}/comments", json={"author": "  ", "text": "hi"}
+        ).status_code
+        == 400
+    )
+
+
+def test_comment_unknown_activity_404(client):
+    res = client.post(
+        "/api/activities/nope/comments", json={"author": "Andre", "text": "hi"}
+    )
+    assert res.status_code == 404
+
+
+def _capture_notifications(monkeypatch):
+    """Replace push.notify_all with a recorder; return the list of its kwargs.
+
+    The routes call push.notify_all by attribute at request time, so patching it
+    on the push module captures the calls without needing VAPID keys.
+    """
+    calls = []
+
+    def fake_notify_all(**kwargs):
+        calls.append(kwargs)
+        return {"sent": 0, "pruned": 0, "failed": 0}
+
+    monkeypatch.setattr(push, "notify_all", fake_notify_all)
+    return calls
+
+
+def test_join_notifies_everyone(client, monkeypatch):
+    created = client.post(
+        "/api/activities", json={"text": "Picnic", "proposedBy": "Andre"}
+    ).get_json()
+    activity_id = created[0]["id"]
+
+    calls = _capture_notifications(monkeypatch)
+    res = client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    assert res.status_code == 200
+    assert len(calls) == 1
+    assert "Kayla" in calls[0]["body"] and "Picnic" in calls[0]["body"]
+
+
+def test_leave_does_not_notify(client, monkeypatch):
+    created = client.post(
+        "/api/activities", json={"text": "Picnic", "proposedBy": "Andre"}
+    ).get_json()
+    activity_id = created[0]["id"]
+    client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+
+    calls = _capture_notifications(monkeypatch)
+    res = client.post(f"/api/activities/{activity_id}/leave", json={"name": "Kayla"})
+    assert res.status_code == 200
+    assert calls == []  # leaving is intentionally quiet
+
+
+def test_comment_notifies_everyone(client, monkeypatch):
+    created = client.post(
+        "/api/activities", json={"text": "Movie night", "proposedBy": "Andre"}
+    ).get_json()
+    activity_id = created[0]["id"]
+
+    calls = _capture_notifications(monkeypatch)
+    res = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"author": "Kayla", "text": "Count me in"},
+    )
+    assert res.status_code == 200
+    assert len(calls) == 1
+    body = calls[0]["body"]
+    assert "Kayla" in body and "Count me in" in body and "Movie night" in body
+
+
+def test_join_requires_name(client):
+    created = client.post("/api/activities", json={"text": "Hike"}).get_json()
+    res = client.post(f"/api/activities/{created[0]['id']}/join", json={"name": "  "})
+    assert res.status_code == 400
+
+
+def test_join_unknown_activity_404(client):
+    res = client.post("/api/activities/nope/join", json={"name": "Andre"})
+    assert res.status_code == 404
 
 
 def test_propose_activity_rejects_empty(client):

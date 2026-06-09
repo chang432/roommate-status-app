@@ -3,7 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/roof.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Pin the scale to exactly 1 so the installed PWA opens fully zoomed out
+         (whole device width) and can't be pinch-/double-tap-zoomed, and iOS
+         won't auto-zoom when a small-font input is focused. min/initial/max all
+         = 1 because on iOS initial-scale alone is sometimes ignored on first
+         paint. (Mobile Safari ignores user-scalable in a browser tab for
+         accessibility but honors it in a standalone home-screen PWA.)
+         No viewport-fit=cover: this app has no safe-area-inset padding, so cover
+         mode would push content edge-to-edge under the Dynamic Island and
+         render magnified on notched iPhones — the default (contain) keeps the
+         content inside the safe area. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
 
     <!-- PWA: installable + push-capable. theme-color tints the iOS status bar. -->
     <link rel="manifest" href="/manifest.webmanifest" />

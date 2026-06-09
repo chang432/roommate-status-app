@@ -49,7 +49,13 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center px-5 py-8">
+    // grid-cols-1 makes the single column minmax(0,1fr) rather than the implicit
+    // `auto` track. An `auto` track grows to its content's intrinsic width, which
+    // let RoomiePicker's intentionally-too-wide, horizontally-scrolling row
+    // stretch the form past the viewport (page-level horizontal scrollbar).
+    // minmax(0,1fr) caps the column at the available width so that row scrolls
+    // internally — as intended — instead of widening the page.
+    <main className="grid min-h-screen grid-cols-1 place-items-center px-5 py-8">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-[420px] rounded-lg border border-line bg-card px-[34px] pb-[34px] pt-10 shadow-card"
