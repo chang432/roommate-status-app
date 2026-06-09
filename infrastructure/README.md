@@ -54,26 +54,6 @@ The script creates the stack if it doesn't exist, updates it otherwise (a no-op
 update is reported, not failed), waits for completion, and prints the table
 name and ARN.
 
-## Local development (no AWS account)
-
-`./start.sh` (repo root) runs the whole stack against an **in-memory DynamoDB
-Local** instead of real AWS, so contributors need no credentials or deployed
-stacks. The wiring lives here next to the templates it stands in for:
-
-- `docker-compose.dynamodb-local.yml` — a `dynamodb-local` service (published on
-  host port **8001**) and a one-off `dynamodb-init` service (the `amazon/aws-cli`
-  image) that runs `create-tables.sh`. `start.sh` merges this file (`-f`) into
-  the app's compose project and also sets `DYNAMODB_ENDPOINT`, which is the only
-  switch that points the Flask app at the local DB; without it the app uses real
-  DynamoDB unchanged.
-- `create-tables.sh` — creates the three tables (same single-`id`-key schema as
-  the templates) in DynamoDB Local. Idempotent; refuses to run unless
-  `DYNAMODB_ENDPOINT` is set, so it can never touch real AWS.
-
-Because the local instance is in-memory, the tables are recreated and reseeded
-on every `start.sh` run. The prod-only template features (encryption, PITR,
-retention) don't apply locally and are intentionally omitted.
-
 ### Options
 
 | Flag           | Default                  | Description                                  |
@@ -83,3 +63,32 @@ retention) don't apply locally and are intentionally omitted.
 | `--stack-name` | per deployment           | Override the CloudFormation stack name       |
 | `--template`   | per deployment           | Override the template path                   |
 | `--region`     | from AWS config          | Target AWS region                            |
+
+## Local development (no AWS account)
+
+For local dev the app runs against an **in-memory DynamoDB Local** instead of
+real AWS, so contributors need no credentials or deployed stacks. It's a
+**standalone compose project** (`roomie-infra`) that can be run and reused
+independently of the app; the two are joined only by a shared network and the
+table-name / key-schema contract.
+
+| File | Purpose |
+| ---- | ------- |
+| `docker-compose.dynamodb-local.yml` | `dynamodb-local` (in-memory, host port **8001**) + a one-off `dynamodb-init` service (`amazon/aws-cli`) that runs `create-tables.sh`. Both attach to the external `roomie-shared` network. |
+| `create-tables.sh` | Creates the three tables (same single-`id`-key schema as the templates) in DynamoDB Local. Idempotent; refuses to run unless `DYNAMODB_ENDPOINT` is set, so it can never touch real AWS. |
+
+`./start.sh` (repo root) drives both projects for you. To run just this module:
+
+```bash
+docker network create roomie-shared        # once; shared with the app
+docker compose -p roomie-infra -f infrastructure/docker-compose.dynamodb-local.yml up -d
+docker compose -p roomie-infra -f infrastructure/docker-compose.dynamodb-local.yml \
+    --profile init run --rm dynamodb-init   # create the tables
+```
+
+The app reaches it on the shared network at `dynamodb-local:8000`; setting
+`DYNAMODB_ENDPOINT` (in `docker/docker-compose.local.yml`) is the only switch
+that points the app at the local DB — without it the app uses real DynamoDB,
+unchanged. The instance is in-memory, so tables are recreated and reseeded on
+every run; the prod-only template features (encryption, PITR, retention) don't
+apply locally and are intentionally omitted.

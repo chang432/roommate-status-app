@@ -49,9 +49,10 @@ and seeds the household automatically on every run. Real DynamoDB +
 CloudFormation are only used by the production deploy.
 
 The local-DynamoDB wiring lives in `infrastructure/` (next to the CloudFormation
-templates it stands in for): `docker-compose.dynamodb-local.yml` (the DynamoDB
-Local service + a one-off table-creator) and `create-tables.sh`. The only
-app-side piece is the `DYNAMODB_ENDPOINT` hook in `db.resource()`.
+templates it stands in for) as its own standalone compose project — see
+`infrastructure/README.md`. The app connects to it over the shared `roomie-shared`
+network; the only app-side pieces are the `DYNAMODB_ENDPOINT` hook in
+`db.resource()` and the connection config in `docker/docker-compose.local.yml`.
 
 ## TODO before going public
 
