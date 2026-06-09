@@ -7,8 +7,10 @@ string `id` (e.g. "jordan"), with schemaless `name`, `status`, and `statusText`
 attributes written by this app.
 
 Configuration (resolved at call time, not import time):
-    ROOMMATE_TABLE  - table name (default "RoommateStatus-main")
+    ROOMMATE_TABLE     - table name (default "RoommateStatus-main")
     AWS_REGION / standard AWS config chain - region & credentials
+    DYNAMODB_ENDPOINT  - local-dev only: point boto3 at a DynamoDB Local instead
+                         of real AWS (unset in production -> real DynamoDB)
 
 The table starts empty after deploy; run seed.py (or call seed()) once to load
 the initial household. Seeding is idempotent and never overwrites a roommate
@@ -79,13 +81,34 @@ def _region() -> str:
     return region if _REGION_RE.match(region) else DEFAULT_REGION
 
 
+def _endpoint() -> str | None:
+    """Optional DynamoDB endpoint override for local development.
+
+    When DYNAMODB_ENDPOINT is set (e.g. a DynamoDB Local container), boto3 talks
+    to it instead of real AWS — so local runs need no AWS account. Unset in
+    production, where None means "use the real DynamoDB endpoint" and behavior
+    is unchanged.
+    """
+    return os.environ.get("DYNAMODB_ENDPOINT") or None
+
+
+def resource():
+    """Build a DynamoDB resource honoring the region and local-endpoint override.
+
+    Shared by db, activities, and push so all three sign requests the same way
+    and pick up DYNAMODB_ENDPOINT together. endpoint_url=None is the boto3
+    default (real AWS), so production is unaffected.
+    """
+    return boto3.resource("dynamodb", region_name=_region(), endpoint_url=_endpoint())
+
+
 def _get_table():
     """Return the cached DynamoDB Table resource, creating it on first use."""
     global _table
     if _table is None:
         with _table_lock:
             if _table is None:
-                _table = boto3.resource("dynamodb", region_name=_region()).Table(TABLE_NAME)
+                _table = resource().Table(TABLE_NAME)
     return _table
 
 

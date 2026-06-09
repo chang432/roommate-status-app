@@ -2,13 +2,16 @@
 #
 # start.sh — one command to run the whole stack for local development.
 #
-#   1. Builds & starts the full app via docker compose (Flask backend + Caddy
+#   1. Starts a local, in-memory DynamoDB, then creates & seeds its tables.
+#   2. Builds & starts the full app via docker compose (Flask backend + Caddy
 #      serving the React frontend and proxying /api to Flask).
-#   2. Waits for the backend to become healthy.
-#   3. Tails the stack logs in the foreground.
+#   3. Waits for the backend to become healthy.
+#   4. Tails the stack logs in the foreground.
 #
-# The DynamoDB dev stack is assumed to already exist — deploy it once, manually,
-# with infrastructure/deploy.py --dev; this script no longer deploys it.
+# No AWS account is needed for local dev: the app talks to the local DynamoDB
+# (DYNAMODB_ENDPOINT, set in docker-compose.local.yml), which is in-memory and
+# reseeded fresh on every run. Real DynamoDB + CloudFormation are only used by
+# the production deploy (the base docker-compose.yml / infrastructure/).
 #
 # Local dev uses docker-compose.local.yml, which serves the app over plain HTTP
 # on http://localhost — Caddy never contacts Let's Encrypt, so no domain, cert,
@@ -32,6 +35,8 @@ COMPOSE_LOCAL_FILE="$ROOT_DIR/docker/docker-compose.local.yml"
 BACKEND_PORT="8000"
 HEALTH_URL="http://localhost:${BACKEND_PORT}/api/health"
 APP_URL="http://localhost"
+# DynamoDB Local, host-published on 8001 (see docker-compose.local.yml).
+DDB_LOCAL_URL="http://localhost:8001"
 
 # The base compose file requires SITE_DOMAIN (for the VPS's TLS cert). Locally
 # the override serves plain HTTP and ignores it, but the variable still has to
@@ -43,10 +48,11 @@ export SITE_DOMAIN="${SITE_DOMAIN:-localhost}"
 # override is layered second so its settings win.
 COMPOSE=(docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_LOCAL_FILE")
 
-# Local dev targets the "dev" deployment: the RoommateStatus-dev DynamoDB table
-# (infrastructure/dynamodb-table-dev.yaml), which must already be deployed.
-# Exporting ROOMMATE_TABLE points the Flask container at the dev table
-# regardless of the compose default.
+# Table name the local DynamoDB tables are created under (plus the -activities
+# and -pushsubs suffixes the app derives). Exporting ROOMMATE_TABLE keeps the
+# Flask container, the create-tables step, and seeding all pointed at the same
+# names. The value is just a label here — locally it's a DynamoDB Local table,
+# not the deployed RoommateStatus-dev one.
 export ROOMMATE_TABLE="RoommateStatus-dev"
 
 # --- Pretty logging ---------------------------------------------------------
@@ -66,12 +72,41 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# --- 1. Build & start the full stack ----------------------------------------
+# --- 1. Start local DynamoDB, then create & seed its tables -----------------
+# Build the backend image up front so the one-off create/seed containers below
+# run the current code (otherwise `compose run` would reuse a stale image that
+# may predate create_local_tables.py or the DYNAMODB_ENDPOINT support).
+log "Building the backend image…"
+"${COMPOSE[@]}" build flask
+
+# Bring up only DynamoDB Local first so the tables exist before the app serves
+# traffic. It's in-memory, so this runs every start.
+log "Starting local DynamoDB (in-memory)…"
+"${COMPOSE[@]}" up -d dynamodb-local
+
+log "Waiting for DynamoDB Local to accept connections…"
+for attempt in $(seq 1 30); do
+  # Once up, DynamoDB Local answers GET / with HTTP 400; any response at all
+  # (curl exit 0 without -f) means the port is ready. Connection-refused before
+  # then is a non-zero exit, so the loop keeps waiting.
+  if curl -s -o /dev/null "$DDB_LOCAL_URL"; then break; fi
+  [ "$attempt" -eq 30 ] && die "DynamoDB Local did not become ready in time."
+  sleep 1
+done
+
+# Create the tables (local stand-in for CloudFormation) and load the household.
+# Run as one-off Flask containers so they inherit DYNAMODB_ENDPOINT + the dummy
+# creds; --no-deps since DynamoDB Local is already up.
+log "Creating tables and seeding the household…"
+"${COMPOSE[@]}" run --rm --no-deps flask python create_local_tables.py
+"${COMPOSE[@]}" run --rm --no-deps flask python seed.py
+
+# --- 2. Build & start the full stack ----------------------------------------
 # Detached so we can health-check below, then we tail logs in the foreground.
 log "Building & starting the stack (Flask + Caddy/React)…"
 "${COMPOSE[@]}" up --build -d
 
-# --- 2. Wait for the backend to be healthy ----------------------------------
+# --- 3. Wait for the backend to be healthy ----------------------------------
 log "Waiting for backend to be ready…"
 for attempt in $(seq 1 30); do
   if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
@@ -87,6 +122,6 @@ done
 
 log "App is ready at ${APP_URL} (Ctrl+C to stop everything)."
 
-# --- 3. Tail the stack logs in the foreground -------------------------------
+# --- 4. Tail the stack logs in the foreground -------------------------------
 # Quitting (Ctrl+C) triggers the cleanup trap above, which tears the stack down.
 "${COMPOSE[@]}" logs -f

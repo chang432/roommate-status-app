@@ -21,11 +21,11 @@ import threading
 import time
 import uuid
 
-import boto3
 from botocore.exceptions import ClientError
 
-# Reuse db's region resolution so all tables sign requests the same way.
-from db import _region
+# Reuse db's resource builder so all tables sign requests the same way and share
+# the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
+from db import resource
 
 # How many recent proposals the feed returns / the UI shows.
 RECENT_LIMIT = 5
@@ -50,7 +50,7 @@ def _get_table():
     if _table is None:
         with _table_lock:
             if _table is None:
-                _table = boto3.resource("dynamodb", region_name=_region()).Table(TABLE_NAME)
+                _table = resource().Table(TABLE_NAME)
     return _table
 
 

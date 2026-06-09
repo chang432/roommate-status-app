@@ -27,10 +27,11 @@ Backed by a per-deployment DynamoDB table — `RoommateStatus-dev` or
 `dynamodb-table-main.yaml`) — one item per roommate, keyed by `id`.
 Configuration:
 
-| Env var          | Default               | Purpose                              |
-| ---------------- | --------------------- | ------------------------------------ |
-| `ROOMMATE_TABLE` | `RoommateStatus-main` | Table name                           |
-| `AWS_REGION`     | —                     | Region (or use your AWS config/SSO)  |
+| Env var             | Default               | Purpose                                      |
+| ------------------- | --------------------- | -------------------------------------------- |
+| `ROOMMATE_TABLE`    | `RoommateStatus-main` | Table name                                   |
+| `AWS_REGION`        | —                     | Region (or use your AWS config/SSO)          |
+| `DYNAMODB_ENDPOINT` | —                     | Local dev only: point boto3 at a DynamoDB Local instead of real AWS |
 
 Credentials resolve via the standard AWS chain. The deploy script lives in
 `infrastructure/`; once the table exists, seed the initial household **once**:
@@ -38,6 +39,15 @@ Credentials resolve via the standard AWS chain. The deploy script lives in
 ```bash
 python seed.py           # idempotent — safe to re-run
 ```
+
+### No AWS account? Use DynamoDB Local
+
+`./start.sh` (repo root) runs the whole stack against an in-memory **DynamoDB
+Local** container — no AWS credentials or deployed tables required. It sets
+`DYNAMODB_ENDPOINT` so boto3 targets the local instance, then creates the tables
+(`create_local_tables.py`, the local stand-in for the CloudFormation templates)
+and seeds the household automatically on every run. Real DynamoDB +
+CloudFormation are only used by the production deploy.
 
 ## TODO before going public
 
