@@ -1,0 +1,60 @@
+# Local DynamoDB for no-AWS-account development, plus a one-off table-creator.
+# This is the local-dev counterpart to the CloudFormation templates in this
+# folder: CloudFormation provisions the real tables for deploys; here we run an
+# in-memory DynamoDB Local and create the same tables inside it.
+#
+# start.sh merges this file (-f) into the app's compose project, so the Flask
+# container shares a network with dynamodb-local and reaches it by name. It also
+# flips Flask to the local DB by setting DYNAMODB_ENDPOINT here — without this
+# file layered in, Flask talks to real AWS (production behavior), unchanged.
+services:
+  # In-memory local DynamoDB. Data is wiped on restart; start.sh recreates and
+  # reseeds the tables each run. -sharedDb keeps all data in one place
+  # regardless of the (dummy) credentials/region.
+  dynamodb-local:
+    image: "amazon/dynamodb-local:latest"
+    container_name: roomie-dynamodb-local
+    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+    working_dir: /home/dynamodblocal
+    # Host-published on 8001 (Flask already uses 8000); containers reach it on
+    # the internal network as dynamodb-local:8000.
+    ports:
+      - "8001:8000"
+
+  # One-off: create the tables (local stand-in for CloudFormation), then exit.
+  # Behind the "init" profile so a plain `compose up` doesn't run it; start.sh
+  # invokes it explicitly with `compose run`. Uses the public aws-cli image and a
+  # mounted script, so there's no extra image to build.
+  dynamodb-init:
+    image: "amazon/aws-cli:latest"
+    depends_on:
+      - dynamodb-local
+    profiles:
+      - init
+    entrypoint: ["/bin/sh", "/work/create-tables.sh"]
+    environment:
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      # DynamoDB Local ignores credentials, but the CLI still requires some.
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - AWS_REGION=us-east-1
+      - AWS_PAGER=
+      # Same table name the app and seed use; the script derives the -activities
+      # and -pushsubs tables from it.
+      - ROOMMATE_TABLE=${ROOMMATE_TABLE:-RoommateStatus-dev}
+    volumes:
+      # Absolute host path (INFRA_DIR, exported by start.sh) so the mount doesn't
+      # depend on the compose project directory; falls back to this folder (it's
+      # resolved against the project dir, docker/) for manual runs.
+      - "${INFRA_DIR:-../infrastructure}/create-tables.sh:/work/create-tables.sh:ro"
+
+  # Point Flask at the local DB. Present only when this file is layered in, so
+  # production / real-AWS runs are unaffected.
+  flask:
+    environment:
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - AWS_REGION=us-east-1
+    depends_on:
+      - dynamodb-local

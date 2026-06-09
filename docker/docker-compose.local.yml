@@ -1,40 +1,16 @@
 # Local-dev override for docker-compose.yml. Swaps Caddy to serve plain HTTP on
 # localhost so it never touches Let's Encrypt / Route 53 (no public cert churn,
-# no rate-limit burn, no /etc/hosts games), and adds a local DynamoDB so the
-# stack needs no AWS account. Layer it on top of the base file:
+# no rate-limit burn, no /etc/hosts games). Layer it on top of the base file:
 #
 #   docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 #
-# start.sh does this automatically. The base file (what the deploy workflow runs
-# with an explicit single -f) keeps the production DNS-01 / real-AWS config
-# untouched.
+# start.sh does this automatically, and also layers in
+# infrastructure/docker-compose.dynamodb-local.yml (the in-memory DynamoDB Local
+# that lets the stack run with no AWS account). The base file (what the deploy
+# workflow runs with an explicit single -f) keeps the production DNS-01 /
+# real-AWS config untouched.
 services:
   caddy:
     # Replace the baked-in DNS-01 Caddyfile with the plain-HTTP local one.
     volumes:
       - "./caddy/Caddyfile.local:/etc/caddy/Caddyfile:ro"
-
-  # Local DynamoDB so the app needs no AWS account. In-memory: data is wiped on
-  # every restart (start.sh recreates + reseeds the tables each run). -sharedDb
-  # keeps all data in one place regardless of the (dummy) credentials/region.
-  dynamodb-local:
-    image: "amazon/dynamodb-local:latest"
-    container_name: roomie-dynamodb-local
-    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
-    working_dir: /home/dynamodblocal
-    # Host-published on 8001 (the Flask backend already uses 8000); containers
-    # reach it on the internal network as dynamodb-local:8000.
-    ports:
-      - "8001:8000"
-
-  flask:
-    environment:
-      # Point boto3 at DynamoDB Local instead of real AWS (internal port 8000).
-      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
-      # DynamoDB Local ignores credentials but boto3 still requires some to be
-      # present — supply throwaway values so no real AWS keys are needed.
-      - AWS_ACCESS_KEY_ID=local
-      - AWS_SECRET_ACCESS_KEY=local
-      - AWS_REGION=us-east-1
-    depends_on:
-      - dynamodb-local

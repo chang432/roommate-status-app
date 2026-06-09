@@ -13,10 +13,15 @@
 # reseeded fresh on every run. Real DynamoDB + CloudFormation are only used by
 # the production deploy (the base docker-compose.yml / infrastructure/).
 #
-# Local dev uses docker-compose.local.yml, which serves the app over plain HTTP
-# on http://localhost — Caddy never contacts Let's Encrypt, so no domain, cert,
-# or AWS Route 53 access is needed here. (The production DNS-01 cert lives only
-# on the VPS, via the base docker-compose.yml the deploy workflow runs.)
+# Local dev layers two override files onto the base docker-compose.yml:
+#   - docker/docker-compose.local.yml          — Caddy serves plain HTTP on
+#     http://localhost (never contacts Let's Encrypt / Route 53; no domain or
+#     cert needed).
+#   - infrastructure/docker-compose.dynamodb-local.yml — an in-memory DynamoDB
+#     Local plus a one-off table-creator, and the DYNAMODB_ENDPOINT that points
+#     Flask at it. This is what removes the AWS-account requirement; all of the
+#     local-DynamoDB wiring lives in infrastructure/ next to the CloudFormation
+#     templates it stands in for.
 # http://localhost is still a browser secure context, so service workers / the
 # push API work locally; the real iPhone push test needs the VPS deploy.
 #
@@ -32,11 +37,16 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # --- Config -----------------------------------------------------------------
 COMPOSE_FILE="$ROOT_DIR/docker/docker-compose.yml"
 COMPOSE_LOCAL_FILE="$ROOT_DIR/docker/docker-compose.local.yml"
+COMPOSE_DDB_FILE="$ROOT_DIR/infrastructure/docker-compose.dynamodb-local.yml"
 BACKEND_PORT="8000"
 HEALTH_URL="http://localhost:${BACKEND_PORT}/api/health"
 APP_URL="http://localhost"
-# DynamoDB Local, host-published on 8001 (see docker-compose.local.yml).
+# DynamoDB Local, host-published on 8001 (see the infrastructure compose file).
 DDB_LOCAL_URL="http://localhost:8001"
+
+# Absolute path to infrastructure/, consumed by its compose file to mount the
+# table-creator script regardless of the compose project directory.
+export INFRA_DIR="$ROOT_DIR/infrastructure"
 
 # The base compose file requires SITE_DOMAIN (for the VPS's TLS cert). Locally
 # the override serves plain HTTP and ignores it, but the variable still has to
@@ -44,9 +54,10 @@ DDB_LOCAL_URL="http://localhost:8001"
 export SITE_DOMAIN="${SITE_DOMAIN:-localhost}"
 
 # docker compose is run with explicit -f files so it works from any directory;
-# relative build contexts resolve against the first file's dir. The local
-# override is layered second so its settings win.
-COMPOSE=(docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_LOCAL_FILE")
+# relative build contexts resolve against the first file's dir. Overrides are
+# layered after the base so their settings win: the plain-HTTP Caddy override,
+# then the local-DynamoDB file from infrastructure/.
+COMPOSE=(docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_LOCAL_FILE" -f "$COMPOSE_DDB_FILE")
 
 # Table name the local DynamoDB tables are created under (plus the -activities
 # and -pushsubs suffixes the app derives). Exporting ROOMMATE_TABLE keeps the
@@ -73,9 +84,9 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # --- 1. Start local DynamoDB, then create & seed its tables -----------------
-# Build the backend image up front so the one-off create/seed containers below
-# run the current code (otherwise `compose run` would reuse a stale image that
-# may predate create_local_tables.py or the DYNAMODB_ENDPOINT support).
+# Build the backend image up front so the seed step below runs the current code
+# (otherwise `compose run flask` could reuse a stale image that predates the
+# DYNAMODB_ENDPOINT support and silently hit real AWS).
 log "Building the backend image…"
 "${COMPOSE[@]}" build flask
 
@@ -94,11 +105,14 @@ for attempt in $(seq 1 30); do
   sleep 1
 done
 
-# Create the tables (local stand-in for CloudFormation) and load the household.
-# Run as one-off Flask containers so they inherit DYNAMODB_ENDPOINT + the dummy
-# creds; --no-deps since DynamoDB Local is already up.
-log "Creating tables and seeding the household…"
-"${COMPOSE[@]}" run --rm --no-deps flask python create_local_tables.py
+# Create the tables — the infrastructure/ table-creator (aws-cli) is the local
+# stand-in for CloudFormation. --profile init activates the one-off service.
+log "Creating tables…"
+"${COMPOSE[@]}" --profile init run --rm dynamodb-init
+
+# Seed the household via the app image (seed.py + the roster live with the app).
+# --no-deps since DynamoDB Local is already up.
+log "Seeding the household…"
 "${COMPOSE[@]}" run --rm --no-deps flask python seed.py
 
 # --- 2. Build & start the full stack ----------------------------------------

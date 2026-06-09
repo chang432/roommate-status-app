@@ -45,9 +45,13 @@ python seed.py           # idempotent — safe to re-run
 `./start.sh` (repo root) runs the whole stack against an in-memory **DynamoDB
 Local** container — no AWS credentials or deployed tables required. It sets
 `DYNAMODB_ENDPOINT` so boto3 targets the local instance, then creates the tables
-(`create_local_tables.py`, the local stand-in for the CloudFormation templates)
 and seeds the household automatically on every run. Real DynamoDB +
 CloudFormation are only used by the production deploy.
+
+The local-DynamoDB wiring lives in `infrastructure/` (next to the CloudFormation
+templates it stands in for): `docker-compose.dynamodb-local.yml` (the DynamoDB
+Local service + a one-off table-creator) and `create-tables.sh`. The only
+app-side piece is the `DYNAMODB_ENDPOINT` hook in `db.resource()`.
 
 ## TODO before going public
 
