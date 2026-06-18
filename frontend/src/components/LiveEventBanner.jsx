@@ -19,13 +19,6 @@ export default function LiveEventBanner({
     if (!isInvolved) onBannerClick(isInvolved);
   }
 
-  function handleBannerKeyDown(event) {
-    if (isInvolved) return;
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    onBannerClick(isInvolved);
-  }
-
   return (
     <div
       className={cx(
@@ -37,7 +30,6 @@ export default function LiveEventBanner({
       tabIndex={isInvolved ? undefined : 0}
       aria-label={isInvolved ? undefined : "Open live activity"}
       onClick={handleBannerClick}
-      onKeyDown={handleBannerKeyDown}
     >
       <div className={styles.content}>
         <span className={styles.dot} />

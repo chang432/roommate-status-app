@@ -30,6 +30,10 @@
   @apply cursor-pointer rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft;
 }
 
+.activeCard {
+  @apply cursor-pointer rounded-sm border border-[#e8b9ae] bg-gradient-to-br from-[#fff0ec] to-[#fbe2dc] px-[14px] py-[10px] transition hover:border-accent-soft;
+}
+
 .summary {
   @apply flex items-center gap-[10px];
 }

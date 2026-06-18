@@ -47,6 +47,7 @@ export default function ProposeActivity({
   // Deletion is owner-only and uses a two-step inline confirmation.
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const commentScrollerRef = useRef(null);
 
   useEffect(() => {
     if (!activityFocusRequest?.activityId) return;
@@ -162,6 +163,14 @@ export default function ProposeActivity({
     }
   }
 
+  // Scroll the comment scroller to the bottom when new comments are added.
+  useEffect(() => {
+    if (commentScrollerRef.current) {
+      commentScrollerRef.current.scrollTop =
+        commentScrollerRef.current.scrollHeight;
+    }
+  }, [activities]);
+
   return (
     <section className={styles.section}>
       <p className="ui-sectionLabel">Propose an activity</p>
@@ -222,7 +231,7 @@ export default function ProposeActivity({
                     toggleExpanded(a.id);
                   }
                 }}
-                className={styles.card}
+                className={a.isLive ? styles.activeCard : styles.card}
               >
                 <div className={styles.summary}>
                   <div className={styles.summaryText}>
@@ -351,14 +360,19 @@ export default function ProposeActivity({
                             No comments yet.
                           </p>
                         ) : (
-                          <div className={styles.commentScroller}>
+                          <div
+                            className={styles.commentScroller}
+                            ref={commentScrollerRef}
+                          >
                             <ul className={styles.commentList}>
                               {comments.map((c, i) => (
                                 <li
                                   key={`${c.createdAt}-${i}`}
                                   className={styles.comment}
                                 >
-                                  <span className={styles.commentAuthor}>{c.author}</span>{" "}
+                                  <span className={styles.commentAuthor}>
+                                    {c.author}
+                                  </span>{" "}
                                   <span className={styles.commentTime}>
                                     {relativeTime(c.createdAt)}
                                   </span>
