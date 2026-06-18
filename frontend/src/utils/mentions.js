@@ -15,11 +15,12 @@ export function activeMention(text, caret) {
   }
 }
 
-export function mentionMatches(text, mentions) {
+export function mentionMatches(text, mentions, mentionsAll = false) {
   const names = mentions
     .map((mention) => mention.name)
     .filter(Boolean)
-    .sort((a, b) => b.length - a.length)
+  if (mentionsAll) names.push('all')
+  names.sort((a, b) => b.length - a.length)
   if (names.length === 0) return []
 
   const pattern = new RegExp(

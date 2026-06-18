@@ -24,7 +24,7 @@ from moto import mock_aws
 import activities
 import db
 import push
-from app import create_app, resolve_mentions
+from app import create_app, mentions_all, resolve_mentions
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -256,6 +256,7 @@ def test_status_reminder_notifies_household_except_requester(client, monkeypatch
                 "url": "/",
                 "exclude_user_ids": {"kayla"},
             },
+        )
     ]
 
 
@@ -450,20 +451,27 @@ def test_resolve_mentions_prefers_longest_overlapping_name():
     ]
 
 
-def test_comments_capped_oldest_first(client):
+def test_mentions_all_requires_a_complete_token():
+    assert mentions_all("@all please")
+    assert mentions_all("Heads up, @ALL!")
+    assert not mentions_all("person@example.com")
+    assert not mentions_all("@alligator")
+    assert not mentions_all("@@all")
+
+
+def test_comments_return_latest_100_without_capping_storage(client):
     created = _propose(client, "Hike").get_json()
     activity_id = created[0]["id"]
 
-    for i in range(7):
-        client.post(
-            f"/api/activities/{activity_id}/comments",
-            json={"authorId": "andre", "text": f"msg {i}"},
-        )
+    for i in range(105):
+        activities.add_comment(activity_id, "Andre", f"msg {i}")
 
     feed = client.get("/api/activities").get_json()
     comments = feed[0]["comments"]
-    # Only the 5 most recent, still oldest-first (msg 2..6).
-    assert [c["text"] for c in comments] == [f"msg {i}" for i in range(2, 7)]
+    assert [c["text"] for c in comments] == [f"msg {i}" for i in range(5, 105)]
+
+    stored = activities._get_table().get_item(Key={"id": activity_id})["Item"]
+    assert len(stored["comments"]) == 105
 
 
 def test_comment_requires_text_and_author(client):
@@ -840,6 +848,37 @@ def test_mentions_notify_household_members_and_store_canonical_metadata(
     assert participant_call[1]["title"] == "New comment 💬"
 
 
+def test_all_mention_notifies_household_once_and_excludes_author(client, monkeypatch):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+    client.post(f"/api/activities/{activity_id}/join", json={"userId": "sheryl"})
+    calls = _capture_notifications(monkeypatch)
+
+    res = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={
+            "authorId": "kayla",
+            "text": "@ALL please join us, especially @Sheryl",
+        },
+    )
+
+    assert res.status_code == 200
+    comment = res.get_json()[0]["comments"][0]
+    assert comment["mentionsAll"] is True
+    assert comment["mentions"] == [{"id": "sheryl", "name": "Sheryl"}]
+    assert calls == [
+        (
+            "all",
+            {
+                "title": "Kayla mentioned everyone",
+                "body": "On “Movie night”: @ALL please join us, especially @Sheryl",
+                "url": "/",
+                "exclude_user_ids": {"kayla"},
+            },
+        )
+    ]
+
+
 def test_mentioned_non_participant_subscription_receives_push(client, monkeypatch):
     created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
@@ -953,6 +992,7 @@ def test_legacy_comment_projects_empty_mentions(client):
 
     comment = client.get("/api/activities").get_json()[0]["comments"][0]
     assert comment["mentions"] == []
+    assert comment["mentionsAll"] is False
 
 
 def test_join_requires_valid_roommate(client):

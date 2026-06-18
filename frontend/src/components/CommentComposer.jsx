@@ -19,10 +19,16 @@ export default function CommentComposer({
   const suggestions = useMemo(() => {
     if (!mention) return []
     const query = mention.query.toLowerCase()
-    return roommates
+    const everyone = {
+      id: '__all__',
+      name: 'all',
+      description: 'Everyone',
+    }
+    const roommateSuggestions = roommates
       .filter((roommate) => roommate.id !== currentUserId)
       .filter((roommate) => roommate.name.toLowerCase().includes(query))
       .sort((a, b) => a.name.localeCompare(b.name))
+    return 'all'.includes(query) ? [everyone, ...roommateSuggestions] : roommateSuggestions
   }, [currentUserId, mention, roommates])
 
   function syncMention(nextValue, caret) {
@@ -109,6 +115,11 @@ export default function CommentComposer({
                   )}
                 >
                   @{roommate.name}
+                  {roommate.description && (
+                    <span className="ml-2 font-normal text-ink-soft">
+                      — {roommate.description}
+                    </span>
+                  )}
                 </button>
               </li>
             ))}

@@ -30,8 +30,9 @@ from db import resource
 # How many recent proposals the feed returns / the UI shows.
 RECENT_LIMIT = 5
 
-# How many of an activity's most recent comments the feed returns / the UI shows.
-COMMENTS_LIMIT = 5
+# How many of an activity's most recent comments the feed returns. Storage
+# remains unbounded; the frontend initially shows only the latest 10.
+COMMENTS_LIMIT = 100
 
 # Results returned by delete_owned(), kept explicit so the route can distinguish
 # missing activities from ownership failures without handling boto3 details.
@@ -102,6 +103,7 @@ def _project(item: dict) -> dict:
                 for mention in c.get("mentions", [])
                 if mention.get("id") and mention.get("name")
             ],
+            "mentionsAll": bool(c.get("mentionsAll", False)),
         }
         for c in (item.get("comments") or [])[-COMMENTS_LIMIT:]
     ]
@@ -175,14 +177,15 @@ def add_comment(
     author: str,
     text: str,
     mentions: list[dict] | None = None,
+    mentions_all: bool = False,
 ) -> dict | None:
     """Append a comment to an activity; return it, or None if unknown.
 
     Comments are stored as an ordered DynamoDB list of
-    {author, text, createdAt, mentions} maps and appended atomically with
-    list_append, so concurrent comments don't clobber each other. if_not_exists
-    seeds an empty list for activities (legacy or otherwise) that have never
-    been commented on.
+    {author, text, createdAt, mentions, mentionsAll} maps and appended
+    atomically with list_append, so concurrent comments don't clobber each
+    other. if_not_exists seeds an empty list for activities (legacy or
+    otherwise) that have never been commented on.
     """
     comment = {
         "author": author,
@@ -191,6 +194,7 @@ def add_comment(
         # ids alongside names keeps notification targeting and UI highlighting
         # independent from free-form client input.
         "mentions": mentions or [],
+        "mentionsAll": mentions_all,
         # Epoch millis, mirroring an activity's createdAt — drives the order the
         # UI shows comments in and powers its relative timestamps.
         "createdAt": int(time.time() * 1000),
