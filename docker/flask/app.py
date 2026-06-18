@@ -26,6 +26,8 @@ And the proposed-activities feed:
     POST /api/activities/<id>/join     -> the updated recent list (and pushes it)
     POST /api/activities/<id>/leave    -> the updated recent list
     POST /api/activities/<id>/comments -> the updated recent list (and pushes it)
+    PUT/DELETE /api/activities/<id>/comments/<comment_id>/likes
+                                        -> the updated recent list
 
 Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
 in push.py; proposals are in activities.py. Routes stay storage-agnostic.
@@ -397,6 +399,7 @@ def create_app() -> Flask:
             text,
             mentions,
             mentions_everyone,
+            author["id"],
         )
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
@@ -448,6 +451,31 @@ def create_app() -> Flask:
             )
 
         # Consistent read so the new comment is reflected immediately.
+        return jsonify(activities.list_recent(consistent=True))
+
+    @app.route(
+        "/api/activities/<activity_id>/comments/<comment_id>/likes",
+        methods=["PUT", "DELETE"],
+    )
+    def update_comment_like(activity_id: str, comment_id: str):
+        """Idempotently like or unlike one comment for a valid roommate."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+
+        result = activities.set_comment_like(
+            activity_id,
+            comment_id,
+            roommate["id"],
+            roommate["name"],
+            request.method == "PUT",
+        )
+        if result == activities.LIKE_NOT_FOUND:
+            return jsonify({"error": "Unknown activity or comment."}), 404
+        if result == activities.LIKE_SELF_FORBIDDEN:
+            return jsonify({"error": "You cannot like your own comment."}), 403
         return jsonify(activities.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/notify")
