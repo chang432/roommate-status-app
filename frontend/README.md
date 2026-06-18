@@ -12,7 +12,10 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Gather banner**: when 3+ roommates are available, a notification banner
   invites everyone to hang out (PROJECT.md threshold).
 - **Live events**: event creators can start/end an event, with one live-event
-  banner shown household-wide.
+  banner shown household-wide. Open apps refresh from live-event push messages,
+  focus changes, or visible-page polling.
+- **Comment mentions**: typing `@` suggests household members, highlights valid
+  mentions, and notifies the mentioned roommates.
 
 ## Tech
 

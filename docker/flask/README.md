@@ -34,6 +34,11 @@ roommate ids. User-triggered notifications always exclude the actor. New
 activity proposals and gather notifications go household-wide; event comments,
 joins, deletion, and emphasis go only to that event's participants.
 Event start/end notifications go household-wide.
+Comments may mention any household member with `@Name`. Mentioned roommates get
+a targeted push; unmentioned event participants still get the normal comment
+push. Mention identities are resolved server-side from the household roster.
+Live-event pushes include an activity-change event type so open apps refresh
+their banner immediately.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).

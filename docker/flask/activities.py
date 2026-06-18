@@ -97,6 +97,11 @@ def _project(item: dict) -> dict:
             "author": c.get("author", "Someone"),
             "text": c.get("text", ""),
             "createdAt": int(c["createdAt"]),
+            "mentions": [
+                {"id": mention["id"], "name": mention["name"]}
+                for mention in c.get("mentions", [])
+                if mention.get("id") and mention.get("name")
+            ],
         }
         for c in (item.get("comments") or [])[-COMMENTS_LIMIT:]
     ]
@@ -165,17 +170,27 @@ def leave(activity_id: str, user_id: str, name: str) -> dict | None:
     return _set_membership(activity_id, user_id, name, "DELETE")
 
 
-def add_comment(activity_id: str, author: str, text: str) -> dict | None:
+def add_comment(
+    activity_id: str,
+    author: str,
+    text: str,
+    mentions: list[dict] | None = None,
+) -> dict | None:
     """Append a comment to an activity; return it, or None if unknown.
 
-    Comments are stored as an ordered DynamoDB list of {author, text, createdAt}
-    maps and appended atomically with list_append, so concurrent comments don't
-    clobber each other. if_not_exists seeds an empty list for activities (legacy
-    or otherwise) that have never been commented on.
+    Comments are stored as an ordered DynamoDB list of
+    {author, text, createdAt, mentions} maps and appended atomically with
+    list_append, so concurrent comments don't clobber each other. if_not_exists
+    seeds an empty list for activities (legacy or otherwise) that have never
+    been commented on.
     """
     comment = {
         "author": author,
         "text": text,
+        # Resolved by the server from the canonical household roster. Storing
+        # ids alongside names keeps notification targeting and UI highlighting
+        # independent from free-form client input.
+        "mentions": mentions or [],
         # Epoch millis, mirroring an activity's createdAt — drives the order the
         # UI shows comments in and powers its relative timestamps.
         "createdAt": int(time.time() * 1000),

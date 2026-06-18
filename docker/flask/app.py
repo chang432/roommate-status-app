@@ -34,6 +34,7 @@ in push.py; proposals are in activities.py. Routes stay storage-agnostic.
 from __future__ import annotations
 
 import os
+import re
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -51,6 +52,34 @@ MAX_COMMENT_LEN = 280
 # Number of available roommates that triggers the "gather" push (PROJECT.md:
 # "3 or more"). Override with the AVAILABLE_THRESHOLD env var.
 PUSH_THRESHOLD = int(os.environ.get("AVAILABLE_THRESHOLD", "3"))
+
+
+def resolve_mentions(text: str, roommates: list[dict], author_id: str) -> list[dict]:
+    """Resolve valid @display-name tokens to canonical household identities."""
+    candidates = []
+    for roommate in sorted(roommates, key=lambda item: len(item["name"]), reverse=True):
+        if roommate["id"] == author_id:
+            continue
+        # Treat names as mentions only at token boundaries, avoiding accidental
+        # matches inside email-like text or longer words.
+        pattern = rf"(?<![\w@])@{re.escape(roommate['name'])}(?=$|[^\w])"
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            candidates.append((match.start(), match.end(), roommate))
+
+    # Prefer the longest name when household names overlap at the same text
+    # position, then deduplicate repeated mentions while preserving text order.
+    candidates.sort(key=lambda item: (item[0], -(item[1] - item[0])))
+    resolved = []
+    used_ids = set()
+    occupied_until = -1
+    for start, end, roommate in candidates:
+        if start < occupied_until:
+            continue
+        occupied_until = end
+        if roommate["id"] not in used_ids:
+            resolved.append({"id": roommate["id"], "name": roommate["name"]})
+            used_ids.add(roommate["id"])
+    return resolved
 
 
 def create_app() -> Flask:
@@ -244,7 +273,7 @@ def create_app() -> Flask:
         # Live transitions are household-wide events. Push remains best-effort
         # so notification configuration or delivery cannot undo persisted state.
         try:
-            push.notify_all(
+            push_result = push.notify_all(
                 title=f"Event {action}ed {'🔴' if action == 'start' else '🏁'}",
                 body=(
                     f"{activity['proposedBy']} started {activity['text']}"
@@ -252,8 +281,10 @@ def create_app() -> Flask:
                     else f"{activity['proposedBy']} ended {activity['text']}"
                 ),
                 url="/",
+                event_type="activities-changed",
                 exclude_user_ids={requester_id},
             )
+            app.logger.info("Event %s push result: %s", action, push_result)
         except Exception:  # noqa: BLE001 - transition must remain successful
             app.logger.exception("Failed to send event %s notification", action)
 
@@ -353,22 +384,46 @@ def create_app() -> Flask:
             return jsonify({"error": "A comment is required."}), 400
         if len(text) > MAX_COMMENT_LEN:
             return jsonify({"error": f"Keep it under {MAX_COMMENT_LEN} characters."}), 400
-        activity = activities.add_comment(activity_id, author["name"], text)
+        mentions = resolve_mentions(text, db.get_all(), author["id"])
+        activity = activities.add_comment(activity_id, author["name"], text, mentions)
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
 
-        # Notify the other participants of the new comment. Best-effort: a push
-        # failure must not fail the comment the user just posted.
-        try:
-            push.notify_users(
-                user_ids=set(activity["memberIds"]),
-                exclude_user_ids={author["id"]},
-                title="New comment 💬",
-                body=f"{author['name']} on “{activity['text']}”: {text}",
-                url="/",
+        # Mentioned users receive one targeted notification. Remaining event
+        # participants keep the generic comment notification, with the two
+        # audiences made disjoint to prevent duplicate pushes.
+        mentioned_ids = {mention["id"] for mention in mentions}
+        participant_ids = set(activity["memberIds"]) - mentioned_ids - {author["id"]}
+
+        def notify_comment_users(user_ids: set[str], title: str, notification_body: str):
+            """Keep each comment audience best-effort and independent."""
+            try:
+                result = push.notify_users(
+                    user_ids=user_ids,
+                    title=title,
+                    body=notification_body,
+                    url="/",
+                )
+                app.logger.info(
+                    "Comment push result for %d recipient(s): %s",
+                    len(user_ids),
+                    result,
+                )
+            except Exception:  # noqa: BLE001 - never let push break the request
+                app.logger.exception("Failed to send comment notification")
+
+        if mentioned_ids:
+            notify_comment_users(
+                mentioned_ids,
+                f"{author['name']} mentioned you",
+                f"On “{activity['text']}”: {text}",
             )
-        except Exception:  # noqa: BLE001 - never let push break the request
-            app.logger.exception("Failed to send comment notification")
+        if participant_ids:
+            notify_comment_users(
+                participant_ids,
+                "New comment 💬",
+                f"{author['name']} on “{activity['text']}”: {text}",
+            )
 
         # Consistent read so the new comment is reflected immediately.
         return jsonify(activities.list_recent(consistent=True))

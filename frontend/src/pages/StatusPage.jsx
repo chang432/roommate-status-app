@@ -21,6 +21,8 @@ import { usePullToRefresh } from '../utils/usePullToRefresh.js'
 import { availableCount, AVAILABLE_THRESHOLD } from '../utils/status.js'
 import { avatarColor } from '../utils/avatar.js'
 
+const ACTIVITY_POLL_INTERVAL_MS = 5000
+
 // A friendly "Tuesday evening" style subtitle based on the current time.
 function whenLabel() {
   const now = new Date()
@@ -67,6 +69,49 @@ export default function StatusPage() {
   useEffect(() => {
     Promise.all([loadRoommates(), loadActivities()]).finally(() => setLoading(false))
   }, [loadActivities, loadRoommates])
+
+  // Keep live-event state current across household devices. Push-enabled open
+  // apps refresh immediately from the service worker; visible-page polling and
+  // focus refresh cover browsers without notification permission.
+  useEffect(() => {
+    let pollId = null
+
+    function startPolling() {
+      if (pollId !== null || document.visibilityState !== 'visible') return
+      pollId = window.setInterval(loadActivities, ACTIVITY_POLL_INTERVAL_MS)
+    }
+
+    function stopPolling() {
+      if (pollId === null) return
+      window.clearInterval(pollId)
+      pollId = null
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        loadActivities()
+        startPolling()
+      } else {
+        stopPolling()
+      }
+    }
+
+    function handleServiceWorkerMessage(event) {
+      if (event.data?.type === 'activities-changed') loadActivities()
+    }
+
+    startPolling()
+    window.addEventListener('focus', loadActivities)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage)
+
+    return () => {
+      stopPolling()
+      window.removeEventListener('focus', loadActivities)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage)
+    }
+  }, [loadActivities])
 
   // Pull down from the top to refresh both household and event state.
   const handleRefresh = useCallback(async () => {
@@ -238,6 +283,7 @@ export default function StatusPage() {
             liveEvent={liveEvent}
             transitioningId={transitioningId}
             onLiveTransition={handleLiveTransition}
+            roommates={roommates}
           />
         </>
       )}
