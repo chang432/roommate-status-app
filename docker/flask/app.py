@@ -15,8 +15,10 @@ Plus the Web Push (PoC) endpoints:
 
 And the proposed-activities feed:
 
-    GET  /api/activities               -> [ { "id", "text", "proposedBy", "createdAt", "members" }, ... ]
+    GET  /api/activities               -> [ { "id", "text", "proposedBy",
+                                             "proposedById", "createdAt", "members" }, ... ]
     POST /api/activities               -> the updated recent list (and pushes it)
+    DELETE /api/activities/<id>        -> the updated recent list
     POST /api/activities/<id>/join     -> the updated recent list (and pushes it)
     POST /api/activities/<id>/leave    -> the updated recent list
     POST /api/activities/<id>/comments -> the updated recent list (and pushes it)
@@ -161,21 +163,24 @@ def create_app() -> Flask:
         """Store a new proposal, push it to everyone, return the recent list."""
         body = request.get_json(silent=True) or {}
         text = (body.get("text") or "").strip()
-        proposed_by = (body.get("proposedBy") or "Someone").strip() or "Someone"
+        proposed_by_id = (body.get("proposedById") or "").strip()
 
         if not text:
             return jsonify({"error": "An activity is required."}), 400
         if len(text) > MAX_ACTIVITY_LEN:
             return jsonify({"error": f"Keep it under {MAX_ACTIVITY_LEN} characters."}), 400
+        proposer = db.get_by_id(proposed_by_id) if proposed_by_id else None
+        if proposer is None:
+            return jsonify({"error": "A valid creator is required."}), 400
 
-        activities.add_activity(text, proposed_by)
+        activities.add_activity(text, proposer["id"], proposer["name"])
 
         # Notify every subscribed device. Best-effort: a push failure must not
         # fail the proposal the user just made.
         try:
             push.notify_all(
                 title="New activity proposed 🎉",
-                body=f"{proposed_by}: {text}",
+                body=f"{proposer['name']}: {text}",
                 url="/",
             )
         except Exception:  # noqa: BLE001 - never let push break the request
@@ -183,6 +188,22 @@ def create_app() -> Flask:
 
         # Return the refreshed list so the UI updates in one round-trip.
         # Consistent read so the just-created proposal is always included.
+        return jsonify(activities.list_recent(consistent=True))
+
+    @app.delete("/api/activities/<activity_id>")
+    def delete_activity(activity_id: str):
+        """Delete an activity only when requested by its stored creator."""
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        if not requester_id:
+            return jsonify({"error": "A requester id is required."}), 400
+
+        result = activities.delete_owned(activity_id, requester_id)
+        if result == activities.DELETE_NOT_FOUND:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        if result == activities.DELETE_FORBIDDEN:
+            return jsonify({"error": "Only the event creator can delete it."}), 403
+
         return jsonify(activities.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/join")

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import {
   getActivities,
   proposeActivity,
+  deleteActivity,
   notifyActivity,
   joinActivity,
   leaveActivity,
@@ -35,12 +36,16 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
   // single draft string is enough — it's cleared whenever the panel changes).
   const [commentText, setCommentText] = useState('')
   const [commentingId, setCommentingId] = useState(null)
+  // Deletion is owner-only and uses a two-step inline confirmation.
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
 
   // Open/close an activity's panel, clearing any half-typed comment so a draft
   // never bleeds from one activity's panel into another's.
   function toggleExpanded(id) {
     setExpandedId((cur) => (cur === id ? null : id))
     setCommentText('')
+    setConfirmingDeleteId(null)
   }
 
   // Load the recent feed on mount, and again whenever the parent refreshes.
@@ -63,13 +68,29 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
     setSending(true)
     setError('')
     try {
-      const updated = await proposeActivity(trimmed, user.name)
+      const updated = await proposeActivity(trimmed, user.id)
       setActivities(updated)
       setText('')
     } catch {
       setError('Could not send your proposal. Try again.')
     } finally {
       setSending(false)
+    }
+  }
+
+  async function handleDelete(activity) {
+    if (deletingId) return
+    setDeletingId(activity.id)
+    setError('')
+    try {
+      const updated = await deleteActivity(activity.id, user.id)
+      setActivities(updated)
+      setConfirmingDeleteId(null)
+      setExpandedId((current) => (current === activity.id ? null : current))
+    } catch {
+      setError('Could not delete the activity. Try again.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -170,6 +191,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
             // The proposer is permanently part of their own activity, so they
             // get no Join/Leave button.
             const isProposer = a.proposedBy.toLowerCase() === user.name.toLowerCase()
+            const canDelete = a.proposedById === user.id
             const expanded = expandedId === a.id
             return (
               <div
@@ -333,6 +355,46 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                           </button>
                         </form>
                       </div>
+
+                      {canDelete && (
+                        <div
+                          className="mt-[14px] flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[12px]"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          {confirmingDeleteId === a.id ? (
+                            <>
+                              <span className="mr-auto text-[12.5px] font-semibold text-status-red max-[400px]:w-full">
+                                Delete this event?
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmingDeleteId(null)}
+                                disabled={deletingId === a.id}
+                                className="rounded-full border border-line bg-white px-[13px] py-[7px] text-[12.5px] font-bold text-ink-soft transition hover:bg-[#faf6ef] disabled:opacity-60"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(a)}
+                                disabled={deletingId === a.id}
+                                className="rounded-full border border-status-red bg-status-red px-[13px] py-[7px] text-[12.5px] font-bold text-white transition hover:brightness-95 disabled:opacity-60"
+                              >
+                                {deletingId === a.id ? 'Deleting…' : 'Delete'}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmingDeleteId(a.id)}
+                              className="rounded-full border border-[#e8c5bf] bg-[#fbeae6] px-[13px] py-[7px] text-[12.5px] font-bold text-status-red transition hover:brightness-95"
+                            >
+                              Delete event
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

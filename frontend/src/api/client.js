@@ -67,10 +67,19 @@ export async function getActivities() {
 
 // POST /api/activities — propose an activity (also pushes it to everyone).
 // Returns the refreshed recent list.
-export async function proposeActivity(text, proposedBy) {
+export async function proposeActivity(text, proposedById) {
   return request('/activities', {
     method: 'POST',
-    body: JSON.stringify({ text, proposedBy }),
+    body: JSON.stringify({ text, proposedById }),
+  })
+}
+
+// DELETE /api/activities/:id — permanently remove an activity owned by the
+// requesting roommate. Returns the refreshed recent list.
+export async function deleteActivity(id, requesterId) {
+  return request(`/activities/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ requesterId }),
   })
 }
 

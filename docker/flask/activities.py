@@ -33,6 +33,12 @@ RECENT_LIMIT = 5
 # How many of an activity's most recent comments the feed returns / the UI shows.
 COMMENTS_LIMIT = 5
 
+# Results returned by delete_owned(), kept explicit so the route can distinguish
+# missing activities from ownership failures without handling boto3 details.
+DELETE_OK = "deleted"
+DELETE_NOT_FOUND = "not_found"
+DELETE_FORBIDDEN = "forbidden"
+
 TABLE_NAME = os.environ.get("ACTIVITIES_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-activities"
 )
@@ -83,23 +89,24 @@ def _project(item: dict) -> dict:
         "id": item["id"],
         "text": item["text"],
         "proposedBy": item.get("proposedBy", "Someone"),
+        "proposedById": item.get("proposedById"),
         "createdAt": int(item["createdAt"]),
         "members": members,
         "comments": comments,
     }
 
 
-def add_activity(text: str, proposed_by: str = "Someone") -> dict:
+def add_activity(text: str, proposed_by_id: str, proposed_by: str) -> dict:
     """Store a new proposal and return it. Caller is responsible for validation."""
-    proposer = proposed_by or "Someone"
     item = {
         "id": uuid.uuid4().hex,
         "text": text,
-        "proposedBy": proposer,
+        "proposedBy": proposed_by,
+        "proposedById": proposed_by_id,
         # Epoch millis drives newest-first ordering in list_recent().
         "createdAt": int(time.time() * 1000),
         # The proposer joins automatically, so the count starts at 1.
-        "members": {proposer},
+        "members": {proposed_by},
     }
     _get_table().put_item(Item=item)
     return _project(item)
@@ -173,14 +180,43 @@ def get(activity_id: str) -> dict | None:
     return _project(item) if item else None
 
 
+def delete_owned(activity_id: str, requester_id: str) -> str:
+    """Delete an activity only when requester_id is its stored creator.
+
+    The initial consistent read gives the route a useful 404 vs. 403 result.
+    The conditional delete then enforces that same ownership at write time, so
+    a concurrent change cannot turn the check into an unauthorized deletion.
+    Legacy activities have no proposedById and are therefore always forbidden.
+    """
+    table = _get_table()
+    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+    if item is None:
+        return DELETE_NOT_FOUND
+    if item.get("proposedById") != requester_id:
+        return DELETE_FORBIDDEN
+
+    try:
+        table.delete_item(
+            Key={"id": activity_id},
+            ConditionExpression="proposedById = :requester",
+            ExpressionAttributeValues={":requester": requester_id},
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        # Resolve the rare race into the same stable API outcomes.
+        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+        return DELETE_NOT_FOUND if current is None else DELETE_FORBIDDEN
+    return DELETE_OK
+
+
 def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
     """Return the most recent proposals, newest first.
 
     Pass consistent=True for the response that follows a write (propose / join /
-    leave): DynamoDB scans are eventually consistent by default, so a plain scan
-    right after an update can return the pre-write member list, leaving the UI
-    showing a stale count. A strongly-consistent read avoids that. The default
-    (eventual) read is fine for the plain GET feed.
+    leave / delete): DynamoDB scans are eventually consistent by default, so a
+    plain scan right after an update can return stale data. A strongly-consistent
+    read avoids that. The default (eventual) read is fine for the plain GET feed.
     """
     table = _get_table()
     resp = table.scan(ConsistentRead=consistent)

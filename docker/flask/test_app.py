@@ -234,23 +234,39 @@ def _b64url(raw: bytes) -> str:
 
 
 # --- Proposed activities ----------------------------------------------------
-def test_propose_activity_creates_and_returns_list(client):
-    res = client.post(
-        "/api/activities", json={"text": "  Taco night  ", "proposedBy": "Andre"}
+def _propose(client, text: str, creator_id: str = "andre"):
+    """Create an activity through the public API with a real roommate owner."""
+    return client.post(
+        "/api/activities",
+        json={"text": text, "proposedById": creator_id},
     )
+
+
+def test_propose_activity_creates_and_returns_list(client):
+    res = _propose(client, "  Taco night  ")
     assert res.status_code == 200
     data = res.get_json()
     assert data[0]["text"] == "Taco night"  # trimmed
     assert data[0]["proposedBy"] == "Andre"
+    assert data[0]["proposedById"] == "andre"
     assert isinstance(data[0]["createdAt"], int)
     # The proposer is auto-joined, so membership starts at exactly them.
     assert data[0]["members"] == ["Andre"]
 
 
+def test_propose_activity_uses_canonical_creator_name(client):
+    res = client.post(
+        "/api/activities",
+        json={"text": "Dinner", "proposedById": "kayla", "proposedBy": "Fake Name"},
+    )
+    assert res.status_code == 200
+    activity = res.get_json()[0]
+    assert activity["proposedById"] == "kayla"
+    assert activity["proposedBy"] == "Kayla"
+
+
 def test_join_and_leave_activity(client):
-    created = client.post(
-        "/api/activities", json={"text": "Board games", "proposedBy": "Andre"}
-    ).get_json()
+    created = _propose(client, "Board games").get_json()
     activity_id = created[0]["id"]
 
     joined = client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
@@ -283,9 +299,7 @@ def test_legacy_activity_without_members_keeps_proposer(client):
 
 
 def test_comment_on_activity(client):
-    created = client.post(
-        "/api/activities", json={"text": "Movie night", "proposedBy": "Andre"}
-    ).get_json()
+    created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
 
     # A fresh activity has an empty comments list in the projected shape.
@@ -304,7 +318,7 @@ def test_comment_on_activity(client):
 
 
 def test_comments_capped_oldest_first(client):
-    created = client.post("/api/activities", json={"text": "Hike"}).get_json()
+    created = _propose(client, "Hike").get_json()
     activity_id = created[0]["id"]
 
     for i in range(7):
@@ -320,7 +334,7 @@ def test_comments_capped_oldest_first(client):
 
 
 def test_comment_requires_text_and_author(client):
-    created = client.post("/api/activities", json={"text": "Bowling"}).get_json()
+    created = _propose(client, "Bowling").get_json()
     activity_id = created[0]["id"]
     assert (
         client.post(
@@ -360,9 +374,7 @@ def _capture_notifications(monkeypatch):
 
 
 def test_join_notifies_everyone(client, monkeypatch):
-    created = client.post(
-        "/api/activities", json={"text": "Picnic", "proposedBy": "Andre"}
-    ).get_json()
+    created = _propose(client, "Picnic").get_json()
     activity_id = created[0]["id"]
 
     calls = _capture_notifications(monkeypatch)
@@ -373,9 +385,7 @@ def test_join_notifies_everyone(client, monkeypatch):
 
 
 def test_leave_does_not_notify(client, monkeypatch):
-    created = client.post(
-        "/api/activities", json={"text": "Picnic", "proposedBy": "Andre"}
-    ).get_json()
+    created = _propose(client, "Picnic").get_json()
     activity_id = created[0]["id"]
     client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
 
@@ -386,9 +396,7 @@ def test_leave_does_not_notify(client, monkeypatch):
 
 
 def test_comment_notifies_everyone(client, monkeypatch):
-    created = client.post(
-        "/api/activities", json={"text": "Movie night", "proposedBy": "Andre"}
-    ).get_json()
+    created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
 
     calls = _capture_notifications(monkeypatch)
@@ -403,7 +411,7 @@ def test_comment_notifies_everyone(client, monkeypatch):
 
 
 def test_join_requires_name(client):
-    created = client.post("/api/activities", json={"text": "Hike"}).get_json()
+    created = _propose(client, "Hike").get_json()
     res = client.post(f"/api/activities/{created[0]['id']}/join", json={"name": "  "})
     assert res.status_code == 400
 
@@ -414,13 +422,88 @@ def test_join_unknown_activity_404(client):
 
 
 def test_propose_activity_rejects_empty(client):
-    res = client.post("/api/activities", json={"text": "   "})
+    res = _propose(client, "   ")
     assert res.status_code == 400
 
 
 def test_propose_activity_rejects_too_long(client):
-    res = client.post("/api/activities", json={"text": "x" * 281})
+    res = _propose(client, "x" * 281)
     assert res.status_code == 400
+
+
+def test_propose_activity_requires_valid_creator(client):
+    missing = client.post("/api/activities", json={"text": "Dinner"})
+    unknown = _propose(client, "Dinner", creator_id="ghost")
+    assert missing.status_code == 400
+    assert unknown.status_code == 400
+
+
+def test_creator_can_delete_activity_and_all_embedded_data(client, monkeypatch):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+    client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"author": "Kayla", "text": "I'm in"},
+    )
+    calls = _capture_notifications(monkeypatch)
+
+    deleted = client.delete(
+        f"/api/activities/{activity_id}",
+        json={"requesterId": "andre"},
+    )
+
+    assert deleted.status_code == 200
+    assert all(item["id"] != activity_id for item in deleted.get_json())
+    assert activities._get_table().get_item(Key={"id": activity_id}).get("Item") is None
+    assert calls == []
+
+
+def test_non_creator_cannot_delete_activity(client):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+
+    denied = client.delete(
+        f"/api/activities/{activity_id}",
+        json={"requesterId": "kayla"},
+    )
+
+    assert denied.status_code == 403
+    assert activities.get(activity_id) is not None
+
+
+def test_legacy_activity_cannot_be_deleted(client):
+    activities._get_table().put_item(
+        Item={
+            "id": "legacy-delete",
+            "text": "Old plan",
+            "proposedBy": "Andre",
+            "createdAt": 1,
+        }
+    )
+
+    denied = client.delete(
+        "/api/activities/legacy-delete",
+        json={"requesterId": "andre"},
+    )
+
+    assert denied.status_code == 403
+    assert activities.get("legacy-delete") is not None
+
+
+def test_delete_activity_requires_requester(client):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+
+    res = client.delete(f"/api/activities/{activity_id}", json={})
+
+    assert res.status_code == 400
+    assert activities.get(activity_id) is not None
+
+
+def test_delete_unknown_activity_404(client):
+    res = client.delete("/api/activities/nope", json={"requesterId": "andre"})
+    assert res.status_code == 404
 
 
 def test_emphasize_unknown_activity_404(client):
@@ -432,7 +515,7 @@ def test_emphasize_existing_activity_unconfigured_503(client):
     # Push isn't configured in tests, so emphasizing a real activity reports 503
     # (the activity must still be found first — a 404 here would mean the lookup
     # failed).
-    created = client.post("/api/activities", json={"text": "Bowling"}).get_json()
+    created = _propose(client, "Bowling").get_json()
     activity_id = created[0]["id"]
     res = client.post(f"/api/activities/{activity_id}/notify", json={"emphasizedBy": "Kayla"})
     assert res.status_code == 503
