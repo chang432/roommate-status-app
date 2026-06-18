@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import StatusDot from './StatusDot.jsx'
 import StatusModal from './StatusModal.jsx'
+import StatusTimestamp from './StatusTimestamp.jsx'
 import { statusLabel, statusNote } from '../utils/status.js'
 
 // Compact card for a household member (everyone other than "you"). The note can
@@ -29,6 +30,10 @@ export default function StatusCard({ roommate }) {
               {note}
             </div>
           )}
+          <StatusTimestamp
+            timestamp={roommate.statusUpdatedAt}
+            className="mt-[4px] text-[11.5px] text-ink-soft"
+          />
         </div>
       </button>
       {open && <StatusModal roommate={roommate} onClose={() => setOpen(false)} />}

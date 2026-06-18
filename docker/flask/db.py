@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import re
 import threading
+import time
 
 import boto3
 from botocore.exceptions import ClientError
@@ -123,21 +124,28 @@ def _to_roommate(item: dict) -> dict:
         "name": item["name"],
         "status": item.get("status", "busy"),
         "statusText": item.get("statusText", ""),
+        "statusUpdatedAt": (
+            int(item["statusUpdatedAt"]) if item.get("statusUpdatedAt") is not None else None
+        ),
     }
 
 
-def get_all() -> list[dict]:
+def get_all(consistent: bool = False) -> list[dict]:
     """Return every roommate and their current status, sorted by name.
 
     Sorting gives the frontend a stable order (DynamoDB scans are unordered).
-    The table is tiny (one household), so a scan is the right tool here.
+    The table is tiny (one household), so a scan is the right tool here. Pass
+    consistent=True immediately after a write so the response includes it.
     """
     table = _get_table()
-    resp = table.scan()
+    resp = table.scan(ConsistentRead=consistent)
     items = resp.get("Items", [])
     # Pagination is unlikely at this scale but cheap to handle correctly.
     while "LastEvaluatedKey" in resp:
-        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
+        resp = table.scan(
+            ExclusiveStartKey=resp["LastEvaluatedKey"],
+            ConsistentRead=consistent,
+        )
         items.extend(resp.get("Items", []))
     return sorted((_to_roommate(i) for i in items), key=lambda r: r["name"].lower())
 
@@ -164,20 +172,21 @@ def update_status(roommate_id: str, status: str, status_text: str = "") -> list[
     that doesn't exist.
     """
     try:
+        updated_at = int(time.time() * 1000)
         _get_table().update_item(
             Key={"id": roommate_id},
             # `status` is a DynamoDB reserved word, so reference it via a name
             # placeholder.
-            UpdateExpression="SET #s = :s, statusText = :t",
+            UpdateExpression="SET #s = :s, statusText = :t, statusUpdatedAt = :u",
             ExpressionAttributeNames={"#s": "status"},
-            ExpressionAttributeValues={":s": status, ":t": status_text},
+            ExpressionAttributeValues={":s": status, ":t": status_text, ":u": updated_at},
             ConditionExpression="attribute_exists(id)",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             return None  # Unknown roommate id.
         raise
-    return get_all()
+    return get_all(consistent=True)
 
 
 def available_count(roommates: list[dict] | None = None) -> int:

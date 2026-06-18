@@ -87,7 +87,8 @@ def test_get_roommates(client):
     data = res.get_json()
     assert len(data) == 5
     # Shape the frontend relies on.
-    assert set(data[0]) == {"id", "name", "status", "statusText"}
+    assert set(data[0]) == {"id", "name", "status", "statusText", "statusUpdatedAt"}
+    assert data[0]["statusUpdatedAt"] is None
 
 
 def test_update_status_keeps_note(client):
@@ -112,6 +113,37 @@ def test_update_status_without_note_clears_text(client):
     sheryl = next(r for r in res.get_json() if r["id"] == "sheryl")
     assert sheryl["status"] == "available"
     assert sheryl["statusText"] == ""
+
+
+def test_update_status_sets_server_timestamp(client, monkeypatch):
+    monkeypatch.setattr(db.time, "time", lambda: 1_750_000_000.123)
+
+    res = client.put(
+        "/api/roommates/sheryl/status",
+        json={"status": "available", "statusText": ""},
+    )
+
+    sheryl = next(r for r in res.get_json() if r["id"] == "sheryl")
+    assert sheryl["statusUpdatedAt"] == 1_750_000_000_123
+
+
+def test_update_status_refreshes_timestamp_on_every_save(client, monkeypatch):
+    times = iter([1_750_000_000.123, 1_750_000_060.456])
+    monkeypatch.setattr(db.time, "time", lambda: next(times))
+
+    first = client.put(
+        "/api/roommates/sheryl/status",
+        json={"status": "available", "statusText": ""},
+    )
+    second = client.put(
+        "/api/roommates/sheryl/status",
+        json={"status": "available", "statusText": "Still free"},
+    )
+
+    first_sheryl = next(r for r in first.get_json() if r["id"] == "sheryl")
+    second_sheryl = next(r for r in second.get_json() if r["id"] == "sheryl")
+    assert first_sheryl["statusUpdatedAt"] == 1_750_000_000_123
+    assert second_sheryl["statusUpdatedAt"] == 1_750_000_060_456
 
 
 def test_update_status_custom_now_invalid(client):
