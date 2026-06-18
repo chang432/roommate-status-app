@@ -1,0 +1,11 @@
+.brandmark {
+  @apply grid place-items-center rounded-2xl bg-accent-soft text-accent-deep;
+}
+
+.defaultSize {
+  @apply h-[54px] w-[54px];
+}
+
+.defaultIcon {
+  @apply h-[30px] w-[30px];
+}

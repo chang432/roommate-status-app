@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
 import { mentionMatches } from '../utils/mentions.js'
+import styles from './MentionText.module.css'
 
 export default function MentionText({ text, mentions = [] }) {
   const matches = mentionMatches(text, mentions)
@@ -12,10 +13,7 @@ export default function MentionText({ text, mentions = [] }) {
       <Fragment key={`text-${index}`}>{text.slice(cursor, match.start)}</Fragment>,
     )
     parts.push(
-      <span
-        key={`mention-${index}`}
-        className="rounded-sm bg-accent-soft px-[2px] font-bold text-accent-deep"
-      >
+      <span key={`mention-${index}`} className={styles.mention}>
         {text.slice(match.start, match.end)}
       </span>,
     )

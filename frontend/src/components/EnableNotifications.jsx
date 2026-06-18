@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { pushSupported, enablePush } from '../utils/push.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import { cx } from '../utils/classNames.js'
+import styles from './EnableNotifications.module.css'
 
 // Opt this device into push notifications. The actual subscribe runs from the
 // tap handler (iOS requires a user gesture). Reflects the current permission so
@@ -26,12 +28,10 @@ export default function EnableNotifications() {
     }
   }, [user.id])
 
-  const note = 'mb-[26px] mt-[22px] rounded-md border border-line bg-card px-4 py-[13px] text-[13.5px] text-ink-soft'
-
   // On iOS, push is unavailable until the app is installed to the Home Screen.
   if (!supported) {
     return (
-      <p className={note}>
+      <p className={styles.note}>
         Want a nudge when roomies are free? On iPhone, tap Share → <b>Add to Home
         Screen</b>, then open this app from the new icon to enable notifications.
       </p>
@@ -39,17 +39,17 @@ export default function EnableNotifications() {
   }
   if (permission === 'granted') {
     return (
-      <div className={note}>
+      <div className={styles.note}>
         <p>🔔 Notifications are on for this device.</p>
         {error && (
-          <p className="mt-2 font-semibold text-status-red">{error}</p>
+          <p className={styles.inlineError}>{error}</p>
         )}
       </div>
     )
   }
   if (permission === 'denied') {
     return (
-      <p className={note}>
+      <p className={styles.note}>
         Notifications are blocked. Re-enable them for this app in your
         browser/site settings, then reload.
       </p>
@@ -75,17 +75,17 @@ export default function EnableNotifications() {
   }
 
   return (
-    <div className="mb-[26px] mt-[22px]">
+    <div className={styles.wrap}>
       <button
         type="button"
         onClick={handleClick}
         disabled={busy}
-        className="w-full rounded-md border border-[#d6e2c5] bg-gradient-to-br from-[#eef3e7] to-[#e7efdd] px-4 py-[13px] text-[14px] font-semibold text-[#50603f] transition hover:brightness-[0.98] disabled:opacity-60"
+        className={styles.button}
       >
         {busy ? 'Enabling…' : '🔔 Enable notifications on this device'}
       </button>
       {error && (
-        <p className="mt-2 text-[13px] font-semibold text-status-red">{error}</p>
+        <p className={cx('ui-errorText', styles.error)}>{error}</p>
       )}
     </div>
   )

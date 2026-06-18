@@ -22,14 +22,6 @@ export const STATUS_LABEL = {
   [STATUS.OOH]: 'OOH (Out Of House)',
 }
 
-// Tailwind dot color per status (see tailwind.config.js palette).
-export const STATUS_DOT_CLASS = {
-  [STATUS.AVAILABLE]: 'bg-status-green',
-  [STATUS.BUSY]: 'bg-status-red',
-  [STATUS.SLEEPING]: 'bg-status-blue',
-  [STATUS.OOH]: 'bg-status-amber',
-}
-
 // Number of available roommates that triggers the "gather!" banner + push
 // (PROJECT.md: "3 or more"). Keep in sync with the backend
 // (AVAILABLE_THRESHOLD env, default 3).

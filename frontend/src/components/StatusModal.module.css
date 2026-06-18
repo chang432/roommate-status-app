@@ -1,0 +1,35 @@
+.backdrop {
+  @apply fixed inset-0 z-50 grid place-items-center bg-black/40 px-5;
+}
+
+.dialog {
+  @apply w-full max-w-[400px] rounded-md border border-line bg-card p-6 shadow-card;
+}
+
+.titleRow {
+  @apply flex items-center gap-[9px];
+}
+
+.name {
+  @apply text-[18px] font-bold text-ink;
+}
+
+.status {
+  @apply mt-[6px] text-[14.5px] text-ink-soft;
+}
+
+.note {
+  @apply mt-[12px] whitespace-pre-wrap break-words text-[15px] leading-[1.5] text-ink;
+}
+
+.emptyNote {
+  @apply mt-[12px] text-[14px] italic text-ink-soft;
+}
+
+.timestamp {
+  @apply mt-[12px] text-[12.5px] text-ink-soft;
+}
+
+.closeButton {
+  @apply mt-[20px] w-full py-[12px] text-[14px];
+}

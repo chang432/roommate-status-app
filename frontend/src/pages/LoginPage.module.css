@@ -1,0 +1,39 @@
+.page {
+  @apply grid min-h-screen grid-cols-1 place-items-center px-5 py-8;
+}
+
+.form {
+  @apply w-full max-w-[420px] rounded-lg border border-line bg-card px-[34px] pb-[34px] pt-10 shadow-card;
+}
+
+.brandmark {
+  @apply mx-auto mb-[18px] h-[54px] w-[54px];
+}
+
+.title {
+  @apply mb-[6px] text-center font-display text-[28px] font-semibold leading-[1.15] -tracking-[0.01em];
+}
+
+.subtitle {
+  @apply mb-7 text-center text-[14.5px] text-ink-soft;
+}
+
+.passwordField {
+  @apply mb-[26px];
+}
+
+.passwordInput {
+  @apply border-[1.5px] px-4 py-[14px] text-[15px] focus:shadow-[0_0_0_4px_rgba(201,123,90,0.14)];
+}
+
+.error {
+  @apply mb-4;
+}
+
+.submit {
+  @apply w-full px-4 py-[15px] text-[15.5px] shadow-soft;
+}
+
+.footer {
+  @apply mt-[18px] text-center text-[12.5px] text-ink-soft;
+}

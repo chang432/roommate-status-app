@@ -1,0 +1,39 @@
+.panel {
+  @apply mb-[26px] rounded-md border border-line bg-card p-5 shadow-soft;
+}
+
+.title {
+  @apply mb-[14px] font-display text-[16px] font-semibold;
+}
+
+.option {
+  @apply mb-[10px] rounded-sm border-[1.5px] px-[15px] py-[13px] transition;
+}
+
+.optionSelected {
+  @apply border-accent bg-accent-soft;
+}
+
+.optionIdle {
+  @apply border-line bg-white hover:border-[#d9c9b3];
+}
+
+.optionButton {
+  @apply flex w-full items-center gap-[11px] text-left text-[15px] font-semibold text-ink;
+}
+
+.noteInput {
+  @apply mt-[10px] px-[11px] py-[8px] text-[14px];
+}
+
+.actions {
+  @apply mt-[6px] flex gap-[10px];
+}
+
+.saveButton {
+  @apply flex-1 py-[13px] text-[15px];
+}
+
+.cancelButton {
+  @apply px-[18px] py-[13px] text-[15px];
+}

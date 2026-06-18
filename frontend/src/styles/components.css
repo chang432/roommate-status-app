@@ -1,0 +1,55 @@
+.ui-sectionLabel {
+  @apply mb-3 ml-[2px] text-[12.5px] font-bold uppercase tracking-[0.05em] text-ink-soft;
+}
+
+.ui-formLabel {
+  @apply mb-[10px] ml-[2px] block text-[12.5px] font-bold uppercase tracking-[0.04em] text-ink-soft;
+}
+
+.ui-textInput {
+  @apply w-full rounded-sm border border-line bg-white text-ink outline-none transition placeholder:text-[#b6a995] focus:border-accent;
+}
+
+.ui-errorBox {
+  @apply rounded-sm bg-[#fbeae6] px-3 py-2 text-[13.5px] font-semibold text-status-red;
+}
+
+.ui-errorText {
+  @apply text-[13px] font-semibold text-status-red;
+}
+
+.ui-primaryButton {
+  @apply rounded-sm bg-accent font-bold text-white transition hover:bg-accent-deep active:translate-y-px disabled:opacity-60;
+}
+
+.ui-secondaryButton {
+  @apply rounded-sm border-[1.5px] border-line bg-white font-bold text-ink-soft transition hover:bg-[#faf6ef] disabled:opacity-60;
+}
+
+.ui-pillButton {
+  @apply flex-none rounded-full border font-bold transition hover:brightness-95 disabled:opacity-60;
+}
+
+.ui-pillPrimary {
+  @apply border-accent bg-accent text-white;
+}
+
+.ui-pillSecondary {
+  @apply border-line bg-white text-ink-soft hover:bg-[#faf6ef];
+}
+
+.ui-pillDanger {
+  @apply border-status-red bg-status-red text-white;
+}
+
+.ui-pillDangerSoft {
+  @apply border-[#e8c5bf] bg-[#fbeae6] text-status-red;
+}
+
+.ui-iconPrimary {
+  @apply grid flex-none place-items-center rounded-full border border-accent bg-accent text-white shadow-soft transition hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.ui-truncate {
+  @apply overflow-hidden text-ellipsis whitespace-nowrap;
+}

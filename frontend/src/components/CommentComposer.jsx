@@ -1,5 +1,7 @@
 import { useId, useMemo, useRef, useState } from 'react'
 import { activeMention } from '../utils/mentions.js'
+import { cx } from '../utils/classNames.js'
+import styles from './CommentComposer.module.css'
 
 export default function CommentComposer({
   value,
@@ -67,8 +69,8 @@ export default function CommentComposer({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex gap-[8px]">
-      <div className="relative flex-1">
+    <form onSubmit={onSubmit} className={styles.form}>
+      <div className={styles.inputWrap}>
         <input
           ref={inputRef}
           type="text"
@@ -83,13 +85,13 @@ export default function CommentComposer({
           aria-autocomplete="list"
           aria-expanded={Boolean(mention && suggestions.length)}
           aria-controls={suggestionListId}
-          className="w-full rounded-sm border border-line bg-white px-[12px] py-[8px] text-[13px] text-ink outline-none transition placeholder:text-[#b6a995] focus:border-accent"
+          className={cx('ui-textInput', styles.input)}
         />
         {mention && suggestions.length > 0 && (
           <ul
             id={suggestionListId}
             role="listbox"
-            className="absolute bottom-full left-0 z-20 mb-1 max-h-[180px] w-full overflow-y-auto rounded-sm border border-line bg-white py-1 shadow-soft"
+            className={styles.suggestions}
           >
             {suggestions.map((roommate, index) => (
               <li key={roommate.id} role="option" aria-selected={index === selectedIndex}>
@@ -99,11 +101,12 @@ export default function CommentComposer({
                     event.preventDefault()
                     selectSuggestion(roommate)
                   }}
-                  className={`w-full px-3 py-2 text-left text-[13px] font-semibold ${
+                  className={cx(
+                    styles.suggestion,
                     index === selectedIndex
-                      ? 'bg-accent-soft text-accent-deep'
-                      : 'text-ink hover:bg-[#faf6ef]'
-                  }`}
+                      ? styles.suggestionActive
+                      : styles.suggestionIdle,
+                  )}
                 >
                   @{roommate.name}
                 </button>
@@ -116,7 +119,7 @@ export default function CommentComposer({
         type="submit"
         disabled={busy || !value.trim()}
         aria-label="Send comment"
-        className="flex flex-none items-center justify-center rounded-sm bg-accent px-[12px] py-[8px] text-white transition hover:bg-accent-deep disabled:opacity-60"
+        className={cx('ui-primaryButton', styles.sendButton)}
       >
         <svg
           width="16"

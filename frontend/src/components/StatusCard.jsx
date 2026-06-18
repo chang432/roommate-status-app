@@ -3,6 +3,8 @@ import StatusDot from './StatusDot.jsx'
 import StatusModal from './StatusModal.jsx'
 import StatusTimestamp from './StatusTimestamp.jsx'
 import { statusLabel, statusNote } from '../utils/status.js'
+import { cx } from '../utils/classNames.js'
+import styles from './StatusCard.module.css'
 
 // Compact card for a household member (everyone other than "you"). The note can
 // be truncated here, so clicking the card opens a popup with the full status.
@@ -14,25 +16,25 @@ export default function StatusCard({ roommate }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex w-full items-center gap-[13px] rounded-md border border-line bg-card p-[18px] text-left shadow-soft transition hover:border-[#d9c9b3] active:translate-y-px"
+        className={styles.card}
       >
-        <div className="min-w-0">
-          <div className="flex items-center gap-[9px]">
+        <div className={styles.body}>
+          <div className={styles.titleRow}>
             <StatusDot status={roommate.status} />
-            <span className="text-[15.5px] font-bold text-ink">{roommate.name}</span>
+            <span className={styles.name}>{roommate.name}</span>
           </div>
-          <div className="mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap text-[13.5px] text-ink-soft">
+          <div className={cx('ui-truncate', styles.status)}>
             {statusLabel(roommate)}
           </div>
           {/* Supplemental note the roommate attached to their status, if any. */}
           {note && (
-            <div className="mt-[2px] overflow-hidden text-ellipsis whitespace-nowrap text-[13px] text-ink">
+            <div className={cx('ui-truncate', styles.note)}>
               {note}
             </div>
           )}
           <StatusTimestamp
             timestamp={roommate.statusUpdatedAt}
-            className="mt-[4px] text-[11.5px] text-ink-soft"
+            className={styles.timestamp}
           />
         </div>
       </button>

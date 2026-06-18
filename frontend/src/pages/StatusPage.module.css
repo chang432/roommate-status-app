@@ -1,0 +1,63 @@
+.page {
+  @apply mx-auto max-w-[640px] px-[22px] pb-16 pt-10;
+}
+
+.header {
+  @apply mb-2 flex items-center gap-[14px];
+}
+
+.brandmark {
+  @apply h-[46px] w-[46px];
+}
+
+.brandmarkIcon {
+  @apply h-[26px] w-[26px];
+}
+
+.headerText {
+  @apply flex-1;
+}
+
+.title {
+  @apply font-display text-[24px] font-semibold leading-[1.1] -tracking-[0.01em];
+}
+
+.subtitle {
+  @apply mt-[2px] text-[13.5px] text-ink-soft;
+}
+
+.signOut {
+  @apply flex-none rounded-full border border-line bg-white px-[14px] py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-[#faf6ef];
+}
+
+.pageError {
+  @apply mt-4;
+}
+
+.loading {
+  @apply mt-10 text-center text-[14px] text-ink-soft;
+}
+
+.ownCard {
+  @apply mb-[26px] mt-[22px];
+}
+
+.householdHeader {
+  @apply mb-3 flex items-center justify-start gap-3;
+}
+
+.householdTitle {
+  @apply mb-0;
+}
+
+.notifyButton {
+  @apply h-9 w-9;
+}
+
+.notifyIcon {
+  @apply h-5 w-5 object-contain;
+}
+
+.householdGrid {
+  @apply grid grid-cols-2 gap-[14px];
+}

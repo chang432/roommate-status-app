@@ -1,0 +1,15 @@
+.frame {
+  @apply pointer-events-none fixed inset-x-0 top-0 z-30 flex justify-center;
+}
+
+.pill {
+  @apply flex items-center gap-[6px] rounded-full bg-card px-[15px] py-[10px] shadow-card;
+}
+
+.dot {
+  @apply h-[7px] w-[7px] rounded-full bg-accent;
+}
+
+.refreshing {
+  @apply animate-dot-bounce;
+}

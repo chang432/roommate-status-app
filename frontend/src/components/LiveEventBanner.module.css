@@ -1,0 +1,31 @@
+.banner {
+  @apply mb-[26px] mt-[22px] rounded-md border border-[#e8b9ae] bg-gradient-to-br from-[#fff0ec] to-[#fbe2dc] px-4 py-[14px] text-[#713c32] shadow-sm;
+}
+
+.content {
+  @apply flex items-center gap-[12px];
+}
+
+.dot {
+  @apply h-[10px] w-[10px] flex-none animate-pulse rounded-full bg-status-red;
+}
+
+.text {
+  @apply min-w-0 flex-1;
+}
+
+.eyebrow {
+  @apply text-[11.5px] font-bold uppercase tracking-[0.08em];
+}
+
+.title {
+  @apply mt-[2px] truncate text-[16px] font-bold text-ink;
+}
+
+.meta {
+  @apply mt-[2px] text-[12px] text-ink-soft;
+}
+
+.endButton {
+  @apply px-[14px] py-[8px] text-[12.5px];
+}

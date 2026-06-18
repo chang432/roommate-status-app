@@ -11,6 +11,8 @@ import {
 import CommentComposer from './CommentComposer.jsx'
 import MentionText from './MentionText.jsx'
 import { relativeTime } from '../utils/time.js'
+import { cx } from '../utils/classNames.js'
+import styles from './ProposeActivity.module.css'
 
 // "Propose an activity": a text field + Send button that pushes the proposal to
 // everyone, with the most recent proposals listed below (newest nearest the
@@ -139,36 +141,36 @@ export default function ProposeActivity({
   }
 
   return (
-    <section className="mt-[34px]">
-      <p className="mb-3 ml-[2px] text-[12.5px] font-bold uppercase tracking-[0.05em] text-ink-soft">
+    <section className={styles.section}>
+      <p className="ui-sectionLabel">
         Propose an activity
       </p>
 
-      <form onSubmit={handleSubmit} className="flex gap-[10px]">
+      <form onSubmit={handleSubmit} className={styles.form}>
         <input
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={280}
           placeholder="Pizza and a movie?"
-          className="flex-1 rounded-sm border border-line bg-white px-[14px] py-[12px] text-[14px] text-ink outline-none transition placeholder:text-[#b6a995] focus:border-accent"
+          className={cx('ui-textInput', styles.input)}
         />
         <button
           type="submit"
           disabled={sending || !text.trim()}
-          className="flex-none rounded-sm bg-accent px-[20px] py-[12px] text-[14px] font-bold text-white transition hover:bg-accent-deep disabled:opacity-60"
+          className={cx('ui-primaryButton', styles.sendButton)}
         >
           {sending ? 'Sending…' : 'Send'}
         </button>
       </form>
 
       {error && (
-        <p className="mt-2 text-[13px] font-semibold text-status-red">{error}</p>
+        <p className={cx('ui-errorText', styles.error)}>{error}</p>
       )}
 
-      <div className="mt-[14px] space-y-[10px]">
+      <div className={styles.list}>
         {activities.length === 0 ? (
-          <p className="text-[13.5px] text-ink-soft">
+          <p className={styles.empty}>
             No activities yet — propose the first one!
           </p>
         ) : (
@@ -194,25 +196,25 @@ export default function ProposeActivity({
                     toggleExpanded(a.id)
                   }
                 }}
-                className="cursor-pointer rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft"
+                className={styles.card}
               >
-                <div className="flex items-center gap-[10px]">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-[7px]">
-                      <p className="text-[14px] text-ink">{a.text}</p>
+                <div className={styles.summary}>
+                  <div className={styles.summaryText}>
+                    <div className={styles.titleRow}>
+                      <p className={styles.activityText}>{a.text}</p>
                       {a.isLive && (
-                        <span className="rounded-full bg-status-red px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white">
+                        <span className={styles.liveChip}>
                           Live
                         </span>
                       )}
                     </div>
-                    <p className="mt-[2px] text-[12px] text-ink-soft">
+                    <p className={styles.meta}>
                       {a.proposedBy} · {relativeTime(a.createdAt)}
                     </p>
                   </div>
                   {/* Member count — at least 1 since the proposer auto-joins. */}
                   <span
-                    className="flex-none text-[13px] font-bold text-ink-soft"
+                    className={styles.memberCount}
                     title={`${members.length} joined`}
                   >
                     👥 {members.length}
@@ -232,11 +234,13 @@ export default function ProposeActivity({
                           ? `${liveEvent.text} is already live`
                           : undefined
                       }
-                      className={`flex-none rounded-full border px-[13px] py-[8px] text-[12px] font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 ${
+                      className={cx(
+                        'ui-pillButton',
+                        styles.liveToggle,
                         a.isLive
-                          ? 'border-status-red bg-status-red text-white'
-                          : 'border-accent bg-accent text-white'
-                      }`}
+                          ? 'ui-pillDanger'
+                          : 'ui-pillPrimary',
+                      )}
                     >
                       {transitioningId === a.id
                         ? a.isLive
@@ -257,7 +261,7 @@ export default function ProposeActivity({
                     // Icon-only: text is dropped in favor of the bell; aria-label
                     // keeps it accessible, and a ✓ briefly confirms a sent notify.
                     aria-label="Notify participants"
-                    className="flex-none rounded-full border border-[#d6e2c5] bg-[#eef3e7] px-[12px] py-[8px] text-[14px] font-bold text-[#50603f] transition hover:brightness-95 disabled:opacity-60"
+                    className={cx('ui-pillButton', styles.notifyButton)}
                   >
                     {sentId === a.id ? '✓' : '🔔'}
                   </button>
@@ -269,11 +273,11 @@ export default function ProposeActivity({
                         handleToggleMember(a, isMember)
                       }}
                       disabled={joiningId === a.id}
-                      className={`flex-none rounded-full border px-[14px] py-[8px] text-[12.5px] font-bold transition hover:brightness-95 disabled:opacity-60 ${
-                        isMember
-                          ? 'border-line bg-white text-ink-soft'
-                          : 'border-accent bg-accent text-white'
-                      }`}
+                      className={cx(
+                        'ui-pillButton',
+                        styles.membershipButton,
+                        isMember ? 'ui-pillSecondary' : 'ui-pillPrimary',
+                      )}
                     >
                       {isMember ? 'Leave' : 'Join'}
                     </button>
@@ -286,26 +290,27 @@ export default function ProposeActivity({
                     max-height. `inert` while collapsed keeps the hidden controls
                     out of the tab order and unclickable. */}
                 <div
-                  className={`grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none ${
-                    expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                  }`}
+                  className={cx(
+                    styles.expandedRegion,
+                    expanded ? styles.expanded : styles.collapsed,
+                  )}
                 >
                   <div
-                    className="min-h-0 overflow-hidden"
+                    className={styles.expandedInner}
                     {...(!expanded ? { inert: '' } : {})}
                   >
-                    <div className="mt-[12px] border-t border-line pt-[12px]">
-                      <p className="mb-[8px] text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft">
+                    <div className={styles.panel}>
+                      <p className={styles.panelTitle}>
                         Who’s in
                       </p>
                       {members.length === 0 ? (
-                        <p className="text-[13px] text-ink-soft">No one yet.</p>
+                        <p className={styles.emptyPanelText}>No one yet.</p>
                       ) : (
-                        <div className="flex flex-wrap gap-[8px]">
+                        <div className={styles.memberList}>
                           {members.map((name) => (
                             <span
                               key={name}
-                              className="rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink"
+                              className={styles.memberPill}
                             >
                               {name}
                             </span>
@@ -318,26 +323,26 @@ export default function ProposeActivity({
                           Clicks/keys are kept inside so typing or focusing the
                           input doesn't toggle the surrounding card. */}
                       <div
-                        className="mt-[14px] border-t border-line pt-[12px]"
+                        className={styles.comments}
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
-                        <p className="mb-[8px] text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft">
+                        <p className={styles.panelTitle}>
                           Comments
                         </p>
                         {(a.comments ?? []).length === 0 ? (
-                          <p className="mb-[10px] text-[13px] text-ink-soft">
+                          <p className={styles.emptyComments}>
                             No comments yet.
                           </p>
                         ) : (
-                          <ul className="mb-[10px] space-y-[8px]">
+                          <ul className={styles.commentList}>
                             {a.comments.map((c, i) => (
-                              <li key={`${c.createdAt}-${i}`} className="text-[13px]">
-                                <span className="font-bold text-ink">{c.author}</span>{' '}
-                                <span className="text-[11px] text-ink-soft">
+                              <li key={`${c.createdAt}-${i}`} className={styles.comment}>
+                                <span className={styles.commentAuthor}>{c.author}</span>{' '}
+                                <span className={styles.commentTime}>
                                   {relativeTime(c.createdAt)}
                                 </span>
-                                <p className="text-ink">
+                                <p className={styles.commentText}>
                                   <MentionText text={c.text} mentions={c.mentions} />
                                 </p>
                               </li>
@@ -356,20 +361,23 @@ export default function ProposeActivity({
 
                       {canDelete && (
                         <div
-                          className="mt-[14px] flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[12px]"
+                          className={styles.deleteActions}
                           onClick={(e) => e.stopPropagation()}
                           onKeyDown={(e) => e.stopPropagation()}
                         >
                           {confirmingDeleteId === a.id ? (
                             <>
-                              <span className="mr-auto text-[12.5px] font-semibold text-status-red max-[400px]:w-full">
+                              <span className={styles.deletePrompt}>
                                 Delete this event?
                               </span>
                               <button
                                 type="button"
                                 onClick={() => setConfirmingDeleteId(null)}
                                 disabled={deletingId === a.id}
-                                className="rounded-full border border-line bg-white px-[13px] py-[7px] text-[12.5px] font-bold text-ink-soft transition hover:bg-[#faf6ef] disabled:opacity-60"
+                                className={cx(
+                                  'ui-pillButton ui-pillSecondary',
+                                  styles.smallPill,
+                                )}
                               >
                                 Cancel
                               </button>
@@ -380,7 +388,10 @@ export default function ProposeActivity({
                                 title={
                                   a.isLive ? 'End the event before deleting it' : undefined
                                 }
-                                className="rounded-full border border-status-red bg-status-red px-[13px] py-[7px] text-[12.5px] font-bold text-white transition hover:brightness-95 disabled:opacity-60"
+                                className={cx(
+                                  'ui-pillButton ui-pillDanger',
+                                  styles.smallPill,
+                                )}
                               >
                                 {deletingId === a.id ? 'Deleting…' : 'Delete'}
                               </button>
@@ -391,7 +402,10 @@ export default function ProposeActivity({
                               onClick={() => setConfirmingDeleteId(a.id)}
                               disabled={a.isLive}
                               title={a.isLive ? 'End the event before deleting it' : undefined}
-                              className="rounded-full border border-[#e8c5bf] bg-[#fbeae6] px-[13px] py-[7px] text-[12.5px] font-bold text-status-red transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+                              className={cx(
+                                'ui-pillButton ui-pillDangerSoft',
+                                styles.smallPill,
+                              )}
                             >
                               Delete event
                             </button>

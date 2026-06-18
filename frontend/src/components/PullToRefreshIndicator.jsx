@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { cx } from '../utils/classNames.js'
+import styles from './PullToRefreshIndicator.module.css'
 
 // Visual affordance for the pull-to-refresh gesture (see usePullToRefresh): a
 // pill of three dots that lives just above the top edge of the screen. As the
@@ -28,7 +30,7 @@ export default function PullToRefreshIndicator({ pull, refreshing, threshold }) 
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-x-0 top-0 z-30 flex justify-center"
+      className={styles.frame}
       style={{
         transform: `translateY(${translate}px)`,
         // Follow the finger 1:1 while dragging; ease when springing back or
@@ -38,14 +40,12 @@ export default function PullToRefreshIndicator({ pull, refreshing, threshold }) 
     >
       <div
         ref={pillRef}
-        className="flex items-center gap-[6px] rounded-full bg-card px-[15px] py-[10px] shadow-card"
+        className={styles.pill}
       >
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            className={`h-[7px] w-[7px] rounded-full bg-accent ${
-              refreshing ? 'animate-dot-bounce' : ''
-            }`}
+            className={cx(styles.dot, refreshing && styles.refreshing)}
             style={
               refreshing
                 ? { animationDelay: `${i * 140}ms` }

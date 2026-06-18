@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import StatusDot from './StatusDot.jsx'
 import StatusTimestamp from './StatusTimestamp.jsx'
 import { statusLabel, statusNote } from '../utils/status.js'
+import { cx } from '../utils/classNames.js'
+import styles from './StatusModal.module.css'
 
 // Centered popup showing a roommate's full status — used when a compact card
 // truncates a long supplemental note. Closes on backdrop click, the Close
@@ -20,37 +22,34 @@ export default function StatusModal({ roommate, onClose }) {
 
   return (
     // Backdrop: clicking it closes; clicks inside the dialog are stopped below.
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-5"
-    >
+    <div onClick={onClose} className={styles.backdrop}>
       <div
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[400px] rounded-md border border-line bg-card p-6 shadow-card"
+        className={styles.dialog}
       >
-        <div className="flex items-center gap-[9px]">
+        <div className={styles.titleRow}>
           <StatusDot status={roommate.status} />
-          <span className="text-[18px] font-bold text-ink">{roommate.name}</span>
+          <span className={styles.name}>{roommate.name}</span>
         </div>
-        <div className="mt-[6px] text-[14.5px] text-ink-soft">{statusLabel(roommate)}</div>
+        <div className={styles.status}>{statusLabel(roommate)}</div>
         {/* Full note, wrapped and never truncated. */}
         {note ? (
-          <p className="mt-[12px] whitespace-pre-wrap break-words text-[15px] leading-[1.5] text-ink">
+          <p className={styles.note}>
             {note}
           </p>
         ) : (
-          <p className="mt-[12px] text-[14px] italic text-ink-soft">No extra note.</p>
+          <p className={styles.emptyNote}>No extra note.</p>
         )}
         <StatusTimestamp
           timestamp={roommate.statusUpdatedAt}
-          className="mt-[12px] text-[12.5px] text-ink-soft"
+          className={styles.timestamp}
         />
         <button
           type="button"
           onClick={onClose}
-          className="mt-[20px] w-full rounded-sm bg-accent py-[12px] text-[14px] font-bold text-white transition hover:bg-accent-deep"
+          className={cx('ui-primaryButton', styles.closeButton)}
         >
           Close
         </button>

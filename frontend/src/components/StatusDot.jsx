@@ -1,4 +1,6 @@
-import { STATUS, STATUS_DOT_CLASS } from '../utils/status.js'
+import { STATUS } from '../utils/status.js'
+import { cx } from '../utils/classNames.js'
+import styles from './StatusDot.module.css'
 
 // Statuses that render a tinted icon instead of a plain dot. Each value is a
 // transparent-background PNG silhouette (served from public/); it's used as a
@@ -8,6 +10,13 @@ const STATUS_ICON = {
   [STATUS.BUSY]: '/busy.png',
   [STATUS.OOH]: '/ooh.png',
   [STATUS.SLEEPING]: '/sleeping.png',
+}
+
+const STATUS_CLASS = {
+  [STATUS.AVAILABLE]: styles.available,
+  [STATUS.BUSY]: styles.busy,
+  [STATUS.SLEEPING]: styles.sleeping,
+  [STATUS.OOH]: styles.ooh,
 }
 
 function maskStyle(src) {
@@ -32,13 +41,13 @@ export default function StatusDot({ status, className = '' }) {
       <span
         aria-hidden="true"
         style={maskStyle(icon)}
-        className={`h-[16px] w-[16px] flex-none ${STATUS_DOT_CLASS[status]} ${className}`}
+        className={cx(styles.icon, STATUS_CLASS[status], className)}
       />
     )
   }
   return (
     <span
-      className={`h-[13px] w-[13px] flex-none rounded-full ${STATUS_DOT_CLASS[status] ?? 'bg-ink-soft'} ${className}`}
+      className={cx(styles.dot, STATUS_CLASS[status] ?? styles.unknown, className)}
     />
   )
 }

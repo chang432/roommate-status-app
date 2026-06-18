@@ -4,6 +4,8 @@ import Brandmark from '../components/Brandmark.jsx'
 import RoomiePicker from '../components/RoomiePicker.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getRoommates } from '../api/client.js'
+import { cx } from '../utils/classNames.js'
+import styles from './LoginPage.module.css'
 
 export default function LoginPage() {
   const { user, login } = useAuth()
@@ -55,19 +57,16 @@ export default function LoginPage() {
     // stretch the form past the viewport (page-level horizontal scrollbar).
     // minmax(0,1fr) caps the column at the available width so that row scrolls
     // internally — as intended — instead of widening the page.
-    <main className="grid min-h-screen grid-cols-1 place-items-center px-5 py-8">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-[420px] rounded-lg border border-line bg-card px-[34px] pb-[34px] pt-10 shadow-card"
-      >
-        <Brandmark className="mx-auto mb-[18px] h-[54px] w-[54px]" />
+    <main className={styles.page}>
+      <form onSubmit={handleSubmit} className={styles.form}>
+        <Brandmark className={styles.brandmark} />
 
-        <h1 className="mb-[6px] text-center font-display text-[28px] font-semibold leading-[1.15] -tracking-[0.01em]">
+        <h1 className={styles.title}>
           York Terrace
           <br />
           Roomie Status
         </h1>
-        <p className="mb-7 text-center text-[14.5px] text-ink-soft">
+        <p className={styles.subtitle}>
           Welcome home — pick your name to sign in.
         </p>
 
@@ -77,11 +76,8 @@ export default function LoginPage() {
           onSelect={setSelected}
         />
 
-        <div className="mb-[26px]">
-          <label
-            htmlFor="password"
-            className="mb-[10px] ml-[2px] block text-[12.5px] font-bold uppercase tracking-[0.04em] text-ink-soft"
-          >
+        <div className={styles.passwordField}>
+          <label htmlFor="password" className="ui-formLabel">
             Password
           </label>
           <input
@@ -90,12 +86,12 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter your password"
-            className="w-full rounded-sm border-[1.5px] border-line bg-white px-4 py-[14px] text-[15px] text-ink outline-none transition placeholder:text-[#b6a995] focus:border-accent focus:shadow-[0_0_0_4px_rgba(201,123,90,0.14)]"
+            className={cx('ui-textInput', styles.passwordInput)}
           />
         </div>
 
         {error && (
-          <p className="mb-4 rounded-sm bg-[#fbeae6] px-3 py-2 text-[13.5px] font-semibold text-status-red">
+          <p className={cx('ui-errorBox', styles.error)}>
             {error}
           </p>
         )}
@@ -103,12 +99,12 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={submitting || !selected}
-          className="w-full rounded-sm bg-accent px-4 py-[15px] text-[15.5px] font-bold text-white shadow-soft transition hover:bg-accent-deep active:translate-y-px disabled:opacity-60"
+          className={cx('ui-primaryButton', styles.submit)}
         >
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
 
-        <p className="mt-[18px] text-center text-[12.5px] text-ink-soft">
+        <p className={styles.footer}>
           Just the six of us · 1024 York Terrace
         </p>
       </form>

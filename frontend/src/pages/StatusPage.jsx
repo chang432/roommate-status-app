@@ -20,6 +20,8 @@ import {
 import { usePullToRefresh } from '../utils/usePullToRefresh.js'
 import { availableCount, AVAILABLE_THRESHOLD } from '../utils/status.js'
 import { avatarColor } from '../utils/avatar.js'
+import { cx } from '../utils/classNames.js'
+import styles from './StatusPage.module.css'
 
 const ACTIVITY_POLL_INTERVAL_MS = 5000
 
@@ -182,7 +184,7 @@ export default function StatusPage() {
       <PullToRefreshIndicator pull={pull} refreshing={refreshing} threshold={threshold} />
 
       <div
-        className="mx-auto max-w-[640px] px-[22px] pb-16 pt-10"
+        className={styles.page}
         style={{
           // Push the whole page down with the pull so the dots are revealed in
           // the gap above the content rather than overlaying it. A transform
@@ -191,35 +193,35 @@ export default function StatusPage() {
           transition: pull > 0 && !refreshing ? 'none' : 'transform 260ms ease',
         }}
       >
-        <header className="mb-2 flex items-center gap-[14px]">
-        <Brandmark className="h-[46px] w-[46px]" iconClassName="h-[26px] w-[26px]" />
-        <div className="flex-1">
-          <h1 className="font-display text-[24px] font-semibold leading-[1.1] -tracking-[0.01em]">
+        <header className={styles.header}>
+        <Brandmark className={styles.brandmark} iconClassName={styles.brandmarkIcon} />
+        <div className={styles.headerText}>
+          <h1 className={styles.title}>
             York Terrace Roomie Status
           </h1>
-          <p className="mt-[2px] text-[13.5px] text-ink-soft">{whenLabel()}</p>
+          <p className={styles.subtitle}>{whenLabel()}</p>
         </div>
         <button
           type="button"
           onClick={logout}
-          className="flex-none rounded-full border border-line bg-white px-[14px] py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-[#faf6ef]"
+          className={styles.signOut}
         >
           Sign out
         </button>
       </header>
 
       {error && (
-        <p className="mt-4 rounded-sm bg-[#fbeae6] px-3 py-2 text-[13.5px] font-semibold text-status-red">
+        <p className={cx('ui-errorBox', styles.pageError)}>
           {error}
         </p>
       )}
 
       {loading ? (
-        <p className="mt-10 text-center text-[14px] text-ink-soft">Loading the household…</p>
+        <p className={styles.loading}>Loading the household…</p>
       ) : (
         <>
           {liveError && (
-            <p className="mt-4 rounded-sm bg-[#fbeae6] px-3 py-2 text-[13.5px] font-semibold text-status-red">
+            <p className={cx('ui-errorBox', styles.pageError)}>
               {liveError}
             </p>
           )}
@@ -230,6 +232,7 @@ export default function StatusPage() {
               canEnd={liveEvent.proposedById === user.id}
               ending={transitioningId === liveEvent.id}
               onEnd={() => handleLiveTransition(liveEvent, 'end')}
+              user={user}
             />
           )}
 
@@ -238,7 +241,7 @@ export default function StatusPage() {
           {showBanner && <NotificationBanner count={freeCount} />}
 
           {me && (
-            <div className="mb-[26px] mt-[22px]">
+            <div className={styles.ownCard}>
               <YouCard
                 roommate={me}
                 avatarColor={avatarColor(meIndex)}
@@ -256,8 +259,8 @@ export default function StatusPage() {
             />
           )}
 
-          <div className="mb-3 flex items-center justify-start gap-3">
-            <p className="ml-[2px] text-[12.5px] font-bold uppercase tracking-[0.05em] text-ink-soft">
+          <div className={styles.householdHeader}>
+            <p className={cx('ui-sectionLabel', styles.householdTitle)}>
               The household
             </p>
             <button
@@ -266,12 +269,12 @@ export default function StatusPage() {
               disabled={notifyingHousehold}
               aria-label="Notify all to update"
               title="Notify all to update"
-              className="grid h-9 w-9 flex-none place-items-center rounded-full border border-line bg-accent shadow-soft transition hover:border-[#d9c9b3] hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+              className={cx('ui-iconPrimary', styles.notifyButton)}
             >
-              <img src="/megaphone.png" alt="" className="h-5 w-5 object-contain" />
+              <img src="/megaphone.png" alt="" className={styles.notifyIcon} />
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-[14px]">
+          <div className={styles.householdGrid}>
             {others.map((roommate) => (
               <StatusCard key={roommate.id} roommate={roommate} />
             ))}
