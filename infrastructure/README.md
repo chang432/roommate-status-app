@@ -23,9 +23,9 @@ roommate table, a Web Push subscriptions table, and a proposed-activities table:
 | `main`     | `roomie-dynamodb-main` | `RoommateStatus-main` | `RoommateStatus-main-pushsubs` | `RoommateStatus-main-activities` |
 
 The roommate table holds one item per roommate, keyed by a string `id` (e.g.
-`"jordan"`); other attributes (`name`, `status`, `statusText`) are schemaless
-and written by the app. The push subscriptions table holds one item per browser
-Web Push subscription, keyed by a hash of the push endpoint (see
+`"jordan"`); other attributes (`name`, `status`, `statusText`,
+`statusUpdatedAt`) are schemaless and written by the app. The push subscriptions
+table holds one item per browser Web Push subscription, keyed by a hash of the push endpoint (see
 `docker/flask/push.py`). The activities table holds one item per proposed
 activity, keyed by a generated id (see `docker/flask/activities.py`). All tables
 use on-demand billing, encryption at rest, and point-in-time recovery, and are

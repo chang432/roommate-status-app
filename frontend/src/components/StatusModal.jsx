@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import StatusDot from './StatusDot.jsx'
+import StatusTimestamp from './StatusTimestamp.jsx'
 import { statusLabel, statusNote } from '../utils/status.js'
 
 // Centered popup showing a roommate's full status — used when a compact card
@@ -42,6 +43,10 @@ export default function StatusModal({ roommate, onClose }) {
         ) : (
           <p className="mt-[12px] text-[14px] italic text-ink-soft">No extra note.</p>
         )}
+        <StatusTimestamp
+          timestamp={roommate.statusUpdatedAt}
+          className="mt-[12px] text-[12.5px] text-ink-soft"
+        />
         <button
           type="button"
           onClick={onClose}

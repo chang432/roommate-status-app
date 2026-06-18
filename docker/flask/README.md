@@ -9,13 +9,15 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | Method & path                  | Body                       | Returns                                  |
 | ------------------------------ | -------------------------- | ---------------------------------------- |
 | `POST /api/login`              | `{ name, password }`       | `{ user: { id, name } }` (401 on bad creds) |
-| `GET  /api/roommates`          | —                          | `[ { id, name, status, statusText } ]`   |
+| `GET  /api/roommates`          | —                          | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status` | `{ status, statusText }` | full updated household list              |
 | `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
 
 `status` is one of `available`, `busy`, `sleeping`, `ooh`. Any status may carry
-an optional `statusText` note that is shown alongside it. Every roommate shares
-the demo password **`roomie`** until real auth is added.
+an optional `statusText` note that is shown alongside it. `statusUpdatedAt` is
+the server-generated epoch-millisecond time of the most recent status save, or
+`null` for records that have not been updated since this field was introduced.
+Every roommate shares the demo password **`roomie`** until real auth is added.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).
