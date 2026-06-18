@@ -153,7 +153,7 @@ export default function StatusPage() {
           <p className="mb-3 ml-[2px] text-[12.5px] font-bold uppercase tracking-[0.05em] text-ink-soft">
             The household
           </p>
-          <div className="grid grid-cols-2 gap-[14px] max-[520px]:grid-cols-1">
+          <div className="grid grid-cols-2 gap-[14px]">
             {others.map((roommate) => (
               <StatusCard key={roommate.id} roommate={roommate} />
             ))}
