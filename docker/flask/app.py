@@ -6,6 +6,7 @@ Implements the endpoints the frontend calls (see frontend/src/api/client.js):
     GET  /api/roommates                -> [ { "id", "name", "status", "statusText",
                                              "statusUpdatedAt" }, ... ]
     PUT  /api/roommates/<id>/status    -> the full, updated household list
+    POST /api/roommates/notify         -> { "sent", "pruned", "failed" }
 
 Plus the Web Push (PoC) endpoints:
 
@@ -155,6 +156,25 @@ def create_app() -> Flask:
                 app.logger.exception("Failed to send gather notification")
 
         return jsonify(roommates)
+
+    @app.post("/api/roommates/notify")
+    def notify_roommates_to_update_status():
+        """Push a household reminder to update statuses, excluding the requester."""
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        requester = db.get_by_id(requester_id) if requester_id else None
+        if requester is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        if not push.is_configured():
+            return jsonify({"error": "Push is not configured on the server."}), 503
+
+        result = push.notify_all(
+            title="Update your status",
+            body=f"{requester['name']} wants to know what you're up to 👀",
+            url="/",
+            exclude_user_ids={requester["id"]},
+        )
+        return jsonify(result)
 
     # --- Web Push (PoC) -----------------------------------------------------
     @app.get("/api/push/public-key")

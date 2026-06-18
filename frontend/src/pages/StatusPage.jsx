@@ -13,6 +13,7 @@ import {
   endActivity,
   getActivities,
   getRoommates,
+  notifyRoommatesToUpdateStatus,
   startActivity,
   updateStatus,
 } from '../api/client.js'
@@ -42,6 +43,7 @@ export default function StatusPage() {
   const [transitioningId, setTransitioningId] = useState(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [notifyingHousehold, setNotifyingHousehold] = useState(false)
 
   // Fetch the household; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
@@ -161,6 +163,19 @@ export default function StatusPage() {
     }
   }
 
+  async function handleNotifyHousehold() {
+    if (notifyingHousehold) return
+    setNotifyingHousehold(true)
+    setError('')
+    try {
+      await notifyRoommatesToUpdateStatus(user.id)
+    } catch {
+      setError('Could not notify the household. Try again.')
+    } finally {
+      setNotifyingHousehold(false)
+    }
+  }
+
   return (
     <>
       {/* Lives off-screen above the top; the pull drags it into view. */}
@@ -241,9 +256,21 @@ export default function StatusPage() {
             />
           )}
 
-          <p className="mb-3 ml-[2px] text-[12.5px] font-bold uppercase tracking-[0.05em] text-ink-soft">
-            The household
-          </p>
+          <div className="mb-3 flex items-center justify-start gap-3">
+            <p className="ml-[2px] text-[12.5px] font-bold uppercase tracking-[0.05em] text-ink-soft">
+              The household
+            </p>
+            <button
+              type="button"
+              onClick={handleNotifyHousehold}
+              disabled={notifyingHousehold}
+              aria-label="Notify all to update"
+              title="Notify all to update"
+              className="grid h-9 w-9 flex-none place-items-center rounded-full border border-line bg-accent shadow-soft transition hover:border-[#d9c9b3] hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <img src="/megaphone.png" alt="" className="h-5 w-5 object-contain" />
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-[14px]">
             {others.map((roommate) => (
               <StatusCard key={roommate.id} roommate={roommate} />
