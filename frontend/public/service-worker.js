@@ -9,7 +9,8 @@
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
 
-// A push arrived from the server. The payload is JSON: { title, body, url }.
+// A push arrived from the server. The payload is JSON:
+// { title, body, url, eventType? }.
 self.addEventListener('push', (event) => {
   let data = {}
   try {
@@ -27,7 +28,22 @@ self.addEventListener('push', (event) => {
     // Carried through to notificationclick so we know where to navigate.
     data: { url: data.url || '/' },
   }
-  event.waitUntil(self.registration.showNotification(title, options))
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(title, options),
+      // Open app windows refresh their activity feed immediately when a live
+      // event starts or ends. Closed apps still receive the visible push.
+      data.eventType === 'activities-changed'
+        ? self.clients
+            .matchAll({ type: 'window', includeUncontrolled: true })
+            .then((windows) =>
+              windows.forEach((client) =>
+                client.postMessage({ type: 'activities-changed' }),
+              ),
+            )
+        : Promise.resolve(),
+    ]),
+  )
 })
 
 // Tapping the notification focuses an existing app window (or opens one).

@@ -516,6 +516,7 @@ def test_creator_can_start_end_and_restart_event(client, monkeypatch):
             "title": "Event started 🔴",
             "body": "Andre started Dinner",
             "url": "/",
+            "event_type": "activities-changed",
             "exclude_user_ids": {"andre"},
         },
     )
@@ -534,6 +535,7 @@ def test_creator_can_start_end_and_restart_event(client, monkeypatch):
             "title": "Event ended 🏁",
             "body": "Andre ended Dinner",
             "url": "/",
+            "event_type": "activities-changed",
             "exclude_user_ids": {"andre"},
         },
     )
@@ -564,6 +566,43 @@ def test_only_creator_can_change_live_status(client):
         json={"requesterId": "kayla"},
     )
     assert denied_end.status_code == 403
+
+
+def test_live_event_push_reaches_non_participant_subscriptions(client, monkeypatch):
+    created = _propose(client, "Dinner").get_json()[0]
+    sent = []
+
+    def fake_webpush(**kwargs):
+        sent.append(
+            (
+                kwargs["subscription_info"]["endpoint"],
+                json.loads(kwargs["data"]),
+            )
+        )
+
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+    monkeypatch.setattr(push, "webpush", fake_webpush)
+    for user_id in ("andre", "sheryl", "kayla", "ting"):
+        push.save_subscription(
+            {"endpoint": f"https://push/{user_id}", "keys": {}},
+            user_id,
+        )
+
+    response = client.post(
+        f"/api/activities/{created['id']}/start",
+        json={"requesterId": "andre"},
+    )
+
+    assert response.status_code == 200
+    assert {endpoint for endpoint, _payload in sent} == {
+        "https://push/sheryl",
+        "https://push/kayla",
+        "https://push/ting",
+    }
+    assert all(
+        payload["eventType"] == "activities-changed"
+        for _endpoint, payload in sent
+    )
 
 
 def test_live_transition_conflicts_and_missing_event(client):
@@ -766,6 +805,42 @@ def test_mentions_notify_household_members_and_store_canonical_metadata(
     assert participant_call[0] == "users"
     assert participant_call[1]["user_ids"] == {"andre"}
     assert participant_call[1]["title"] == "New comment 💬"
+
+
+def test_mentioned_non_participant_subscription_receives_push(client, monkeypatch):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+    sent = []
+
+    def fake_webpush(**kwargs):
+        sent.append(
+            (
+                kwargs["subscription_info"]["endpoint"],
+                json.loads(kwargs["data"]),
+            )
+        )
+
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+    monkeypatch.setattr(push, "webpush", fake_webpush)
+    for user_id in ("andre", "sheryl", "kayla"):
+        push.save_subscription(
+            {"endpoint": f"https://push/{user_id}", "keys": {}},
+            user_id,
+        )
+
+    response = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"authorId": "kayla", "text": "@Sheryl can you join us?"},
+    )
+
+    assert response.status_code == 200
+    sent_by_endpoint = {endpoint: payload for endpoint, payload in sent}
+    assert set(sent_by_endpoint) == {
+        "https://push/andre",
+        "https://push/sheryl",
+    }
+    assert sent_by_endpoint["https://push/sheryl"]["title"] == "Kayla mentioned you"
+    assert sent_by_endpoint["https://push/andre"]["title"] == "New comment 💬"
 
 
 def test_mentioned_participant_gets_only_mention_push(client, monkeypatch):

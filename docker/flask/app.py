@@ -253,7 +253,7 @@ def create_app() -> Flask:
         # Live transitions are household-wide events. Push remains best-effort
         # so notification configuration or delivery cannot undo persisted state.
         try:
-            push.notify_all(
+            push_result = push.notify_all(
                 title=f"Event {action}ed {'🔴' if action == 'start' else '🏁'}",
                 body=(
                     f"{activity['proposedBy']} started {activity['text']}"
@@ -261,8 +261,10 @@ def create_app() -> Flask:
                     else f"{activity['proposedBy']} ended {activity['text']}"
                 ),
                 url="/",
+                event_type="activities-changed",
                 exclude_user_ids={requester_id},
             )
+            app.logger.info("Event %s push result: %s", action, push_result)
         except Exception:  # noqa: BLE001 - transition must remain successful
             app.logger.exception("Failed to send event %s notification", action)
 
@@ -376,11 +378,16 @@ def create_app() -> Flask:
         def notify_comment_users(user_ids: set[str], title: str, notification_body: str):
             """Keep each comment audience best-effort and independent."""
             try:
-                push.notify_users(
+                result = push.notify_users(
                     user_ids=user_ids,
                     title=title,
                     body=notification_body,
                     url="/",
+                )
+                app.logger.info(
+                    "Comment push result for %d recipient(s): %s",
+                    len(user_ids),
+                    result,
                 )
             except Exception:  # noqa: BLE001 - never let push break the request
                 app.logger.exception("Failed to send comment notification")
