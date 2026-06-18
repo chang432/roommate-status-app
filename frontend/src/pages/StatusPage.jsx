@@ -187,8 +187,8 @@ export default function StatusPage() {
     }
   }
 
-  function handleLiveBannerClick(isInvolved) {
-    if (isInvolved || !liveEvent) return;
+  function handleLiveBannerClick() {
+    if (!liveEvent) return;
     setActivityFocusRequest((current) => ({
       activityId: liveEvent.id,
       requestId: (current?.requestId ?? 0) + 1,

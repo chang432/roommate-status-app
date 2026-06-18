@@ -15,10 +15,6 @@ export default function LiveEventBanner({
     return Boolean(user && (event.memberIds ?? []).includes(user.id));
   }, [event, user]);
 
-  function handleBannerClick() {
-    if (!isInvolved) onBannerClick(isInvolved);
-  }
-
   return (
     <div
       className={cx(
@@ -29,7 +25,7 @@ export default function LiveEventBanner({
       role={isInvolved ? undefined : "button"}
       tabIndex={isInvolved ? undefined : 0}
       aria-label={isInvolved ? undefined : "Open live activity"}
-      onClick={handleBannerClick}
+      onClick={onBannerClick}
     >
       <div className={styles.content}>
         <span className={styles.dot} />
