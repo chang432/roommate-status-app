@@ -1,0 +1,41 @@
+.card {
+  @apply flex flex-wrap items-center gap-4 rounded-lg border-[1.5px] border-[#ecc9b6] bg-gradient-to-br from-card to-accent-soft p-[22px] shadow-card;
+}
+
+.body {
+  @apply min-w-0 flex-1;
+}
+
+.titleRow {
+  @apply flex items-center gap-[9px];
+}
+
+.name {
+  @apply text-[18px] font-bold text-ink;
+}
+
+.youBadge {
+  @apply rounded-full border border-[#ecc9b6] bg-white px-2 py-[2px] text-[11px] font-bold uppercase tracking-[0.05em] text-accent-deep;
+}
+
+.status {
+  @apply mt-[3px] text-[14.5px] text-ink-soft;
+}
+
+.note {
+  @apply mt-[2px] text-[14px] text-ink;
+}
+
+.timestamp {
+  @apply mt-[4px] text-[12px] text-ink-soft;
+}
+
+.editButton {
+  @apply flex-none rounded-full border-[1.5px] border-[#e6c2ad] bg-white px-4 py-[9px] text-[14px] font-bold text-accent-deep transition hover:bg-[#fff3ec] active:translate-y-px;
+}
+
+@media (max-width: 520px) {
+  .editButton {
+    @apply w-full;
+  }
+}

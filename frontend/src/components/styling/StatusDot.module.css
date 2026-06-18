@@ -1,0 +1,27 @@
+.icon {
+  @apply h-[16px] w-[16px] flex-none;
+}
+
+.dot {
+  @apply h-[13px] w-[13px] flex-none rounded-full;
+}
+
+.available {
+  @apply bg-status-green;
+}
+
+.busy {
+  @apply bg-status-red;
+}
+
+.sleeping {
+  @apply bg-status-blue;
+}
+
+.ooh {
+  @apply bg-status-amber;
+}
+
+.unknown {
+  @apply bg-ink-soft;
+}

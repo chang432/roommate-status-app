@@ -1,0 +1,31 @@
+.form {
+  @apply flex gap-[8px];
+}
+
+.inputWrap {
+  @apply relative flex-1;
+}
+
+.input {
+  @apply px-[12px] py-[8px] text-[13px];
+}
+
+.suggestions {
+  @apply absolute bottom-full left-0 z-20 mb-1 max-h-[180px] w-full overflow-y-auto rounded-sm border border-line bg-white py-1 shadow-soft;
+}
+
+.suggestion {
+  @apply w-full px-3 py-2 text-left text-[13px] font-semibold;
+}
+
+.suggestionActive {
+  @apply bg-accent-soft text-accent-deep;
+}
+
+.suggestionIdle {
+  @apply text-ink hover:bg-[#faf6ef];
+}
+
+.sendButton {
+  @apply flex flex-none items-center justify-center px-[12px] py-[8px];
+}

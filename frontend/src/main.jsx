@@ -5,6 +5,7 @@ import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { registerServiceWorker } from './utils/push.js'
 import './index.css'
+import './styles/components.css'
 
 // Register the push/PWA service worker early. No-op where unsupported; the
 // actual push subscription happens later from a user tap (see push.js).

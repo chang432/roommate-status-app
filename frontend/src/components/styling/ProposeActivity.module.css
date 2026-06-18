@@ -1,0 +1,155 @@
+.section {
+  @apply mt-[34px];
+}
+
+.form {
+  @apply flex gap-[10px];
+}
+
+.input {
+  @apply flex-1 px-[14px] py-[12px] text-[14px];
+}
+
+.sendButton {
+  @apply flex-none px-[20px] py-[12px] text-[14px];
+}
+
+.error {
+  @apply mt-2;
+}
+
+.list {
+  @apply mt-[14px] space-y-[10px];
+}
+
+.empty {
+  @apply text-[13.5px] text-ink-soft;
+}
+
+.card {
+  @apply cursor-pointer rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft;
+}
+
+.activeCard {
+  @apply cursor-pointer rounded-sm border border-[#e8b9ae] bg-gradient-to-br from-[#fff0ec] to-[#fbe2dc] px-[14px] py-[10px] transition hover:border-accent-soft;
+}
+
+.summary {
+  @apply flex items-center gap-[10px];
+}
+
+.summaryText {
+  @apply min-w-0 flex-1;
+}
+
+.titleRow {
+  @apply flex flex-wrap items-center gap-[7px];
+}
+
+.activityText {
+  @apply text-[14px] text-ink;
+}
+
+.liveChip {
+  @apply rounded-full bg-status-red px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white;
+}
+
+.meta {
+  @apply mt-[2px] text-[12px] text-ink-soft;
+}
+
+.memberCount {
+  @apply flex-none text-[13px] font-bold text-ink-soft;
+}
+
+.liveToggle {
+  @apply px-[13px] py-[8px] text-[12px] disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.notifyButton {
+  @apply border-[#d6e2c5] bg-[#eef3e7] px-[12px] py-[8px] text-[14px] text-[#50603f];
+}
+
+.membershipButton {
+  @apply px-[14px] py-[8px] text-[12.5px];
+}
+
+.expandedRegion {
+  @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none;
+}
+
+.expanded {
+  grid-template-rows: 1fr;
+}
+
+.collapsed {
+  grid-template-rows: 0fr;
+}
+
+.expandedInner {
+  @apply min-h-0 overflow-hidden;
+}
+
+.panel {
+  @apply mt-[12px] border-t border-line pt-[12px];
+}
+
+.panelTitle {
+  @apply mb-[8px] text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft;
+}
+
+.emptyPanelText {
+  @apply text-[13px] text-ink-soft;
+}
+
+.memberList {
+  @apply flex flex-wrap gap-[8px];
+}
+
+.memberPill {
+  @apply rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink;
+}
+
+.comments {
+  @apply mt-[14px] border-t border-line pt-[12px];
+}
+
+.emptyComments {
+  @apply mb-[10px] text-[13px] text-ink-soft;
+}
+
+.commentList {
+  @apply mb-[10px] space-y-[8px];
+}
+
+.commentScroller {
+  @apply mb-[10px] max-h-[220px] overflow-y-auto pr-2;
+}
+
+.comment {
+  @apply text-[13px];
+}
+
+.commentAuthor {
+  @apply font-bold text-ink;
+}
+
+.commentTime {
+  @apply text-[11px] text-ink-soft;
+}
+
+.commentText {
+  @apply text-ink;
+}
+
+.deleteActions {
+  @apply mt-[14px] flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[12px];
+}
+
+.deletePrompt {
+  @apply mr-auto text-[12.5px] font-semibold text-status-red max-[400px]:w-full;
+}
+
+.smallPill {
+  @apply px-[13px] py-[7px] text-[12.5px];
+}

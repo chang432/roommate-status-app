@@ -1,0 +1,35 @@
+.wrap {
+  @apply relative mb-6;
+}
+
+.scroller {
+  @apply no-scrollbar flex gap-3 overflow-x-auto px-[2px] pb-[14px] pt-[6px];
+}
+
+.option {
+  @apply w-[92px] flex-none rounded-md border-[1.5px] px-[10px] pb-3 pt-[14px] text-center transition hover:-translate-y-[2px];
+}
+
+.selected {
+  @apply -translate-y-[2px] border-accent bg-accent-soft shadow-soft;
+}
+
+.unselected {
+  @apply border-line bg-white;
+}
+
+.avatar {
+  @apply mx-auto mb-[9px];
+}
+
+.name {
+  @apply text-[13.5px] font-semibold text-ink;
+}
+
+.fadeLeft {
+  @apply pointer-events-none absolute bottom-[14px] left-0 top-0 w-[26px] bg-gradient-to-r from-card to-transparent;
+}
+
+.fadeRight {
+  @apply pointer-events-none absolute bottom-[14px] right-0 top-0 w-[26px] bg-gradient-to-l from-card to-transparent;
+}

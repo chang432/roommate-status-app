@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useAuth } from '../context/AuthContext.jsx'
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
 import {
   proposeActivity,
   deleteActivity,
@@ -8,13 +8,15 @@ import {
   leaveActivity,
   commentOnActivity,
   setCommentLiked,
-} from '../api/client.js'
-import CommentComposer from './CommentComposer.jsx'
-import CommentLikeButton from './CommentLikeButton.jsx'
-import MentionText from './MentionText.jsx'
-import { relativeTime } from '../utils/time.js'
+} from "../api/client.js";
+import CommentComposer from "./CommentComposer.jsx";
+import CommentLikeButton from "./CommentLikeButton.jsx";
+import MentionText from "./MentionText.jsx";
+import { relativeTime } from "../utils/time.js";
+import { cx } from "../utils/classNames.js";
+import styles from "./styling/ProposeActivity.module.css";
 
-const COLLAPSED_COMMENT_LIMIT = 10
+const COLLAPSED_COMMENT_LIMIT = 10;
 
 // "Propose an activity": a text field + Send button that pushes the proposal to
 // everyone, with the most recent proposals listed below (newest nearest the
@@ -26,195 +28,228 @@ export default function ProposeActivity({
   transitioningId,
   onLiveTransition,
   roommates,
+  activityFocusRequest,
 }) {
-  const { user } = useAuth()
-  const [text, setText] = useState('')
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState('')
+  const { user } = useAuth();
+  const activityRefs = useRef(new Map());
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
   // Per-activity notify state: the id currently sending, and the id just sent
   // (briefly shown as a confirmation).
-  const [notifyingId, setNotifyingId] = useState(null)
-  const [sentId, setSentId] = useState(null)
+  const [notifyingId, setNotifyingId] = useState(null);
+  const [sentId, setSentId] = useState(null);
   // The id of the activity whose member panel is expanded, and the id whose
   // join/leave request is currently in flight (to disable its button).
-  const [expandedId, setExpandedId] = useState(null)
-  const [joiningId, setJoiningId] = useState(null)
+  const [expandedId, setExpandedId] = useState(null);
+  const [joiningId, setJoiningId] = useState(null);
   // The comment draft for the currently expanded activity, and the id whose
   // comment is currently being posted (only one panel is open at a time, so a
   // single draft string is enough — it's cleared whenever the panel changes).
-  const [commentText, setCommentText] = useState('')
-  const [commentingId, setCommentingId] = useState(null)
-  const [likingCommentIds, setLikingCommentIds] = useState([])
-  const [openLikesCommentId, setOpenLikesCommentId] = useState(null)
-  const [showOlderComments, setShowOlderComments] = useState(false)
+  const [commentText, setCommentText] = useState("");
+  const [commentingId, setCommentingId] = useState(null);
+  const [likingCommentIds, setLikingCommentIds] = useState([]);
+  const [openLikesCommentId, setOpenLikesCommentId] = useState(null);
+  const [showOlderComments, setShowOlderComments] = useState(false);
   // Deletion is owner-only and uses a two-step inline confirmation.
-  const [confirmingDeleteId, setConfirmingDeleteId] = useState(null)
-  const [deletingId, setDeletingId] = useState(null)
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const commentScrollerRef = useRef(null);
+
+  useEffect(() => {
+    if (!activityFocusRequest?.activityId) return;
+    const { activityId } = activityFocusRequest;
+    setExpandedId(activityId);
+    setCommentText("");
+    setConfirmingDeleteId(null);
+
+    requestAnimationFrame(() => {
+      activityRefs.current.get(activityId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [activityFocusRequest]);
 
   // Open/close an activity's panel, clearing any half-typed comment so a draft
   // never bleeds from one activity's panel into another's.
   function toggleExpanded(id) {
-    setExpandedId((cur) => (cur === id ? null : id))
-    setCommentText('')
-    setOpenLikesCommentId(null)
-    setShowOlderComments(false)
-    setConfirmingDeleteId(null)
+    setExpandedId((cur) => (cur === id ? null : id));
+    setCommentText("");
+    setOpenLikesCommentId(null);
+    setShowOlderComments(false);
+    setConfirmingDeleteId(null);
   }
 
   async function handleSubmit(e) {
-    e.preventDefault()
-    const trimmed = text.trim()
-    if (!trimmed || sending) return
-    setSending(true)
-    setError('')
+    e.preventDefault();
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+    setSending(true);
+    setError("");
     try {
-      const updated = await proposeActivity(trimmed, user.id)
-      onActivitiesChange(updated)
-      setText('')
+      const updated = await proposeActivity(trimmed, user.id);
+      onActivitiesChange(updated);
+      setText("");
     } catch {
-      setError('Could not send your proposal. Try again.')
+      setError("Could not send your proposal. Try again.");
     } finally {
-      setSending(false)
+      setSending(false);
     }
   }
 
   async function handleDelete(activity) {
-    if (deletingId) return
-    setDeletingId(activity.id)
-    setError('')
+    if (deletingId) return;
+    setDeletingId(activity.id);
+    setError("");
     try {
-      const updated = await deleteActivity(activity.id, user.id)
-      onActivitiesChange(updated)
-      setConfirmingDeleteId(null)
-      setExpandedId((current) => (current === activity.id ? null : current))
+      const updated = await deleteActivity(activity.id, user.id);
+      onActivitiesChange(updated);
+      setConfirmingDeleteId(null);
+      setExpandedId((current) => (current === activity.id ? null : current));
     } catch {
-      setError('Could not delete the activity. Try again.')
+      setError("Could not delete the activity. Try again.");
     } finally {
-      setDeletingId(null)
+      setDeletingId(null);
     }
   }
 
   // Notify the other participants that you emphasized this activity.
   async function handleNotify(activity) {
-    if (notifyingId) return
-    setNotifyingId(activity.id)
-    setError('')
+    if (notifyingId) return;
+    setNotifyingId(activity.id);
+    setError("");
     try {
-      await notifyActivity(activity.id, user.id)
-      setSentId(activity.id)
-      setTimeout(() => setSentId((cur) => (cur === activity.id ? null : cur)), 2000)
+      await notifyActivity(activity.id, user.id);
+      setSentId(activity.id);
+      setTimeout(
+        () => setSentId((cur) => (cur === activity.id ? null : cur)),
+        2000,
+      );
     } catch {
-      setError('Could not send the notification. Try again.')
+      setError("Could not send the notification. Try again.");
     } finally {
-      setNotifyingId(null)
+      setNotifyingId(null);
     }
   }
 
   // Toggle the current user's membership of an activity. The member list comes
   // back from the server, so the count and panel stay in sync everywhere.
   async function handleToggleMember(activity, isMember) {
-    if (joiningId) return
-    setJoiningId(activity.id)
-    setError('')
+    if (joiningId) return;
+    setJoiningId(activity.id);
+    setError("");
     try {
       const updated = isMember
         ? await leaveActivity(activity.id, user.id)
-        : await joinActivity(activity.id, user.id)
-      onActivitiesChange(updated)
+        : await joinActivity(activity.id, user.id);
+      onActivitiesChange(updated);
     } catch {
-      setError(`Could not ${isMember ? 'leave' : 'join'} the activity. Try again.`)
+      setError(
+        `Could not ${isMember ? "leave" : "join"} the activity. Try again.`,
+      );
     } finally {
-      setJoiningId(null)
+      setJoiningId(null);
     }
   }
 
   // Post the current draft as a comment on `activity`. The server returns the
   // refreshed feed (with the new comment), so counts and lists stay in sync.
   async function handleComment(e, activity) {
-    e.preventDefault()
-    const trimmed = commentText.trim()
-    if (!trimmed || commentingId) return
-    setCommentingId(activity.id)
-    setError('')
+    e.preventDefault();
+    const trimmed = commentText.trim();
+    if (!trimmed || commentingId) return;
+    setCommentingId(activity.id);
+    setError("");
     try {
-      const updated = await commentOnActivity(activity.id, user.id, trimmed)
-      onActivitiesChange(updated)
-      setCommentText('')
+      const updated = await commentOnActivity(activity.id, user.id, trimmed);
+      onActivitiesChange(updated);
+      setCommentText("");
     } catch {
-      setError('Could not post your comment. Try again.')
+      setError("Could not post your comment. Try again.");
     } finally {
-      setCommentingId(null)
+      setCommentingId(null);
     }
   }
 
+  // Scroll the comment scroller to the bottom when new comments are added.
+  useEffect(() => {
+    if (commentScrollerRef.current) {
+      commentScrollerRef.current.scrollTop =
+        commentScrollerRef.current.scrollHeight;
+    }
+  }, [activities]);
+
   async function handleCommentLike(activity, comment) {
-    if (likingCommentIds.includes(comment.id)) return
-    setLikingCommentIds((current) => [...current, comment.id])
-    setError('')
+    if (likingCommentIds.includes(comment.id)) return;
+    setLikingCommentIds((current) => [...current, comment.id]);
+    setError("");
     try {
-      const liked = (comment.likedByIds ?? []).includes(user.id)
-      const updated = await setCommentLiked(activity.id, comment.id, user.id, !liked)
-      onActivitiesChange(updated)
+      const liked = (comment.likedByIds ?? []).includes(user.id);
+      const updated = await setCommentLiked(
+        activity.id,
+        comment.id,
+        user.id,
+        !liked,
+      );
+      onActivitiesChange(updated);
     } catch {
-      setError('Could not update the comment like. Try again.')
+      setError("Could not update the comment like. Try again.");
     } finally {
-      setLikingCommentIds((current) => current.filter((id) => id !== comment.id))
+      setLikingCommentIds((current) =>
+        current.filter((id) => id !== comment.id),
+      );
     }
   }
 
   return (
-    <section className="mt-[34px]">
-      <p className="mb-3 ml-[2px] text-[12.5px] font-bold uppercase tracking-[0.05em] text-ink-soft">
-        Propose an activity
-      </p>
+    <section className={styles.section}>
+      <p className="ui-sectionLabel">Propose an activity</p>
 
-      <form onSubmit={handleSubmit} className="flex gap-[10px]">
+      <form onSubmit={handleSubmit} className={styles.form}>
         <input
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={280}
           placeholder="Pizza and a movie?"
-          className="flex-1 rounded-sm border border-line bg-white px-[14px] py-[12px] text-[14px] text-ink outline-none transition placeholder:text-[#b6a995] focus:border-accent"
+          className={cx("ui-textInput", styles.input)}
         />
         <button
           type="submit"
           disabled={sending || !text.trim()}
-          className="flex-none rounded-sm bg-accent px-[20px] py-[12px] text-[14px] font-bold text-white transition hover:bg-accent-deep disabled:opacity-60"
+          className={cx("ui-primaryButton", styles.sendButton)}
         >
-          {sending ? 'Sending…' : 'Send'}
+          {sending ? "Sending…" : "Send"}
         </button>
       </form>
 
-      {error && (
-        <p className="mt-2 text-[13px] font-semibold text-status-red">{error}</p>
-      )}
+      {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
 
-      <div className="mt-[14px] space-y-[10px]">
+      <div className={styles.list}>
         {activities.length === 0 ? (
-          <p className="text-[13.5px] text-ink-soft">
+          <p className={styles.empty}>
             No activities yet — propose the first one!
           </p>
         ) : (
           activities.map((a) => {
-            const members = a.members ?? []
-            const comments = a.comments ?? []
-            const hiddenCommentCount = Math.max(
-              comments.length - COLLAPSED_COMMENT_LIMIT,
-              0,
-            )
-            const visibleComments =
-              showOlderComments || hiddenCommentCount === 0
-                ? comments
-                : comments.slice(-COLLAPSED_COMMENT_LIMIT)
-            const isMember = (a.memberIds ?? []).includes(user.id)
+            const members = a.members ?? [];
+            const comments = a.comments ?? [];
+            const isMember = (a.memberIds ?? []).includes(user.id);
             // The proposer is permanently part of their own activity, so they
             // get no Join/Leave button.
-            const canDelete = a.proposedById === user.id
-            const expanded = expandedId === a.id
+            const canDelete = a.proposedById === user.id;
+            const expanded = expandedId === a.id;
             return (
               <div
                 key={a.id}
+                ref={(node) => {
+                  if (node) {
+                    activityRefs.current.set(a.id, node);
+                  } else {
+                    activityRefs.current.delete(a.id);
+                  }
+                }}
                 // The whole card is a toggle that expands the member panel; the
                 // action buttons inside stop propagation so they don't toggle it.
                 role="button"
@@ -222,30 +257,28 @@ export default function ProposeActivity({
                 aria-expanded={expanded}
                 onClick={() => toggleExpanded(a.id)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    toggleExpanded(a.id)
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggleExpanded(a.id);
                   }
                 }}
-                className="cursor-pointer rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft"
+                className={a.isLive ? styles.activeCard : styles.card}
               >
-                <div className="flex items-center gap-[10px]">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-[7px]">
-                      <p className="text-[14px] text-ink">{a.text}</p>
+                <div className={styles.summary}>
+                  <div className={styles.summaryText}>
+                    <div className={styles.titleRow}>
+                      <p className={styles.activityText}>{a.text}</p>
                       {a.isLive && (
-                        <span className="rounded-full bg-status-red px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white">
-                          Live
-                        </span>
+                        <span className={styles.liveChip}>Live</span>
                       )}
                     </div>
-                    <p className="mt-[2px] text-[12px] text-ink-soft">
+                    <p className={styles.meta}>
                       {a.proposedBy} · {relativeTime(a.createdAt)}
                     </p>
                   </div>
                   {/* Member count — at least 1 since the proposer auto-joins. */}
                   <span
-                    className="flex-none text-[13px] font-bold text-ink-soft"
+                    className={styles.memberCount}
                     title={`${members.length} joined`}
                   >
                     👥 {members.length}
@@ -254,61 +287,62 @@ export default function ProposeActivity({
                     <button
                       type="button"
                       onClick={(e) => {
-                        e.stopPropagation()
-                        onLiveTransition(a, a.isLive ? 'end' : 'start')
+                        e.stopPropagation();
+                        onLiveTransition(a, a.isLive ? "end" : "start");
                       }}
                       disabled={
-                        Boolean(transitioningId) || (!a.isLive && Boolean(liveEvent))
+                        Boolean(transitioningId) ||
+                        (!a.isLive && Boolean(liveEvent))
                       }
                       title={
                         !a.isLive && liveEvent
                           ? `${liveEvent.text} is already live`
                           : undefined
                       }
-                      className={`flex-none rounded-full border px-[13px] py-[8px] text-[12px] font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 ${
-                        a.isLive
-                          ? 'border-status-red bg-status-red text-white'
-                          : 'border-accent bg-accent text-white'
-                      }`}
+                      className={cx(
+                        "ui-pillButton",
+                        styles.liveToggle,
+                        a.isLive ? "ui-pillDanger" : "ui-pillPrimary",
+                      )}
                     >
                       {transitioningId === a.id
                         ? a.isLive
-                          ? 'Ending…'
-                          : 'Starting…'
+                          ? "Ending…"
+                          : "Starting…"
                         : a.isLive
-                          ? 'End'
-                          : 'Start'}
+                          ? "End"
+                          : "Start"}
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={(e) => {
-                      e.stopPropagation()
-                      handleNotify(a)
+                      e.stopPropagation();
+                      handleNotify(a);
                     }}
                     disabled={notifyingId === a.id}
                     // Icon-only: text is dropped in favor of the bell; aria-label
                     // keeps it accessible, and a ✓ briefly confirms a sent notify.
                     aria-label="Notify participants"
-                    className="flex-none rounded-full border border-[#d6e2c5] bg-[#eef3e7] px-[12px] py-[8px] text-[14px] font-bold text-[#50603f] transition hover:brightness-95 disabled:opacity-60"
+                    className={cx("ui-pillButton", styles.notifyButton)}
                   >
-                    {sentId === a.id ? '✓' : '🔔'}
+                    {sentId === a.id ? "✓" : "🔔"}
                   </button>
                   {!canDelete && (
                     <button
                       type="button"
                       onClick={(e) => {
-                        e.stopPropagation()
-                        handleToggleMember(a, isMember)
+                        e.stopPropagation();
+                        handleToggleMember(a, isMember);
                       }}
                       disabled={joiningId === a.id}
-                      className={`flex-none rounded-full border px-[14px] py-[8px] text-[12.5px] font-bold transition hover:brightness-95 disabled:opacity-60 ${
-                        isMember
-                          ? 'border-line bg-white text-ink-soft'
-                          : 'border-accent bg-accent text-white'
-                      }`}
+                      className={cx(
+                        "ui-pillButton",
+                        styles.membershipButton,
+                        isMember ? "ui-pillSecondary" : "ui-pillPrimary",
+                      )}
                     >
-                      {isMember ? 'Leave' : 'Join'}
+                      {isMember ? "Leave" : "Join"}
                     </button>
                   )}
                 </div>
@@ -319,27 +353,23 @@ export default function ProposeActivity({
                     max-height. `inert` while collapsed keeps the hidden controls
                     out of the tab order and unclickable. */}
                 <div
-                  className={`grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none ${
-                    expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                  }`}
+                  className={cx(
+                    styles.expandedRegion,
+                    expanded ? styles.expanded : styles.collapsed,
+                  )}
                 >
                   <div
-                    className="min-h-0 overflow-hidden"
-                    {...(!expanded ? { inert: '' } : {})}
+                    className={styles.expandedInner}
+                    {...(!expanded ? { inert: "" } : {})}
                   >
-                    <div className="mt-[12px] border-t border-line pt-[12px]">
-                      <p className="mb-[8px] text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft">
-                        Who’s in
-                      </p>
+                    <div className={styles.panel}>
+                      <p className={styles.panelTitle}>Who’s in</p>
                       {members.length === 0 ? (
-                        <p className="text-[13px] text-ink-soft">No one yet.</p>
+                        <p className={styles.emptyPanelText}>No one yet.</p>
                       ) : (
-                        <div className="flex flex-wrap gap-[8px]">
+                        <div className={styles.memberList}>
                           {members.map((name) => (
-                            <span
-                              key={name}
-                              className="rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink"
-                            >
+                            <span key={name} className={styles.memberPill}>
                               {name}
                             </span>
                           ))}
@@ -351,46 +381,38 @@ export default function ProposeActivity({
                           Clicks/keys are kept inside so typing or focusing the
                           input doesn't toggle the surrounding card. */}
                       <div
-                        className="mt-[14px] border-t border-line pt-[12px]"
+                        className={styles.comments}
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
-                        <p className="mb-[8px] text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft">
-                          Comments
-                        </p>
+                        <p className={styles.panelTitle}>Comments</p>
                         {comments.length === 0 ? (
-                          <p className="mb-[10px] text-[13px] text-ink-soft">
+                          <p className={styles.emptyComments}>
                             No comments yet.
                           </p>
                         ) : (
-                          <>
-                            {hiddenCommentCount > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => setShowOlderComments((current) => !current)}
-                                className="mb-[8px] text-[12px] font-semibold text-accent-deep hover:underline"
-                              >
-                                {showOlderComments
-                                  ? 'Show latest 10'
-                                  : `View ${hiddenCommentCount} older comment${
-                                      hiddenCommentCount === 1 ? '' : 's'
-                                    }`}
-                              </button>
-                            )}
-                            <ul className="mb-[10px] space-y-[8px]">
-                              {visibleComments.map((c, i) => (
+                          <div
+                            className={styles.commentScroller}
+                            ref={commentScrollerRef}
+                          >
+                            <ul className={styles.commentList}>
+                              {comments.map((c, i) => (
                                 <li
                                   key={c.id ?? `${c.createdAt}-${i}`}
                                   className="text-[13px]"
                                 >
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-ink">{c.author}</span>
+                                    <span className="font-bold text-ink">
+                                      {c.author}
+                                    </span>
                                     <span className="text-[11px] text-ink-soft">
                                       {relativeTime(c.createdAt)}
                                     </span>
                                     <CommentLikeButton
                                       count={c.likeCount ?? 0}
-                                      liked={(c.likedByIds ?? []).includes(user.id)}
+                                      liked={(c.likedByIds ?? []).includes(
+                                        user.id,
+                                      )}
                                       ownComment={
                                         c.authorId === user.id ||
                                         (!c.authorId &&
@@ -403,7 +425,9 @@ export default function ProposeActivity({
                                       roommates={roommates}
                                       open={openLikesCommentId === c.id}
                                       onOpenChange={(open) =>
-                                        setOpenLikesCommentId(open ? c.id : null)
+                                        setOpenLikesCommentId(
+                                          open ? c.id : null,
+                                        )
                                       }
                                     />
                                   </div>
@@ -417,7 +441,7 @@ export default function ProposeActivity({
                                 </li>
                               ))}
                             </ul>
-                          </>
+                          </div>
                         )}
                         <CommentComposer
                           value={commentText}
@@ -431,20 +455,23 @@ export default function ProposeActivity({
 
                       {canDelete && (
                         <div
-                          className="mt-[14px] flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[12px]"
+                          className={styles.deleteActions}
                           onClick={(e) => e.stopPropagation()}
                           onKeyDown={(e) => e.stopPropagation()}
                         >
                           {confirmingDeleteId === a.id ? (
                             <>
-                              <span className="mr-auto text-[12.5px] font-semibold text-status-red max-[400px]:w-full">
+                              <span className={styles.deletePrompt}>
                                 Delete this event?
                               </span>
                               <button
                                 type="button"
                                 onClick={() => setConfirmingDeleteId(null)}
                                 disabled={deletingId === a.id}
-                                className="rounded-full border border-line bg-white px-[13px] py-[7px] text-[12.5px] font-bold text-ink-soft transition hover:bg-[#faf6ef] disabled:opacity-60"
+                                className={cx(
+                                  "ui-pillButton ui-pillSecondary",
+                                  styles.smallPill,
+                                )}
                               >
                                 Cancel
                               </button>
@@ -453,11 +480,16 @@ export default function ProposeActivity({
                                 onClick={() => handleDelete(a)}
                                 disabled={deletingId === a.id || a.isLive}
                                 title={
-                                  a.isLive ? 'End the event before deleting it' : undefined
+                                  a.isLive
+                                    ? "End the event before deleting it"
+                                    : undefined
                                 }
-                                className="rounded-full border border-status-red bg-status-red px-[13px] py-[7px] text-[12.5px] font-bold text-white transition hover:brightness-95 disabled:opacity-60"
+                                className={cx(
+                                  "ui-pillButton ui-pillDanger",
+                                  styles.smallPill,
+                                )}
                               >
-                                {deletingId === a.id ? 'Deleting…' : 'Delete'}
+                                {deletingId === a.id ? "Deleting…" : "Delete"}
                               </button>
                             </>
                           ) : (
@@ -465,8 +497,15 @@ export default function ProposeActivity({
                               type="button"
                               onClick={() => setConfirmingDeleteId(a.id)}
                               disabled={a.isLive}
-                              title={a.isLive ? 'End the event before deleting it' : undefined}
-                              className="rounded-full border border-[#e8c5bf] bg-[#fbeae6] px-[13px] py-[7px] text-[12.5px] font-bold text-status-red transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+                              title={
+                                a.isLive
+                                  ? "End the event before deleting it"
+                                  : undefined
+                              }
+                              className={cx(
+                                "ui-pillButton ui-pillDangerSoft",
+                                styles.smallPill,
+                              )}
                             >
                               Delete event
                             </button>
@@ -477,10 +516,10 @@ export default function ProposeActivity({
                   </div>
                 </div>
               </div>
-            )
+            );
           })
         )}
       </div>
     </section>
-  )
+  );
 }

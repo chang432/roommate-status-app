@@ -1,0 +1,3 @@
+.mention {
+  @apply rounded-sm bg-accent-soft px-[2px] font-bold text-accent-deep;
+}
