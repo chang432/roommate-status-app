@@ -10,13 +10,14 @@ Implements the endpoints the frontend calls (see frontend/src/api/client.js):
 Plus the Web Push (PoC) endpoints:
 
     GET  /api/push/public-key          -> { "publicKey": <VAPID public key> }
-    POST /api/push/subscribe           -> { "ok": true }  (stores a subscription)
+    POST /api/push/subscribe           -> { "ok": true }  (stores a user-owned subscription)
     POST /api/push/test                -> { "sent", "pruned", "failed" }
 
 And the proposed-activities feed:
 
     GET  /api/activities               -> [ { "id", "text", "proposedBy",
-                                             "proposedById", "createdAt", "members" }, ... ]
+                                             "proposedById", "createdAt", "members",
+                                             "memberIds" }, ... ]
     POST /api/activities               -> the updated recent list (and pushes it)
     DELETE /api/activities/<id>        -> the updated recent list
     POST /api/activities/<id>/join     -> the updated recent list (and pushes it)
@@ -117,6 +118,7 @@ def create_app() -> Flask:
                     title="Roomies are free!",
                     body=f"{free} roomies are around right now — perfect time to gather.",
                     url="/",
+                    exclude_user_ids={roommate_id},
                 )
             except Exception:  # noqa: BLE001 - never let push break the request
                 app.logger.exception("Failed to send gather notification")
@@ -134,10 +136,14 @@ def create_app() -> Flask:
     @app.post("/api/push/subscribe")
     def push_subscribe():
         """Store a browser PushSubscription so we can notify this device."""
-        subscription = request.get_json(silent=True) or {}
+        body = request.get_json(silent=True) or {}
+        subscription = body.get("subscription") or {}
+        user_id = (body.get("userId") or "").strip()
         if not subscription.get("endpoint"):
             return jsonify({"error": "Invalid subscription (no endpoint)."}), 400
-        push.save_subscription(subscription)
+        if db.get_by_id(user_id) is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        push.save_subscription(subscription, user_id)
         return jsonify({"ok": True})
 
     @app.post("/api/push/test")
@@ -175,13 +181,14 @@ def create_app() -> Flask:
 
         activities.add_activity(text, proposer["id"], proposer["name"])
 
-        # Notify every subscribed device. Best-effort: a push failure must not
-        # fail the proposal the user just made.
+        # Notify the household except the proposer. Best-effort: a push failure
+        # must not fail the proposal the user just made.
         try:
             push.notify_all(
                 title="New activity proposed 🎉",
                 body=f"{proposer['name']}: {text}",
                 url="/",
+                exclude_user_ids={proposer["id"]},
             )
         except Exception:  # noqa: BLE001 - never let push break the request
             app.logger.exception("Failed to send activity notification")
@@ -198,11 +205,23 @@ def create_app() -> Flask:
         if not requester_id:
             return jsonify({"error": "A requester id is required."}), 400
 
+        activity = activities.get(activity_id, consistent=True)
         result = activities.delete_owned(activity_id, requester_id)
         if result == activities.DELETE_NOT_FOUND:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
         if result == activities.DELETE_FORBIDDEN:
             return jsonify({"error": "Only the event creator can delete it."}), 403
+
+        try:
+            push.notify_users(
+                user_ids=set(activity["memberIds"]),
+                exclude_user_ids={requester_id},
+                title="Activity deleted",
+                body=f"{activity['proposedBy']} deleted {activity['text']}",
+                url="/",
+            )
+        except Exception:  # noqa: BLE001 - deletion must remain successful
+            app.logger.exception("Failed to send activity deletion notification")
 
         return jsonify(activities.list_recent(consistent=True))
 
@@ -210,19 +229,22 @@ def create_app() -> Flask:
     def join_activity(activity_id: str):
         """Add the caller to an activity's members; return the refreshed list."""
         body = request.get_json(silent=True) or {}
-        name = (body.get("name") or "").strip()
-        if not name:
-            return jsonify({"error": "A name is required."}), 400
-        activity = activities.join(activity_id, name)
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        activity = activities.join(activity_id, roommate["id"], roommate["name"])
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
 
-        # Let everyone know someone's in. Best-effort: a push failure must not
-        # fail the join. (Leaving is intentionally quiet — no notification.)
+        # Notify the other participants that someone joined. Best-effort: a push
+        # failure must not fail the join. Leaving remains intentionally quiet.
         try:
-            push.notify_all(
+            push.notify_users(
+                user_ids=set(activity["memberIds"]),
+                exclude_user_ids={roommate["id"]},
                 title="Someone joined an activity 🙌",
-                body=f"{name} joined {activity['text']}",
+                body=f"{roommate['name']} joined {activity['text']}",
                 url="/",
             )
         except Exception:  # noqa: BLE001 - never let push break the request
@@ -235,10 +257,11 @@ def create_app() -> Flask:
     def leave_activity(activity_id: str):
         """Remove the caller from an activity's members; return the refreshed list."""
         body = request.get_json(silent=True) or {}
-        name = (body.get("name") or "").strip()
-        if not name:
-            return jsonify({"error": "A name is required."}), 400
-        if activities.leave(activity_id, name) is None:
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        if activities.leave(activity_id, roommate["id"], roommate["name"]) is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
         # Consistent read so the updated member list is reflected immediately.
         return jsonify(activities.list_recent(consistent=True))
@@ -247,24 +270,27 @@ def create_app() -> Flask:
     def comment_on_activity(activity_id: str):
         """Append a comment to an activity; return the refreshed recent list."""
         body = request.get_json(silent=True) or {}
-        author = (body.get("author") or "").strip()
+        author_id = (body.get("authorId") or "").strip()
         text = (body.get("text") or "").strip()
-        if not author:
-            return jsonify({"error": "A name is required."}), 400
+        author = db.get_by_id(author_id) if author_id else None
+        if author is None:
+            return jsonify({"error": "A valid author is required."}), 400
         if not text:
             return jsonify({"error": "A comment is required."}), 400
         if len(text) > MAX_COMMENT_LEN:
             return jsonify({"error": f"Keep it under {MAX_COMMENT_LEN} characters."}), 400
-        activity = activities.add_comment(activity_id, author, text)
+        activity = activities.add_comment(activity_id, author["name"], text)
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
 
-        # Notify everyone of the new comment. Best-effort: a push failure must
-        # not fail the comment the user just posted.
+        # Notify the other participants of the new comment. Best-effort: a push
+        # failure must not fail the comment the user just posted.
         try:
-            push.notify_all(
+            push.notify_users(
+                user_ids=set(activity["memberIds"]),
+                exclude_user_ids={author["id"]},
                 title="New comment 💬",
-                body=f"{author} on “{activity['text']}”: {text}",
+                body=f"{author['name']} on “{activity['text']}”: {text}",
                 url="/",
             )
         except Exception:  # noqa: BLE001 - never let push break the request
@@ -282,7 +308,10 @@ def create_app() -> Flask:
         always matches a real proposal.
         """
         body = request.get_json(silent=True) or {}
-        emphasized_by = (body.get("emphasizedBy") or "Someone").strip() or "Someone"
+        emphasized_by_id = (body.get("emphasizedById") or "").strip()
+        emphasized_by = db.get_by_id(emphasized_by_id) if emphasized_by_id else None
+        if emphasized_by is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
 
         activity = activities.get(activity_id)
         if activity is None:
@@ -290,9 +319,11 @@ def create_app() -> Flask:
         if not push.is_configured():
             return jsonify({"error": "Push is not configured on the server."}), 503
 
-        result = push.notify_all(
+        result = push.notify_users(
+            user_ids=set(activity["memberIds"]),
+            exclude_user_ids={emphasized_by["id"]},
             title="Activity emphasized 👀",
-            body=f"{emphasized_by} emphasized {activity['text']}",
+            body=f"{emphasized_by['name']} emphasized {activity['text']}",
             url="/",
         )
         return jsonify(result)

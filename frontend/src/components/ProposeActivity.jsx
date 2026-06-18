@@ -94,13 +94,13 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
     }
   }
 
-  // Re-push an existing activity as "<you> emphasized <activity>".
+  // Notify the other participants that you emphasized this activity.
   async function handleNotify(activity) {
     if (notifyingId) return
     setNotifyingId(activity.id)
     setError('')
     try {
-      await notifyActivity(activity.id, user.name)
+      await notifyActivity(activity.id, user.id)
       setSentId(activity.id)
       setTimeout(() => setSentId((cur) => (cur === activity.id ? null : cur)), 2000)
     } catch {
@@ -118,8 +118,8 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
     setError('')
     try {
       const updated = isMember
-        ? await leaveActivity(activity.id, user.name)
-        : await joinActivity(activity.id, user.name)
+        ? await leaveActivity(activity.id, user.id)
+        : await joinActivity(activity.id, user.id)
       setActivities(updated)
     } catch {
       setError(`Could not ${isMember ? 'leave' : 'join'} the activity. Try again.`)
@@ -137,7 +137,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
     setCommentingId(activity.id)
     setError('')
     try {
-      const updated = await commentOnActivity(activity.id, user.name, trimmed)
+      const updated = await commentOnActivity(activity.id, user.id, trimmed)
       setActivities(updated)
       setCommentText('')
     } catch {
@@ -183,11 +183,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
         ) : (
           activities.map((a) => {
             const members = a.members ?? []
-            // Case-insensitive so a user always matches their own membership
-            // regardless of how their name was originally cased.
-            const isMember = members.some(
-              (m) => m.toLowerCase() === user.name.toLowerCase()
-            )
+            const isMember = (a.memberIds ?? []).includes(user.id)
             // The proposer is permanently part of their own activity, so they
             // get no Join/Leave button.
             const isProposer = a.proposedBy.toLowerCase() === user.name.toLowerCase()
@@ -233,7 +229,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                     disabled={notifyingId === a.id}
                     // Icon-only: text is dropped in favor of the bell; aria-label
                     // keeps it accessible, and a ✓ briefly confirms a sent notify.
-                    aria-label="Notify everyone"
+                    aria-label="Notify participants"
                     className="flex-none rounded-full border border-[#d6e2c5] bg-[#eef3e7] px-[12px] py-[8px] text-[14px] font-bold text-[#50603f] transition hover:brightness-95 disabled:opacity-60"
                   >
                     {sentId === a.id ? '✓' : '🔔'}

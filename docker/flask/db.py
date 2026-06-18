@@ -165,6 +165,8 @@ def find_by_name(name: str) -> dict | None:
 
 def get_by_id(roommate_id: str) -> dict | None:
     """Return one roommate by stable id, or None when it does not exist."""
+    if not roommate_id:
+        return None
     item = _get_table().get_item(Key={"id": roommate_id}, ConsistentRead=True).get("Item")
     return _to_roommate(item) if item else None
 

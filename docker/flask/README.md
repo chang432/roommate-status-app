@@ -13,6 +13,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `PUT  /api/roommates/<id>/status` | `{ status, statusText }` | full updated household list              |
 | `POST /api/activities`          | `{ text, proposedById }`   | full updated activity list                |
 | `DELETE /api/activities/<id>`   | `{ requesterId }`          | full updated activity list                |
+| `POST /api/push/subscribe`      | `{ subscription, userId }` | `{ ok: true }`                            |
 | `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
 
 `status` is one of `available`, `busy`, `sleeping`, `ooh`. Any status may carry
@@ -23,6 +24,10 @@ Every roommate shares the demo password **`roomie`** until real auth is added.
 New activities store both the creator's stable roommate id (`proposedById`) and
 canonical display name (`proposedBy`). Only that id can delete the activity;
 legacy activities without `proposedById` remain visible but cannot be deleted.
+Push subscriptions and activity participants are associated with stable
+roommate ids. User-triggered notifications always exclude the actor. New
+activity proposals and gather notifications go household-wide; event comments,
+joins, deletion, and emphasis go only to that event's participants.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).

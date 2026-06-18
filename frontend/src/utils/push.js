@@ -34,10 +34,10 @@ export async function registerServiceWorker() {
   }
 }
 
-// Full subscribe flow. MUST be called from a user gesture (a tap) — iOS will
-// otherwise refuse the permission prompt. Returns the resulting Notification
-// permission ('granted' | 'denied' | 'default').
-export async function enablePush() {
+// Full subscribe flow. A new permission request must come from a user gesture;
+// an already-granted subscription can be silently re-associated on app load.
+// Returns the Notification permission ('granted' | 'denied' | 'default').
+export async function enablePush(userId, requestPermission = true) {
   if (!pushSupported()) throw new Error('unsupported')
 
   const registration =
@@ -45,7 +45,10 @@ export async function enablePush() {
     (await registerServiceWorker())
   if (!registration) throw new Error('no-service-worker')
 
-  const permission = await Notification.requestPermission()
+  const permission =
+    Notification.permission === 'default' && requestPermission
+      ? await Notification.requestPermission()
+      : Notification.permission
   if (permission !== 'granted') return permission
 
   // Reuse an existing subscription if the browser already has one.
@@ -58,6 +61,6 @@ export async function enablePush() {
     })
   }
 
-  await savePushSubscription(subscription)
+  await savePushSubscription(subscription, userId)
   return permission
 }

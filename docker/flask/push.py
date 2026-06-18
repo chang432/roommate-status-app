@@ -6,10 +6,10 @@ protocol + VAPID (works for installed PWAs on iOS 16.4+, Android, and desktop).
 
 Subscriptions are stored in their own DynamoDB table — separate from the
 roommate table so the household scan in db.py stays clean — keyed by a hash of
-the push endpoint. The table is provisioned by CloudFormation alongside the
-roommate table (infrastructure/dynamodb-table-{dev,main}.yaml), so it must
-already exist; this module never creates it. The app's IAM only needs item
-access on the table (PutItem / DeleteItem / Scan).
+the push endpoint and associated with a stable roommate id for recipient
+selection. The table is provisioned by CloudFormation alongside the roommate
+table (infrastructure/dynamodb-table-{dev,main}.yaml), so it must already exist;
+this module never creates it.
 
 Configuration (env):
     VAPID_PUBLIC_KEY   - base64url application server public key (sent to browser)
@@ -78,15 +78,18 @@ def _endpoint_id(endpoint: str) -> str:
     return hashlib.sha256(endpoint.encode()).hexdigest()
 
 
-def save_subscription(subscription: dict) -> None:
-    """Upsert a PushSubscription. Idempotent — re-subscribing is a no-op write."""
+def save_subscription(subscription: dict, user_id: str) -> None:
+    """Upsert a PushSubscription and associate the device with one roommate."""
     endpoint = subscription.get("endpoint")
     if not endpoint:
         raise ValueError("subscription is missing an endpoint")
+    if not user_id:
+        raise ValueError("subscription is missing a user id")
     _get_table().put_item(
         Item={
             "id": _endpoint_id(endpoint),
             "endpoint": endpoint,
+            "userId": user_id,
             # Store the whole subscription JSON so we can send to it verbatim.
             "subscription": json.dumps(subscription),
         }
@@ -109,8 +112,14 @@ def list_subscriptions() -> list[dict]:
 
 
 # --- Sending ----------------------------------------------------------------
-def notify_all(title: str, body: str, url: str = "/") -> dict:
-    """Send a notification to every subscription; prune dead ones.
+def _notify(
+    title: str,
+    body: str,
+    url: str = "/",
+    user_ids: set[str] | None = None,
+    exclude_user_ids: set[str] | None = None,
+) -> dict:
+    """Send to selected roommate devices and prune dead subscriptions.
 
     Returns a small summary {sent, pruned, failed}. Never raises for a single
     bad subscription — one expired endpoint shouldn't stop the others.
@@ -129,7 +138,16 @@ def notify_all(title: str, body: str, url: str = "/") -> dict:
         resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
         items.extend(resp.get("Items", []))
 
+    excluded = exclude_user_ids or set()
     for item in items:
+        item_user_id = item.get("userId")
+        if user_ids is not None and item_user_id not in user_ids:
+            continue
+        if item_user_id in excluded:
+            continue
+        # An old unowned subscription cannot prove it is not the actor.
+        if excluded and not item_user_id:
+            continue
         raw = item.get("subscription")
         if not raw:
             continue
@@ -161,5 +179,26 @@ def notify_all(title: str, body: str, url: str = "/") -> dict:
             failed += 1
             log.warning("Push send error: %s", err)
 
-    log.info("notify_all: sent=%d pruned=%d failed=%d", sent, pruned, failed)
+    log.info("notify: sent=%d pruned=%d failed=%d", sent, pruned, failed)
     return {"sent": sent, "pruned": pruned, "failed": failed}
+
+
+def notify_all(
+    title: str,
+    body: str,
+    url: str = "/",
+    exclude_user_ids: set[str] | None = None,
+) -> dict:
+    """Send to every associated device except explicitly excluded actors."""
+    return _notify(title, body, url, exclude_user_ids=exclude_user_ids)
+
+
+def notify_users(
+    user_ids: set[str],
+    title: str,
+    body: str,
+    url: str = "/",
+    exclude_user_ids: set[str] | None = None,
+) -> dict:
+    """Send only to devices owned by the selected roommate ids."""
+    return _notify(title, body, url, user_ids=user_ids, exclude_user_ids=exclude_user_ids)

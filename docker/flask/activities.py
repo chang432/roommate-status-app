@@ -64,15 +64,18 @@ def _project(item: dict) -> dict:
     """Shape a raw DynamoDB item to what the frontend expects.
 
     createdAt is stored as a number (epoch millis) and comes back as a Decimal,
-    which isn't JSON-serializable — cast it to int here. `members` is a DynamoDB
-    string set (unordered, and absent once empty); we always union the proposer
-    into it and present a stable, sorted list. Unioning the proposer means the
-    creator is always counted as a member (count >= 1) with no stored-data
-    migration: legacy items written before join/leave simply have no members
-    attribute, and even after someone joins one the proposer is still included.
+    which isn't JSON-serializable — cast it to int here. `members` and
+    `memberIds` are DynamoDB string sets (unordered, and absent once empty); we
+    always union the proposer into both when its id exists and present stable,
+    sorted lists. Legacy items can still expose display-name membership while
+    acquiring stable ids as roommates join them.
     """
     proposer = item.get("proposedBy", "Someone")
+    proposer_id = item.get("proposedById")
     members = sorted(set(item.get("members") or set()) | {proposer})
+    member_ids = set(item.get("memberIds") or set())
+    if proposer_id:
+        member_ids.add(proposer_id)
     # Comments are an ordered list of {author, text, createdAt} maps (oldest
     # first). Expose only the most recent COMMENTS_LIMIT, still oldest-first so
     # the UI can render them top-to-bottom with the newest nearest the input.
@@ -89,9 +92,10 @@ def _project(item: dict) -> dict:
         "id": item["id"],
         "text": item["text"],
         "proposedBy": item.get("proposedBy", "Someone"),
-        "proposedById": item.get("proposedById"),
+        "proposedById": proposer_id,
         "createdAt": int(item["createdAt"]),
         "members": members,
+        "memberIds": sorted(member_ids),
         "comments": comments,
     }
 
@@ -107,13 +111,14 @@ def add_activity(text: str, proposed_by_id: str, proposed_by: str) -> dict:
         "createdAt": int(time.time() * 1000),
         # The proposer joins automatically, so the count starts at 1.
         "members": {proposed_by},
+        "memberIds": {proposed_by_id},
     }
     _get_table().put_item(Item=item)
     return _project(item)
 
 
-def _set_membership(activity_id: str, name: str, op: str) -> dict | None:
-    """Add or remove `name` from an activity's members; return it, or None.
+def _set_membership(activity_id: str, user_id: str, name: str, op: str) -> dict | None:
+    """Add or remove a roommate from an activity; return it, or None.
 
     `op` is "ADD" (join) or "DELETE" (leave). Both are atomic and idempotent at
     the DynamoDB level — joining twice or leaving when absent is a no-op. None
@@ -122,8 +127,8 @@ def _set_membership(activity_id: str, name: str, op: str) -> dict | None:
     try:
         resp = _get_table().update_item(
             Key={"id": activity_id},
-            UpdateExpression=f"{op} members :m",
-            ExpressionAttributeValues={":m": {name}},
+            UpdateExpression=f"{op} members :m, memberIds :i",
+            ExpressionAttributeValues={":m": {name}, ":i": {user_id}},
             ConditionExpression="attribute_exists(id)",
             ReturnValues="ALL_NEW",
         )
@@ -134,14 +139,14 @@ def _set_membership(activity_id: str, name: str, op: str) -> dict | None:
     return _project(resp["Attributes"])
 
 
-def join(activity_id: str, name: str) -> dict | None:
-    """Add `name` to an activity's members. None if the activity is unknown."""
-    return _set_membership(activity_id, name, "ADD")
+def join(activity_id: str, user_id: str, name: str) -> dict | None:
+    """Add a roommate to an activity. None if the activity is unknown."""
+    return _set_membership(activity_id, user_id, name, "ADD")
 
 
-def leave(activity_id: str, name: str) -> dict | None:
-    """Remove `name` from an activity's members. None if the activity is unknown."""
-    return _set_membership(activity_id, name, "DELETE")
+def leave(activity_id: str, user_id: str, name: str) -> dict | None:
+    """Remove a roommate from an activity. None if the activity is unknown."""
+    return _set_membership(activity_id, user_id, name, "DELETE")
 
 
 def add_comment(activity_id: str, author: str, text: str) -> dict | None:
@@ -174,9 +179,12 @@ def add_comment(activity_id: str, author: str, text: str) -> dict | None:
     return _project(resp["Attributes"])
 
 
-def get(activity_id: str) -> dict | None:
+def get(activity_id: str, consistent: bool = False) -> dict | None:
     """Return one proposal by id, or None if it doesn't exist."""
-    item = _get_table().get_item(Key={"id": activity_id}).get("Item")
+    item = _get_table().get_item(
+        Key={"id": activity_id},
+        ConsistentRead=consistent,
+    ).get("Item")
     return _project(item) if item else None
 
 

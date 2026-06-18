@@ -25,9 +25,11 @@ roommate table, a Web Push subscriptions table, and a proposed-activities table:
 The roommate table holds one item per roommate, keyed by a string `id` (e.g.
 `"jordan"`); other attributes (`name`, `status`, `statusText`,
 `statusUpdatedAt`) are schemaless and written by the app. The push subscriptions
-table holds one item per browser Web Push subscription, keyed by a hash of the push endpoint (see
+table holds one item per browser Web Push subscription, keyed by a hash of the
+push endpoint and associated with a roommate `userId` (see
 `docker/flask/push.py`). The activities table holds one item per proposed
-activity, keyed by a generated id (see `docker/flask/activities.py`). All tables
+activity, keyed by a generated id, with participant names and stable
+`memberIds` (see `docker/flask/activities.py`). All tables
 use on-demand billing, encryption at rest, and point-in-time recovery, and are
 retained on stack deletion (`DeletionPolicy: Retain`).
 
