@@ -24,7 +24,7 @@ from moto import mock_aws
 import activities
 import db
 import push
-from app import create_app
+from app import create_app, resolve_mentions
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -403,6 +403,18 @@ def test_comment_on_activity(client):
     assert comments[0]["author"] == "Kayla"
     assert comments[0]["text"] == "I'm in!"  # trimmed
     assert isinstance(comments[0]["createdAt"], int)
+    assert comments[0]["mentions"] == []
+
+
+def test_resolve_mentions_prefers_longest_overlapping_name():
+    roommates = [
+        {"id": "ann", "name": "Ann"},
+        {"id": "ann-marie", "name": "Ann Marie"},
+    ]
+
+    assert resolve_mentions("@Ann Marie is here", roommates, "someone-else") == [
+        {"id": "ann-marie", "name": "Ann Marie"}
+    ]
 
 
 def test_comments_capped_oldest_first(client):
@@ -700,7 +712,7 @@ def test_leave_does_not_notify(client, monkeypatch):
     assert calls == []  # leaving is intentionally quiet
 
 
-def test_comment_notifies_only_participants_and_excludes_author(client, monkeypatch):
+def test_comment_notifies_unmentioned_participants(client, monkeypatch):
     created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
     client.post(f"/api/activities/{activity_id}/join", json={"userId": "kayla"})
@@ -714,10 +726,125 @@ def test_comment_notifies_only_participants_and_excludes_author(client, monkeypa
     assert len(calls) == 1
     audience, kwargs = calls[0]
     assert audience == "users"
-    assert kwargs["user_ids"] == {"andre", "kayla"}
-    assert kwargs["exclude_user_ids"] == {"kayla"}
+    assert kwargs["user_ids"] == {"andre"}
     body = kwargs["body"]
     assert "Kayla" in body and "Count me in" in body and "Movie night" in body
+
+
+def test_mentions_notify_household_members_and_store_canonical_metadata(
+    client, monkeypatch
+):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+    calls = _capture_notifications(monkeypatch)
+
+    res = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={
+            "authorId": "kayla",
+            "text": "@sheryl, can you ask @Ting? @SHERYL",
+        },
+    )
+
+    assert res.status_code == 200
+    comment = res.get_json()[0]["comments"][0]
+    assert comment["mentions"] == [
+        {"id": "sheryl", "name": "Sheryl"},
+        {"id": "ting", "name": "Ting"},
+    ]
+    assert len(calls) == 2
+    mention_call, participant_call = calls
+    assert mention_call == (
+        "users",
+        {
+            "user_ids": {"sheryl", "ting"},
+            "title": "Kayla mentioned you",
+            "body": "On “Movie night”: @sheryl, can you ask @Ting? @SHERYL",
+            "url": "/",
+        },
+    )
+    assert participant_call[0] == "users"
+    assert participant_call[1]["user_ids"] == {"andre"}
+    assert participant_call[1]["title"] == "New comment 💬"
+
+
+def test_mentioned_participant_gets_only_mention_push(client, monkeypatch):
+    created = _propose(client, "Dinner").get_json()
+    activity_id = created[0]["id"]
+    client.post(f"/api/activities/{activity_id}/join", json={"userId": "sheryl"})
+    calls = _capture_notifications(monkeypatch)
+
+    res = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"authorId": "kayla", "text": "@Andre are you bringing drinks?"},
+    )
+
+    assert res.status_code == 200
+    assert len(calls) == 2
+    assert calls[0][1]["user_ids"] == {"andre"}
+    assert calls[0][1]["title"] == "Kayla mentioned you"
+    assert calls[1][1]["user_ids"] == {"sheryl"}
+    assert calls[1][1]["title"] == "New comment 💬"
+
+
+def test_mention_push_failure_does_not_skip_participant_push(client, monkeypatch):
+    created = _propose(client, "Dinner").get_json()
+    activity_id = created[0]["id"]
+    client.post(f"/api/activities/{activity_id}/join", json={"userId": "sheryl"})
+    calls = []
+
+    def fail_first_push(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise RuntimeError("mention push unavailable")
+        return {"sent": 0, "pruned": 0, "failed": 0}
+
+    monkeypatch.setattr(push, "notify_users", fail_first_push)
+    res = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"authorId": "kayla", "text": "@Andre heads up"},
+    )
+
+    assert res.status_code == 200
+    assert len(calls) == 2
+    assert calls[0]["user_ids"] == {"andre"}
+    assert calls[1]["user_ids"] == {"sheryl"}
+
+
+def test_self_invalid_and_email_like_mentions_do_not_notify(client, monkeypatch):
+    created = _propose(client, "Dinner").get_json()
+    activity_id = created[0]["id"]
+    calls = _capture_notifications(monkeypatch)
+
+    res = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={
+            "authorId": "kayla",
+            "text": "@Kayla @Ghost andre@example.com @Shery",
+        },
+    )
+
+    assert res.status_code == 200
+    assert res.get_json()[0]["comments"][0]["mentions"] == []
+    assert len(calls) == 1
+    assert calls[0][1]["user_ids"] == {"andre"}
+    assert calls[0][1]["title"] == "New comment 💬"
+
+
+def test_legacy_comment_projects_empty_mentions(client):
+    activities._get_table().put_item(
+        Item={
+            "id": "legacy-comment",
+            "text": "Old event",
+            "proposedBy": "Andre",
+            "proposedById": "andre",
+            "createdAt": 1,
+            "comments": [{"author": "Kayla", "text": "hello", "createdAt": 2}],
+        }
+    )
+
+    comment = client.get("/api/activities").get_json()[0]["comments"][0]
+    assert comment["mentions"] == []
 
 
 def test_join_requires_valid_roommate(client):

@@ -211,6 +211,7 @@ export default function StatusPage() {
             liveEvent={liveEvent}
             transitioningId={transitioningId}
             onLiveTransition={handleLiveTransition}
+            roommates={roommates}
           />
         </>
       )}

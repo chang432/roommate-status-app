@@ -13,6 +13,8 @@ availability to hang out. Built from the mockups in `../mockups`.
   invites everyone to hang out (PROJECT.md threshold).
 - **Live events**: event creators can start/end an event, with one live-event
   banner shown household-wide.
+- **Comment mentions**: typing `@` suggests household members, highlights valid
+  mentions, and notifies the mentioned roommates.
 
 ## Tech
 

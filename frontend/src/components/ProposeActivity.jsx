@@ -8,6 +8,8 @@ import {
   leaveActivity,
   commentOnActivity,
 } from '../api/client.js'
+import CommentComposer from './CommentComposer.jsx'
+import MentionText from './MentionText.jsx'
 import { relativeTime } from '../utils/time.js'
 
 // "Propose an activity": a text field + Send button that pushes the proposal to
@@ -19,6 +21,7 @@ export default function ProposeActivity({
   liveEvent,
   transitioningId,
   onLiveTransition,
+  roommates,
 }) {
   const { user } = useAuth()
   const [text, setText] = useState('')
@@ -334,46 +337,21 @@ export default function ProposeActivity({
                                 <span className="text-[11px] text-ink-soft">
                                   {relativeTime(c.createdAt)}
                                 </span>
-                                <p className="text-ink">{c.text}</p>
+                                <p className="text-ink">
+                                  <MentionText text={c.text} mentions={c.mentions} />
+                                </p>
                               </li>
                             ))}
                           </ul>
                         )}
-                        <form
-                          onSubmit={(e) => handleComment(e, a)}
-                          className="flex gap-[8px]"
-                        >
-                          <input
-                            type="text"
-                            value={commentText}
-                            onChange={(e) => setCommentText(e.target.value)}
-                            maxLength={280}
-                            placeholder="Add a comment…"
-                            className="flex-1 rounded-sm border border-line bg-white px-[12px] py-[8px] text-[13px] text-ink outline-none transition placeholder:text-[#b6a995] focus:border-accent"
-                          />
-                          <button
-                            type="submit"
-                            disabled={commentingId === a.id || !commentText.trim()}
-                            aria-label="Send comment"
-                            className="flex flex-none items-center justify-center rounded-sm bg-accent px-[12px] py-[8px] text-white transition hover:bg-accent-deep disabled:opacity-60"
-                          >
-                            {/* Paper-plane send icon (Feather "send"). */}
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden="true"
-                            >
-                              <line x1="22" y1="2" x2="11" y2="13" />
-                              <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                            </svg>
-                          </button>
-                        </form>
+                        <CommentComposer
+                          value={commentText}
+                          onChange={setCommentText}
+                          onSubmit={(event) => handleComment(event, a)}
+                          roommates={roommates}
+                          currentUserId={user.id}
+                          busy={commentingId === a.id}
+                        />
                       </div>
 
                       {canDelete && (
