@@ -1,6 +1,6 @@
 # Builds and runs the full Roomie Status stack: the Flask backend and the
 # Caddy container that serves the React frontend, proxies /api to Flask, and
-# terminates HTTPS with a Let's Encrypt cert (DNS-01 via Route 53).
+# terminates HTTPS with a Let's Encrypt cert issued via HTTP-01.
 #
 # SITE_DOMAIN must be set to the public hostname the cert is issued for, e.g.
 #   SITE_DOMAIN=dev.example.com docker compose up --build
@@ -58,13 +58,7 @@ services:
       # to start without it so Caddy never tries to provision a cert for a
       # placeholder. Each VPS sets its own (dev. vs apex).
       - SITE_DOMAIN=${SITE_DOMAIN:-dev.roomie-status.eu}
-      # Region for the AWS SDK used by the route53 DNS plugin. Route 53 is
-      # global, but the SDK still needs a region configured.
-      - AWS_REGION=${AWS_REGION:-us-east-1}
     volumes:
-      # Same read-only AWS creds the Flask app uses; the route53 DNS-01 plugin
-      # reads them to write the ACME TXT records.
-      - "${HOME}/.aws:/root/.aws:ro"
       # Persist issued certs + ACME account across rebuilds so every deploy
       # doesn't re-issue (and risk hitting Let's Encrypt rate limits).
       - "caddy_data:/data"

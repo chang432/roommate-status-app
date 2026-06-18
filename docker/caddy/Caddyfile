@@ -1,12 +1,9 @@
 # Caddy site config for the Roomie Status app.
 #
 # Serves the static React/Vite bundle, proxies /api to the Flask backend, and
-# terminates TLS with a Let's Encrypt cert obtained via the DNS-01 challenge
-# against Route 53. The public hostname comes from the SITE_DOMAIN env var so
-# the same image can serve the dev and main VPSs (dev. vs apex domain).
-#
-# Credentials for the Route 53 TXT-record writes are read from the standard AWS
-# chain (the mounted ~/.aws or AWS_* env vars), exactly like the Flask backend.
+# terminates TLS with a Let's Encrypt cert obtained by Caddy's default HTTP-01
+# challenge. The public hostname comes from the SITE_DOMAIN env var so the same
+# image can serve the dev and main VPSs (dev. vs apex domain).
 
 {$SITE_DOMAIN} {
 	# Compress responses; zstd preferred, gzip fallback.
@@ -30,13 +27,5 @@
 
 		try_files {path} /index.html
 		file_server
-	}
-
-	# DNS-01 via Route 53: no inbound port 80 needed for issuance, and this is
-	# the only challenge type that can mint wildcard certs. The resolver is set
-	# explicitly so the propagation check doesn't depend on the VPS's resolver.
-	tls {
-		dns route53
-		resolvers 1.1.1.1
 	}
 }

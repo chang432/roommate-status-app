@@ -1,7 +1,7 @@
 # Local-dev Caddy config: serve the app over plain HTTP on localhost so Caddy
 # never contacts Let's Encrypt. Mounted over the baked-in Caddyfile by
-# docker-compose.local.yml (see start.sh). The production Caddyfile (DNS-01 via
-# Route 53) is used only on the VPS.
+# docker-compose.local.yml (see start.sh). The production Caddyfile is used
+# only on the VPS.
 #
 # http://localhost is a browser "secure context", so service workers / the push
 # API still work locally without a cert — the real iPhone test needs the VPS.

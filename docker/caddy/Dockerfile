@@ -1,6 +1,6 @@
 # Caddy image that builds the React/Vite frontend and serves the static bundle
-# over HTTPS, obtaining/renewing its TLS cert from Let's Encrypt via the
-# DNS-01 challenge against Amazon Route 53.
+# over HTTPS. Caddy obtains/renews its TLS cert with the default HTTP-01
+# challenge, so the VPS must publish port 80 as well as 443.
 #
 # Build context is the repo root (see docker/docker-compose.yml) so this can
 # reach both the frontend/ source and this folder's Caddyfile.
@@ -18,26 +18,10 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# --- Stage 2: build a custom Caddy with the Route 53 DNS module -------------
-# The stock caddy image ships no DNS providers, so the DNS-01 challenge needs a
-# binary built with the route53 plugin via xcaddy (preinstalled in -builder).
-FROM caddy:2.10-builder AS caddybuild
-
-# The route53 plugin requires a newer Go than the builder image pins, and that
-# image defaults to GOTOOLCHAIN=local (no auto-upgrade). Allow Go to fetch the
-# toolchain the module declares so the build isn't tied to the image's Go.
-ENV GOTOOLCHAIN=auto
-
-RUN xcaddy build \
-    --with github.com/caddy-dns/route53
-
-# --- Stage 3: runtime ------------------------------------------------------
+# --- Stage 2: runtime ------------------------------------------------------
 FROM caddy:2.10-alpine
 
-# Swap in the custom binary (with the route53 module) for the stock one.
-COPY --from=caddybuild /usr/bin/caddy /usr/bin/caddy
-
-# Site config: SPA + /api proxy + DNS-01 TLS.
+# Site config: SPA + /api proxy + automatic HTTPS.
 COPY docker/caddy/Caddyfile /etc/caddy/Caddyfile
 
 # Static assets produced by the build stage live under /srv (see Caddyfile root).
