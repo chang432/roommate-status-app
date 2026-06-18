@@ -7,8 +7,10 @@ string `id` (e.g. "jordan"), with schemaless `name`, `status`, and `statusText`
 attributes written by this app.
 
 Configuration (resolved at call time, not import time):
-    ROOMMATE_TABLE  - table name (default "RoommateStatus-main")
+    ROOMMATE_TABLE     - table name (default "RoommateStatus-main")
     AWS_REGION / standard AWS config chain - region & credentials
+    DYNAMODB_ENDPOINT  - local-dev only: point boto3 at a DynamoDB Local instead
+                         of real AWS (unset in production -> real DynamoDB)
 
 The table starts empty after deploy; run seed.py (or call seed()) once to load
 the initial household. Seeding is idempotent and never overwrites a roommate
@@ -20,6 +22,7 @@ from __future__ import annotations
 import os
 import re
 import threading
+import time
 
 import boto3
 from botocore.exceptions import ClientError
@@ -79,13 +82,34 @@ def _region() -> str:
     return region if _REGION_RE.match(region) else DEFAULT_REGION
 
 
+def _endpoint() -> str | None:
+    """Optional DynamoDB endpoint override for local development.
+
+    When DYNAMODB_ENDPOINT is set (e.g. a DynamoDB Local container), boto3 talks
+    to it instead of real AWS — so local runs need no AWS account. Unset in
+    production, where None means "use the real DynamoDB endpoint" and behavior
+    is unchanged.
+    """
+    return os.environ.get("DYNAMODB_ENDPOINT") or None
+
+
+def resource():
+    """Build a DynamoDB resource honoring the region and local-endpoint override.
+
+    Shared by db, activities, and push so all three sign requests the same way
+    and pick up DYNAMODB_ENDPOINT together. endpoint_url=None is the boto3
+    default (real AWS), so production is unaffected.
+    """
+    return boto3.resource("dynamodb", region_name=_region(), endpoint_url=_endpoint())
+
+
 def _get_table():
     """Return the cached DynamoDB Table resource, creating it on first use."""
     global _table
     if _table is None:
         with _table_lock:
             if _table is None:
-                _table = boto3.resource("dynamodb", region_name=_region()).Table(TABLE_NAME)
+                _table = resource().Table(TABLE_NAME)
     return _table
 
 
@@ -100,21 +124,28 @@ def _to_roommate(item: dict) -> dict:
         "name": item["name"],
         "status": item.get("status", "busy"),
         "statusText": item.get("statusText", ""),
+        "statusUpdatedAt": (
+            int(item["statusUpdatedAt"]) if item.get("statusUpdatedAt") is not None else None
+        ),
     }
 
 
-def get_all() -> list[dict]:
+def get_all(consistent: bool = False) -> list[dict]:
     """Return every roommate and their current status, sorted by name.
 
     Sorting gives the frontend a stable order (DynamoDB scans are unordered).
-    The table is tiny (one household), so a scan is the right tool here.
+    The table is tiny (one household), so a scan is the right tool here. Pass
+    consistent=True immediately after a write so the response includes it.
     """
     table = _get_table()
-    resp = table.scan()
+    resp = table.scan(ConsistentRead=consistent)
     items = resp.get("Items", [])
     # Pagination is unlikely at this scale but cheap to handle correctly.
     while "LastEvaluatedKey" in resp:
-        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
+        resp = table.scan(
+            ExclusiveStartKey=resp["LastEvaluatedKey"],
+            ConsistentRead=consistent,
+        )
         items.extend(resp.get("Items", []))
     return sorted((_to_roommate(i) for i in items), key=lambda r: r["name"].lower())
 
@@ -141,20 +172,21 @@ def update_status(roommate_id: str, status: str, status_text: str = "") -> list[
     that doesn't exist.
     """
     try:
+        updated_at = int(time.time() * 1000)
         _get_table().update_item(
             Key={"id": roommate_id},
             # `status` is a DynamoDB reserved word, so reference it via a name
             # placeholder.
-            UpdateExpression="SET #s = :s, statusText = :t",
+            UpdateExpression="SET #s = :s, statusText = :t, statusUpdatedAt = :u",
             ExpressionAttributeNames={"#s": "status"},
-            ExpressionAttributeValues={":s": status, ":t": status_text},
+            ExpressionAttributeValues={":s": status, ":t": status_text, ":u": updated_at},
             ConditionExpression="attribute_exists(id)",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             return None  # Unknown roommate id.
         raise
-    return get_all()
+    return get_all(consistent=True)
 
 
 def available_count(roommates: list[dict] | None = None) -> int:

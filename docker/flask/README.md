@@ -9,13 +9,15 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | Method & path                  | Body                       | Returns                                  |
 | ------------------------------ | -------------------------- | ---------------------------------------- |
 | `POST /api/login`              | `{ name, password }`       | `{ user: { id, name } }` (401 on bad creds) |
-| `GET  /api/roommates`          | —                          | `[ { id, name, status, statusText } ]`   |
+| `GET  /api/roommates`          | —                          | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status` | `{ status, statusText }` | full updated household list              |
 | `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
 
 `status` is one of `available`, `busy`, `sleeping`, `ooh`. Any status may carry
-an optional `statusText` note that is shown alongside it. Every roommate shares
-the demo password **`roomie`** until real auth is added.
+an optional `statusText` note that is shown alongside it. `statusUpdatedAt` is
+the server-generated epoch-millisecond time of the most recent status save, or
+`null` for records that have not been updated since this field was introduced.
+Every roommate shares the demo password **`roomie`** until real auth is added.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).
@@ -27,10 +29,11 @@ Backed by a per-deployment DynamoDB table — `RoommateStatus-dev` or
 `dynamodb-table-main.yaml`) — one item per roommate, keyed by `id`.
 Configuration:
 
-| Env var          | Default               | Purpose                              |
-| ---------------- | --------------------- | ------------------------------------ |
-| `ROOMMATE_TABLE` | `RoommateStatus-main` | Table name                           |
-| `AWS_REGION`     | —                     | Region (or use your AWS config/SSO)  |
+| Env var             | Default               | Purpose                                      |
+| ------------------- | --------------------- | -------------------------------------------- |
+| `ROOMMATE_TABLE`    | `RoommateStatus-main` | Table name                                   |
+| `AWS_REGION`        | —                     | Region (or use your AWS config/SSO)          |
+| `DYNAMODB_ENDPOINT` | —                     | Local dev only: point boto3 at a DynamoDB Local instead of real AWS |
 
 Credentials resolve via the standard AWS chain. The deploy script lives in
 `infrastructure/`; once the table exists, seed the initial household **once**:
@@ -38,6 +41,20 @@ Credentials resolve via the standard AWS chain. The deploy script lives in
 ```bash
 python seed.py           # idempotent — safe to re-run
 ```
+
+### No AWS account? Use DynamoDB Local
+
+`./start.sh` (repo root) runs the whole stack against an in-memory **DynamoDB
+Local** container — no AWS credentials or deployed tables required. It sets
+`DYNAMODB_ENDPOINT` so boto3 targets the local instance, then creates the tables
+and seeds the household automatically on every run. Real DynamoDB +
+CloudFormation are only used by the production deploy.
+
+The local-DynamoDB wiring lives in `infrastructure/` (next to the CloudFormation
+templates it stands in for) as its own standalone compose project — see
+`infrastructure/README.md`. The app connects to it over the shared `roomie-shared`
+network; the only app-side pieces are the `DYNAMODB_ENDPOINT` hook in
+`db.resource()` and the connection config in `docker/docker-compose.local.yml`.
 
 ## TODO before going public
 

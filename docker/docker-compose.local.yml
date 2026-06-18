@@ -1,13 +1,41 @@
 # Local-dev override for docker-compose.yml. Swaps Caddy to serve plain HTTP on
-# localhost so it never touches Let's Encrypt / Route 53 (no public cert churn,
-# no rate-limit burn, no /etc/hosts games). Layer it on top of the base file:
+# localhost so it never touches Let's Encrypt (no public cert churn, no
+# rate-limit burn, no /etc/hosts games), and connects the app to the local
+# DynamoDB module. Layer it on top of the base file:
 #
 #   docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 #
-# start.sh does this automatically. The base file (what the deploy workflow runs
-# with an explicit single -f) keeps the production DNS-01 config untouched.
+# start.sh does this automatically and, as a separate compose project, runs
+# infrastructure/docker-compose.dynamodb-local.yml (the in-memory DynamoDB Local
+# this app dials over the shared network). The base file (what the deploy
+# workflow runs with an explicit single -f) keeps the production HTTPS /
+# real-AWS config untouched.
+
+# The shared network the local DynamoDB module also joins. External: created
+# once (`docker network create roomie-shared`, done by start.sh) and owned by
+# neither project. Without this override the app uses its own default network and
+# real AWS — production is unaffected.
+networks:
+  roomie-shared:
+    external: true
+
 services:
   caddy:
-    # Replace the baked-in DNS-01 Caddyfile with the plain-HTTP local one.
+    # Replace the baked-in HTTPS Caddyfile with the plain-HTTP local one.
     volumes:
       - "./caddy/Caddyfile.local:/etc/caddy/Caddyfile:ro"
+
+  # Connect the app to the local DynamoDB module: dial it by name over the shared
+  # network, with throwaway creds (DynamoDB Local ignores them, but boto3 still
+  # needs some). DYNAMODB_ENDPOINT is the only switch that points the app at the
+  # local DB; without it the app talks to real AWS. flask stays on `default` too
+  # so Caddy can keep proxying to it.
+  flask:
+    environment:
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - AWS_REGION=us-east-1
+    networks:
+      - default
+      - roomie-shared

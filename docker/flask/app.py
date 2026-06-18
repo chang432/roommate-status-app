@@ -3,7 +3,8 @@
 Implements the endpoints the frontend calls (see frontend/src/api/client.js):
 
     POST /api/login                    -> { "user": { "id", "name" } }
-    GET  /api/roommates                -> [ { "id", "name", "status", "statusText" }, ... ]
+    GET  /api/roommates                -> [ { "id", "name", "status", "statusText",
+                                             "statusUpdatedAt" }, ... ]
     PUT  /api/roommates/<id>/status    -> the full, updated household list
 
 Plus the Web Push (PoC) endpoints:

@@ -1,5 +1,6 @@
 import Avatar from './Avatar.jsx'
 import StatusDot from './StatusDot.jsx'
+import StatusTimestamp from './StatusTimestamp.jsx'
 import { statusLabel, statusNote } from '../utils/status.js'
 
 // The signed-in roommate's own card: highlighted, full-width, with an Edit
@@ -20,6 +21,10 @@ export default function YouCard({ roommate, avatarColor, onEdit }) {
         <div className="mt-[3px] text-[14.5px] text-ink-soft">{statusLabel(roommate)}</div>
         {/* Supplemental note attached to your current status, if any. */}
         {note && <div className="mt-[2px] text-[14px] text-ink">{note}</div>}
+        <StatusTimestamp
+          timestamp={roommate.statusUpdatedAt}
+          className="mt-[4px] text-[12px] text-ink-soft"
+        />
       </div>
       <button
         type="button"

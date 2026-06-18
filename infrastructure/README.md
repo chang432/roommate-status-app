@@ -8,6 +8,8 @@ CloudFormation + a deploy script for the app's AWS resources.
 | `dynamodb-table-main.yaml` | CloudFormation template: the **main** tables (`RoommateStatus-main` + `-pushsubs` + `-activities`) |
 | `deploy.py`                | Creates/updates a stack via boto3 and prints outputs           |
 | `requirements.txt`         | Python deps (`boto3`)                                          |
+| `docker-compose.dynamodb-local.yml` | Local-dev only: in-memory DynamoDB Local + a one-off table-creator (the local stand-in for the CloudFormation tables) |
+| `create-tables.sh`         | Local-dev only: creates the tables in DynamoDB Local (run by the compose file above) |
 
 ## DynamoDB tables
 
@@ -21,9 +23,9 @@ roommate table, a Web Push subscriptions table, and a proposed-activities table:
 | `main`     | `roomie-dynamodb-main` | `RoommateStatus-main` | `RoommateStatus-main-pushsubs` | `RoommateStatus-main-activities` |
 
 The roommate table holds one item per roommate, keyed by a string `id` (e.g.
-`"jordan"`); other attributes (`name`, `status`, `statusText`) are schemaless
-and written by the app. The push subscriptions table holds one item per browser
-Web Push subscription, keyed by a hash of the push endpoint (see
+`"jordan"`); other attributes (`name`, `status`, `statusText`,
+`statusUpdatedAt`) are schemaless and written by the app. The push subscriptions
+table holds one item per browser Web Push subscription, keyed by a hash of the push endpoint (see
 `docker/flask/push.py`). The activities table holds one item per proposed
 activity, keyed by a generated id (see `docker/flask/activities.py`). All tables
 use on-demand billing, encryption at rest, and point-in-time recovery, and are
@@ -61,3 +63,32 @@ name and ARN.
 | `--stack-name` | per deployment           | Override the CloudFormation stack name       |
 | `--template`   | per deployment           | Override the template path                   |
 | `--region`     | from AWS config          | Target AWS region                            |
+
+## Local development (no AWS account)
+
+For local dev the app runs against an **in-memory DynamoDB Local** instead of
+real AWS, so contributors need no credentials or deployed stacks. It's a
+**standalone compose project** (`roomie-infra`) that can be run and reused
+independently of the app; the two are joined only by a shared network and the
+table-name / key-schema contract.
+
+| File | Purpose |
+| ---- | ------- |
+| `docker-compose.dynamodb-local.yml` | `dynamodb-local` (in-memory, host port **8001**) + a one-off `dynamodb-init` service (`amazon/aws-cli`) that runs `create-tables.sh`. Both attach to the external `roomie-shared` network. |
+| `create-tables.sh` | Creates the three tables (same single-`id`-key schema as the templates) in DynamoDB Local. Idempotent; refuses to run unless `DYNAMODB_ENDPOINT` is set, so it can never touch real AWS. |
+
+`./start.sh` (repo root) drives both projects for you. To run just this module:
+
+```bash
+docker network create roomie-shared        # once; shared with the app
+docker compose -p roomie-infra -f infrastructure/docker-compose.dynamodb-local.yml up -d
+docker compose -p roomie-infra -f infrastructure/docker-compose.dynamodb-local.yml \
+    --profile init run --rm dynamodb-init   # create the tables
+```
+
+The app reaches it on the shared network at `dynamodb-local:8000`; setting
+`DYNAMODB_ENDPOINT` (in `docker/docker-compose.local.yml`) is the only switch
+that points the app at the local DB — without it the app uses real DynamoDB,
+unchanged. The instance is in-memory, so tables are recreated and reseeded on
+every run; the prod-only template features (encryption, PITR, retention) don't
+apply locally and are intentionally omitted.

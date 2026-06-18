@@ -8,17 +8,7 @@ import {
   leaveActivity,
   commentOnActivity,
 } from '../api/client.js'
-
-// Short relative time, e.g. "just now", "5m", "3h", "2d".
-function timeAgo(createdAt) {
-  const secs = Math.max(0, Math.floor((Date.now() - createdAt) / 1000))
-  if (secs < 45) return 'just now'
-  const mins = Math.floor(secs / 60)
-  if (mins < 60) return `${mins}m`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h`
-  return `${Math.floor(hours / 24)}d`
-}
+import { relativeTime } from '../utils/time.js'
 
 // "Propose an activity": a text field + Send button that pushes the proposal to
 // everyone, with the most recent proposals listed below (newest nearest the
@@ -202,7 +192,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                   <div className="min-w-0 flex-1">
                     <p className="text-[14px] text-ink">{a.text}</p>
                     <p className="mt-[2px] text-[12px] text-ink-soft">
-                      {a.proposedBy} · {timeAgo(a.createdAt)}
+                      {a.proposedBy} · {relativeTime(a.createdAt)}
                     </p>
                   </div>
                   {/* Member count — at least 1 since the proposer auto-joins. */}
@@ -300,7 +290,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                               <li key={`${c.createdAt}-${i}`} className="text-[13px]">
                                 <span className="font-bold text-ink">{c.author}</span>{' '}
                                 <span className="text-[11px] text-ink-soft">
-                                  {timeAgo(c.createdAt)}
+                                  {relativeTime(c.createdAt)}
                                 </span>
                                 <p className="text-ink">{c.text}</p>
                               </li>

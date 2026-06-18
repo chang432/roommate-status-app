@@ -29,12 +29,11 @@ import logging
 import os
 import threading
 
-import boto3
 from pywebpush import WebPushException, webpush
 
-# Reuse db's region resolution so push and roommate data sign requests the same
-# way (handles a missing/blank/garbled AWS_REGION).
-from db import _region
+# Reuse db's resource builder so push and roommate data sign requests the same
+# way (shared region handling + the local DynamoDB endpoint override).
+from db import resource
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +69,7 @@ def _get_table():
     if _table is None:
         with _table_lock:
             if _table is None:
-                _table = boto3.resource("dynamodb", region_name=_region()).Table(TABLE_NAME)
+                _table = resource().Table(TABLE_NAME)
     return _table
 
 

@@ -1,0 +1,65 @@
+# Local DynamoDB as a standalone compose deployment (its own project), so it can
+# be run and reused independently of the app. The only things connecting it to
+# the app are the shared external network (roomie-shared) and the table-name /
+# key-schema contract; the app points itself here via DYNAMODB_ENDPOINT (set in
+# docker/docker-compose.local.yml). This is the local-dev stand-in for the
+# CloudFormation templates in this folder — real DynamoDB is only used by deploys.
+#
+# Run it on its own:
+#   docker network create roomie-shared                 # once, shared with the app
+#   docker compose -p roomie-infra -f infrastructure/docker-compose.dynamodb-local.yml up -d
+#   docker compose -p roomie-infra -f infrastructure/docker-compose.dynamodb-local.yml \
+#       --profile init run --rm dynamodb-init           # create the tables
+# start.sh does all of this (plus the app) for you.
+
+# Shared network the app also joins. External so its lifecycle is independent of
+# either project (neither `down` removes it); create it once with
+#   docker network create roomie-shared
+networks:
+  roomie-shared:
+    external: true
+
+services:
+  # In-memory local DynamoDB. Data is wiped on restart. -sharedDb keeps all data
+  # in one place regardless of the (dummy) credentials/region.
+  dynamodb-local:
+    image: "amazon/dynamodb-local:latest"
+    container_name: roomie-dynamodb-local
+    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+    working_dir: /home/dynamodblocal
+    # Host-published on 8001 for readiness checks / host debugging; the app
+    # reaches it on the shared network as dynamodb-local:8000.
+    ports:
+      - "8001:8000"
+    networks:
+      roomie-shared:
+        # Stable DNS name the app dials regardless of compose project prefixes.
+        aliases:
+          - dynamodb-local
+
+  # One-off: create the tables (local stand-in for CloudFormation), then exit.
+  # Behind the "init" profile so a plain `up` doesn't run it. Uses the public
+  # aws-cli image + a mounted script, so there's no image to build.
+  dynamodb-init:
+    image: "amazon/aws-cli:latest"
+    depends_on:
+      - dynamodb-local
+    profiles:
+      - init
+    entrypoint: ["/bin/sh", "/work/create-tables.sh"]
+    environment:
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      # DynamoDB Local ignores credentials, but the CLI still requires some.
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - AWS_REGION=us-east-1
+      - AWS_PAGER=
+      # Same table name the app and seed use; the script derives the -activities
+      # and -pushsubs tables from it.
+      - ROOMMATE_TABLE=${ROOMMATE_TABLE:-RoommateStatus-dev}
+    networks:
+      - roomie-shared
+    volumes:
+      # Absolute path when start.sh exports INFRA_DIR; falls back to the project
+      # dir (this folder) for standalone `compose -f infrastructure/...` runs.
+      - "${INFRA_DIR:-.}/create-tables.sh:/work/create-tables.sh:ro"
