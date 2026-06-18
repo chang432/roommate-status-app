@@ -252,11 +252,10 @@ def test_status_reminder_notifies_household_except_requester(client, monkeypatch
             "all",
             {
                 "title": "Update your status",
-                "body": "Kayla reminds everyone to update their status.",
+                "body": "Kayla wants to know what you're up to 👀",
                 "url": "/",
                 "exclude_user_ids": {"kayla"},
             },
-        )
     ]
 
 

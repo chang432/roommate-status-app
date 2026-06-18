@@ -141,7 +141,7 @@ def create_app() -> Flask:
 
         result = push.notify_all(
             title="Update your status",
-            body=f"{requester['name']} reminds everyone to update their status.",
+            body=f"{requester['name']} wants to know what you're up to 👀",
             url="/",
             exclude_user_ids={requester["id"]},
         )

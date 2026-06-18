@@ -211,7 +211,7 @@ export default function StatusPage() {
             />
           )}
 
-          <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="mb-3 flex items-center justify-start gap-3">
             <p className="ml-[2px] text-[12.5px] font-bold uppercase tracking-[0.05em] text-ink-soft">
               The household
             </p>
@@ -219,9 +219,9 @@ export default function StatusPage() {
               type="button"
               onClick={handleNotifyHousehold}
               disabled={notifyingHousehold}
-              aria-label="Notify all roommates to update their status"
-              title="Notify all roommates to update their status"
-              className="grid h-9 w-9 flex-none place-items-center rounded-full border border-line bg-card shadow-soft transition hover:border-[#d9c9b3] hover:bg-[#faf6ef] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Notify all to update"
+              title="Notify all to update"
+              className="grid h-9 w-9 flex-none place-items-center rounded-full border border-line bg-accent shadow-soft transition hover:border-[#d9c9b3] hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
             >
               <img src="/megaphone.png" alt="" className="h-5 w-5 object-contain" />
             </button>
