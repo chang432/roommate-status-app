@@ -16,6 +16,8 @@ availability to hang out. Built from the mockups in `../mockups`.
   focus changes, or visible-page polling.
 - **Comment mentions**: typing `@` suggests household members or `@all`,
   highlights valid mentions, and notifies the selected audience.
+- **Comment history**: event panels show the latest 10 comments first and can
+  expand to the latest 100 returned by the backend.
 
 ## Tech
 

@@ -86,7 +86,7 @@ network; the only app-side pieces are the `DYNAMODB_ENDPOINT` hook in
 
 - **Bound comment storage on proposed activities.** Comments are appended to an
   activity's `comments` list with no cap, so the stored list grows without
-  limit even though the API/UI only ever show the most recent few
+  limit even though the API/UI only ever return the most recent 100
   (`activities.COMMENTS_LIMIT`). Within a single household this is fine, but if
   the app is opened to the public it's an unbounded-growth risk (item size,
   cost, and eventually DynamoDB's 400 KB item limit). Cap the stored list —

@@ -256,6 +256,7 @@ def test_status_reminder_notifies_household_except_requester(client, monkeypatch
                 "url": "/",
                 "exclude_user_ids": {"kayla"},
             },
+        )
     ]
 
 
@@ -458,20 +459,19 @@ def test_mentions_all_requires_a_complete_token():
     assert not mentions_all("@@all")
 
 
-def test_comments_capped_oldest_first(client):
+def test_comments_return_latest_100_without_capping_storage(client):
     created = _propose(client, "Hike").get_json()
     activity_id = created[0]["id"]
 
-    for i in range(7):
-        client.post(
-            f"/api/activities/{activity_id}/comments",
-            json={"authorId": "andre", "text": f"msg {i}"},
-        )
+    for i in range(105):
+        activities.add_comment(activity_id, "Andre", f"msg {i}")
 
     feed = client.get("/api/activities").get_json()
     comments = feed[0]["comments"]
-    # Only the 5 most recent, still oldest-first (msg 2..6).
-    assert [c["text"] for c in comments] == [f"msg {i}" for i in range(2, 7)]
+    assert [c["text"] for c in comments] == [f"msg {i}" for i in range(5, 105)]
+
+    stored = activities._get_table().get_item(Key={"id": activity_id})["Item"]
+    assert len(stored["comments"]) == 105
 
 
 def test_comment_requires_text_and_author(client):
