@@ -9,11 +9,11 @@ import {
   commentOnActivity,
   setCommentLiked,
 } from "../api/client.js";
-import { cx } from "../utils/classNames.js";
 import CommentComposer from "./CommentComposer.jsx";
 import CommentLikeButton from "./CommentLikeButton.jsx";
 import MentionText from "./MentionText.jsx";
 import { relativeTime } from "../utils/time.js";
+import styles from "./styling/ProposeActivity.module.css";
 
 const COLLAPSED_COMMENT_LIMIT = 10;
 
