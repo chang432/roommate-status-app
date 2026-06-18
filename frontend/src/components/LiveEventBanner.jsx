@@ -15,11 +15,29 @@ export default function LiveEventBanner({
     return Boolean(user && (event.memberIds ?? []).includes(user.id));
   }, [event, user]);
 
+  function handleBannerClick() {
+    if (!isInvolved) onBannerClick(isInvolved);
+  }
+
+  function handleBannerKeyDown(event) {
+    if (isInvolved) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onBannerClick(isInvolved);
+  }
+
   return (
     <div
-      className={isInvolved ? styles.involvedBanner : styles.banner}
+      className={cx(
+        isInvolved ? styles.involvedBanner : styles.banner,
+        !isInvolved && styles.clickable,
+      )}
       data-involved={isInvolved || undefined}
-      onClick={() => onBannerClick(isInvolved)}
+      role={isInvolved ? undefined : "button"}
+      tabIndex={isInvolved ? undefined : 0}
+      aria-label={isInvolved ? undefined : "Open live activity"}
+      onClick={handleBannerClick}
+      onKeyDown={handleBannerKeyDown}
     >
       <div className={styles.content}>
         <span className={styles.dot} />
@@ -36,7 +54,10 @@ export default function LiveEventBanner({
         {canEnd && (
           <button
             type="button"
-            onClick={onEnd}
+            onClick={(event) => {
+              event.stopPropagation();
+              onEnd();
+            }}
             disabled={ending}
             className={cx("ui-pillButton ui-pillDanger", styles.endButton)}
           >

@@ -46,6 +46,7 @@ export default function StatusPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notifyingHousehold, setNotifyingHousehold] = useState(false);
+  const [activityFocusRequest, setActivityFocusRequest] = useState(null);
 
   // Fetch the household; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
@@ -186,10 +187,12 @@ export default function StatusPage() {
     }
   }
 
-  function onBannerClick(isInvolved) {
-    if (isInvolved) {
-      // Handle click for involved banner
-    }
+  function handleLiveBannerClick(isInvolved) {
+    if (isInvolved || !liveEvent) return;
+    setActivityFocusRequest((current) => ({
+      activityId: liveEvent.id,
+      requestId: (current?.requestId ?? 0) + 1,
+    }));
   }
 
   return (
@@ -244,7 +247,7 @@ export default function StatusPage() {
                 ending={transitioningId === liveEvent.id}
                 onEnd={() => handleLiveTransition(liveEvent, "end")}
                 user={user}
-                onBannerClick={onBannerClick}
+                onBannerClick={handleLiveBannerClick}
               />
             )}
 
@@ -303,6 +306,7 @@ export default function StatusPage() {
               transitioningId={transitioningId}
               onLiveTransition={handleLiveTransition}
               roommates={roommates}
+              activityFocusRequest={activityFocusRequest}
             />
           </>
         )}

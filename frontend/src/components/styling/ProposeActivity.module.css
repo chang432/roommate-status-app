@@ -118,6 +118,10 @@
   @apply mb-[10px] space-y-[8px];
 }
 
+.commentScroller {
+  @apply mb-[10px] max-h-[220px] overflow-y-auto pr-2;
+}
+
 .comment {
   @apply text-[13px];
 }

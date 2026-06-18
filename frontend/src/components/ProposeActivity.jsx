@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   proposeActivity,
@@ -14,8 +14,6 @@ import { relativeTime } from "../utils/time.js";
 import { cx } from "../utils/classNames.js";
 import styles from "./styling/ProposeActivity.module.css";
 
-const COLLAPSED_COMMENT_LIMIT = 10;
-
 // "Propose an activity": a text field + Send button that pushes the proposal to
 // everyone, with the most recent proposals listed below (newest nearest the
 // input).
@@ -26,8 +24,10 @@ export default function ProposeActivity({
   transitioningId,
   onLiveTransition,
   roommates,
+  activityFocusRequest,
 }) {
   const { user } = useAuth();
+  const activityRefs = useRef(new Map());
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -44,17 +44,30 @@ export default function ProposeActivity({
   // single draft string is enough — it's cleared whenever the panel changes).
   const [commentText, setCommentText] = useState("");
   const [commentingId, setCommentingId] = useState(null);
-  const [showOlderComments, setShowOlderComments] = useState(false);
   // Deletion is owner-only and uses a two-step inline confirmation.
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+
+  useEffect(() => {
+    if (!activityFocusRequest?.activityId) return;
+    const { activityId } = activityFocusRequest;
+    setExpandedId(activityId);
+    setCommentText("");
+    setConfirmingDeleteId(null);
+
+    requestAnimationFrame(() => {
+      activityRefs.current.get(activityId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [activityFocusRequest]);
 
   // Open/close an activity's panel, clearing any half-typed comment so a draft
   // never bleeds from one activity's panel into another's.
   function toggleExpanded(id) {
     setExpandedId((cur) => (cur === id ? null : id));
     setCommentText("");
-    setShowOlderComments(false);
     setConfirmingDeleteId(null);
   }
 
@@ -182,14 +195,6 @@ export default function ProposeActivity({
           activities.map((a) => {
             const members = a.members ?? [];
             const comments = a.comments ?? [];
-            const hiddenCommentCount = Math.max(
-              comments.length - COLLAPSED_COMMENT_LIMIT,
-              0,
-            );
-            const visibleComments =
-              showOlderComments || hiddenCommentCount === 0
-                ? comments
-                : comments.slice(-COLLAPSED_COMMENT_LIMIT);
             const isMember = (a.memberIds ?? []).includes(user.id);
             // The proposer is permanently part of their own activity, so they
             // get no Join/Leave button.
@@ -198,6 +203,13 @@ export default function ProposeActivity({
             return (
               <div
                 key={a.id}
+                ref={(node) => {
+                  if (node) {
+                    activityRefs.current.set(a.id, node);
+                  } else {
+                    activityRefs.current.delete(a.id);
+                  }
+                }}
                 // The whole card is a toggle that expands the member panel; the
                 // action buttons inside stop propagation so they don't toggle it.
                 role="button"
@@ -335,39 +347,22 @@ export default function ProposeActivity({
                       >
                         <p className={styles.panelTitle}>Comments</p>
                         {comments.length === 0 ? (
-                          <p className="mb-[10px] text-[13px] text-ink-soft">
+                          <p className={styles.emptyComments}>
                             No comments yet.
                           </p>
                         ) : (
-                          <>
-                            {hiddenCommentCount > 0 && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setShowOlderComments((current) => !current)
-                                }
-                                className="mb-[8px] text-[12px] font-semibold text-accent-deep hover:underline"
-                              >
-                                {showOlderComments
-                                  ? "Show latest 10"
-                                  : `View ${hiddenCommentCount} older comment${
-                                      hiddenCommentCount === 1 ? "" : "s"
-                                    }`}
-                              </button>
-                            )}
-                            <ul className="mb-[10px] space-y-[8px]">
-                              {visibleComments.map((c, i) => (
+                          <div className={styles.commentScroller}>
+                            <ul className={styles.commentList}>
+                              {comments.map((c, i) => (
                                 <li
                                   key={`${c.createdAt}-${i}`}
-                                  className="text-[13px]"
+                                  className={styles.comment}
                                 >
-                                  <span className="font-bold text-ink">
-                                    {c.author}
-                                  </span>{" "}
-                                  <span className="text-[11px] text-ink-soft">
+                                  <span className={styles.commentAuthor}>{c.author}</span>{" "}
+                                  <span className={styles.commentTime}>
                                     {relativeTime(c.createdAt)}
                                   </span>
-                                  <p className="text-ink">
+                                  <p className={styles.commentText}>
                                     <MentionText
                                       text={c.text}
                                       mentions={c.mentions}
@@ -377,7 +372,7 @@ export default function ProposeActivity({
                                 </li>
                               ))}
                             </ul>
-                          </>
+                          </div>
                         )}
                         <CommentComposer
                           value={commentText}

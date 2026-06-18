@@ -5,6 +5,10 @@
   @apply mb-[26px] mt-[22px] rounded-md border border-[#e8b9ae] bg-gradient-to-br from-[#e8b9ae] to-[#e3a496] px-4 py-[14px] text-[#713c32] shadow-sm;
 }
 
+.clickable {
+  @apply cursor-pointer transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent/20;
+}
+
 .content {
   @apply flex items-center gap-[12px];
 }
