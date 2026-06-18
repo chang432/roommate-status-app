@@ -30,8 +30,9 @@ from db import resource
 # How many recent proposals the feed returns / the UI shows.
 RECENT_LIMIT = 5
 
-# How many of an activity's most recent comments the feed returns / the UI shows.
-COMMENTS_LIMIT = 5
+# How many of an activity's most recent comments the feed returns. Storage
+# remains unbounded; the frontend initially shows only the latest 10.
+COMMENTS_LIMIT = 100
 
 # Results returned by delete_owned(), kept explicit so the route can distinguish
 # missing activities from ownership failures without handling boto3 details.
