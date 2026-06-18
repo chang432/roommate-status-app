@@ -19,7 +19,8 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Comment history**: event panels show the latest 10 comments first and can
   expand to the latest 100 returned by the backend.
 - **Comment likes**: roommates can like or unlike other people’s comments and
-  see both their own reaction state and the total like count.
+  see their own reaction state, the total like count, and a popover listing
+  who liked each comment.
 
 ## Tech
 

@@ -45,6 +45,7 @@ export default function ProposeActivity({
   const [commentText, setCommentText] = useState('')
   const [commentingId, setCommentingId] = useState(null)
   const [likingCommentIds, setLikingCommentIds] = useState([])
+  const [openLikesCommentId, setOpenLikesCommentId] = useState(null)
   const [showOlderComments, setShowOlderComments] = useState(false)
   // Deletion is owner-only and uses a two-step inline confirmation.
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null)
@@ -55,6 +56,7 @@ export default function ProposeActivity({
   function toggleExpanded(id) {
     setExpandedId((cur) => (cur === id ? null : id))
     setCommentText('')
+    setOpenLikesCommentId(null)
     setShowOlderComments(false)
     setConfirmingDeleteId(null)
   }
@@ -397,6 +399,12 @@ export default function ProposeActivity({
                                       }
                                       busy={likingCommentIds.includes(c.id)}
                                       onToggle={() => handleCommentLike(a, c)}
+                                      likedByIds={c.likedByIds ?? []}
+                                      roommates={roommates}
+                                      open={openLikesCommentId === c.id}
+                                      onOpenChange={(open) =>
+                                        setOpenLikesCommentId(open ? c.id : null)
+                                      }
                                     />
                                   </div>
                                   <p className="text-ink">
