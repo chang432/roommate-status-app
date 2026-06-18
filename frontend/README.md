@@ -45,6 +45,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `login`             | `POST /api/login`                 |
 | `getRoommates`      | `GET /api/roommates`              |
 | `updateStatus`      | `PUT /api/roommates/:id/status`   |
+| `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify` |
 | `proposeActivity`   | `POST /api/activities`            |
 | `deleteActivity`    | `DELETE /api/activities/:id`      |
 | `startActivity`     | `POST /api/activities/:id/start`  |

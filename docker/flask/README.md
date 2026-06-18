@@ -11,6 +11,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/login`              | `{ name, password }`       | `{ user: { id, name } }` (401 on bad creds) |
 | `GET  /api/roommates`          | —                          | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status` | `{ status, statusText }` | full updated household list              |
+| `POST /api/roommates/notify`   | `{ requesterId }`          | `{ sent, pruned, failed }`                  |
 | `POST /api/activities`          | `{ text, proposedById }`   | full updated activity list                |
 | `DELETE /api/activities/<id>`   | `{ requesterId }`          | full updated activity list                |
 | `POST /api/activities/<id>/start` | `{ requesterId }`        | full updated activity list                |

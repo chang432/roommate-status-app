@@ -46,6 +46,14 @@ export async function updateStatus(id, status, statusText) {
   })
 }
 
+// POST /api/roommates/notify — remind every other roommate to update status.
+export async function notifyRoommatesToUpdateStatus(requesterId) {
+  return request('/roommates/notify', {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
 // GET /api/push/public-key — the VAPID public key needed to subscribe.
 export async function getVapidPublicKey() {
   return request('/push/public-key')

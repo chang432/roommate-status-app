@@ -226,6 +226,40 @@ def test_push_subscribe_requires_valid_roommate(client):
     assert unknown.status_code == 400
 
 
+def test_status_reminder_unconfigured(client):
+    res = client.post("/api/roommates/notify", json={"requesterId": "andre"})
+
+    assert res.status_code == 503
+
+
+def test_status_reminder_requires_valid_roommate(client):
+    missing = client.post("/api/roommates/notify", json={})
+    unknown = client.post("/api/roommates/notify", json={"requesterId": "ghost"})
+
+    assert missing.status_code == 400
+    assert unknown.status_code == 400
+
+
+def test_status_reminder_notifies_household_except_requester(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+
+    res = client.post("/api/roommates/notify", json={"requesterId": "kayla"})
+
+    assert res.status_code == 200
+    assert calls == [
+        (
+            "all",
+            {
+                "title": "Update your status",
+                "body": "Kayla reminds everyone to update their status.",
+                "url": "/",
+                "exclude_user_ids": {"kayla"},
+            },
+        )
+    ]
+
+
 def test_push_targets_selected_users_and_excludes_actor(client, monkeypatch):
     sent_endpoints = []
 
