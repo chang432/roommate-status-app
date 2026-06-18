@@ -1,19 +1,30 @@
 import { useEffect, useState } from 'react'
 import { pushSupported, enablePush } from '../utils/push.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 // Opt this device into push notifications. The actual subscribe runs from the
 // tap handler (iOS requires a user gesture). Reflects the current permission so
 // the control is informative on repeat visits.
 export default function EnableNotifications() {
+  const { user } = useAuth()
   const [supported, setSupported] = useState(true)
   const [permission, setPermission] = useState('default')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    setSupported(pushSupported())
-    if ('Notification' in window) setPermission(Notification.permission)
-  }, [])
+    const available = pushSupported()
+    setSupported(available)
+    if (!('Notification' in window)) return
+    setPermission(Notification.permission)
+    // Re-save existing subscriptions so legacy devices become associated with
+    // the currently signed-in roommate without another permission prompt.
+    if (available && Notification.permission === 'granted') {
+      enablePush(user.id, false).catch(() => {
+        setError('Could not sync notifications for this roommate.')
+      })
+    }
+  }, [user.id])
 
   const note = 'mb-[26px] mt-[22px] rounded-md border border-line bg-card px-4 py-[13px] text-[13.5px] text-ink-soft'
 
@@ -27,7 +38,14 @@ export default function EnableNotifications() {
     )
   }
   if (permission === 'granted') {
-    return <p className={note}>🔔 Notifications are on for this device.</p>
+    return (
+      <div className={note}>
+        <p>🔔 Notifications are on for this device.</p>
+        {error && (
+          <p className="mt-2 font-semibold text-status-red">{error}</p>
+        )}
+      </div>
+    )
   }
   if (permission === 'denied') {
     return (
@@ -42,7 +60,7 @@ export default function EnableNotifications() {
     setBusy(true)
     setError('')
     try {
-      const result = await enablePush()
+      const result = await enablePush(user.id)
       setPermission(result)
       if (result === 'default') setError('Permission dismissed — tap to try again.')
     } catch (err) {

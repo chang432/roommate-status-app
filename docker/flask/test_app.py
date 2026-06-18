@@ -7,6 +7,7 @@ the exact response shapes the frontend (frontend/src/api/client.js) depends on.
 DynamoDB is mocked with moto, so these run hermetically with no real AWS calls.
 """
 
+import json
 import os
 
 # moto and boto3 need *some* region/credentials present before any client is
@@ -49,10 +50,10 @@ def _dynamodb():
 @pytest.fixture()
 def client():
     db.reset()  # Isolate each test from prior status mutations.
-    # Clear proposed activities so each test starts from an empty feed.
-    table = activities._get_table()
-    for item in table.scan().get("Items", []):
-        table.delete_item(Key={"id": item["id"]})
+    # Clear mutable tables so each test starts with no activities/subscriptions.
+    for table in (activities._get_table(), push._get_table()):
+        for item in table.scan().get("Items", []):
+            table.delete_item(Key={"id": item["id"]})
     app = create_app()
     app.config.update(TESTING=True)
     return app.test_client()
@@ -181,18 +182,98 @@ def test_push_public_key_unconfigured(client):
 
 def test_push_subscribe_stores(client):
     sub = {"endpoint": "https://example.com/ep/abc", "keys": {"p256dh": "x", "auth": "y"}}
-    res = client.post("/api/push/subscribe", json=sub)
+    res = client.post(
+        "/api/push/subscribe",
+        json={"subscription": sub, "userId": "andre"},
+    )
     assert res.status_code == 200
     assert res.get_json() == {"ok": True}
-
-    import push
-
     assert any(s["endpoint"] == sub["endpoint"] for s in push.list_subscriptions())
+    item = push._get_table().get_item(Key={"id": push._endpoint_id(sub["endpoint"])})["Item"]
+    assert item["userId"] == "andre"
+
+
+def test_push_subscription_moves_with_current_signed_in_roommate(client):
+    sub = {"endpoint": "https://example.com/ep/shared", "keys": {}}
+    for user_id in ("andre", "kayla"):
+        res = client.post(
+            "/api/push/subscribe",
+            json={"subscription": sub, "userId": user_id},
+        )
+        assert res.status_code == 200
+
+    item = push._get_table().get_item(Key={"id": push._endpoint_id(sub["endpoint"])})["Item"]
+    assert item["userId"] == "kayla"
 
 
 def test_push_subscribe_rejects_missing_endpoint(client):
-    res = client.post("/api/push/subscribe", json={"keys": {}})
+    res = client.post(
+        "/api/push/subscribe",
+        json={"subscription": {"keys": {}}, "userId": "andre"},
+    )
     assert res.status_code == 400
+
+
+def test_push_subscribe_requires_valid_roommate(client):
+    sub = {"endpoint": "https://example.com/ep/abc", "keys": {}}
+    missing = client.post("/api/push/subscribe", json={"subscription": sub})
+    unknown = client.post(
+        "/api/push/subscribe",
+        json={"subscription": sub, "userId": "ghost"},
+    )
+    assert missing.status_code == 400
+    assert unknown.status_code == 400
+
+
+def test_push_targets_selected_users_and_excludes_actor(client, monkeypatch):
+    sent_endpoints = []
+
+    def fake_webpush(**kwargs):
+        sent_endpoints.append(kwargs["subscription_info"]["endpoint"])
+
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+    monkeypatch.setattr(push, "webpush", fake_webpush)
+    for user_id in ("andre", "kayla", "ting"):
+        push.save_subscription({"endpoint": f"https://push/{user_id}", "keys": {}}, user_id)
+
+    result = push.notify_users(
+        {"andre", "kayla"},
+        title="Event update",
+        body="Changed",
+        exclude_user_ids={"kayla"},
+    )
+
+    assert result == {"sent": 1, "pruned": 0, "failed": 0}
+    assert sent_endpoints == ["https://push/andre"]
+
+
+def test_user_triggered_broadcast_skips_actor_and_unowned_legacy_subscription(
+    client, monkeypatch
+):
+    sent_endpoints = []
+
+    def fake_webpush(**kwargs):
+        sent_endpoints.append(kwargs["subscription_info"]["endpoint"])
+
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+    monkeypatch.setattr(push, "webpush", fake_webpush)
+    push.save_subscription({"endpoint": "https://push/andre", "keys": {}}, "andre")
+    push.save_subscription({"endpoint": "https://push/kayla", "keys": {}}, "kayla")
+    legacy = {"endpoint": "https://push/legacy", "keys": {}}
+    push._get_table().put_item(
+        Item={
+            "id": push._endpoint_id(legacy["endpoint"]),
+            "subscription": json.dumps(legacy),
+        }
+    )
+
+    push.notify_all(
+        title="Household update",
+        body="Changed",
+        exclude_user_ids={"andre"},
+    )
+
+    assert sent_endpoints == ["https://push/kayla"]
 
 
 def test_push_test_unconfigured(client):
@@ -234,36 +315,55 @@ def _b64url(raw: bytes) -> str:
 
 
 # --- Proposed activities ----------------------------------------------------
-def test_propose_activity_creates_and_returns_list(client):
-    res = client.post(
-        "/api/activities", json={"text": "  Taco night  ", "proposedBy": "Andre"}
+def _propose(client, text: str, creator_id: str = "andre"):
+    """Create an activity through the public API with a real roommate owner."""
+    return client.post(
+        "/api/activities",
+        json={"text": text, "proposedById": creator_id},
     )
+
+
+def test_propose_activity_creates_and_returns_list(client):
+    res = _propose(client, "  Taco night  ")
     assert res.status_code == 200
     data = res.get_json()
     assert data[0]["text"] == "Taco night"  # trimmed
     assert data[0]["proposedBy"] == "Andre"
+    assert data[0]["proposedById"] == "andre"
+    assert data[0]["memberIds"] == ["andre"]
     assert isinstance(data[0]["createdAt"], int)
     # The proposer is auto-joined, so membership starts at exactly them.
     assert data[0]["members"] == ["Andre"]
 
 
+def test_propose_activity_uses_canonical_creator_name(client):
+    res = client.post(
+        "/api/activities",
+        json={"text": "Dinner", "proposedById": "kayla", "proposedBy": "Fake Name"},
+    )
+    assert res.status_code == 200
+    activity = res.get_json()[0]
+    assert activity["proposedById"] == "kayla"
+    assert activity["proposedBy"] == "Kayla"
+
+
 def test_join_and_leave_activity(client):
-    created = client.post(
-        "/api/activities", json={"text": "Board games", "proposedBy": "Andre"}
-    ).get_json()
+    created = _propose(client, "Board games").get_json()
     activity_id = created[0]["id"]
 
-    joined = client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    joined = client.post(f"/api/activities/{activity_id}/join", json={"userId": "kayla"})
     assert joined.status_code == 200
     assert sorted(joined.get_json()[0]["members"]) == ["Andre", "Kayla"]
+    assert sorted(joined.get_json()[0]["memberIds"]) == ["andre", "kayla"]
 
     # Joining again is idempotent — no duplicate member.
-    again = client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    again = client.post(f"/api/activities/{activity_id}/join", json={"userId": "kayla"})
     assert sorted(again.get_json()[0]["members"]) == ["Andre", "Kayla"]
 
-    left = client.post(f"/api/activities/{activity_id}/leave", json={"name": "Kayla"})
+    left = client.post(f"/api/activities/{activity_id}/leave", json={"userId": "kayla"})
     assert left.status_code == 200
     assert left.get_json()[0]["members"] == ["Andre"]
+    assert left.get_json()[0]["memberIds"] == ["andre"]
 
 
 def test_legacy_activity_without_members_keeps_proposer(client):
@@ -278,14 +378,13 @@ def test_legacy_activity_without_members_keeps_proposer(client):
     feed = client.get("/api/activities").get_json()
     assert feed[0]["members"] == ["Isabella"]
 
-    joined = client.post("/api/activities/legacy/join", json={"name": "Kayla"})
+    joined = client.post("/api/activities/legacy/join", json={"userId": "kayla"})
     assert sorted(joined.get_json()[0]["members"]) == ["Isabella", "Kayla"]
+    assert joined.get_json()[0]["memberIds"] == ["kayla"]
 
 
 def test_comment_on_activity(client):
-    created = client.post(
-        "/api/activities", json={"text": "Movie night", "proposedBy": "Andre"}
-    ).get_json()
+    created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
 
     # A fresh activity has an empty comments list in the projected shape.
@@ -293,7 +392,7 @@ def test_comment_on_activity(client):
 
     posted = client.post(
         f"/api/activities/{activity_id}/comments",
-        json={"author": "Kayla", "text": "  I'm in!  "},
+        json={"authorId": "kayla", "text": "  I'm in!  "},
     )
     assert posted.status_code == 200
     comments = posted.get_json()[0]["comments"]
@@ -304,13 +403,13 @@ def test_comment_on_activity(client):
 
 
 def test_comments_capped_oldest_first(client):
-    created = client.post("/api/activities", json={"text": "Hike"}).get_json()
+    created = _propose(client, "Hike").get_json()
     activity_id = created[0]["id"]
 
     for i in range(7):
         client.post(
             f"/api/activities/{activity_id}/comments",
-            json={"author": "Andre", "text": f"msg {i}"},
+            json={"authorId": "andre", "text": f"msg {i}"},
         )
 
     feed = client.get("/api/activities").get_json()
@@ -320,17 +419,19 @@ def test_comments_capped_oldest_first(client):
 
 
 def test_comment_requires_text_and_author(client):
-    created = client.post("/api/activities", json={"text": "Bowling"}).get_json()
+    created = _propose(client, "Bowling").get_json()
     activity_id = created[0]["id"]
     assert (
         client.post(
-            f"/api/activities/{activity_id}/comments", json={"author": "Andre", "text": "  "}
+            f"/api/activities/{activity_id}/comments",
+            json={"authorId": "andre", "text": "  "},
         ).status_code
         == 400
     )
     assert (
         client.post(
-            f"/api/activities/{activity_id}/comments", json={"author": "  ", "text": "hi"}
+            f"/api/activities/{activity_id}/comments",
+            json={"authorId": "  ", "text": "hi"},
         ).status_code
         == 400
     )
@@ -338,93 +439,216 @@ def test_comment_requires_text_and_author(client):
 
 def test_comment_unknown_activity_404(client):
     res = client.post(
-        "/api/activities/nope/comments", json={"author": "Andre", "text": "hi"}
+        "/api/activities/nope/comments", json={"authorId": "andre", "text": "hi"}
     )
     assert res.status_code == 404
 
 
 def _capture_notifications(monkeypatch):
-    """Replace push.notify_all with a recorder; return the list of its kwargs.
+    """Replace push send functions with recorders; return audience + kwargs.
 
-    The routes call push.notify_all by attribute at request time, so patching it
-    on the push module captures the calls without needing VAPID keys.
+    This verifies route-level recipient selection without requiring VAPID keys.
     """
     calls = []
 
     def fake_notify_all(**kwargs):
-        calls.append(kwargs)
+        calls.append(("all", kwargs))
+        return {"sent": 0, "pruned": 0, "failed": 0}
+
+    def fake_notify_users(**kwargs):
+        calls.append(("users", kwargs))
         return {"sent": 0, "pruned": 0, "failed": 0}
 
     monkeypatch.setattr(push, "notify_all", fake_notify_all)
+    monkeypatch.setattr(push, "notify_users", fake_notify_users)
     return calls
 
 
-def test_join_notifies_everyone(client, monkeypatch):
-    created = client.post(
-        "/api/activities", json={"text": "Picnic", "proposedBy": "Andre"}
-    ).get_json()
+def test_new_activity_notifies_household_except_creator(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+
+    res = _propose(client, "Picnic")
+
+    assert res.status_code == 200
+    assert calls == [
+        (
+            "all",
+            {
+                "title": "New activity proposed 🎉",
+                "body": "Andre: Picnic",
+                "url": "/",
+                "exclude_user_ids": {"andre"},
+            },
+        )
+    ]
+
+
+def test_status_notification_excludes_roommate_who_triggered_it(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+    client.put("/api/roommates/andre/status", json={"status": "available"})
+    client.put("/api/roommates/sheryl/status", json={"status": "available"})
+    client.put("/api/roommates/kayla/status", json={"status": "available"})
+
+    assert len(calls) == 1
+    audience, kwargs = calls[0]
+    assert audience == "all"
+    assert kwargs["exclude_user_ids"] == {"kayla"}
+
+
+def test_join_notifies_only_existing_participants_and_excludes_joiner(client, monkeypatch):
+    created = _propose(client, "Picnic").get_json()
     activity_id = created[0]["id"]
 
     calls = _capture_notifications(monkeypatch)
-    res = client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    res = client.post(f"/api/activities/{activity_id}/join", json={"userId": "kayla"})
     assert res.status_code == 200
     assert len(calls) == 1
-    assert "Kayla" in calls[0]["body"] and "Picnic" in calls[0]["body"]
+    audience, kwargs = calls[0]
+    assert audience == "users"
+    assert kwargs["user_ids"] == {"andre", "kayla"}
+    assert kwargs["exclude_user_ids"] == {"kayla"}
+    assert "Kayla" in kwargs["body"] and "Picnic" in kwargs["body"]
 
 
 def test_leave_does_not_notify(client, monkeypatch):
-    created = client.post(
-        "/api/activities", json={"text": "Picnic", "proposedBy": "Andre"}
-    ).get_json()
+    created = _propose(client, "Picnic").get_json()
     activity_id = created[0]["id"]
-    client.post(f"/api/activities/{activity_id}/join", json={"name": "Kayla"})
+    client.post(f"/api/activities/{activity_id}/join", json={"userId": "kayla"})
 
     calls = _capture_notifications(monkeypatch)
-    res = client.post(f"/api/activities/{activity_id}/leave", json={"name": "Kayla"})
+    res = client.post(f"/api/activities/{activity_id}/leave", json={"userId": "kayla"})
     assert res.status_code == 200
     assert calls == []  # leaving is intentionally quiet
 
 
-def test_comment_notifies_everyone(client, monkeypatch):
-    created = client.post(
-        "/api/activities", json={"text": "Movie night", "proposedBy": "Andre"}
-    ).get_json()
+def test_comment_notifies_only_participants_and_excludes_author(client, monkeypatch):
+    created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
+    client.post(f"/api/activities/{activity_id}/join", json={"userId": "kayla"})
 
     calls = _capture_notifications(monkeypatch)
     res = client.post(
         f"/api/activities/{activity_id}/comments",
-        json={"author": "Kayla", "text": "Count me in"},
+        json={"authorId": "kayla", "text": "Count me in"},
     )
     assert res.status_code == 200
     assert len(calls) == 1
-    body = calls[0]["body"]
+    audience, kwargs = calls[0]
+    assert audience == "users"
+    assert kwargs["user_ids"] == {"andre", "kayla"}
+    assert kwargs["exclude_user_ids"] == {"kayla"}
+    body = kwargs["body"]
     assert "Kayla" in body and "Count me in" in body and "Movie night" in body
 
 
-def test_join_requires_name(client):
-    created = client.post("/api/activities", json={"text": "Hike"}).get_json()
-    res = client.post(f"/api/activities/{created[0]['id']}/join", json={"name": "  "})
-    assert res.status_code == 400
+def test_join_requires_valid_roommate(client):
+    created = _propose(client, "Hike").get_json()
+    missing = client.post(f"/api/activities/{created[0]['id']}/join", json={})
+    unknown = client.post(
+        f"/api/activities/{created[0]['id']}/join",
+        json={"userId": "ghost"},
+    )
+    assert missing.status_code == 400
+    assert unknown.status_code == 400
 
 
 def test_join_unknown_activity_404(client):
-    res = client.post("/api/activities/nope/join", json={"name": "Andre"})
+    res = client.post("/api/activities/nope/join", json={"userId": "andre"})
     assert res.status_code == 404
 
 
 def test_propose_activity_rejects_empty(client):
-    res = client.post("/api/activities", json={"text": "   "})
+    res = _propose(client, "   ")
     assert res.status_code == 400
 
 
 def test_propose_activity_rejects_too_long(client):
-    res = client.post("/api/activities", json={"text": "x" * 281})
+    res = _propose(client, "x" * 281)
     assert res.status_code == 400
 
 
+def test_propose_activity_requires_valid_creator(client):
+    missing = client.post("/api/activities", json={"text": "Dinner"})
+    unknown = _propose(client, "Dinner", creator_id="ghost")
+    assert missing.status_code == 400
+    assert unknown.status_code == 400
+
+
+def test_creator_can_delete_activity_and_all_embedded_data(client, monkeypatch):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+    client.post(f"/api/activities/{activity_id}/join", json={"userId": "kayla"})
+    client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"authorId": "kayla", "text": "I'm in"},
+    )
+    calls = _capture_notifications(monkeypatch)
+
+    deleted = client.delete(
+        f"/api/activities/{activity_id}",
+        json={"requesterId": "andre"},
+    )
+
+    assert deleted.status_code == 200
+    assert all(item["id"] != activity_id for item in deleted.get_json())
+    assert activities._get_table().get_item(Key={"id": activity_id}).get("Item") is None
+    assert len(calls) == 1
+    audience, kwargs = calls[0]
+    assert audience == "users"
+    assert kwargs["user_ids"] == {"andre", "kayla"}
+    assert kwargs["exclude_user_ids"] == {"andre"}
+    assert kwargs["body"] == "Andre deleted Movie night"
+
+
+def test_non_creator_cannot_delete_activity(client):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+
+    denied = client.delete(
+        f"/api/activities/{activity_id}",
+        json={"requesterId": "kayla"},
+    )
+
+    assert denied.status_code == 403
+    assert activities.get(activity_id) is not None
+
+
+def test_legacy_activity_cannot_be_deleted(client):
+    activities._get_table().put_item(
+        Item={
+            "id": "legacy-delete",
+            "text": "Old plan",
+            "proposedBy": "Andre",
+            "createdAt": 1,
+        }
+    )
+
+    denied = client.delete(
+        "/api/activities/legacy-delete",
+        json={"requesterId": "andre"},
+    )
+
+    assert denied.status_code == 403
+    assert activities.get("legacy-delete") is not None
+
+
+def test_delete_activity_requires_requester(client):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+
+    res = client.delete(f"/api/activities/{activity_id}", json={})
+
+    assert res.status_code == 400
+    assert activities.get(activity_id) is not None
+
+
+def test_delete_unknown_activity_404(client):
+    res = client.delete("/api/activities/nope", json={"requesterId": "andre"})
+    assert res.status_code == 404
+
+
 def test_emphasize_unknown_activity_404(client):
-    res = client.post("/api/activities/nope/notify", json={"emphasizedBy": "Andre"})
+    res = client.post("/api/activities/nope/notify", json={"emphasizedById": "andre"})
     assert res.status_code == 404
 
 
@@ -432,10 +656,34 @@ def test_emphasize_existing_activity_unconfigured_503(client):
     # Push isn't configured in tests, so emphasizing a real activity reports 503
     # (the activity must still be found first — a 404 here would mean the lookup
     # failed).
-    created = client.post("/api/activities", json={"text": "Bowling"}).get_json()
+    created = _propose(client, "Bowling").get_json()
     activity_id = created[0]["id"]
-    res = client.post(f"/api/activities/{activity_id}/notify", json={"emphasizedBy": "Kayla"})
+    res = client.post(
+        f"/api/activities/{activity_id}/notify",
+        json={"emphasizedById": "kayla"},
+    )
     assert res.status_code == 503
+
+
+def test_emphasize_notifies_only_participants_and_excludes_actor(
+    client, monkeypatch
+):
+    created = _propose(client, "Bowling").get_json()
+    activity_id = created[0]["id"]
+    calls = _capture_notifications(monkeypatch)
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+
+    res = client.post(
+        f"/api/activities/{activity_id}/notify",
+        json={"emphasizedById": "kayla"},
+    )
+
+    assert res.status_code == 200
+    assert len(calls) == 1
+    audience, kwargs = calls[0]
+    assert audience == "users"
+    assert kwargs["user_ids"] == {"andre"}
+    assert kwargs["exclude_user_ids"] == {"kayla"}
 
 
 def test_activities_recent_newest_first_capped(client):

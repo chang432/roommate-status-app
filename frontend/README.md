@@ -43,6 +43,8 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `login`             | `POST /api/login`                 |
 | `getRoommates`      | `GET /api/roommates`              |
 | `updateStatus`      | `PUT /api/roommates/:id/status`   |
+| `proposeActivity`   | `POST /api/activities`            |
+| `deleteActivity`    | `DELETE /api/activities/:id`      |
 
 In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
 Point at a different server with `VITE_API_TARGET`:

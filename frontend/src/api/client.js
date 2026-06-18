@@ -51,12 +51,12 @@ export async function getVapidPublicKey() {
   return request('/push/public-key')
 }
 
-// POST /api/push/subscribe — register this device's PushSubscription so the
-// backend can notify it. A PushSubscription serializes to { endpoint, keys }.
-export async function savePushSubscription(subscription) {
+// POST /api/push/subscribe — associate this device's PushSubscription with the
+// signed-in roommate so the backend can target and exclude recipients.
+export async function savePushSubscription(subscription, userId) {
   return request('/push/subscribe', {
     method: 'POST',
-    body: JSON.stringify(subscription),
+    body: JSON.stringify({ subscription, userId }),
   })
 }
 
@@ -67,45 +67,54 @@ export async function getActivities() {
 
 // POST /api/activities — propose an activity (also pushes it to everyone).
 // Returns the refreshed recent list.
-export async function proposeActivity(text, proposedBy) {
+export async function proposeActivity(text, proposedById) {
   return request('/activities', {
     method: 'POST',
-    body: JSON.stringify({ text, proposedBy }),
+    body: JSON.stringify({ text, proposedById }),
   })
 }
 
-// POST /api/activities/:id/notify — re-push an existing activity to everyone as
-// "<emphasizedBy> emphasized <activity>". Anyone can emphasize any activity.
-export async function notifyActivity(id, emphasizedBy) {
+// DELETE /api/activities/:id — permanently remove an activity owned by the
+// requesting roommate. Returns the refreshed recent list.
+export async function deleteActivity(id, requesterId) {
+  return request(`/activities/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
+// POST /api/activities/:id/notify — notify participants about an emphasized
+// activity, excluding the roommate who triggered it.
+export async function notifyActivity(id, emphasizedById) {
   return request(`/activities/${id}/notify`, {
     method: 'POST',
-    body: JSON.stringify({ emphasizedBy }),
+    body: JSON.stringify({ emphasizedById }),
   })
 }
 
-// POST /api/activities/:id/join — add the named roommate to an activity.
+// POST /api/activities/:id/join — add the identified roommate to an activity.
 // Returns the refreshed recent list (with updated member counts).
-export async function joinActivity(id, name) {
+export async function joinActivity(id, userId) {
   return request(`/activities/${id}/join`, {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ userId }),
   })
 }
 
-// POST /api/activities/:id/leave — remove the named roommate from an activity.
+// POST /api/activities/:id/leave — remove the identified roommate from an activity.
 // Returns the refreshed recent list.
-export async function leaveActivity(id, name) {
+export async function leaveActivity(id, userId) {
   return request(`/activities/${id}/leave`, {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ userId }),
   })
 }
 
 // POST /api/activities/:id/comments — add a comment to an activity.
 // Returns the refreshed recent list (each activity carries its latest comments).
-export async function commentOnActivity(id, author, text) {
+export async function commentOnActivity(id, authorId, text) {
   return request(`/activities/${id}/comments`, {
     method: 'POST',
-    body: JSON.stringify({ author, text }),
+    body: JSON.stringify({ authorId, text }),
   })
 }
