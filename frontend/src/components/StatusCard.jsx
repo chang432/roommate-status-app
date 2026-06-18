@@ -4,7 +4,7 @@ import StatusModal from './StatusModal.jsx'
 import StatusTimestamp from './StatusTimestamp.jsx'
 import { statusLabel, statusNote } from '../utils/status.js'
 import { cx } from '../utils/classNames.js'
-import styles from './StatusCard.module.css'
+import styles from './styling/StatusCard.module.css'
 
 // Compact card for a household member (everyone other than "you"). The note can
 // be truncated here, so clicking the card opens a popup with the full status.

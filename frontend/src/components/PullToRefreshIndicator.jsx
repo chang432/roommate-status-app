@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { cx } from '../utils/classNames.js'
-import styles from './PullToRefreshIndicator.module.css'
+import styles from './styling/PullToRefreshIndicator.module.css'
 
 // Visual affordance for the pull-to-refresh gesture (see usePullToRefresh): a
 // pill of three dots that lives just above the top edge of the screen. As the

@@ -1,7 +1,7 @@
 import Avatar from './Avatar.jsx'
 import { avatarColor } from '../utils/avatar.js'
 import { cx } from '../utils/classNames.js'
-import styles from './RoomiePicker.module.css'
+import styles from './styling/RoomiePicker.module.css'
 
 // Horizontal, swipeable list of roommates on the login screen. Tap a card to
 // select who's signing in. Soft edge fades hint that the row scrolls.

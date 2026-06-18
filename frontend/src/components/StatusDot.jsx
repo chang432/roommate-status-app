@@ -1,6 +1,6 @@
 import { STATUS } from '../utils/status.js'
 import { cx } from '../utils/classNames.js'
-import styles from './StatusDot.module.css'
+import styles from './styling/StatusDot.module.css'
 
 // Statuses that render a tinted icon instead of a plain dot. Each value is a
 // transparent-background PNG silhouette (served from public/); it's used as a

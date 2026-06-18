@@ -12,7 +12,7 @@ import CommentComposer from './CommentComposer.jsx'
 import MentionText from './MentionText.jsx'
 import { relativeTime } from '../utils/time.js'
 import { cx } from '../utils/classNames.js'
-import styles from './ProposeActivity.module.css'
+import styles from './styling/ProposeActivity.module.css'
 
 // "Propose an activity": a text field + Send button that pushes the proposal to
 // everyone, with the most recent proposals listed below (newest nearest the

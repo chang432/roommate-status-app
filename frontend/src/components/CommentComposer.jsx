@@ -1,7 +1,7 @@
 import { useId, useMemo, useRef, useState } from 'react'
 import { activeMention } from '../utils/mentions.js'
 import { cx } from '../utils/classNames.js'
-import styles from './CommentComposer.module.css'
+import styles from './styling/CommentComposer.module.css'
 
 export default function CommentComposer({
   value,

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { pushSupported, enablePush } from '../utils/push.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { cx } from '../utils/classNames.js'
-import styles from './EnableNotifications.module.css'
+import styles from './styling/EnableNotifications.module.css'
 
 // Opt this device into push notifications. The actual subscribe runs from the
 // tap handler (iOS requires a user gesture). Reflects the current permission so

@@ -1,4 +1,4 @@
-import styles from './NotificationBanner.module.css'
+import styles from './styling/NotificationBanner.module.css'
 
 // Shown when the available-to-hang count crosses AVAILABLE_THRESHOLD
 // (utils/status.js). PROJECT.md specifies 3; this PoC uses 2.

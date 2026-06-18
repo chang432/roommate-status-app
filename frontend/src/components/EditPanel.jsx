@@ -2,7 +2,7 @@ import { useState } from 'react'
 import StatusDot from './StatusDot.jsx'
 import { STATUS_ORDER, STATUS_LABEL } from '../utils/status.js'
 import { cx } from '../utils/classNames.js'
-import styles from './EditPanel.module.css'
+import styles from './styling/EditPanel.module.css'
 
 // Editor for your own status. Pick one of the fixed statuses and, below each
 // title, optionally add a supplemental note for that status. Only the selected

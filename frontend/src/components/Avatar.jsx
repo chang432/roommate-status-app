@@ -1,6 +1,6 @@
 import { initialOf } from '../utils/avatar.js'
 import { cx } from '../utils/classNames.js'
-import styles from './Avatar.module.css'
+import styles from './styling/Avatar.module.css'
 
 // Round, colored initial badge for a roommate. `color` is a CSS color string
 // (see utils/avatar.js); `size` controls the diameter and font.

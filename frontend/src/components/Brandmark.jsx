@@ -1,5 +1,5 @@
 import { cx } from '../utils/classNames.js'
-import styles from './Brandmark.module.css'
+import styles from './styling/Brandmark.module.css'
 
 // The little roof motif used in the headers for a "household" feel.
 export default function Brandmark({ className = '', iconClassName = '' }) {

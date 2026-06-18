@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { mentionMatches } from '../utils/mentions.js'
-import styles from './MentionText.module.css'
+import styles from './styling/MentionText.module.css'
 
 export default function MentionText({ text, mentions = [] }) {
   const matches = mentionMatches(text, mentions)

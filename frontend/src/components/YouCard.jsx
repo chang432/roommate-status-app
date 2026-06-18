@@ -2,7 +2,7 @@ import Avatar from './Avatar.jsx'
 import StatusDot from './StatusDot.jsx'
 import StatusTimestamp from './StatusTimestamp.jsx'
 import { statusLabel, statusNote } from '../utils/status.js'
-import styles from './YouCard.module.css'
+import styles from './styling/YouCard.module.css'
 
 // The signed-in roommate's own card: highlighted, full-width, with an Edit
 // button that opens the status editor.

@@ -3,7 +3,7 @@ import StatusDot from './StatusDot.jsx'
 import StatusTimestamp from './StatusTimestamp.jsx'
 import { statusLabel, statusNote } from '../utils/status.js'
 import { cx } from '../utils/classNames.js'
-import styles from './StatusModal.module.css'
+import styles from './styling/StatusModal.module.css'
 
 // Centered popup showing a roommate's full status — used when a compact card
 // truncates a long supplemental note. Closes on backdrop click, the Close
