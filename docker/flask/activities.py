@@ -16,6 +16,7 @@ Configuration (env):
 
 from __future__ import annotations
 
+import hashlib
 import os
 import threading
 import time
@@ -51,6 +52,11 @@ LIVE_CONFLICT = "conflict"
 # one transaction without introducing another table or schema migration.
 LIVE_CONTROL_ID = "__live_event_control__"
 LIVE_CONTROL_TYPE = "liveControl"
+COMMENT_LIKE_TYPE = "commentLike"
+
+LIKE_OK = "ok"
+LIKE_NOT_FOUND = "not_found"
+LIKE_SELF_FORBIDDEN = "self_forbidden"
 
 TABLE_NAME = os.environ.get("ACTIVITIES_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-activities"
@@ -73,7 +79,35 @@ def _get_table():
     return _table
 
 
-def _project(item: dict) -> dict:
+def _scan_all(consistent: bool = False) -> list[dict]:
+    """Read every activities-table item, including typed coordination records."""
+    table = _get_table()
+    resp = table.scan(ConsistentRead=consistent)
+    items = resp.get("Items", [])
+    while "LastEvaluatedKey" in resp:
+        resp = table.scan(
+            ExclusiveStartKey=resp["LastEvaluatedKey"],
+            ConsistentRead=consistent,
+        )
+        items.extend(resp.get("Items", []))
+    return items
+
+
+def _legacy_comment_id(activity_id: str, index: int) -> str:
+    """Build a stable id for a pre-id comment from its append-only list position."""
+    digest = hashlib.sha256(f"{activity_id}:{index}".encode()).hexdigest()[:24]
+    return f"legacy-{digest}"
+
+
+def _comment_entries(item: dict) -> list[tuple[str, dict]]:
+    """Return every raw comment paired with its persisted or legacy-stable id."""
+    return [
+        (comment.get("id") or _legacy_comment_id(item["id"], index), comment)
+        for index, comment in enumerate(item.get("comments") or [])
+    ]
+
+
+def _project(item: dict, likes_by_comment: dict[str, set[str]] | None = None) -> dict:
     """Shape a raw DynamoDB item to what the frontend expects.
 
     createdAt is stored as a number (epoch millis) and comes back as a Decimal,
@@ -89,13 +123,15 @@ def _project(item: dict) -> dict:
     member_ids = set(item.get("memberIds") or set())
     if proposer_id:
         member_ids.add(proposer_id)
-    # Comments are an ordered list of {author, text, createdAt} maps (oldest
-    # first). Expose only the most recent COMMENTS_LIMIT, still oldest-first so
-    # the UI can render them top-to-bottom with the newest nearest the input.
+    # Comments are an ordered list (oldest first). Expose only the most recent
+    # COMMENTS_LIMIT and merge independently stored likes by stable comment id.
     # createdAt comes back as a Decimal, so cast it like the activity's own.
+    likes_by_comment = likes_by_comment or {}
     comments = [
         {
+            "id": comment_id,
             "author": c.get("author", "Someone"),
+            "authorId": c.get("authorId"),
             "text": c.get("text", ""),
             "createdAt": int(c["createdAt"]),
             "mentions": [
@@ -104,8 +140,10 @@ def _project(item: dict) -> dict:
                 if mention.get("id") and mention.get("name")
             ],
             "mentionsAll": bool(c.get("mentionsAll", False)),
+            "likedByIds": sorted(likes_by_comment.get(comment_id, set())),
+            "likeCount": len(likes_by_comment.get(comment_id, set())),
         }
-        for c in (item.get("comments") or [])[-COMMENTS_LIMIT:]
+        for comment_id, c in _comment_entries(item)[-COMMENTS_LIMIT:]
     ]
     return {
         "id": item["id"],
@@ -178,17 +216,20 @@ def add_comment(
     text: str,
     mentions: list[dict] | None = None,
     mentions_all: bool = False,
+    author_id: str | None = None,
 ) -> dict | None:
     """Append a comment to an activity; return it, or None if unknown.
 
     Comments are stored as an ordered DynamoDB list of
-    {author, text, createdAt, mentions, mentionsAll} maps and appended
-    atomically with list_append, so concurrent comments don't clobber each
-    other. if_not_exists seeds an empty list for activities (legacy or
+    {id, author, authorId, text, createdAt, mentions, mentionsAll} maps and
+    appended atomically with list_append, so concurrent comments don't clobber
+    each other. if_not_exists seeds an empty list for activities (legacy or
     otherwise) that have never been commented on.
     """
     comment = {
+        "id": uuid.uuid4().hex,
         "author": author,
+        "authorId": author_id,
         "text": text,
         # Resolved by the server from the canonical household roster. Storing
         # ids alongside names keeps notification targeting and UI highlighting
@@ -212,6 +253,52 @@ def add_comment(
             return None  # Unknown activity id.
         raise
     return _project(resp["Attributes"])
+
+
+def _comment_like_id(activity_id: str, comment_id: str, user_id: str) -> str:
+    """Return the deterministic key that makes each user's like idempotent."""
+    return f"comment-like#{activity_id}#{comment_id}#{user_id}"
+
+
+def set_comment_like(
+    activity_id: str,
+    comment_id: str,
+    user_id: str,
+    user_name: str,
+    liked: bool,
+) -> str:
+    """Like or unlike a comment, returning a stable route-level result."""
+    table = _get_table()
+    activity = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+    if activity is None or activity.get("itemType"):
+        return LIKE_NOT_FOUND
+
+    comment = next(
+        (raw for candidate_id, raw in _comment_entries(activity) if candidate_id == comment_id),
+        None,
+    )
+    if comment is None:
+        return LIKE_NOT_FOUND
+    if comment.get("authorId") == user_id or (
+        not comment.get("authorId")
+        and comment.get("author", "").strip().casefold() == user_name.strip().casefold()
+    ):
+        return LIKE_SELF_FORBIDDEN
+
+    key = {"id": _comment_like_id(activity_id, comment_id, user_id)}
+    if liked:
+        table.put_item(
+            Item={
+                **key,
+                "itemType": COMMENT_LIKE_TYPE,
+                "activityId": activity_id,
+                "commentId": comment_id,
+                "userId": user_id,
+            }
+        )
+    else:
+        table.delete_item(Key=key)
+    return LIKE_OK
 
 
 def get(activity_id: str, consistent: bool = False) -> dict | None:
@@ -384,6 +471,15 @@ def delete_owned(activity_id: str, requester_id: str) -> str:
         if current.get("proposedById") != requester_id:
             return DELETE_FORBIDDEN
         return DELETE_LIVE
+
+    # Likes are separate idempotent records so concurrent reactions cannot
+    # clobber the embedded comment list. Remove them with their parent event.
+    for reaction in _scan_all(consistent=True):
+        if (
+            reaction.get("itemType") == COMMENT_LIKE_TYPE
+            and reaction.get("activityId") == activity_id
+        ):
+            table.delete_item(Key={"id": reaction["id"]})
     return DELETE_OK
 
 
@@ -395,16 +491,19 @@ def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dic
     plain scan right after an update can return stale data. A strongly-consistent
     read avoids that. The default (eventual) read is fine for the plain GET feed.
     """
-    table = _get_table()
-    resp = table.scan(ConsistentRead=consistent)
-    items = resp.get("Items", [])
-    while "LastEvaluatedKey" in resp:
-        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"], ConsistentRead=consistent)
-        items.extend(resp.get("Items", []))
+    items = _scan_all(consistent=consistent)
+    likes_by_activity: dict[str, dict[str, set[str]]] = {}
+    for item in items:
+        if item.get("itemType") != COMMENT_LIKE_TYPE:
+            continue
+        likes_by_activity.setdefault(item["activityId"], {}).setdefault(
+            item["commentId"], set()
+        ).add(item["userId"])
+
     items = [
         item
         for item in items
-        if item.get("itemType") != LIVE_CONTROL_TYPE and "createdAt" in item
+        if not item.get("itemType") and "createdAt" in item
     ]
     items.sort(key=lambda i: int(i["createdAt"]), reverse=True)
     selected = items[:limit]
@@ -415,4 +514,4 @@ def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dic
     if live_item and live_item not in selected and limit > 0:
         selected[-1] = live_item
         selected.sort(key=lambda i: int(i["createdAt"]), reverse=True)
-    return [_project(i) for i in selected]
+    return [_project(i, likes_by_activity.get(i["id"])) for i in selected]

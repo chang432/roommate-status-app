@@ -7,8 +7,10 @@ import {
   joinActivity,
   leaveActivity,
   commentOnActivity,
+  setCommentLiked,
 } from '../api/client.js'
 import CommentComposer from './CommentComposer.jsx'
+import CommentLikeButton from './CommentLikeButton.jsx'
 import MentionText from './MentionText.jsx'
 import { relativeTime } from '../utils/time.js'
 
@@ -42,6 +44,8 @@ export default function ProposeActivity({
   // single draft string is enough — it's cleared whenever the panel changes).
   const [commentText, setCommentText] = useState('')
   const [commentingId, setCommentingId] = useState(null)
+  const [likingCommentIds, setLikingCommentIds] = useState([])
+  const [openLikesCommentId, setOpenLikesCommentId] = useState(null)
   const [showOlderComments, setShowOlderComments] = useState(false)
   // Deletion is owner-only and uses a two-step inline confirmation.
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null)
@@ -52,6 +56,7 @@ export default function ProposeActivity({
   function toggleExpanded(id) {
     setExpandedId((cur) => (cur === id ? null : id))
     setCommentText('')
+    setOpenLikesCommentId(null)
     setShowOlderComments(false)
     setConfirmingDeleteId(null)
   }
@@ -139,6 +144,21 @@ export default function ProposeActivity({
       setError('Could not post your comment. Try again.')
     } finally {
       setCommentingId(null)
+    }
+  }
+
+  async function handleCommentLike(activity, comment) {
+    if (likingCommentIds.includes(comment.id)) return
+    setLikingCommentIds((current) => [...current, comment.id])
+    setError('')
+    try {
+      const liked = (comment.likedByIds ?? []).includes(user.id)
+      const updated = await setCommentLiked(activity.id, comment.id, user.id, !liked)
+      onActivitiesChange(updated)
+    } catch {
+      setError('Could not update the comment like. Try again.')
+    } finally {
+      setLikingCommentIds((current) => current.filter((id) => id !== comment.id))
     }
   }
 
@@ -360,13 +380,33 @@ export default function ProposeActivity({
                             <ul className="mb-[10px] space-y-[8px]">
                               {visibleComments.map((c, i) => (
                                 <li
-                                  key={`${c.createdAt}-${i}`}
+                                  key={c.id ?? `${c.createdAt}-${i}`}
                                   className="text-[13px]"
                                 >
-                                  <span className="font-bold text-ink">{c.author}</span>{' '}
-                                  <span className="text-[11px] text-ink-soft">
-                                    {relativeTime(c.createdAt)}
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-ink">{c.author}</span>
+                                    <span className="text-[11px] text-ink-soft">
+                                      {relativeTime(c.createdAt)}
+                                    </span>
+                                    <CommentLikeButton
+                                      count={c.likeCount ?? 0}
+                                      liked={(c.likedByIds ?? []).includes(user.id)}
+                                      ownComment={
+                                        c.authorId === user.id ||
+                                        (!c.authorId &&
+                                          c.author.toLowerCase() ===
+                                            user.name.toLowerCase())
+                                      }
+                                      busy={likingCommentIds.includes(c.id)}
+                                      onToggle={() => handleCommentLike(a, c)}
+                                      likedByIds={c.likedByIds ?? []}
+                                      roommates={roommates}
+                                      open={openLikesCommentId === c.id}
+                                      onOpenChange={(open) =>
+                                        setOpenLikesCommentId(open ? c.id : null)
+                                      }
+                                    />
+                                  </div>
                                   <p className="text-ink">
                                     <MentionText
                                       text={c.text}

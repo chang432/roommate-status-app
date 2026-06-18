@@ -142,3 +142,12 @@ export async function commentOnActivity(id, authorId, text) {
     body: JSON.stringify({ authorId, text }),
   })
 }
+
+// PUT/DELETE /api/activities/:id/comments/:commentId/likes — idempotently
+// update the signed-in roommate's reaction and return the refreshed feed.
+export async function setCommentLiked(id, commentId, userId, liked) {
+  return request(`/activities/${id}/comments/${commentId}/likes`, {
+    method: liked ? 'PUT' : 'DELETE',
+    body: JSON.stringify({ userId }),
+  })
+}

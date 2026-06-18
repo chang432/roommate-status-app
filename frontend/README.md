@@ -18,6 +18,9 @@ availability to hang out. Built from the mockups in `../mockups`.
   highlights valid mentions, and notifies the selected audience.
 - **Comment history**: event panels show the latest 10 comments first and can
   expand to the latest 100 returned by the backend.
+- **Comment likes**: roommates can like or unlike other people’s comments and
+  see their own reaction state, the total like count, and a popover listing
+  who liked each comment.
 
 ## Tech
 
@@ -55,6 +58,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `deleteActivity`    | `DELETE /api/activities/:id`      |
 | `startActivity`     | `POST /api/activities/:id/start`  |
 | `endActivity`       | `POST /api/activities/:id/end`    |
+| `setCommentLiked`   | `PUT/DELETE /api/activities/:id/comments/:commentId/likes` |
 
 In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
 Point at a different server with `VITE_API_TARGET`:

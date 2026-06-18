@@ -438,6 +438,10 @@ def test_comment_on_activity(client):
     assert comments[0]["text"] == "I'm in!"  # trimmed
     assert isinstance(comments[0]["createdAt"], int)
     assert comments[0]["mentions"] == []
+    assert comments[0]["authorId"] == "kayla"
+    assert comments[0]["id"]
+    assert comments[0]["likeCount"] == 0
+    assert comments[0]["likedByIds"] == []
 
 
 def test_resolve_mentions_prefers_longest_overlapping_name():
@@ -472,6 +476,110 @@ def test_comments_return_latest_100_without_capping_storage(client):
 
     stored = activities._get_table().get_item(Key={"id": activity_id})["Item"]
     assert len(stored["comments"]) == 105
+
+
+def test_comment_like_and_unlike_are_idempotent(client):
+    created = _propose(client, "Hike").get_json()
+    activity_id = created[0]["id"]
+    posted = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"authorId": "kayla", "text": "Bring water"},
+    ).get_json()
+    comment_id = posted[0]["comments"][0]["id"]
+    url = f"/api/activities/{activity_id}/comments/{comment_id}/likes"
+
+    liked = client.put(url, json={"userId": "andre"})
+    liked_again = client.put(url, json={"userId": "andre"})
+    assert liked.status_code == 200
+    assert liked_again.status_code == 200
+    comment = liked_again.get_json()[0]["comments"][0]
+    assert comment["likeCount"] == 1
+    assert comment["likedByIds"] == ["andre"]
+
+    unliked = client.delete(url, json={"userId": "andre"})
+    unliked_again = client.delete(url, json={"userId": "andre"})
+    assert unliked.status_code == 200
+    assert unliked_again.status_code == 200
+    comment = unliked_again.get_json()[0]["comments"][0]
+    assert comment["likeCount"] == 0
+    assert comment["likedByIds"] == []
+
+
+def test_comment_likes_support_multiple_users(client):
+    created = _propose(client, "Hike").get_json()
+    activity_id = created[0]["id"]
+    posted = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"authorId": "kayla", "text": "Bring water"},
+    ).get_json()
+    comment_id = posted[0]["comments"][0]["id"]
+    url = f"/api/activities/{activity_id}/comments/{comment_id}/likes"
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        results = list(
+            pool.map(
+                lambda user_id: activities.set_comment_like(
+                    activity_id,
+                    comment_id,
+                    user_id,
+                    user_id.title(),
+                    True,
+                ),
+                ("andre", "sheryl", "ting"),
+            )
+        )
+
+    assert results == [activities.LIKE_OK] * 3
+    comment = client.get("/api/activities").get_json()[0]["comments"][0]
+    assert comment["likeCount"] == 3
+    assert comment["likedByIds"] == ["andre", "sheryl", "ting"]
+
+
+def test_comment_like_rejects_self_invalid_and_unknown_targets(client):
+    created = _propose(client, "Hike").get_json()
+    activity_id = created[0]["id"]
+    posted = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={"authorId": "kayla", "text": "Bring water"},
+    ).get_json()
+    comment_id = posted[0]["comments"][0]["id"]
+    url = f"/api/activities/{activity_id}/comments/{comment_id}/likes"
+
+    assert client.put(url, json={"userId": "kayla"}).status_code == 403
+    assert client.put(url, json={"userId": "ghost"}).status_code == 400
+    assert client.put(
+        f"/api/activities/{activity_id}/comments/nope/likes",
+        json={"userId": "andre"},
+    ).status_code == 404
+    assert client.put(
+        f"/api/activities/nope/comments/{comment_id}/likes",
+        json={"userId": "andre"},
+    ).status_code == 404
+
+
+def test_legacy_comment_has_stable_id_and_can_be_liked(client):
+    activities._get_table().put_item(
+        Item={
+            "id": "legacy-like",
+            "text": "Old event",
+            "proposedBy": "Andre",
+            "proposedById": "andre",
+            "createdAt": 1,
+            "comments": [{"author": "Kayla", "text": "hello", "createdAt": 2}],
+        }
+    )
+
+    first = client.get("/api/activities").get_json()[0]["comments"][0]
+    second = client.get("/api/activities").get_json()[0]["comments"][0]
+    assert first["id"] == second["id"]
+    assert first["authorId"] is None
+
+    url = f"/api/activities/legacy-like/comments/{first['id']}/likes"
+    assert client.put(url, json={"userId": "andre"}).status_code == 200
+    assert client.put(url, json={"userId": "kayla"}).status_code == 403
+    liked = client.get("/api/activities").get_json()[0]["comments"][0]
+    assert liked["likeCount"] == 1
+    assert liked["likedByIds"] == ["andre"]
 
 
 def test_comment_requires_text_and_author(client):
@@ -1036,6 +1144,11 @@ def test_creator_can_delete_activity_and_all_embedded_data(client, monkeypatch):
         f"/api/activities/{activity_id}/comments",
         json={"authorId": "kayla", "text": "I'm in"},
     )
+    comment_id = client.get("/api/activities").get_json()[0]["comments"][0]["id"]
+    client.put(
+        f"/api/activities/{activity_id}/comments/{comment_id}/likes",
+        json={"userId": "andre"},
+    )
     calls = _capture_notifications(monkeypatch)
 
     deleted = client.delete(
@@ -1046,6 +1159,10 @@ def test_creator_can_delete_activity_and_all_embedded_data(client, monkeypatch):
     assert deleted.status_code == 200
     assert all(item["id"] != activity_id for item in deleted.get_json())
     assert activities._get_table().get_item(Key={"id": activity_id}).get("Item") is None
+    assert not any(
+        item.get("activityId") == activity_id
+        for item in activities._get_table().scan().get("Items", [])
+    )
     assert len(calls) == 1
     audience, kwargs = calls[0]
     assert audience == "users"
