@@ -116,6 +116,7 @@ def _notify(
     title: str,
     body: str,
     url: str = "/",
+    event_type: str | None = None,
     user_ids: set[str] | None = None,
     exclude_user_ids: set[str] | None = None,
 ) -> dict:
@@ -128,7 +129,10 @@ def _notify(
         log.warning("Push not configured (VAPID keys missing); skipping notify_all.")
         return {"sent": 0, "pruned": 0, "failed": 0}
 
-    payload = json.dumps({"title": title, "body": body, "url": url})
+    payload = {"title": title, "body": body, "url": url}
+    if event_type:
+        payload["eventType"] = event_type
+    payload = json.dumps(payload)
     sent = pruned = failed = 0
 
     table = _get_table()
@@ -187,10 +191,17 @@ def notify_all(
     title: str,
     body: str,
     url: str = "/",
+    event_type: str | None = None,
     exclude_user_ids: set[str] | None = None,
 ) -> dict:
     """Send to every associated device except explicitly excluded actors."""
-    return _notify(title, body, url, exclude_user_ids=exclude_user_ids)
+    return _notify(
+        title,
+        body,
+        url,
+        event_type=event_type,
+        exclude_user_ids=exclude_user_ids,
+    )
 
 
 def notify_users(
@@ -198,7 +209,15 @@ def notify_users(
     title: str,
     body: str,
     url: str = "/",
+    event_type: str | None = None,
     exclude_user_ids: set[str] | None = None,
 ) -> dict:
     """Send only to devices owned by the selected roommate ids."""
-    return _notify(title, body, url, user_ids=user_ids, exclude_user_ids=exclude_user_ids)
+    return _notify(
+        title,
+        body,
+        url,
+        event_type=event_type,
+        user_ids=user_ids,
+        exclude_user_ids=exclude_user_ids,
+    )
