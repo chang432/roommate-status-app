@@ -338,7 +338,11 @@ export default function ProposeActivity({
                                   {relativeTime(c.createdAt)}
                                 </span>
                                 <p className="text-ink">
-                                  <MentionText text={c.text} mentions={c.mentions} />
+                                  <MentionText
+                                    text={c.text}
+                                    mentions={c.mentions}
+                                    mentionsAll={c.mentionsAll}
+                                  />
                                 </p>
                               </li>
                             ))}

@@ -54,6 +54,11 @@ MAX_COMMENT_LEN = 280
 PUSH_THRESHOLD = int(os.environ.get("AVAILABLE_THRESHOLD", "3"))
 
 
+def mentions_all(text: str) -> bool:
+    """Return whether text contains the reserved @all mention token."""
+    return re.search(r"(?<![\w@])@all(?=$|[^\w])", text, flags=re.IGNORECASE) is not None
+
+
 def resolve_mentions(text: str, roommates: list[dict], author_id: str) -> list[dict]:
     """Resolve valid @display-name tokens to canonical household identities."""
     candidates = []
@@ -385,13 +390,19 @@ def create_app() -> Flask:
         if len(text) > MAX_COMMENT_LEN:
             return jsonify({"error": f"Keep it under {MAX_COMMENT_LEN} characters."}), 400
         mentions = resolve_mentions(text, db.get_all(), author["id"])
-        activity = activities.add_comment(activity_id, author["name"], text, mentions)
+        mentions_everyone = mentions_all(text)
+        activity = activities.add_comment(
+            activity_id,
+            author["name"],
+            text,
+            mentions,
+            mentions_everyone,
+        )
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
 
-        # Mentioned users receive one targeted notification. Remaining event
-        # participants keep the generic comment notification, with the two
-        # audiences made disjoint to prevent duplicate pushes.
+        # @all takes precedence over named and participant audiences so each
+        # recipient gets at most one push for the comment.
         mentioned_ids = {mention["id"] for mention in mentions}
         participant_ids = set(activity["memberIds"]) - mentioned_ids - {author["id"]}
 
@@ -412,13 +423,24 @@ def create_app() -> Flask:
             except Exception:  # noqa: BLE001 - never let push break the request
                 app.logger.exception("Failed to send comment notification")
 
-        if mentioned_ids:
+        if mentions_everyone:
+            try:
+                result = push.notify_all(
+                    title=f"{author['name']} mentioned everyone",
+                    body=f"On “{activity['text']}”: {text}",
+                    url="/",
+                    exclude_user_ids={author["id"]},
+                )
+                app.logger.info("Comment @all push result: %s", result)
+            except Exception:  # noqa: BLE001 - never let push break the request
+                app.logger.exception("Failed to send comment @all notification")
+        elif mentioned_ids:
             notify_comment_users(
                 mentioned_ids,
                 f"{author['name']} mentioned you",
                 f"On “{activity['text']}”: {text}",
             )
-        if participant_ids:
+        if participant_ids and not mentions_everyone:
             notify_comment_users(
                 participant_ids,
                 "New comment 💬",
