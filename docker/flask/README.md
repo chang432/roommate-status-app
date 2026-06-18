@@ -13,6 +13,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `PUT  /api/roommates/<id>/status` | `{ status, statusText }` | full updated household list              |
 | `POST /api/activities`          | `{ text, proposedById }`   | full updated activity list                |
 | `DELETE /api/activities/<id>`   | `{ requesterId }`          | full updated activity list                |
+| `POST /api/activities/<id>/start` | `{ requesterId }`        | full updated activity list                |
+| `POST /api/activities/<id>/end` | `{ requesterId }`          | full updated activity list                |
 | `POST /api/push/subscribe`      | `{ subscription, userId }` | `{ ok: true }`                            |
 | `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
 
@@ -24,10 +26,13 @@ Every roommate shares the demo password **`roomie`** until real auth is added.
 New activities store both the creator's stable roommate id (`proposedById`) and
 canonical display name (`proposedBy`). Only that id can delete the activity;
 legacy activities without `proposedById` remain visible but cannot be deleted.
+Only the creator can start or end an event. One event may be live household-wide
+at a time; ending it returns it to proposed status so it can be restarted.
 Push subscriptions and activity participants are associated with stable
 roommate ids. User-triggered notifications always exclude the actor. New
 activity proposals and gather notifications go household-wide; event comments,
 joins, deletion, and emphasis go only to that event's participants.
+Event start/end notifications go household-wide.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).
@@ -46,7 +51,8 @@ Configuration:
 | `DYNAMODB_ENDPOINT` | —                     | Local dev only: point boto3 at a DynamoDB Local instead of real AWS |
 
 The runtime AWS principal must allow `dynamodb:DeleteItem` on the activities
-table for creator-owned event deletion.
+table for creator-owned event deletion and `dynamodb:TransactWriteItems` for
+atomic live-event transitions.
 
 Credentials resolve via the standard AWS chain. The deploy script lives in
 `infrastructure/`; once the table exists, seed the initial household **once**:

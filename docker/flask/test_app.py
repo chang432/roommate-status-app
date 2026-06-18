@@ -9,6 +9,7 @@ DynamoDB is mocked with moto, so these run hermetically with no real AWS calls.
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 # moto and boto3 need *some* region/credentials present before any client is
 # built; these dummy values are never sent anywhere (moto intercepts them).
@@ -332,6 +333,8 @@ def test_propose_activity_creates_and_returns_list(client):
     assert data[0]["proposedById"] == "andre"
     assert data[0]["memberIds"] == ["andre"]
     assert isinstance(data[0]["createdAt"], int)
+    assert data[0]["isLive"] is False
+    assert data[0]["liveStartedAt"] is None
     # The proposer is auto-joined, so membership starts at exactly them.
     assert data[0]["members"] == ["Andre"]
 
@@ -481,6 +484,182 @@ def test_new_activity_notifies_household_except_creator(client, monkeypatch):
             },
         )
     ]
+
+
+def test_creator_can_start_end_and_restart_event(client, monkeypatch):
+    created = _propose(client, "Dinner").get_json()[0]
+    calls = _capture_notifications(monkeypatch)
+
+    started = client.post(
+        f"/api/activities/{created['id']}/start",
+        json={"requesterId": "andre"},
+    )
+    assert started.status_code == 200
+    live = next(item for item in started.get_json() if item["id"] == created["id"])
+    assert live["isLive"] is True
+    assert isinstance(live["liveStartedAt"], int)
+    assert calls[-1] == (
+        "all",
+        {
+            "title": "Event started 🔴",
+            "body": "Andre started Dinner",
+            "url": "/",
+            "exclude_user_ids": {"andre"},
+        },
+    )
+
+    ended = client.post(
+        f"/api/activities/{created['id']}/end",
+        json={"requesterId": "andre"},
+    )
+    assert ended.status_code == 200
+    proposed = next(item for item in ended.get_json() if item["id"] == created["id"])
+    assert proposed["isLive"] is False
+    assert proposed["liveStartedAt"] is None
+    assert calls[-1] == (
+        "all",
+        {
+            "title": "Event ended 🏁",
+            "body": "Andre ended Dinner",
+            "url": "/",
+            "exclude_user_ids": {"andre"},
+        },
+    )
+
+    restarted = client.post(
+        f"/api/activities/{created['id']}/start",
+        json={"requesterId": "andre"},
+    )
+    assert restarted.status_code == 200
+    assert restarted.get_json()[0]["isLive"] is True
+
+
+def test_only_creator_can_change_live_status(client):
+    created = _propose(client, "Dinner").get_json()[0]
+
+    denied_start = client.post(
+        f"/api/activities/{created['id']}/start",
+        json={"requesterId": "kayla"},
+    )
+    assert denied_start.status_code == 403
+
+    client.post(
+        f"/api/activities/{created['id']}/start",
+        json={"requesterId": "andre"},
+    )
+    denied_end = client.post(
+        f"/api/activities/{created['id']}/end",
+        json={"requesterId": "kayla"},
+    )
+    assert denied_end.status_code == 403
+
+
+def test_live_transition_conflicts_and_missing_event(client):
+    first = _propose(client, "Dinner", creator_id="andre").get_json()[0]
+    second = _propose(client, "Movie", creator_id="kayla").get_json()[0]
+
+    assert (
+        client.post(
+            f"/api/activities/{first['id']}/start",
+            json={"requesterId": "andre"},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            f"/api/activities/{first['id']}/start",
+            json={"requesterId": "andre"},
+        ).status_code
+        == 409
+    )
+    assert (
+        client.post(
+            f"/api/activities/{second['id']}/start",
+            json={"requesterId": "kayla"},
+        ).status_code
+        == 409
+    )
+    assert (
+        client.post(
+            f"/api/activities/{second['id']}/end",
+            json={"requesterId": "kayla"},
+        ).status_code
+        == 409
+    )
+    assert (
+        client.post(
+            "/api/activities/nope/start",
+            json={"requesterId": "andre"},
+        ).status_code
+        == 404
+    )
+
+
+def test_concurrent_starts_produce_one_live_event(client):
+    first = _propose(client, "Dinner", creator_id="andre").get_json()[0]
+    second = _propose(client, "Movie", creator_id="kayla").get_json()[0]
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(
+            pool.map(
+                lambda args: activities.start_owned(*args),
+                [(first["id"], "andre"), (second["id"], "kayla")],
+            )
+        )
+
+    assert sorted(results) == sorted([activities.LIVE_OK, activities.LIVE_CONFLICT])
+    feed = activities.list_recent(consistent=True)
+    assert sum(item["isLive"] for item in feed) == 1
+
+
+def test_live_event_cannot_be_deleted(client):
+    created = _propose(client, "Dinner").get_json()[0]
+    client.post(
+        f"/api/activities/{created['id']}/start",
+        json={"requesterId": "andre"},
+    )
+
+    deleted = client.delete(
+        f"/api/activities/{created['id']}",
+        json={"requesterId": "andre"},
+    )
+    assert deleted.status_code == 409
+    assert activities.get(created["id"])["isLive"] is True
+
+
+def test_live_transition_survives_push_failure(client, monkeypatch):
+    created = _propose(client, "Dinner").get_json()[0]
+
+    def fail_push(**_kwargs):
+        raise RuntimeError("push unavailable")
+
+    monkeypatch.setattr(push, "notify_all", fail_push)
+    started = client.post(
+        f"/api/activities/{created['id']}/start",
+        json={"requesterId": "andre"},
+    )
+
+    assert started.status_code == 200
+    assert activities.get(created["id"], consistent=True)["isLive"] is True
+
+
+def test_older_live_event_remains_in_capped_feed(client):
+    table = activities._get_table()
+    for i in range(6):
+        table.put_item(
+            Item={
+                "id": f"owned-{i}",
+                "text": f"activity {i}",
+                "proposedBy": "Andre",
+                "proposedById": "andre",
+                "createdAt": 1000 + i,
+            }
+        )
+
+    assert activities.start_owned("owned-0", "andre") == activities.LIVE_OK
+    feed = activities.list_recent(consistent=True)
+    assert len(feed) == activities.RECENT_LIMIT
+    assert any(item["id"] == "owned-0" and item["isLive"] for item in feed)
 
 
 def test_status_notification_excludes_roommate_who_triggered_it(client, monkeypatch):

@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
-  getActivities,
   proposeActivity,
   deleteActivity,
   notifyActivity,
@@ -14,12 +13,14 @@ import { relativeTime } from '../utils/time.js'
 // "Propose an activity": a text field + Send button that pushes the proposal to
 // everyone, with the most recent proposals listed below (newest nearest the
 // input).
-// `refreshSignal` is a counter the parent bumps on pull-to-refresh; bumping it
-// re-fetches the recent feed without remounting (so a half-typed proposal and
-// any inline notify state are preserved).
-export default function ProposeActivity({ refreshSignal = 0 }) {
+export default function ProposeActivity({
+  activities,
+  onActivitiesChange,
+  liveEvent,
+  transitioningId,
+  onLiveTransition,
+}) {
   const { user } = useAuth()
-  const [activities, setActivities] = useState([])
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
@@ -48,19 +49,6 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
     setConfirmingDeleteId(null)
   }
 
-  // Load the recent feed on mount, and again whenever the parent refreshes.
-  useEffect(() => {
-    let active = true
-    getActivities()
-      .then((list) => active && setActivities(list))
-      .catch(() => {
-        /* non-critical: just show an empty feed */
-      })
-    return () => {
-      active = false
-    }
-  }, [refreshSignal])
-
   async function handleSubmit(e) {
     e.preventDefault()
     const trimmed = text.trim()
@@ -69,7 +57,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
     setError('')
     try {
       const updated = await proposeActivity(trimmed, user.id)
-      setActivities(updated)
+      onActivitiesChange(updated)
       setText('')
     } catch {
       setError('Could not send your proposal. Try again.')
@@ -84,7 +72,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
     setError('')
     try {
       const updated = await deleteActivity(activity.id, user.id)
-      setActivities(updated)
+      onActivitiesChange(updated)
       setConfirmingDeleteId(null)
       setExpandedId((current) => (current === activity.id ? null : current))
     } catch {
@@ -120,7 +108,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
       const updated = isMember
         ? await leaveActivity(activity.id, user.id)
         : await joinActivity(activity.id, user.id)
-      setActivities(updated)
+      onActivitiesChange(updated)
     } catch {
       setError(`Could not ${isMember ? 'leave' : 'join'} the activity. Try again.`)
     } finally {
@@ -138,7 +126,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
     setError('')
     try {
       const updated = await commentOnActivity(activity.id, user.id, trimmed)
-      setActivities(updated)
+      onActivitiesChange(updated)
       setCommentText('')
     } catch {
       setError('Could not post your comment. Try again.')
@@ -186,7 +174,6 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
             const isMember = (a.memberIds ?? []).includes(user.id)
             // The proposer is permanently part of their own activity, so they
             // get no Join/Leave button.
-            const isProposer = a.proposedBy.toLowerCase() === user.name.toLowerCase()
             const canDelete = a.proposedById === user.id
             const expanded = expandedId === a.id
             return (
@@ -208,7 +195,14 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
               >
                 <div className="flex items-center gap-[10px]">
                   <div className="min-w-0 flex-1">
-                    <p className="text-[14px] text-ink">{a.text}</p>
+                    <div className="flex flex-wrap items-center gap-[7px]">
+                      <p className="text-[14px] text-ink">{a.text}</p>
+                      {a.isLive && (
+                        <span className="rounded-full bg-status-red px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white">
+                          Live
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-[2px] text-[12px] text-ink-soft">
                       {a.proposedBy} · {relativeTime(a.createdAt)}
                     </p>
@@ -220,6 +214,36 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                   >
                     👥 {members.length}
                   </span>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onLiveTransition(a, a.isLive ? 'end' : 'start')
+                      }}
+                      disabled={
+                        Boolean(transitioningId) || (!a.isLive && Boolean(liveEvent))
+                      }
+                      title={
+                        !a.isLive && liveEvent
+                          ? `${liveEvent.text} is already live`
+                          : undefined
+                      }
+                      className={`flex-none rounded-full border px-[13px] py-[8px] text-[12px] font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 ${
+                        a.isLive
+                          ? 'border-status-red bg-status-red text-white'
+                          : 'border-accent bg-accent text-white'
+                      }`}
+                    >
+                      {transitioningId === a.id
+                        ? a.isLive
+                          ? 'Ending…'
+                          : 'Starting…'
+                        : a.isLive
+                          ? 'End'
+                          : 'Start'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={(e) => {
@@ -234,7 +258,7 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                   >
                     {sentId === a.id ? '✓' : '🔔'}
                   </button>
-                  {!isProposer && (
+                  {!canDelete && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -374,7 +398,10 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                               <button
                                 type="button"
                                 onClick={() => handleDelete(a)}
-                                disabled={deletingId === a.id}
+                                disabled={deletingId === a.id || a.isLive}
+                                title={
+                                  a.isLive ? 'End the event before deleting it' : undefined
+                                }
                                 className="rounded-full border border-status-red bg-status-red px-[13px] py-[7px] text-[12.5px] font-bold text-white transition hover:brightness-95 disabled:opacity-60"
                               >
                                 {deletingId === a.id ? 'Deleting…' : 'Delete'}
@@ -384,7 +411,9 @@ export default function ProposeActivity({ refreshSignal = 0 }) {
                             <button
                               type="button"
                               onClick={() => setConfirmingDeleteId(a.id)}
-                              className="rounded-full border border-[#e8c5bf] bg-[#fbeae6] px-[13px] py-[7px] text-[12.5px] font-bold text-status-red transition hover:brightness-95"
+                              disabled={a.isLive}
+                              title={a.isLive ? 'End the event before deleting it' : undefined}
+                              className="rounded-full border border-[#e8c5bf] bg-[#fbeae6] px-[13px] py-[7px] text-[12.5px] font-bold text-status-red transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Delete event
                             </button>

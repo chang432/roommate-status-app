@@ -4,11 +4,18 @@ import YouCard from '../components/YouCard.jsx'
 import EditPanel from '../components/EditPanel.jsx'
 import StatusCard from '../components/StatusCard.jsx'
 import NotificationBanner from '../components/NotificationBanner.jsx'
+import LiveEventBanner from '../components/LiveEventBanner.jsx'
 import EnableNotifications from '../components/EnableNotifications.jsx'
 import ProposeActivity from '../components/ProposeActivity.jsx'
 import PullToRefreshIndicator from '../components/PullToRefreshIndicator.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
-import { getRoommates, updateStatus } from '../api/client.js'
+import {
+  endActivity,
+  getActivities,
+  getRoommates,
+  startActivity,
+  updateStatus,
+} from '../api/client.js'
 import { usePullToRefresh } from '../utils/usePullToRefresh.js'
 import { availableCount, AVAILABLE_THRESHOLD } from '../utils/status.js'
 import { avatarColor } from '../utils/avatar.js'
@@ -26,12 +33,13 @@ export default function StatusPage() {
   const { user, logout } = useAuth()
 
   const [roommates, setRoommates] = useState([])
+  const [activities, setActivities] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [liveError, setLiveError] = useState('')
+  const [transitioningId, setTransitioningId] = useState(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-  // Bumped on each pull-to-refresh so child feeds (activities) re-fetch too.
-  const [refreshSignal, setRefreshSignal] = useState(0)
 
   // Fetch the household; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
@@ -43,17 +51,25 @@ export default function StatusPage() {
     }
   }, [])
 
-  // Load the household on mount.
-  useEffect(() => {
-    loadRoommates().finally(() => setLoading(false))
-  }, [loadRoommates])
+  const loadActivities = useCallback(async () => {
+    try {
+      setActivities(await getActivities())
+      setLiveError('')
+    } catch {
+      setLiveError('Could not load household events.')
+    }
+  }, [])
 
-  // Pull down from the top to refresh — the only reload affordance for the app
-  // running standalone from the homescreen. Also nudges children to re-fetch.
+  // Load both page-level data sets so the live banner and activity cards share
+  // one source of truth from the first render onward.
+  useEffect(() => {
+    Promise.all([loadRoommates(), loadActivities()]).finally(() => setLoading(false))
+  }, [loadActivities, loadRoommates])
+
+  // Pull down from the top to refresh both household and event state.
   const handleRefresh = useCallback(async () => {
-    await loadRoommates()
-    setRefreshSignal((n) => n + 1)
-  }, [loadRoommates])
+    await Promise.all([loadRoommates(), loadActivities()])
+  }, [loadActivities, loadRoommates])
 
   const { pull, refreshing, threshold } = usePullToRefresh(handleRefresh)
 
@@ -70,6 +86,21 @@ export default function StatusPage() {
 
   const freeCount = availableCount(roommates)
   const showBanner = freeCount >= AVAILABLE_THRESHOLD
+  const liveEvent = activities.find((activity) => activity.isLive) ?? null
+
+  async function handleLiveTransition(activity, action) {
+    if (transitioningId) return
+    setTransitioningId(activity.id)
+    setLiveError('')
+    try {
+      const transition = action === 'start' ? startActivity : endActivity
+      setActivities(await transition(activity.id, user.id))
+    } catch (err) {
+      setLiveError(err.message || `Could not ${action} the event. Try again.`)
+    } finally {
+      setTransitioningId(null)
+    }
+  }
 
   async function handleSave(status, statusText) {
     setSaving(true)
@@ -127,6 +158,21 @@ export default function StatusPage() {
         <p className="mt-10 text-center text-[14px] text-ink-soft">Loading the household…</p>
       ) : (
         <>
+          {liveError && (
+            <p className="mt-4 rounded-sm bg-[#fbeae6] px-3 py-2 text-[13.5px] font-semibold text-status-red">
+              {liveError}
+            </p>
+          )}
+
+          {liveEvent && (
+            <LiveEventBanner
+              event={liveEvent}
+              canEnd={liveEvent.proposedById === user.id}
+              ending={transitioningId === liveEvent.id}
+              onEnd={() => handleLiveTransition(liveEvent, 'end')}
+            />
+          )}
+
           <EnableNotifications />
 
           {showBanner && <NotificationBanner count={freeCount} />}
@@ -159,7 +205,13 @@ export default function StatusPage() {
             ))}
           </div>
 
-          <ProposeActivity refreshSignal={refreshSignal} />
+          <ProposeActivity
+            activities={activities}
+            onActivitiesChange={setActivities}
+            liveEvent={liveEvent}
+            transitioningId={transitioningId}
+            onLiveTransition={handleLiveTransition}
+          />
         </>
       )}
       </div>

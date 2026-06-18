@@ -11,6 +11,8 @@ availability to hang out. Built from the mockups in `../mockups`.
   message.
 - **Gather banner**: when 3+ roommates are available, a notification banner
   invites everyone to hang out (PROJECT.md threshold).
+- **Live events**: event creators can start/end an event, with one live-event
+  banner shown household-wide.
 
 ## Tech
 
@@ -45,6 +47,8 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `updateStatus`      | `PUT /api/roommates/:id/status`   |
 | `proposeActivity`   | `POST /api/activities`            |
 | `deleteActivity`    | `DELETE /api/activities/:id`      |
+| `startActivity`     | `POST /api/activities/:id/start`  |
+| `endActivity`       | `POST /api/activities/:id/end`    |
 
 In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
 Point at a different server with `VITE_API_TARGET`:
