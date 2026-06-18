@@ -20,6 +20,8 @@ And the proposed-activities feed:
                                              "memberIds" }, ... ]
     POST /api/activities               -> the updated recent list (and pushes it)
     DELETE /api/activities/<id>        -> the updated recent list
+    POST /api/activities/<id>/start    -> the updated recent list (and pushes it)
+    POST /api/activities/<id>/end      -> the updated recent list (and pushes it)
     POST /api/activities/<id>/join     -> the updated recent list (and pushes it)
     POST /api/activities/<id>/leave    -> the updated recent list
     POST /api/activities/<id>/comments -> the updated recent list (and pushes it)
@@ -197,6 +199,56 @@ def create_app() -> Flask:
         # Consistent read so the just-created proposal is always included.
         return jsonify(activities.list_recent(consistent=True))
 
+    def transition_activity_live(activity_id: str, action: str):
+        """Apply a creator-owned live transition and notify the household."""
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        if not requester_id:
+            return jsonify({"error": "A requester id is required."}), 400
+
+        activity = activities.get(activity_id, consistent=True)
+        transition = activities.start_owned if action == "start" else activities.end_owned
+        result = transition(activity_id, requester_id)
+        if result == activities.LIVE_NOT_FOUND:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        if result == activities.LIVE_FORBIDDEN:
+            return jsonify({"error": "Only the event creator can change its live status."}), 403
+        if result == activities.LIVE_CONFLICT:
+            message = (
+                "Another event is already live."
+                if action == "start"
+                else "This event is not currently live."
+            )
+            return jsonify({"error": message}), 409
+
+        # Live transitions are household-wide events. Push remains best-effort
+        # so notification configuration or delivery cannot undo persisted state.
+        try:
+            push.notify_all(
+                title=f"Event {action}ed {'🔴' if action == 'start' else '🏁'}",
+                body=(
+                    f"{activity['proposedBy']} started {activity['text']}"
+                    if action == "start"
+                    else f"{activity['proposedBy']} ended {activity['text']}"
+                ),
+                url="/",
+                exclude_user_ids={requester_id},
+            )
+        except Exception:  # noqa: BLE001 - transition must remain successful
+            app.logger.exception("Failed to send event %s notification", action)
+
+        return jsonify(activities.list_recent(consistent=True))
+
+    @app.post("/api/activities/<activity_id>/start")
+    def start_activity(activity_id: str):
+        """Let an event creator make their event the one live household event."""
+        return transition_activity_live(activity_id, "start")
+
+    @app.post("/api/activities/<activity_id>/end")
+    def end_activity(activity_id: str):
+        """Let an event creator end their live event so another may start."""
+        return transition_activity_live(activity_id, "end")
+
     @app.delete("/api/activities/<activity_id>")
     def delete_activity(activity_id: str):
         """Delete an activity only when requested by its stored creator."""
@@ -211,6 +263,8 @@ def create_app() -> Flask:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
         if result == activities.DELETE_FORBIDDEN:
             return jsonify({"error": "Only the event creator can delete it."}), 403
+        if result == activities.DELETE_LIVE:
+            return jsonify({"error": "End the live event before deleting it."}), 409
 
         try:
             push.notify_users(

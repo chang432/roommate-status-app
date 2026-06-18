@@ -83,6 +83,22 @@ export async function deleteActivity(id, requesterId) {
   })
 }
 
+// POST /api/activities/:id/start|end — creator-owned live transitions.
+// Each returns the refreshed feed so the card and homepage banner stay in sync.
+export async function startActivity(id, requesterId) {
+  return request(`/activities/${id}/start`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
+export async function endActivity(id, requesterId) {
+  return request(`/activities/${id}/end`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
 // POST /api/activities/:id/notify — notify participants about an emphasized
 // activity, excluding the roommate who triggered it.
 export async function notifyActivity(id, emphasizedById) {

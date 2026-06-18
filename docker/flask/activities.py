@@ -38,6 +38,18 @@ COMMENTS_LIMIT = 5
 DELETE_OK = "deleted"
 DELETE_NOT_FOUND = "not_found"
 DELETE_FORBIDDEN = "forbidden"
+DELETE_LIVE = "live"
+
+LIVE_OK = "ok"
+LIVE_NOT_FOUND = "not_found"
+LIVE_FORBIDDEN = "forbidden"
+LIVE_CONFLICT = "conflict"
+
+# One reserved item coordinates the household-wide single-live-event invariant.
+# Keeping it in the activities table lets DynamoDB update the event and lock in
+# one transaction without introducing another table or schema migration.
+LIVE_CONTROL_ID = "__live_event_control__"
+LIVE_CONTROL_TYPE = "liveControl"
 
 TABLE_NAME = os.environ.get("ACTIVITIES_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-activities"
@@ -97,6 +109,10 @@ def _project(item: dict) -> dict:
         "members": members,
         "memberIds": sorted(member_ids),
         "comments": comments,
+        "isLive": bool(item.get("isLive", False)),
+        "liveStartedAt": (
+            int(item["liveStartedAt"]) if item.get("liveStartedAt") is not None else None
+        ),
     }
 
 
@@ -181,11 +197,136 @@ def add_comment(activity_id: str, author: str, text: str) -> dict | None:
 
 def get(activity_id: str, consistent: bool = False) -> dict | None:
     """Return one proposal by id, or None if it doesn't exist."""
+    if activity_id == LIVE_CONTROL_ID:
+        return None
     item = _get_table().get_item(
         Key={"id": activity_id},
         ConsistentRead=consistent,
     ).get("Item")
-    return _project(item) if item else None
+    return _project(item) if item and item.get("itemType") != LIVE_CONTROL_TYPE else None
+
+
+def _live_control(consistent: bool = True) -> dict:
+    """Return the singleton live-event coordination item, or an empty dict."""
+    return (
+        _get_table()
+        .get_item(Key={"id": LIVE_CONTROL_ID}, ConsistentRead=consistent)
+        .get("Item", {})
+    )
+
+
+def start_owned(activity_id: str, requester_id: str) -> str:
+    """Atomically make an owned event the household's only live event."""
+    table = _get_table()
+    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("itemType") == LIVE_CONTROL_TYPE:
+        return LIVE_NOT_FOUND
+    if item.get("proposedById") != requester_id:
+        return LIVE_FORBIDDEN
+    if item.get("isLive"):
+        return LIVE_CONFLICT
+    if _live_control().get("liveActivityId"):
+        return LIVE_CONFLICT
+
+    started_at = int(time.time() * 1000)
+    try:
+        table.meta.client.transact_write_items(
+            TransactItems=[
+                {
+                    "Update": {
+                        "TableName": TABLE_NAME,
+                        "Key": {"id": activity_id},
+                        "UpdateExpression": "SET isLive = :true, liveStartedAt = :started",
+                        "ConditionExpression": (
+                            "proposedById = :requester AND "
+                            "(attribute_not_exists(isLive) OR isLive = :false)"
+                        ),
+                        "ExpressionAttributeValues": {
+                            ":true": True,
+                            ":false": False,
+                            ":started": started_at,
+                            ":requester": requester_id,
+                        },
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": TABLE_NAME,
+                        "Key": {"id": LIVE_CONTROL_ID},
+                        "UpdateExpression": (
+                            "SET itemType = :type, liveActivityId = :activity"
+                        ),
+                        "ConditionExpression": "attribute_not_exists(liveActivityId)",
+                        "ExpressionAttributeValues": {
+                            ":type": LIVE_CONTROL_TYPE,
+                            ":activity": activity_id,
+                        },
+                    }
+                },
+            ]
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "TransactionCanceledException":
+            raise
+        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+        if current is None:
+            return LIVE_NOT_FOUND
+        if current.get("proposedById") != requester_id:
+            return LIVE_FORBIDDEN
+        return LIVE_CONFLICT
+    return LIVE_OK
+
+
+def end_owned(activity_id: str, requester_id: str) -> str:
+    """Atomically end a live owned event and release the household live lock."""
+    table = _get_table()
+    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("itemType") == LIVE_CONTROL_TYPE:
+        return LIVE_NOT_FOUND
+    if item.get("proposedById") != requester_id:
+        return LIVE_FORBIDDEN
+    if not item.get("isLive"):
+        return LIVE_CONFLICT
+
+    try:
+        table.meta.client.transact_write_items(
+            TransactItems=[
+                {
+                    "Update": {
+                        "TableName": TABLE_NAME,
+                        "Key": {"id": activity_id},
+                        "UpdateExpression": "SET isLive = :false REMOVE liveStartedAt",
+                        "ConditionExpression": (
+                            "proposedById = :requester AND isLive = :true"
+                        ),
+                        "ExpressionAttributeValues": {
+                            ":false": False,
+                            ":true": True,
+                            ":requester": requester_id,
+                        },
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": TABLE_NAME,
+                        "Key": {"id": LIVE_CONTROL_ID},
+                        "UpdateExpression": "REMOVE liveActivityId",
+                        "ConditionExpression": "liveActivityId = :activity",
+                        "ExpressionAttributeValues": {":activity": activity_id},
+                    }
+                },
+            ]
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "TransactionCanceledException":
+            raise
+        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+        if current is None:
+            return LIVE_NOT_FOUND
+        if current.get("proposedById") != requester_id:
+            return LIVE_FORBIDDEN
+        return LIVE_CONFLICT
+    return LIVE_OK
 
 
 def delete_owned(activity_id: str, requester_id: str) -> str:
@@ -202,19 +343,28 @@ def delete_owned(activity_id: str, requester_id: str) -> str:
         return DELETE_NOT_FOUND
     if item.get("proposedById") != requester_id:
         return DELETE_FORBIDDEN
+    if item.get("isLive"):
+        return DELETE_LIVE
 
     try:
         table.delete_item(
             Key={"id": activity_id},
-            ConditionExpression="proposedById = :requester",
-            ExpressionAttributeValues={":requester": requester_id},
+            ConditionExpression=(
+                "proposedById = :requester AND "
+                "(attribute_not_exists(isLive) OR isLive = :false)"
+            ),
+            ExpressionAttributeValues={":requester": requester_id, ":false": False},
         )
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         # Resolve the rare race into the same stable API outcomes.
         current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        return DELETE_NOT_FOUND if current is None else DELETE_FORBIDDEN
+        if current is None:
+            return DELETE_NOT_FOUND
+        if current.get("proposedById") != requester_id:
+            return DELETE_FORBIDDEN
+        return DELETE_LIVE
     return DELETE_OK
 
 
@@ -232,5 +382,18 @@ def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dic
     while "LastEvaluatedKey" in resp:
         resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"], ConsistentRead=consistent)
         items.extend(resp.get("Items", []))
+    items = [
+        item
+        for item in items
+        if item.get("itemType") != LIVE_CONTROL_TYPE and "createdAt" in item
+    ]
     items.sort(key=lambda i: int(i["createdAt"]), reverse=True)
-    return [_project(i) for i in items[:limit]]
+    selected = items[:limit]
+
+    # An older live event must remain in the feed because its card contains the
+    # creator's End control. Replace the oldest selected proposal if necessary.
+    live_item = next((item for item in items if item.get("isLive")), None)
+    if live_item and live_item not in selected and limit > 0:
+        selected[-1] = live_item
+        selected.sort(key=lambda i: int(i["createdAt"]), reverse=True)
+    return [_project(i) for i in selected]
