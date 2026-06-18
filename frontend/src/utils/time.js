@@ -5,7 +5,7 @@ export function relativeTime(timestamp) {
   if (!Number.isFinite(value)) return ''
 
   const secs = Math.max(0, Math.floor((Date.now() - value) / 1000))
-  if (secs < 45) return 'just now'
+  if (secs < 60) return 'just now'
   const mins = Math.floor(secs / 60)
   if (mins < 60) return `${mins}m ago`
   const hours = Math.floor(mins / 60)
