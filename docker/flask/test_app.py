@@ -24,7 +24,7 @@ from moto import mock_aws
 import activities
 import db
 import push
-from app import create_app, resolve_mentions
+from app import create_app, mentions_all, resolve_mentions
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -450,6 +450,14 @@ def test_resolve_mentions_prefers_longest_overlapping_name():
     ]
 
 
+def test_mentions_all_requires_a_complete_token():
+    assert mentions_all("@all please")
+    assert mentions_all("Heads up, @ALL!")
+    assert not mentions_all("person@example.com")
+    assert not mentions_all("@alligator")
+    assert not mentions_all("@@all")
+
+
 def test_comments_capped_oldest_first(client):
     created = _propose(client, "Hike").get_json()
     activity_id = created[0]["id"]
@@ -840,6 +848,37 @@ def test_mentions_notify_household_members_and_store_canonical_metadata(
     assert participant_call[1]["title"] == "New comment 💬"
 
 
+def test_all_mention_notifies_household_once_and_excludes_author(client, monkeypatch):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+    client.post(f"/api/activities/{activity_id}/join", json={"userId": "sheryl"})
+    calls = _capture_notifications(monkeypatch)
+
+    res = client.post(
+        f"/api/activities/{activity_id}/comments",
+        json={
+            "authorId": "kayla",
+            "text": "@ALL please join us, especially @Sheryl",
+        },
+    )
+
+    assert res.status_code == 200
+    comment = res.get_json()[0]["comments"][0]
+    assert comment["mentionsAll"] is True
+    assert comment["mentions"] == [{"id": "sheryl", "name": "Sheryl"}]
+    assert calls == [
+        (
+            "all",
+            {
+                "title": "Kayla mentioned everyone",
+                "body": "On “Movie night”: @ALL please join us, especially @Sheryl",
+                "url": "/",
+                "exclude_user_ids": {"kayla"},
+            },
+        )
+    ]
+
+
 def test_mentioned_non_participant_subscription_receives_push(client, monkeypatch):
     created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
@@ -953,6 +992,7 @@ def test_legacy_comment_projects_empty_mentions(client):
 
     comment = client.get("/api/activities").get_json()[0]["comments"][0]
     assert comment["mentions"] == []
+    assert comment["mentionsAll"] is False
 
 
 def test_join_requires_valid_roommate(client):

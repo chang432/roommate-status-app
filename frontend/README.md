@@ -14,8 +14,8 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Live events**: event creators can start/end an event, with one live-event
   banner shown household-wide. Open apps refresh from live-event push messages,
   focus changes, or visible-page polling.
-- **Comment mentions**: typing `@` suggests household members, highlights valid
-  mentions, and notifies the mentioned roommates.
+- **Comment mentions**: typing `@` suggests household members or `@all`,
+  highlights valid mentions, and notifies the selected audience.
 
 ## Tech
 
