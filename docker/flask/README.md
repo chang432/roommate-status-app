@@ -16,6 +16,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `DELETE /api/activities/<id>`   | `{ requesterId }`          | full updated activity list                |
 | `POST /api/activities/<id>/start` | `{ requesterId }`        | full updated activity list                |
 | `POST /api/activities/<id>/end` | `{ requesterId }`          | full updated activity list                |
+| `PUT/DELETE /api/activities/<id>/comments/<commentId>/likes` | `{ userId }` | full updated activity list |
 | `POST /api/push/subscribe`      | `{ subscription, userId }` | `{ ok: true }`                            |
 | `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
 
@@ -38,6 +39,8 @@ Comments may mention any household member with `@Name`. Mentioned roommates get
 a targeted push; unmentioned event participants still get the normal comment
 push. The reserved `@all` mention sends one household-wide push excluding the
 author. Mention identities are resolved server-side from the household roster.
+Comments have stable ids and can be liked once per non-author roommate; likes
+are idempotent, can be removed, and do not send push notifications.
 Live-event pushes include an activity-change event type so open apps refresh
 their banner immediately.
 

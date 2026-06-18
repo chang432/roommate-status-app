@@ -7,12 +7,15 @@ import {
   joinActivity,
   leaveActivity,
   commentOnActivity,
+  setCommentLiked,
 } from "../api/client.js";
+import { cx } from "../utils/classNames.js";
 import CommentComposer from "./CommentComposer.jsx";
+import CommentLikeButton from "./CommentLikeButton.jsx";
 import MentionText from "./MentionText.jsx";
 import { relativeTime } from "../utils/time.js";
-import { cx } from "../utils/classNames.js";
-import styles from "./styling/ProposeActivity.module.css";
+
+const COLLAPSED_COMMENT_LIMIT = 10;
 
 // "Propose an activity": a text field + Send button that pushes the proposal to
 // everyone, with the most recent proposals listed below (newest nearest the
@@ -44,6 +47,8 @@ export default function ProposeActivity({
   // single draft string is enough — it's cleared whenever the panel changes).
   const [commentText, setCommentText] = useState("");
   const [commentingId, setCommentingId] = useState(null);
+  const [likingCommentIds, setLikingCommentIds] = useState([]);
+  const [showOlderComments, setShowOlderComments] = useState(false);
   // Deletion is owner-only and uses a two-step inline confirmation.
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -170,6 +175,28 @@ export default function ProposeActivity({
         commentScrollerRef.current.scrollHeight;
     }
   }, [activities]);
+
+  async function handleCommentLike(activity, comment) {
+    if (likingCommentIds.includes(comment.id)) return;
+    setLikingCommentIds((current) => [...current, comment.id]);
+    setError("");
+    try {
+      const liked = (comment.likedByIds ?? []).includes(user.id);
+      const updated = await setCommentLiked(
+        activity.id,
+        comment.id,
+        user.id,
+        !liked,
+      );
+      onActivitiesChange(updated);
+    } catch {
+      setError("Could not update the comment like. Try again.");
+    } finally {
+      setLikingCommentIds((current) =>
+        current.filter((id) => id !== comment.id),
+      );
+    }
+  }
 
   return (
     <section className={styles.section}>
@@ -367,16 +394,32 @@ export default function ProposeActivity({
                             <ul className={styles.commentList}>
                               {comments.map((c, i) => (
                                 <li
-                                  key={`${c.createdAt}-${i}`}
-                                  className={styles.comment}
+                                  key={c.id ?? `${c.createdAt}-${i}`}
+                                  className="text-[13px]"
                                 >
-                                  <span className={styles.commentAuthor}>
-                                    {c.author}
-                                  </span>{" "}
-                                  <span className={styles.commentTime}>
-                                    {relativeTime(c.createdAt)}
-                                  </span>
-                                  <p className={styles.commentText}>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-ink">
+                                      {c.author}
+                                    </span>
+                                    <span className="text-[11px] text-ink-soft">
+                                      {relativeTime(c.createdAt)}
+                                    </span>
+                                    <CommentLikeButton
+                                      count={c.likeCount ?? 0}
+                                      liked={(c.likedByIds ?? []).includes(
+                                        user.id,
+                                      )}
+                                      ownComment={
+                                        c.authorId === user.id ||
+                                        (!c.authorId &&
+                                          c.author.toLowerCase() ===
+                                            user.name.toLowerCase())
+                                      }
+                                      busy={likingCommentIds.includes(c.id)}
+                                      onToggle={() => handleCommentLike(a, c)}
+                                    />
+                                  </div>
+                                  <p className="text-ink">
                                     <MentionText
                                       text={c.text}
                                       mentions={c.mentions}
