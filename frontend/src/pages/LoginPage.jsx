@@ -1,52 +1,54 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
-import Brandmark from '../components/Brandmark.jsx'
-import RoomiePicker from '../components/RoomiePicker.jsx'
-import { useAuth } from '../context/AuthContext.jsx'
-import { getRoommates } from '../api/client.js'
-import { cx } from '../utils/classNames.js'
-import styles from './LoginPage.module.css'
+import { useEffect, useState } from "react";
+import { useNavigate, Navigate } from "react-router-dom";
+import Brandmark from "../components/Brandmark.jsx";
+import RoomiePicker from "../components/RoomiePicker.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
+import { getRoommates } from "../api/client.js";
+import { cx } from "../utils/classNames.js";
+import styles from "./LoginPage.module.css";
 
 export default function LoginPage() {
-  const { user, login } = useAuth()
-  const navigate = useNavigate()
+  const { user, login } = useAuth();
+  const navigate = useNavigate();
 
-  const [roommates, setRoommates] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [roommates, setRoommates] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // Populate the roommate picker from the API.
   useEffect(() => {
-    let active = true
+    let active = true;
     getRoommates()
       .then((list) => {
-        if (!active) return
-        setRoommates(list)
-        setSelected(list[0] ?? null)
+        if (!active) return;
+        setRoommates(list);
+        setSelected(list[0] ?? null);
       })
-      .catch(() => setError('Could not load the household. Try again in a moment.'))
+      .catch(() =>
+        setError("Could not load the household. Try again in a moment."),
+      );
     return () => {
-      active = false
-    }
-  }, [])
+      active = false;
+    };
+  }, []);
 
   // Already signed in? Skip the login screen.
-  if (user) return <Navigate to="/" replace />
+  if (user) return <Navigate to="/" replace />;
 
   async function handleSubmit(e) {
-    e.preventDefault()
-    if (!selected) return
-    setSubmitting(true)
-    setError('')
+    e.preventDefault();
+    if (!selected) return;
+    setSubmitting(true);
+    setError("");
     try {
-      await login(selected.name, password)
-      navigate('/', { replace: true })
+      await login(selected.name, password);
+      navigate("/", { replace: true });
     } catch (err) {
-      setError(err.message)
+      setError(err.message);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
@@ -62,7 +64,7 @@ export default function LoginPage() {
         <Brandmark className={styles.brandmark} />
 
         <h1 className={styles.title}>
-          York Terrace
+          Yorkshire
           <br />
           Roomie Status
         </h1>
@@ -86,28 +88,22 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter your password"
-            className={cx('ui-textInput', styles.passwordInput)}
+            className={cx("ui-textInput", styles.passwordInput)}
           />
         </div>
 
-        {error && (
-          <p className={cx('ui-errorBox', styles.error)}>
-            {error}
-          </p>
-        )}
+        {error && <p className={cx("ui-errorBox", styles.error)}>{error}</p>}
 
         <button
           type="submit"
           disabled={submitting || !selected}
-          className={cx('ui-primaryButton', styles.submit)}
+          className={cx("ui-primaryButton", styles.submit)}
         >
-          {submitting ? 'Signing in…' : 'Sign in'}
+          {submitting ? "Signing in…" : "Sign in"}
         </button>
 
-        <p className={styles.footer}>
-          Just the six of us · 1024 York Terrace
-        </p>
+        <p className={styles.footer}>Just the six of us · 1024 Yorkshire</p>
       </form>
     </main>
-  )
+  );
 }

@@ -3,7 +3,7 @@
 }
 
 .form {
-  @apply flex gap-[10px];
+  @apply mt-3 flex gap-[10px];
 }
 
 .input {

@@ -1,7 +1,7 @@
 // Status model shared across the app. Statuses are four fixed availability
 // states (available, busy, sleeping, ooh). Each roommate can attach an optional
 // free-form note (roommate.statusText) to give more detail about their current
-// status — e.g. "back by 9pm" alongside "Busy with something".
+// status — e.g. "back by 9pm" alongside "Busy with smth".
 
 export const STATUS = {
   AVAILABLE: 'available',
@@ -17,7 +17,7 @@ export const STATUS_ORDER = [STATUS.AVAILABLE, STATUS.BUSY, STATUS.SLEEPING, STA
 // Human-readable label for each status.
 export const STATUS_LABEL = {
   [STATUS.AVAILABLE]: 'Available to hang',
-  [STATUS.BUSY]: 'Busy with something',
+  [STATUS.BUSY]: 'Busy with smth',
   [STATUS.SLEEPING]: 'Sleeping',
   [STATUS.OOH]: 'OOH (Out Of House)',
 }

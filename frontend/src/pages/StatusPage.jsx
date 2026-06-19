@@ -220,7 +220,7 @@ export default function StatusPage() {
             iconClassName={styles.brandmarkIcon}
           />
           <div className={styles.headerText}>
-            <h1 className={styles.title}>York Terrace Roomie Status</h1>
+            <h1 className={styles.title}>Yorkshire Roomie Status</h1>
             <p className={styles.subtitle}>{whenLabel()}</p>
           </div>
           <button type="button" onClick={logout} className={styles.signOut}>

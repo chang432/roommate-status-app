@@ -1,5 +1,5 @@
 .ui-sectionLabel {
-  @apply mb-3 ml-[2px] text-[12.5px] font-bold uppercase tracking-[0.05em] text-ink-soft;
+  @apply ml-[2px] text-[12.5px] font-bold uppercase tracking-[0.05em] text-ink-soft;
 }
 
 .ui-formLabel {

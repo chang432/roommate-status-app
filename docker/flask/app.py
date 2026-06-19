@@ -1,4 +1,4 @@
-"""Flask backend for the York Terrace Roomie Status app.
+"""Flask backend for the Yorkshire Roomie Status app.
 
 Implements the endpoints the frontend calls (see frontend/src/api/client.js):
 
@@ -155,7 +155,7 @@ def create_app() -> Flask:
             try:
                 push.notify_all(
                     title="Roomies are free!",
-                    body=f"{free} roomies are around right now — perfect time to gather.",
+                    body=f"{free} roomies are free! LETS HANG 🎉!",
                     url="/",
                     exclude_user_ids={roommate_id},
                 )
