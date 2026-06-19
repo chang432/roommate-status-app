@@ -20,16 +20,23 @@ export default function YouCard({
   const note = statusNote(roommate)
   const [status, setStatus] = useState(roommate.status)
   const [draftNote, setDraftNote] = useState(roommate.statusText || '')
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false)
 
   useEffect(() => {
     if (!editing) return
     setStatus(roommate.status)
     setDraftNote(roommate.statusText || '')
+    setStatusMenuOpen(false)
   }, [editing, roommate.status, roommate.statusText])
 
   function handleSubmit(event) {
     event.preventDefault()
     onSave(status, draftNote.trim())
+  }
+
+  function selectStatus(value) {
+    setStatus(value)
+    setStatusMenuOpen(false)
   }
 
   return (
@@ -60,21 +67,56 @@ export default function YouCard({
       </button>
       {editing && (
         <form className={styles.editor} onSubmit={handleSubmit}>
-          <label className={styles.field}>
+          <div
+            className={styles.field}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                setStatusMenuOpen(false)
+              }
+            }}
+          >
             <span className={styles.fieldLabel}>Status</span>
-            <select
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
-              disabled={saving}
-              className={cx('ui-textInput', styles.select)}
-            >
-              {STATUS_ORDER.map((value) => (
-                <option key={value} value={value}>
-                  {STATUS_LABEL[value]}
-                </option>
-              ))}
-            </select>
-          </label>
+            <div className={styles.statusSelect}>
+              <button
+                type="button"
+                onClick={() => setStatusMenuOpen((open) => !open)}
+                aria-haspopup="listbox"
+                aria-expanded={statusMenuOpen}
+                disabled={saving}
+                className={cx(
+                  'ui-textInput',
+                  styles.statusSelectButton,
+                  statusMenuOpen ? styles.statusSelectButtonOpen : '',
+                )}
+              >
+                <span className={styles.statusSelectValue}>
+                  <StatusDot status={status} />
+                  <span>{STATUS_LABEL[status]}</span>
+                </span>
+                <span className={styles.statusSelectArrow}>▾</span>
+              </button>
+              {statusMenuOpen && (
+                <div className={styles.statusMenu} role="listbox">
+                  {STATUS_ORDER.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="option"
+                      aria-selected={status === value}
+                      onClick={() => selectStatus(value)}
+                      className={cx(
+                        styles.statusOption,
+                        status === value ? styles.statusOptionSelected : '',
+                      )}
+                    >
+                      <StatusDot status={value} />
+                      <span>{STATUS_LABEL[value]}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <label className={styles.field}>
             <span className={styles.fieldLabel}>Note</span>
             <input
