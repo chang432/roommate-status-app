@@ -107,15 +107,6 @@ export async function endActivity(id, requesterId) {
   })
 }
 
-// POST /api/activities/:id/notify — notify participants about an emphasized
-// activity, excluding the roommate who triggered it.
-export async function notifyActivity(id, emphasizedById) {
-  return request(`/activities/${id}/notify`, {
-    method: 'POST',
-    body: JSON.stringify({ emphasizedById }),
-  })
-}
-
 // POST /api/activities/:id/join — add the identified roommate to an activity.
 // Returns the refreshed recent list (with updated member counts).
 export async function joinActivity(id, userId) {

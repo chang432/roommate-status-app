@@ -1223,40 +1223,6 @@ def test_emphasize_unknown_activity_404(client):
     assert res.status_code == 404
 
 
-def test_emphasize_existing_activity_unconfigured_503(client):
-    # Push isn't configured in tests, so emphasizing a real activity reports 503
-    # (the activity must still be found first — a 404 here would mean the lookup
-    # failed).
-    created = _propose(client, "Bowling").get_json()
-    activity_id = created[0]["id"]
-    res = client.post(
-        f"/api/activities/{activity_id}/notify",
-        json={"emphasizedById": "kayla"},
-    )
-    assert res.status_code == 503
-
-
-def test_emphasize_notifies_only_participants_and_excludes_actor(
-    client, monkeypatch
-):
-    created = _propose(client, "Bowling").get_json()
-    activity_id = created[0]["id"]
-    calls = _capture_notifications(monkeypatch)
-    monkeypatch.setattr(push, "is_configured", lambda: True)
-
-    res = client.post(
-        f"/api/activities/{activity_id}/notify",
-        json={"emphasizedById": "kayla"},
-    )
-
-    assert res.status_code == 200
-    assert len(calls) == 1
-    audience, kwargs = calls[0]
-    assert audience == "users"
-    assert kwargs["user_ids"] == {"andre"}
-    assert kwargs["exclude_user_ids"] == {"kayla"}
-
-
 def test_activities_recent_newest_first_capped(client):
     # Insert 6 proposals with controlled, increasing timestamps for determinism.
     table = activities._get_table()
