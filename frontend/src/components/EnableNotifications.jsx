@@ -39,11 +39,11 @@ export default function EnableNotifications() {
     );
   }
   if (permission === "granted") {
-    return (
+    return error ? (
       <div className={styles.note}>
-        {error && <p className={styles.inlineError}>{error}</p>}
+        <p className={styles.inlineError}>{error}</p>
       </div>
-    );
+    ) : null;
   }
   if (permission === "denied") {
     return (
