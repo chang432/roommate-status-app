@@ -34,8 +34,48 @@
   @apply flex-none rounded-full border-[1.5px] border-[#e6c2ad] bg-white px-4 py-[9px] text-[14px] font-bold text-accent-deep transition hover:bg-[#fff3ec] active:translate-y-px;
 }
 
+.editor {
+  @apply grid w-full grid-cols-[minmax(140px,0.7fr)_minmax(0,1.3fr)_auto] items-end gap-3 border-t border-[#ecc9b6] pt-4;
+}
+
+.field {
+  @apply min-w-0;
+}
+
+.fieldLabel {
+  @apply mb-[6px] ml-[2px] block text-[11px] font-bold uppercase tracking-[0.06em] text-accent-deep;
+}
+
+.select {
+  @apply h-[42px] px-[11px] py-[8px] text-[14px];
+}
+
+.noteInput {
+  @apply h-[42px] px-[11px] py-[8px] text-[14px];
+}
+
+.editorActions {
+  @apply flex gap-[8px];
+}
+
+.saveButton {
+  @apply h-[42px] px-[15px] text-[13.5px];
+}
+
+.cancelButton {
+  @apply h-[42px] px-[14px] text-[13.5px];
+}
+
 @media (max-width: 520px) {
   .editButton {
     @apply w-full;
+  }
+
+  .editor {
+    @apply grid-cols-1;
+  }
+
+  .editorActions {
+    @apply justify-end;
   }
 }

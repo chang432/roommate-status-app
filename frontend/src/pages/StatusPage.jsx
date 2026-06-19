@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Brandmark from "../components/Brandmark.jsx";
 import YouCard from "../components/YouCard.jsx";
-import EditPanel from "../components/EditPanel.jsx";
 import StatusCard from "../components/StatusCard.jsx";
 import NotificationBanner from "../components/NotificationBanner.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
@@ -260,18 +259,13 @@ export default function StatusPage() {
                 <YouCard
                   roommate={me}
                   avatarColor={avatarColor(meIndex)}
+                  editing={editing}
+                  saving={saving}
                   onEdit={() => setEditing((v) => !v)}
+                  onSave={handleSave}
+                  onCancel={() => setEditing(false)}
                 />
               </div>
-            )}
-
-            {editing && me && (
-              <EditPanel
-                roommate={me}
-                saving={saving}
-                onSave={handleSave}
-                onCancel={() => setEditing(false)}
-              />
             )}
 
             <div className={styles.householdHeader}>
