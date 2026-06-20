@@ -95,11 +95,19 @@
 }
 
 .acceptAction {
-  @apply border-status-green bg-status-green hover:bg-[#4f7b32];
+  @apply border-status-green bg-status-green;
+}
+
+.acceptedAction {
+  @apply border-status-hover-green bg-status-hover-green;
 }
 
 .denyAction {
-  @apply border-status-red bg-status-red hover:bg-[#a0443b];
+  @apply border-status-red bg-status-red;
+}
+
+.deniedAction {
+  @apply border-status-hover-red bg-status-hover-red;
 }
 
 .summaryReopen {

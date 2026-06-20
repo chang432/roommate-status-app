@@ -22,6 +22,8 @@ export default {
         'status-purple': '#9a78b8',
         'status-blue': '#6a86b8',
         'status-amber': '#d39a4f',
+        'status-hover-green': '#4f7b32',
+        'status-hover-red': '#a0443b',
       },
       fontFamily: {
         display: ['Fraunces', 'Georgia', 'serif'],
