@@ -630,18 +630,19 @@ def create_app() -> Flask:
                 return jsonify({"error": "Every requested roommate must be valid."}), 400
             requested_roommates.append(roommate)
 
-        household_requests.add_request(
+        created = household_requests.add_request(
             text,
             requester["id"],
             requester["name"],
             requested_roommates,
         )
+        request_url = f"/?request={created['id']}"
         try:
             push.notify_users(
                 user_ids={roommate["id"] for roommate in requested_roommates},
                 title="New request",
                 body=f"{requester['name']} requested: {text}",
-                url="/",
+                url=request_url,
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - never let push break request creation
@@ -664,13 +665,14 @@ def create_app() -> Flask:
         if updated is None:
             return jsonify({"error": "Unknown request or roommate."}), 404
 
+        request_url = f"/?request={updated['id']}"
         try:
             push.notify_users(
                 user_ids={updated["requesterId"]},
                 exclude_user_ids={roommate["id"]},
                 title="Request response",
                 body=f"{roommate['name']} {response} “{updated['text']}”",
-                url="/",
+                url=request_url,
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - response must remain successful
@@ -690,13 +692,14 @@ def create_app() -> Flask:
         if updated is None:
             return jsonify({"error": f"Unknown request: {request_id}"}), 404
 
+        request_url = f"/?request={updated['id']}"
         try:
             push.notify_users(
                 user_ids={updated["requesterId"]},
                 exclude_user_ids={roommate["id"]},
                 title="Request completed",
                 body=f"{roommate['name']} completed “{updated['text']}”",
-                url="/",
+                url=request_url,
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - completion must remain successful
@@ -716,13 +719,14 @@ def create_app() -> Flask:
         if updated is None:
             return jsonify({"error": f"Unknown request: {request_id}"}), 404
 
+        request_url = f"/?request={updated['id']}"
         try:
             push.notify_users(
                 user_ids={updated["requesterId"], *updated["requestedIds"]},
                 exclude_user_ids={roommate["id"]},
                 title="Request reopened",
                 body=f"{roommate['name']} reopened “{updated['text']}”",
-                url="/",
+                url=request_url,
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - reopen must remain successful
@@ -750,7 +754,7 @@ def create_app() -> Flask:
                 exclude_user_ids={requester_id},
                 title="Request deleted",
                 body=f"{request_item['requester']} deleted “{request_item['text']}”",
-                url="/",
+                url=f"/?request={request_item['id']}",
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - deletion must remain successful
@@ -797,7 +801,7 @@ def create_app() -> Flask:
                     user_ids=user_ids,
                     title=title,
                     body=notification_body,
-                    url="/",
+                    url=f"/?request={updated['id']}",
                     event_type="requests-changed",
                 )
             except Exception:  # noqa: BLE001 - never let push break the comment
@@ -808,7 +812,7 @@ def create_app() -> Flask:
                 push.notify_all(
                     title=f"{author['name']} mentioned everyone",
                     body=f"On request “{updated['text']}”: {text}",
-                    url="/",
+                    url=f"/?request={updated['id']}",
                     event_type="requests-changed",
                     exclude_user_ids={author["id"]},
                 )

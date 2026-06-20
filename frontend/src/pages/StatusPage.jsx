@@ -54,6 +54,7 @@ export default function StatusPage() {
   const [saving, setSaving] = useState(false);
   const [notifyingHousehold, setNotifyingHousehold] = useState(false);
   const [activityFocusRequest, setActivityFocusRequest] = useState(null);
+  const [requestFocusRequest, setRequestFocusRequest] = useState(null);
   const [activeBoardTab, setActiveBoardTab] = useState("activities");
 
   // Fetch the household; shared by the initial load and pull-to-refresh.
@@ -169,11 +170,26 @@ export default function StatusPage() {
   useEffect(() => {
     if (!me || searchParams.get("updateStatus") !== "1") return;
     setEditing(true);
-    setSearchParams({}, { replace: true });
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("updateStatus");
+    setSearchParams(nextParams, { replace: true });
     window.requestAnimationFrame(() => {
       ownCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   }, [me, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const requestId = searchParams.get("request");
+    if (!requestId) return;
+    setActiveBoardTab("requests");
+    setRequestFocusRequest((current) => ({
+      requestId,
+      requestKey: (current?.requestKey ?? 0) + 1,
+    }));
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("request");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   async function handleLiveTransition(activity, action) {
     if (transitioningId) return;
@@ -363,6 +379,7 @@ export default function StatusPage() {
                       requests={requests}
                       onRequestsChange={setRequests}
                       roommates={roommates}
+                      requestFocusRequest={requestFocusRequest}
                     />
                   ),
                 },

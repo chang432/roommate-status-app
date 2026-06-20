@@ -64,7 +64,8 @@ specific roommate ids, and support comments and comment likes. Requested
 roommates can accept or deny, any roommate can complete a request, and request
 notifications target the requested users or the requester as appropriate.
 Completed requests can be reopened by any roommate; only the requester can
-delete a request.
+delete a request. Request notifications include a request deep link so tapping
+one opens the Requests tab with that request expanded.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).

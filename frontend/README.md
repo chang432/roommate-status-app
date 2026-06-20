@@ -23,7 +23,8 @@ availability to hang out. Built from the mockups in `../mockups`.
   see their own reaction state, the total like count, and a popover listing
   who liked each comment.
 - **Requests**: a tabbed household board lets users ask specific roommates for
-  help, track accept/deny responses, comment, and mark requests complete.
+  help, track accept/deny responses, comment, mark requests complete, and open
+  request notifications directly to the expanded request card.
 
 ## Tech
 

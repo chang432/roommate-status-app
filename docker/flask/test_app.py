@@ -498,6 +498,7 @@ def test_create_request_targets_roommates_and_notifies_them(client, monkeypatch)
     assert request_item["isCompleted"] is False
     assert request_item["completedAt"] is None
     assert client.get("/api/activities").get_json() == []
+    request_url = f"/?request={request_item['id']}"
     assert calls == [
         (
             "users",
@@ -505,7 +506,7 @@ def test_create_request_targets_roommates_and_notifies_them(client, monkeypatch)
                 "user_ids": {"kayla", "ting"},
                 "title": "New request",
                 "body": "Andre requested: Please grab milk",
-                "url": "/",
+                "url": request_url,
                 "event_type": "requests-changed",
             },
         )
@@ -540,7 +541,7 @@ def test_requested_roommate_can_accept_or_deny(client, monkeypatch):
             "exclude_user_ids": {"kayla"},
             "title": "Request response",
             "body": "Kayla accepted “Please take out recycling”",
-            "url": "/",
+            "url": f"/?request={request_item['id']}",
             "event_type": "requests-changed",
         },
     )
@@ -592,7 +593,7 @@ def test_any_roommate_can_complete_request_and_notify_requester(client, monkeypa
                 "exclude_user_ids": {"ting"},
                 "title": "Request completed",
                 "body": "Ting completed “Please take out recycling”",
-                "url": "/",
+                "url": f"/?request={request_item['id']}",
                 "event_type": "requests-changed",
             },
         )
@@ -626,7 +627,7 @@ def test_any_roommate_can_reopen_completed_request(client, monkeypatch):
                 "exclude_user_ids": {"ting"},
                 "title": "Request reopened",
                 "body": "Ting reopened “Please take out recycling”",
-                "url": "/",
+                "url": f"/?request={request_item['id']}",
                 "event_type": "requests-changed",
             },
         )
@@ -667,7 +668,7 @@ def test_requester_can_delete_request_and_comment_likes(client, monkeypatch):
                 "exclude_user_ids": {"andre"},
                 "title": "Request deleted",
                 "body": "Andre deleted “Please take out recycling”",
-                "url": "/",
+                "url": f"/?request={request_item['id']}",
                 "event_type": "requests-changed",
             },
         )
@@ -707,7 +708,7 @@ def test_request_comments_and_likes_match_activity_shape(client, monkeypatch):
             "user_ids": {"andre"},
             "title": "New request comment",
             "body": "Kayla on “Please take out recycling”: I can do this",
-            "url": "/",
+            "url": f"/?request={request_item['id']}",
             "event_type": "requests-changed",
         },
     )
@@ -739,7 +740,7 @@ def test_request_comment_mentions_target_named_users(client, monkeypatch):
             "user_ids": {"ting"},
             "title": "Kayla mentioned you",
             "body": "On request “Please take out recycling”: @Ting can you help?",
-            "url": "/",
+            "url": f"/?request={request_item['id']}",
             "event_type": "requests-changed",
         },
     )
