@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import StatusDot from './StatusDot.jsx'
 import StatusModal from './StatusModal.jsx'
 import StatusTimestamp from './StatusTimestamp.jsx'
@@ -10,7 +10,24 @@ import styles from './styling/StatusCard.module.css'
 // be truncated here, so clicking the card opens a popup with the full status.
 export default function StatusCard({ roommate, onPoke }) {
   const [open, setOpen] = useState(false)
+  const [pokeCount, setPokeCount] = useState(0)
+  const pokeResetTimer = useRef(null)
   const note = statusNote(roommate)
+
+  useEffect(() => {
+    return () => window.clearTimeout(pokeResetTimer.current)
+  }, [])
+
+  async function handlePoke(roommateId) {
+    await onPoke(roommateId)
+    setPokeCount((count) => count + 1)
+
+    // The counter represents one burst of pokes, ending 30 seconds after the
+    // most recent successful delivery.
+    window.clearTimeout(pokeResetTimer.current)
+    pokeResetTimer.current = window.setTimeout(() => setPokeCount(0), 30000)
+  }
+
   return (
     <>
       <button
@@ -41,7 +58,8 @@ export default function StatusCard({ roommate, onPoke }) {
       {open && (
         <StatusModal
           roommate={roommate}
-          onPoke={onPoke}
+          pokeCount={pokeCount}
+          onPoke={handlePoke}
           onClose={() => setOpen(false)}
         />
       )}

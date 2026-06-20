@@ -8,9 +8,9 @@ import styles from './styling/StatusModal.module.css'
 // Centered popup showing a roommate's full status — used when a compact card
 // truncates a long supplemental note. Closes on backdrop click, the top-right
 // close button, or Escape.
-export default function StatusModal({ roommate, onPoke, onClose }) {
+export default function StatusModal({ roommate, pokeCount, onPoke, onClose }) {
   const [poking, setPoking] = useState(false)
-  const [pokeResult, setPokeResult] = useState('')
+  const [pokeError, setPokeError] = useState('')
 
   // Allow Escape to dismiss, like a standard dialog.
   useEffect(() => {
@@ -26,12 +26,11 @@ export default function StatusModal({ roommate, onPoke, onClose }) {
   async function handlePoke() {
     if (poking) return
     setPoking(true)
-    setPokeResult('')
+    setPokeError('')
     try {
       await onPoke(roommate.id)
-      setPokeResult('Poked!')
     } catch (error) {
-      setPokeResult(error.message || 'Could not poke this roommate.')
+      setPokeError(error.message || 'Could not poke this roommate.')
     } finally {
       setPoking(false)
     }
@@ -71,19 +70,24 @@ export default function StatusModal({ roommate, onPoke, onClose }) {
           timestamp={roommate.statusUpdatedAt}
           className={styles.timestamp}
         />
-        {pokeResult && (
+        {pokeCount > 0 && (
           <p className={styles.pokeResult} role="status">
-            {pokeResult}
+            {pokeCount === 1 ? 'Poked once' : `Poked ${pokeCount} times`}
+          </p>
+        )}
+        {pokeError && (
+          <p className={styles.pokeError} role="alert">
+            {pokeError}
           </p>
         )}
         <div className={styles.actions}>
           <button
             type="button"
             onClick={handlePoke}
-            disabled={poking || pokeResult === 'Poked!'}
+            disabled={poking}
             className={cx('ui-primaryButton', styles.actionButton)}
           >
-            {poking ? 'Poking…' : pokeResult === 'Poked!' ? 'Poked!' : '👉 Poke'}
+            {poking ? 'Poking…' : '👉 Poke'}
           </button>
         </div>
       </div>

@@ -38,6 +38,10 @@
   @apply mt-3 text-center text-[13px] font-semibold text-accent-deep;
 }
 
+.pokeError {
+  @apply mt-3 text-center text-[13px] font-semibold text-status-red;
+}
+
 .actions {
   @apply mt-[20px];
 }
