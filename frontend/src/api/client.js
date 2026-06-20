@@ -191,6 +191,22 @@ export async function completeRequest(id, userId) {
   })
 }
 
+// POST /api/requests/:id/reopen — move a completed request back to active.
+export async function reopenRequest(id, userId) {
+  return request(`/requests/${id}/reopen`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}
+
+// DELETE /api/requests/:id — delete a request owned by the requester.
+export async function deleteRequest(id, requesterId) {
+  return request(`/requests/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
 // POST /api/requests/:id/comments — add a comment to a request.
 export async function commentOnRequest(id, authorId, text) {
   return request(`/requests/${id}/comments`, {

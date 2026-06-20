@@ -23,6 +23,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/requests`             | `{ text, requesterId, requestedIds }` | full updated request list    |
 | `POST /api/requests/<id>/responses` | `{ userId, response }`  | full updated request list                  |
 | `POST /api/requests/<id>/complete` | `{ userId }`             | full updated request list                  |
+| `POST /api/requests/<id>/reopen` | `{ userId }`             | full updated request list                  |
+| `DELETE /api/requests/<id>`      | `{ requesterId }`        | full updated request list                  |
 | `POST /api/requests/<id>/comments` | `{ authorId, text }`     | full updated request list                  |
 | `PUT/DELETE /api/requests/<id>/comments/<commentId>/likes` | `{ userId }` | full updated request list |
 | `POST /api/push/subscribe`      | `{ subscription, userId }` | `{ ok: true }`                            |
@@ -61,6 +63,9 @@ Requests are stored as typed records in the activities table, targeted to
 specific roommate ids, and support comments and comment likes. Requested
 roommates can accept or deny, any roommate can complete a request, and request
 notifications target the requested users or the requester as appropriate.
+Completed requests can be reopened by any roommate; only the requester can
+delete a request. Request notifications include a request deep link so tapping
+one opens the Requests tab with that request expanded.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).

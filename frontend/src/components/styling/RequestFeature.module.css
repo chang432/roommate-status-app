@@ -78,12 +78,40 @@
   @apply mt-[2px] text-[12px] text-ink-soft;
 }
 
+.summaryActions {
+  @apply flex flex-none items-center gap-[7px];
+}
+
 .responseIcons {
   @apply flex flex-none -space-x-1;
 }
 
 .responseIcon {
   @apply grid h-[24px] w-[24px] place-items-center rounded-full border-2 border-card text-[11px] font-bold uppercase text-white;
+}
+
+.iconAction {
+  @apply grid h-[32px] w-[32px] place-items-center rounded-full border text-[15px] font-black leading-none text-white transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.acceptedAction {
+  @apply border-status-green bg-status-green;
+}
+
+.acceptAction {
+  @apply border-status-highlight-green bg-status-highlight-green;
+}
+
+.deniedAction {
+  @apply border-status-red bg-status-red;
+}
+
+.denyAction {
+  @apply border-status-highlight-red bg-status-highlight-red;
+}
+
+.summaryReopen {
+  @apply px-[13px] py-[7px] text-[12.5px];
 }
 
 .responsePending {
@@ -134,18 +162,14 @@
   @apply mt-[12px] flex flex-wrap gap-[8px];
 }
 
-.actionPill {
-  @apply px-[13px] py-[7px] text-[12.5px];
+.requestActions {
+  @apply mt-[14px] flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[12px];
 }
 
-.completeActions {
-  @apply mt-[14px] flex justify-end border-t border-line pt-[12px];
-}
-
-.completeButton {
+.requestActionButton {
   @apply px-[13px] py-[7px] text-[12.5px];
 }
 
 .completedText {
-  @apply text-[12.5px] font-semibold text-ink-soft;
+  @apply mr-auto text-[12.5px] font-semibold text-ink-soft max-[430px]:w-full;
 }

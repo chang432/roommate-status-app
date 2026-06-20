@@ -35,6 +35,8 @@ And the household request feed:
     POST /api/requests                 -> the updated recent request list
     POST /api/requests/<id>/responses  -> the updated recent request list
     POST /api/requests/<id>/complete   -> the updated recent request list
+    POST /api/requests/<id>/reopen     -> the updated recent request list
+    DELETE /api/requests/<id>          -> the updated recent request list
     POST /api/requests/<id>/comments   -> the updated recent request list
     PUT/DELETE /api/requests/<id>/comments/<comment_id>/likes
                                        -> the updated recent request list
@@ -628,18 +630,19 @@ def create_app() -> Flask:
                 return jsonify({"error": "Every requested roommate must be valid."}), 400
             requested_roommates.append(roommate)
 
-        household_requests.add_request(
+        created = household_requests.add_request(
             text,
             requester["id"],
             requester["name"],
             requested_roommates,
         )
+        request_url = f"/?request={created['id']}"
         try:
             push.notify_users(
                 user_ids={roommate["id"] for roommate in requested_roommates},
                 title="New request",
                 body=f"{requester['name']} requested: {text}",
-                url="/",
+                url=request_url,
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - never let push break request creation
@@ -662,13 +665,14 @@ def create_app() -> Flask:
         if updated is None:
             return jsonify({"error": "Unknown request or roommate."}), 404
 
+        request_url = f"/?request={updated['id']}"
         try:
             push.notify_users(
                 user_ids={updated["requesterId"]},
                 exclude_user_ids={roommate["id"]},
                 title="Request response",
                 body=f"{roommate['name']} {response} “{updated['text']}”",
-                url="/",
+                url=request_url,
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - response must remain successful
@@ -688,17 +692,73 @@ def create_app() -> Flask:
         if updated is None:
             return jsonify({"error": f"Unknown request: {request_id}"}), 404
 
+        request_url = f"/?request={updated['id']}"
         try:
             push.notify_users(
                 user_ids={updated["requesterId"]},
                 exclude_user_ids={roommate["id"]},
                 title="Request completed",
                 body=f"{roommate['name']} completed “{updated['text']}”",
-                url="/",
+                url=request_url,
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - completion must remain successful
             app.logger.exception("Failed to send request completion notification")
+        return jsonify(household_requests.list_recent(consistent=True))
+
+    @app.post("/api/requests/<request_id>/reopen")
+    def reopen_request(request_id: str):
+        """Reopen a completed request; any valid roommate may do this."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+
+        updated = household_requests.reopen(request_id, roommate["id"], roommate["name"])
+        if updated is None:
+            return jsonify({"error": f"Unknown request: {request_id}"}), 404
+
+        request_url = f"/?request={updated['id']}"
+        try:
+            push.notify_users(
+                user_ids={updated["requesterId"], *updated["requestedIds"]},
+                exclude_user_ids={roommate["id"]},
+                title="Request reopened",
+                body=f"{roommate['name']} reopened “{updated['text']}”",
+                url=request_url,
+                event_type="requests-changed",
+            )
+        except Exception:  # noqa: BLE001 - reopen must remain successful
+            app.logger.exception("Failed to send request reopen notification")
+        return jsonify(household_requests.list_recent(consistent=True))
+
+    @app.delete("/api/requests/<request_id>")
+    def delete_request(request_id: str):
+        """Delete a request only when requested by its creator."""
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        if not requester_id:
+            return jsonify({"error": "A requester id is required."}), 400
+
+        request_item = household_requests.get(request_id, consistent=True)
+        result = household_requests.delete_owned(request_id, requester_id)
+        if result == household_requests.DELETE_NOT_FOUND:
+            return jsonify({"error": f"Unknown request: {request_id}"}), 404
+        if result == household_requests.DELETE_FORBIDDEN:
+            return jsonify({"error": "Only the requester can delete it."}), 403
+
+        try:
+            push.notify_users(
+                user_ids={request_item["requesterId"], *request_item["requestedIds"]},
+                exclude_user_ids={requester_id},
+                title="Request deleted",
+                body=f"{request_item['requester']} deleted “{request_item['text']}”",
+                url=f"/?request={request_item['id']}",
+                event_type="requests-changed",
+            )
+        except Exception:  # noqa: BLE001 - deletion must remain successful
+            app.logger.exception("Failed to send request deletion notification")
         return jsonify(household_requests.list_recent(consistent=True))
 
     @app.post("/api/requests/<request_id>/comments")
@@ -741,7 +801,7 @@ def create_app() -> Flask:
                     user_ids=user_ids,
                     title=title,
                     body=notification_body,
-                    url="/",
+                    url=f"/?request={updated['id']}",
                     event_type="requests-changed",
                 )
             except Exception:  # noqa: BLE001 - never let push break the comment
@@ -752,7 +812,7 @@ def create_app() -> Flask:
                 push.notify_all(
                     title=f"{author['name']} mentioned everyone",
                     body=f"On request “{updated['text']}”: {text}",
-                    url="/",
+                    url=f"/?request={updated['id']}",
                     event_type="requests-changed",
                     exclude_user_ids={author["id"]},
                 )

@@ -498,6 +498,7 @@ def test_create_request_targets_roommates_and_notifies_them(client, monkeypatch)
     assert request_item["isCompleted"] is False
     assert request_item["completedAt"] is None
     assert client.get("/api/activities").get_json() == []
+    request_url = f"/?request={request_item['id']}"
     assert calls == [
         (
             "users",
@@ -505,7 +506,7 @@ def test_create_request_targets_roommates_and_notifies_them(client, monkeypatch)
                 "user_ids": {"kayla", "ting"},
                 "title": "New request",
                 "body": "Andre requested: Please grab milk",
-                "url": "/",
+                "url": request_url,
                 "event_type": "requests-changed",
             },
         )
@@ -540,7 +541,7 @@ def test_requested_roommate_can_accept_or_deny(client, monkeypatch):
             "exclude_user_ids": {"kayla"},
             "title": "Request response",
             "body": "Kayla accepted “Please take out recycling”",
-            "url": "/",
+            "url": f"/?request={request_item['id']}",
             "event_type": "requests-changed",
         },
     )
@@ -592,11 +593,98 @@ def test_any_roommate_can_complete_request_and_notify_requester(client, monkeypa
                 "exclude_user_ids": {"ting"},
                 "title": "Request completed",
                 "body": "Ting completed “Please take out recycling”",
-                "url": "/",
+                "url": f"/?request={request_item['id']}",
                 "event_type": "requests-changed",
             },
         )
     ]
+
+
+def test_any_roommate_can_reopen_completed_request(client, monkeypatch):
+    request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
+    client.post(
+        f"/api/requests/{request_item['id']}/complete",
+        json={"userId": "kayla"},
+    )
+    calls = _capture_notifications(monkeypatch)
+
+    reopened = client.post(
+        f"/api/requests/{request_item['id']}/reopen",
+        json={"userId": "ting"},
+    )
+
+    assert reopened.status_code == 200
+    updated = reopened.get_json()[0]
+    assert updated["isCompleted"] is False
+    assert updated["completedAt"] is None
+    assert updated["completedBy"] is None
+    assert updated["completedById"] is None
+    assert calls == [
+        (
+            "users",
+            {
+                "user_ids": {"andre", "kayla"},
+                "exclude_user_ids": {"ting"},
+                "title": "Request reopened",
+                "body": "Ting reopened “Please take out recycling”",
+                "url": f"/?request={request_item['id']}",
+                "event_type": "requests-changed",
+            },
+        )
+    ]
+
+
+def test_requester_can_delete_request_and_comment_likes(client, monkeypatch):
+    request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
+    posted = client.post(
+        f"/api/requests/{request_item['id']}/comments",
+        json={"authorId": "kayla", "text": "Sure"},
+    )
+    comment_id = posted.get_json()[0]["comments"][0]["id"]
+    client.put(
+        f"/api/requests/{request_item['id']}/comments/{comment_id}/likes",
+        json={"userId": "andre"},
+    )
+    calls = _capture_notifications(monkeypatch)
+
+    deleted = client.delete(
+        f"/api/requests/{request_item['id']}",
+        json={"requesterId": "andre"},
+    )
+
+    assert deleted.status_code == 200
+    assert deleted.get_json() == []
+    assert household_requests.get(request_item["id"], consistent=True) is None
+    assert not [
+        item
+        for item in household_requests._scan_all(consistent=True)
+        if item.get("itemType") == household_requests.REQUEST_COMMENT_LIKE_TYPE
+    ]
+    assert calls == [
+        (
+            "users",
+            {
+                "user_ids": {"andre", "kayla"},
+                "exclude_user_ids": {"andre"},
+                "title": "Request deleted",
+                "body": "Andre deleted “Please take out recycling”",
+                "url": f"/?request={request_item['id']}",
+                "event_type": "requests-changed",
+            },
+        )
+    ]
+
+
+def test_only_requester_can_delete_request(client):
+    request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
+
+    denied = client.delete(
+        f"/api/requests/{request_item['id']}",
+        json={"requesterId": "kayla"},
+    )
+
+    assert denied.status_code == 403
+    assert household_requests.get(request_item["id"], consistent=True) is not None
 
 
 def test_request_comments_and_likes_match_activity_shape(client, monkeypatch):
@@ -620,7 +708,7 @@ def test_request_comments_and_likes_match_activity_shape(client, monkeypatch):
             "user_ids": {"andre"},
             "title": "New request comment",
             "body": "Kayla on “Please take out recycling”: I can do this",
-            "url": "/",
+            "url": f"/?request={request_item['id']}",
             "event_type": "requests-changed",
         },
     )
@@ -652,7 +740,7 @@ def test_request_comment_mentions_target_named_users(client, monkeypatch):
             "user_ids": {"ting"},
             "title": "Kayla mentioned you",
             "body": "On request “Please take out recycling”: @Ting can you help?",
-            "url": "/",
+            "url": f"/?request={request_item['id']}",
             "event_type": "requests-changed",
         },
     )
