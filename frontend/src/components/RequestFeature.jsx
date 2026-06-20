@@ -259,7 +259,7 @@ export default function RequestFeature({
           value={text}
           onChange={(event) => setText(event.target.value)}
           maxLength={280}
-          placeholder="Who wants Livite?"
+          placeholder="Can someone feed the beasts?"
           className={cx("ui-textInput", styles.input)}
         />
         <RoommateChecklist
