@@ -599,6 +599,93 @@ def test_any_roommate_can_complete_request_and_notify_requester(client, monkeypa
     ]
 
 
+def test_any_roommate_can_reopen_completed_request(client, monkeypatch):
+    request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
+    client.post(
+        f"/api/requests/{request_item['id']}/complete",
+        json={"userId": "kayla"},
+    )
+    calls = _capture_notifications(monkeypatch)
+
+    reopened = client.post(
+        f"/api/requests/{request_item['id']}/reopen",
+        json={"userId": "ting"},
+    )
+
+    assert reopened.status_code == 200
+    updated = reopened.get_json()[0]
+    assert updated["isCompleted"] is False
+    assert updated["completedAt"] is None
+    assert updated["completedBy"] is None
+    assert updated["completedById"] is None
+    assert calls == [
+        (
+            "users",
+            {
+                "user_ids": {"andre", "kayla"},
+                "exclude_user_ids": {"ting"},
+                "title": "Request reopened",
+                "body": "Ting reopened “Please take out recycling”",
+                "url": "/",
+                "event_type": "requests-changed",
+            },
+        )
+    ]
+
+
+def test_requester_can_delete_request_and_comment_likes(client, monkeypatch):
+    request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
+    posted = client.post(
+        f"/api/requests/{request_item['id']}/comments",
+        json={"authorId": "kayla", "text": "Sure"},
+    )
+    comment_id = posted.get_json()[0]["comments"][0]["id"]
+    client.put(
+        f"/api/requests/{request_item['id']}/comments/{comment_id}/likes",
+        json={"userId": "andre"},
+    )
+    calls = _capture_notifications(monkeypatch)
+
+    deleted = client.delete(
+        f"/api/requests/{request_item['id']}",
+        json={"requesterId": "andre"},
+    )
+
+    assert deleted.status_code == 200
+    assert deleted.get_json() == []
+    assert household_requests.get(request_item["id"], consistent=True) is None
+    assert not [
+        item
+        for item in household_requests._scan_all(consistent=True)
+        if item.get("itemType") == household_requests.REQUEST_COMMENT_LIKE_TYPE
+    ]
+    assert calls == [
+        (
+            "users",
+            {
+                "user_ids": {"andre", "kayla"},
+                "exclude_user_ids": {"andre"},
+                "title": "Request deleted",
+                "body": "Andre deleted “Please take out recycling”",
+                "url": "/",
+                "event_type": "requests-changed",
+            },
+        )
+    ]
+
+
+def test_only_requester_can_delete_request(client):
+    request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
+
+    denied = client.delete(
+        f"/api/requests/{request_item['id']}",
+        json={"requesterId": "kayla"},
+    )
+
+    assert denied.status_code == 403
+    assert household_requests.get(request_item["id"], consistent=True) is not None
+
+
 def test_request_comments_and_likes_match_activity_shape(client, monkeypatch):
     request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
     calls = _capture_notifications(monkeypatch)

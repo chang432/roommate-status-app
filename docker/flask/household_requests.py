@@ -30,6 +30,10 @@ LIKE_OK = activities.LIKE_OK
 LIKE_NOT_FOUND = activities.LIKE_NOT_FOUND
 LIKE_SELF_FORBIDDEN = activities.LIKE_SELF_FORBIDDEN
 
+DELETE_OK = "deleted"
+DELETE_NOT_FOUND = "not_found"
+DELETE_FORBIDDEN = "forbidden"
+
 
 def _get_table():
     return activities._get_table()
@@ -218,6 +222,64 @@ def complete(request_id: str, user_id: str, name: str) -> dict | None:
             return None
         raise
     return _project(resp["Attributes"])
+
+
+def reopen(request_id: str, user_id: str, name: str) -> dict | None:
+    try:
+        resp = _get_table().update_item(
+            Key={"id": request_id},
+            UpdateExpression=(
+                "SET isCompleted = :false, reopenedById = :user_id, "
+                "reopenedBy = :name REMOVE completedAt, completedById, completedBy"
+            ),
+            ExpressionAttributeValues={
+                ":request": REQUEST_TYPE,
+                ":false": False,
+                ":user_id": user_id,
+                ":name": name,
+            },
+            ConditionExpression="attribute_exists(id) AND itemType = :request",
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None
+        raise
+    return _project(resp["Attributes"])
+
+
+def delete_owned(request_id: str, requester_id: str) -> str:
+    table = _get_table()
+    item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("itemType") != REQUEST_TYPE:
+        return DELETE_NOT_FOUND
+    if item.get("requesterId") != requester_id:
+        return DELETE_FORBIDDEN
+
+    try:
+        table.delete_item(
+            Key={"id": request_id},
+            ConditionExpression="requesterId = :requester AND itemType = :request",
+            ExpressionAttributeValues={
+                ":requester": requester_id,
+                ":request": REQUEST_TYPE,
+            },
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        current = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
+        if current is None or current.get("itemType") != REQUEST_TYPE:
+            return DELETE_NOT_FOUND
+        return DELETE_FORBIDDEN
+
+    for reaction in _scan_all(consistent=True):
+        if (
+            reaction.get("itemType") == REQUEST_COMMENT_LIKE_TYPE
+            and reaction.get("requestId") == request_id
+        ):
+            table.delete_item(Key={"id": reaction["id"]})
+    return DELETE_OK
 
 
 def _comment_like_id(request_id: str, comment_id: str, user_id: str) -> str:

@@ -4,6 +4,8 @@ import {
   commentOnRequest,
   completeRequest,
   createRequest,
+  deleteRequest,
+  reopenRequest,
   respondToRequest,
   setRequestCommentLiked,
 } from '../api/client.js'
@@ -102,6 +104,8 @@ export default function RequestFeature({ requests, onRequestsChange, roommates }
   const [openLikesCommentId, setOpenLikesCommentId] = useState(null)
   const [respondingId, setRespondingId] = useState(null)
   const [completingId, setCompletingId] = useState(null)
+  const [reopeningId, setReopeningId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
 
   function toggleExpanded(id) {
     setExpandedId((current) => (current === id ? null : id))
@@ -150,6 +154,33 @@ export default function RequestFeature({ requests, onRequestsChange, roommates }
       setError('Could not complete the request. Try again.')
     } finally {
       setCompletingId(null)
+    }
+  }
+
+  async function handleReopen(requestItem) {
+    if (reopeningId || !requestItem.isCompleted) return
+    setReopeningId(requestItem.id)
+    setError('')
+    try {
+      onRequestsChange(await reopenRequest(requestItem.id, user.id))
+    } catch {
+      setError('Could not reopen the request. Try again.')
+    } finally {
+      setReopeningId(null)
+    }
+  }
+
+  async function handleDelete(requestItem) {
+    if (deletingId) return
+    setDeletingId(requestItem.id)
+    setError('')
+    try {
+      onRequestsChange(await deleteRequest(requestItem.id, user.id))
+      setExpandedId((current) => (current === requestItem.id ? null : current))
+    } catch {
+      setError('Could not delete the request. Try again.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -224,6 +255,7 @@ export default function RequestFeature({ requests, onRequestsChange, roommates }
             const requestedSelf = requestItem.requested.find(
               (person) => person.id === user.id,
             )
+            const canDelete = requestItem.requesterId === user.id
             return (
               <div
                 key={requestItem.id}
@@ -249,20 +281,34 @@ export default function RequestFeature({ requests, onRequestsChange, roommates }
                       {requestItem.requester} · {relativeTime(requestItem.createdAt)}
                     </p>
                   </div>
-                  <div className={styles.responseIcons}>
-                    {requestItem.requested.map((person) => (
-                      <span
-                        key={person.id}
-                        className={cx(
-                          styles.responseIcon,
-                          RESPONSE_CLASS[person.response] ?? styles.responsePending,
-                        )}
-                        title={`${person.name}: ${person.response}`}
+                  {requestedSelf && !requestItem.isCompleted && (
+                    <div
+                      className={styles.summaryActions}
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        disabled={respondingId === requestItem.id}
+                        onClick={() => handleResponse(requestItem, 'accepted')}
+                        className={cx(styles.iconAction, styles.acceptAction)}
+                        aria-label="Accept request"
+                        title="Accept"
                       >
-                        {person.name.slice(0, 1)}
-                      </span>
-                    ))}
-                  </div>
+                        ✓
+                      </button>
+                      <button
+                        type="button"
+                        disabled={respondingId === requestItem.id}
+                        onClick={() => handleResponse(requestItem, 'denied')}
+                        className={cx(styles.iconAction, styles.denyAction)}
+                        aria-label="Deny request"
+                        title="Deny"
+                      >
+                        X
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div
@@ -332,24 +378,44 @@ export default function RequestFeature({ requests, onRequestsChange, roommates }
                       />
 
                       <div
-                        className={styles.completeActions}
+                        className={styles.requestActions}
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => event.stopPropagation()}
                       >
                         {requestItem.isCompleted ? (
-                          <span className={styles.completedText}>
-                            Completed by {requestItem.completedBy}
-                          </span>
+                          <>
+                            <span className={styles.completedText}>
+                              Completed by {requestItem.completedBy}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={reopeningId === requestItem.id}
+                              onClick={() => handleReopen(requestItem)}
+                              className={cx('ui-pillButton ui-pillSecondary', styles.requestActionButton)}
+                            >
+                              {reopeningId === requestItem.id ? 'Reopening…' : 'Reopen'}
+                            </button>
+                          </>
                         ) : (
                           <button
                             type="button"
                             disabled={completingId === requestItem.id}
                             onClick={() => handleComplete(requestItem)}
-                            className={cx('ui-pillButton ui-pillSecondary', styles.completeButton)}
+                            className={cx('ui-pillButton ui-pillSecondary', styles.requestActionButton)}
                           >
                             {completingId === requestItem.id
                               ? 'Completing…'
                               : 'Completed'}
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            disabled={deletingId === requestItem.id}
+                            onClick={() => handleDelete(requestItem)}
+                            className={cx('ui-pillButton ui-pillDangerSoft', styles.requestActionButton)}
+                          >
+                            {deletingId === requestItem.id ? 'Deleting…' : 'Delete'}
                           </button>
                         )}
                       </div>

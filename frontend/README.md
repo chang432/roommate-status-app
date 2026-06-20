@@ -68,6 +68,8 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `createRequest`                 | `POST /api/requests`                                       |
 | `respondToRequest`              | `POST /api/requests/:id/responses`                         |
 | `completeRequest`               | `POST /api/requests/:id/complete`                          |
+| `reopenRequest`                 | `POST /api/requests/:id/reopen`                            |
+| `deleteRequest`                 | `DELETE /api/requests/:id`                                 |
 | `commentOnRequest`              | `POST /api/requests/:id/comments`                          |
 | `setRequestCommentLiked`        | `PUT/DELETE /api/requests/:id/comments/:commentId/likes`   |
 
