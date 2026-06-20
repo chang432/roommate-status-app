@@ -8,7 +8,7 @@ import styles from './styling/StatusCard.module.css'
 
 // Compact card for a household member (everyone other than "you"). The note can
 // be truncated here, so clicking the card opens a popup with the full status.
-export default function StatusCard({ roommate }) {
+export default function StatusCard({ roommate, onPoke }) {
   const [open, setOpen] = useState(false)
   const note = statusNote(roommate)
   return (
@@ -38,7 +38,13 @@ export default function StatusCard({ roommate }) {
           />
         </div>
       </button>
-      {open && <StatusModal roommate={roommate} onClose={() => setOpen(false)} />}
+      {open && (
+        <StatusModal
+          roommate={roommate}
+          onPoke={onPoke}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   )
 }

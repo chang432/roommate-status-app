@@ -30,6 +30,14 @@
   @apply mt-[12px] text-[12.5px] text-ink-soft;
 }
 
-.closeButton {
-  @apply mt-[20px] w-full py-[12px] text-[14px];
+.pokeResult {
+  @apply mt-3 text-center text-[13px] font-semibold text-accent-deep;
+}
+
+.actions {
+  @apply mt-[20px] grid grid-cols-2 gap-3;
+}
+
+.actionButton {
+  @apply py-[12px] text-[14px];
 }

@@ -54,6 +54,15 @@ export async function notifyRoommatesToUpdateStatus(requesterId) {
   })
 }
 
+// POST /api/roommates/:id/poke — send one roommate directly to their status
+// editor when they select the resulting push notification.
+export async function pokeRoommate(id, requesterId) {
+  return request(`/roommates/${id}/poke`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
 // GET /api/push/public-key — the VAPID public key needed to subscribe.
 export async function getVapidPublicKey() {
   return request('/push/public-key')

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Brandmark from "../components/Brandmark.jsx";
 import YouCard from "../components/YouCard.jsx";
 import StatusCard from "../components/StatusCard.jsx";
@@ -13,6 +14,7 @@ import {
   getActivities,
   getRoommates,
   notifyRoommatesToUpdateStatus,
+  pokeRoommate,
   startActivity,
   updateStatus,
 } from "../api/client.js";
@@ -35,6 +37,8 @@ function whenLabel() {
 
 export default function StatusPage() {
   const { user, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const ownCardRef = useRef(null);
 
   const [roommates, setRoommates] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -145,6 +149,17 @@ export default function StatusPage() {
   const showBanner = freeCount >= AVAILABLE_THRESHOLD;
   const liveEvent = activities.find((activity) => activity.isLive) ?? null;
 
+  // Poke notifications carry this one-shot intent. Open the editor after the
+  // household loads, then remove the query so refreshes do not reopen it.
+  useEffect(() => {
+    if (!me || searchParams.get("updateStatus") !== "1") return;
+    setEditing(true);
+    setSearchParams({}, { replace: true });
+    window.requestAnimationFrame(() => {
+      ownCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [me, searchParams, setSearchParams]);
+
   async function handleLiveTransition(activity, action) {
     if (transitioningId) return;
     setTransitioningId(activity.id);
@@ -184,6 +199,10 @@ export default function StatusPage() {
     } finally {
       setNotifyingHousehold(false);
     }
+  }
+
+  async function handlePokeRoommate(roommateId) {
+    await pokeRoommate(roommateId, user.id);
   }
 
   function handleLiveBannerClick() {
@@ -255,7 +274,7 @@ export default function StatusPage() {
             {showBanner && <NotificationBanner count={freeCount} />}
 
             {me && (
-              <div className={styles.ownCard}>
+              <div ref={ownCardRef} className={styles.ownCard}>
                 <YouCard
                   roommate={me}
                   avatarColor={avatarColor(meIndex)}
@@ -289,7 +308,11 @@ export default function StatusPage() {
             </div>
             <div className={styles.householdGrid}>
               {others.map((roommate) => (
-                <StatusCard key={roommate.id} roommate={roommate} />
+                <StatusCard
+                  key={roommate.id}
+                  roommate={roommate}
+                  onPoke={handlePokeRoommate}
+                />
               ))}
             </div>
 
