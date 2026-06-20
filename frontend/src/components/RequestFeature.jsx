@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   commentOnRequest,
   completeRequest,
-  createRequest,
   deleteRequest,
   reopenRequest,
   respondToRequest,
@@ -20,74 +19,6 @@ const RESPONSE_CLASS = {
   pending: styles.responsePending,
 };
 
-function RoommateChecklist({ roommates, selectedIds, onChange, disabled }) {
-  const [open, setOpen] = useState(false);
-  const allSelected =
-    roommates.length > 0 && selectedIds.length === roommates.length;
-  const selectedNames = roommates
-    .filter((roommate) => selectedIds.includes(roommate.id))
-    .map((roommate) => roommate.name);
-
-  function toggleAll() {
-    onChange(allSelected ? [] : roommates.map((roommate) => roommate.id));
-  }
-
-  function toggleOne(id) {
-    onChange(
-      selectedIds.includes(id)
-        ? selectedIds.filter((selectedId) => selectedId !== id)
-        : [...selectedIds, id],
-    );
-  }
-
-  return (
-    <div
-      className={styles.recipientSelect}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        disabled={disabled}
-        className={cx("ui-textInput", styles.recipientButton)}
-        aria-haspopup="true"
-        aria-expanded={open}
-      >
-        <span className={styles.recipientButtonText}>
-          {selectedNames.length ? selectedNames.join(", ") : "Choose roommates"}
-        </span>
-        <span className={styles.recipientArrow}>▾</span>
-      </button>
-      {open && (
-        <div className={styles.recipientMenu}>
-          <label className={styles.recipientOption}>
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={toggleAll}
-              className={styles.checkbox}
-            />
-            <span>All roommates</span>
-          </label>
-          {roommates.map((roommate) => (
-            <label key={roommate.id} className={styles.recipientOption}>
-              <input
-                type="checkbox"
-                checked={selectedIds.includes(roommate.id)}
-                onChange={() => toggleOne(roommate.id)}
-                className={styles.checkbox}
-              />
-              <span>{roommate.name}</span>
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function RequestFeature({
   requests,
   onRequestsChange,
@@ -96,13 +27,6 @@ export default function RequestFeature({
 }) {
   const { user } = useAuth();
   const requestRefs = useRef(new Map());
-  const requestableRoommates = useMemo(
-    () => roommates.filter((roommate) => roommate.id !== user.id),
-    [roommates, user.id],
-  );
-  const [text, setText] = useState("");
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [commentText, setCommentText] = useState("");
@@ -136,26 +60,7 @@ export default function RequestFeature({
     setOpenLikesCommentId(null);
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    const trimmed = text.trim();
-    if (!trimmed || selectedIds.length === 0 || sending) return;
-    setSending(true);
-    setError("");
-    try {
-      const updated = await createRequest(trimmed, user.id, selectedIds);
-      onRequestsChange(updated);
-      setText("");
-      setSelectedIds([]);
-    } catch {
-      setError("Could not send your request. Try again.");
-    } finally {
-      setSending(false);
-    }
-  }
-
   async function handleResponse(requestItem, response) {
-    console.log(requestItem, response);
     if (respondingId) return;
     setRespondingId(requestItem.id);
     setError("");
@@ -253,30 +158,6 @@ export default function RequestFeature({
 
   return (
     <div className={styles.wrap}>
-      <form onSubmit={handleSubmit} className={styles.form}>
-        <input
-          type="text"
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          maxLength={280}
-          placeholder="Can someone bring in the bins?"
-          className={cx("ui-textInput", styles.input)}
-        />
-        <RoommateChecklist
-          roommates={requestableRoommates}
-          selectedIds={selectedIds}
-          onChange={setSelectedIds}
-          disabled={sending}
-        />
-        <button
-          type="submit"
-          disabled={sending || !text.trim() || selectedIds.length === 0}
-          className={cx("ui-primaryButton", styles.sendButton)}
-        >
-          {sending ? "Sending…" : "Request"}
-        </button>
-      </form>
-
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
 
       <div className={styles.list}>

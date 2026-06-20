@@ -1,0 +1,47 @@
+.form {
+  @apply space-y-4;
+}
+
+.input {
+  @apply min-w-0 px-[14px] py-[12px] text-[14px];
+}
+
+.recipientSelect {
+  @apply relative min-w-0;
+}
+
+.recipientButton {
+  @apply flex min-h-[46px] w-full items-center justify-between gap-3 px-[12px] py-[11px] pr-[16px] text-left text-[14px] disabled:opacity-70;
+}
+
+.recipientButtonText {
+  @apply min-w-0 truncate;
+}
+
+.recipientArrow {
+  @apply ml-4 flex-none text-[14px] text-accent-deep;
+}
+
+.recipientMenu {
+  @apply absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-[260px] overflow-y-auto rounded-md border border-[#e1cdbb] bg-white py-[5px] shadow-card;
+}
+
+.recipientOption {
+  @apply flex cursor-pointer items-center gap-[9px] px-[11px] py-[9px] text-[14px] font-semibold text-ink transition hover:bg-accent-soft;
+}
+
+.checkbox {
+  @apply h-[15px] w-[15px] accent-accent;
+}
+
+.error {
+  @apply mt-1;
+}
+
+.actions {
+  @apply flex justify-end gap-2;
+}
+
+.actionButton {
+  @apply min-w-[128px] px-[18px] py-[11px] text-[14px];
+}

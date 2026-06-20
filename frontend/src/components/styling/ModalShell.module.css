@@ -1,0 +1,19 @@
+.backdrop {
+  @apply fixed inset-0 z-50 grid place-items-center bg-black/40 px-5 py-6;
+}
+
+.dialog {
+  @apply relative max-h-[calc(100vh-48px)] w-full overflow-y-auto rounded-md border border-line bg-card p-6 shadow-card;
+}
+
+.closeButton {
+  @apply absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full text-[26px] leading-none text-ink-soft transition hover:bg-[#faf6ef] hover:text-ink;
+}
+
+.title {
+  @apply pr-10 text-[20px] font-bold text-ink;
+}
+
+.content {
+  @apply mt-4;
+}
