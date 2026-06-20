@@ -1751,6 +1751,68 @@ def test_creator_can_delete_activity_and_all_embedded_data(client, monkeypatch):
     assert kwargs["body"] == "Andre deleted Movie night"
 
 
+def test_any_roommate_can_archive_activity_into_expired_section(client, monkeypatch):
+    monkeypatch.setattr(activities.time, "time", lambda: 1_000)
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+    client.post(f"/api/activities/{activity_id}/join", json={"userId": "kayla"})
+    calls = _capture_notifications(monkeypatch)
+
+    monkeypatch.setattr(activities.time, "time", lambda: 1_200)
+    archived = client.post(
+        f"/api/activities/{activity_id}/archive",
+        json={"requesterId": "kayla"},
+    )
+
+    assert archived.status_code == 200
+    archived_item = next(item for item in archived.get_json() if item["id"] == activity_id)
+    assert archived_item["isExpired"] is True
+    assert archived_item["endedAt"] == 1_200_000
+    assert len(calls) == 1
+    audience, kwargs = calls[0]
+    assert audience == "users"
+    assert kwargs["user_ids"] == {"andre", "kayla"}
+    assert kwargs["exclude_user_ids"] == {"kayla"}
+    assert kwargs["body"] == "Kayla archived Movie night"
+
+
+def test_archive_live_activity_moves_it_to_expired_section(client, monkeypatch):
+    monkeypatch.setattr(activities.time, "time", lambda: 1_000)
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+    client.post(
+        f"/api/activities/{activity_id}/start",
+        json={"requesterId": "andre"},
+    )
+
+    monkeypatch.setattr(activities.time, "time", lambda: 1_300)
+    archived = client.post(
+        f"/api/activities/{activity_id}/archive",
+        json={"requesterId": "kayla"},
+    )
+
+    assert archived.status_code == 200
+    archived_item = next(item for item in archived.get_json() if item["id"] == activity_id)
+    assert archived_item["isLive"] is False
+    assert archived_item["isExpired"] is True
+    assert archived_item["endedAt"] == 1_300_000
+
+
+def test_archive_activity_requires_requester(client):
+    created = _propose(client, "Movie night").get_json()
+    activity_id = created[0]["id"]
+
+    res = client.post(f"/api/activities/{activity_id}/archive", json={})
+
+    assert res.status_code == 400
+    assert activities.get(activity_id)["isExpired"] is False
+
+
+def test_archive_unknown_activity_404(client):
+    res = client.post("/api/activities/nope/archive", json={"requesterId": "andre"})
+    assert res.status_code == 404
+
+
 def test_non_creator_cannot_delete_activity(client):
     created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]

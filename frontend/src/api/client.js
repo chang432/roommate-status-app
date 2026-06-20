@@ -91,6 +91,15 @@ export async function proposeActivity(text, proposedById, startAt = null, endAt 
   })
 }
 
+// POST /api/activities/:id/archive — move an activity into expired history
+// without deleting it. Returns the refreshed activity list.
+export async function archiveActivity(id, requesterId) {
+  return request(`/activities/${id}/archive`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
 // DELETE /api/activities/:id — permanently remove an activity owned by the
 // requesting roommate. Returns the refreshed activity list.
 export async function deleteActivity(id, requesterId) {

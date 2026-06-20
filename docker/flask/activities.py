@@ -39,6 +39,9 @@ DELETE_NOT_FOUND = "not_found"
 DELETE_FORBIDDEN = "forbidden"
 DELETE_LIVE = "live"
 
+ARCHIVE_OK = "archived"
+ARCHIVE_NOT_FOUND = "not_found"
+
 LIVE_OK = "ok"
 LIVE_NOT_FOUND = "not_found"
 LIVE_FORBIDDEN = "forbidden"
@@ -544,6 +547,39 @@ def update_schedule_owned(
             return SCHEDULE_FORBIDDEN
         return SCHEDULE_CONFLICT
     return SCHEDULE_OK
+
+
+def archive(activity_id: str, _requester_id: str) -> str:
+    """Move an activity into the expired section without deleting it.
+
+    Archiving is a shared-household action rather than an owner-only one. We
+    persist `endedAt` so the normal lifecycle projection treats the event as
+    expired everywhere without introducing a second archive-specific state.
+    """
+    table = _get_table()
+    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("itemType"):
+        return ARCHIVE_NOT_FOUND
+    if _lifecycle(item)["isExpired"]:
+        return ARCHIVE_OK
+
+    try:
+        table.update_item(
+            Key={"id": activity_id},
+            UpdateExpression="SET endedAt = :ended REMOVE isLive, liveStartedAt",
+            ConditionExpression=(
+                "attribute_not_exists(itemType) AND attribute_not_exists(endedAt)"
+            ),
+            ExpressionAttributeValues={":ended": int(time.time() * 1000)},
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+        if current is None or current.get("itemType"):
+            return ARCHIVE_NOT_FOUND
+        return ARCHIVE_OK
+    return ARCHIVE_OK
 
 
 def delete_owned(activity_id: str, requester_id: str) -> str:

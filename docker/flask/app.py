@@ -20,6 +20,7 @@ And the proposed-activities feed:
     GET  /api/activities               -> current + expired activity history
     POST /api/activities               -> the updated activity list (and pushes it)
     PATCH /api/activities/<id>/schedule -> the updated activity list
+    POST /api/activities/<id>/archive  -> the updated activity list
     DELETE /api/activities/<id>        -> the updated activity list
     POST /api/activities/<id>/start    -> the updated activity list (and pushes it)
     POST /api/activities/<id>/end      -> the updated activity list (and pushes it)
@@ -412,6 +413,34 @@ def create_app() -> Flask:
             return jsonify({"error": "Only the event creator can edit its schedule."}), 403
         if result == activities.SCHEDULE_CONFLICT:
             return jsonify({"error": "Only pending events can be rescheduled."}), 409
+        return jsonify(activities.list_recent(consistent=True))
+
+    @app.post("/api/activities/<activity_id>/archive")
+    def archive_activity(activity_id: str):
+        """Archive an activity so it moves into the expired section."""
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        if not requester_id:
+            return jsonify({"error": "A requester id is required."}), 400
+
+        activity = activities.get(activity_id, consistent=True)
+        result = activities.archive(activity_id, requester_id)
+        if result == activities.ARCHIVE_NOT_FOUND:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+
+        requester = db.get_by_id(requester_id)
+        actor_name = requester["name"] if requester else requester_id
+        try:
+            push.notify_users(
+                user_ids=set(activity["memberIds"]),
+                exclude_user_ids={requester_id},
+                title="Activity archived",
+                body=f"{actor_name} archived {activity['text']}",
+                url="/",
+            )
+        except Exception:  # noqa: BLE001 - archiving must remain successful
+            app.logger.exception("Failed to send activity archive notification")
+
         return jsonify(activities.list_recent(consistent=True))
 
     @app.delete("/api/activities/<activity_id>")

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
-  proposeActivity,
+  archiveActivity,
   deleteActivity,
   joinActivity,
   leaveActivity,
@@ -29,10 +29,6 @@ export default function ProposeActivity({
 }) {
   const { user } = useAuth();
   const activityRefs = useRef(new Map());
-  const [text, setText] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [joiningId, setJoiningId] = useState(null);
@@ -40,6 +36,8 @@ export default function ProposeActivity({
   const [commentingId, setCommentingId] = useState(null);
   const [likingCommentIds, setLikingCommentIds] = useState([]);
   const [openLikesCommentId, setOpenLikesCommentId] = useState(null);
+  const [confirmingArchiveId, setConfirmingArchiveId] = useState(null);
+  const [archivingId, setArchivingId] = useState(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [editingScheduleId, setEditingScheduleId] = useState(null);
@@ -61,6 +59,7 @@ export default function ProposeActivity({
     const { activityId } = activityFocusRequest;
     setExpandedId(activityId);
     setCommentText("");
+    setConfirmingArchiveId(null);
     setConfirmingDeleteId(null);
     requestAnimationFrame(() => {
       activityRefs.current.get(activityId)?.scrollIntoView({
@@ -74,6 +73,7 @@ export default function ProposeActivity({
     setExpandedId((current) => (current === id ? null : id));
     setCommentText("");
     setOpenLikesCommentId(null);
+    setConfirmingArchiveId(null);
     setConfirmingDeleteId(null);
     setEditingScheduleId(null);
   }
@@ -90,35 +90,6 @@ export default function ProposeActivity({
     return "";
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    const trimmed = text.trim();
-    const timeError = validateTimes(startTime, endTime);
-    if (timeError) {
-      setError(timeError);
-      return;
-    }
-    if (!trimmed || sending) return;
-    setSending(true);
-    setError("");
-    try {
-      const updated = await proposeActivity(
-        trimmed,
-        user.id,
-        fromDateTimeLocal(startTime),
-        fromDateTimeLocal(endTime),
-      );
-      onActivitiesChange(updated);
-      setText("");
-      setStartTime("");
-      setEndTime("");
-    } catch (err) {
-      setError(err.message || "Could not send your proposal. Try again.");
-    } finally {
-      setSending(false);
-    }
-  }
-
   async function handleDelete(activity) {
     if (deletingId) return;
     setDeletingId(activity.id);
@@ -131,6 +102,20 @@ export default function ProposeActivity({
       setError(err.message || "Could not delete the activity. Try again.");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleArchive(activity) {
+    if (archivingId) return;
+    setArchivingId(activity.id);
+    setError("");
+    try {
+      onActivitiesChange(await archiveActivity(activity.id, user.id));
+      setConfirmingArchiveId(null);
+    } catch (err) {
+      setError(err.message || "Could not archive the activity. Try again.");
+    } finally {
+      setArchivingId(null);
     }
   }
 
@@ -441,13 +426,41 @@ export default function ProposeActivity({
                 readOnly={activity.isExpired}
               />
 
-              {isOwner && (
+              {(!activity.isExpired || isOwner) && (
                 <div
                   className={styles.deleteActions}
                   onClick={(event) => event.stopPropagation()}
                   onKeyDown={(event) => event.stopPropagation()}
                 >
-                  {confirmingDeleteId === activity.id ? (
+                  {!activity.isExpired && confirmingArchiveId === activity.id ? (
+                    <>
+                      <span className={styles.deletePrompt}>Archive this event?</span>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingArchiveId(null)}
+                        disabled={archivingId === activity.id}
+                        className={cx(
+                          "ui-pillButton ui-pillSecondary",
+                          styles.smallPill,
+                        )}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleArchive(activity)}
+                        disabled={archivingId === activity.id}
+                        className={cx(
+                          "ui-pillButton ui-pillDangerSoft",
+                          styles.smallPill,
+                        )}
+                      >
+                        {archivingId === activity.id ? "Archiving…" : "Archive"}
+                      </button>
+                    </>
+                  ) : null}
+
+                  {!activity.isExpired && confirmingDeleteId === activity.id ? (
                     <>
                       <span className={styles.deletePrompt}>Delete this event?</span>
                       <button
@@ -473,10 +486,56 @@ export default function ProposeActivity({
                         {deletingId === activity.id ? "Deleting…" : "Delete"}
                       </button>
                     </>
-                  ) : (
+                  ) : null}
+
+                  {!activity.isExpired &&
+                  confirmingArchiveId !== activity.id &&
+                  confirmingDeleteId !== activity.id ? (
+                    <div className={styles.actionButtonRow}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmingDeleteId(null);
+                          setConfirmingArchiveId(activity.id);
+                        }}
+                        className={cx(
+                          "ui-pillButton ui-pillSecondary",
+                          styles.smallPill,
+                        )}
+                      >
+                        Archive event
+                      </button>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmingArchiveId(null);
+                            setConfirmingDeleteId(activity.id);
+                          }}
+                          disabled={activity.isLive}
+                          title={
+                            activity.isLive
+                              ? "End the event before deleting it"
+                              : undefined
+                          }
+                          className={cx(
+                            "ui-pillButton ui-pillDangerSoft",
+                            styles.smallPill,
+                          )}
+                        >
+                          Delete event
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {activity.isExpired && isOwner ? (
                     <button
                       type="button"
-                      onClick={() => setConfirmingDeleteId(activity.id)}
+                      onClick={() => {
+                        setConfirmingArchiveId(null);
+                        setConfirmingDeleteId(activity.id);
+                      }}
                       disabled={activity.isLive}
                       title={
                         activity.isLive
@@ -490,7 +549,7 @@ export default function ProposeActivity({
                     >
                       Delete event
                     </button>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -502,51 +561,6 @@ export default function ProposeActivity({
 
   return (
     <section className={styles.section}>
-      <p className="ui-sectionLabel">Propose an activity</p>
-      <form onSubmit={handleSubmit} className={styles.form}>
-        <div className={styles.proposalFields}>
-          <input
-            type="text"
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            maxLength={280}
-            placeholder="Rod D and Monopoly Deal?"
-            className={cx("ui-textInput", styles.input)}
-          />
-          <div className={styles.timeFields}>
-            <label className={styles.timeField}>
-              <span>Start (optional)</span>
-              <input
-                type="datetime-local"
-                value={startTime}
-                onChange={(event) => {
-                  setStartTime(event.target.value);
-                  if (!event.target.value) setEndTime("");
-                }}
-                className={cx("ui-textInput", styles.timeInput)}
-              />
-            </label>
-            <label className={styles.timeField}>
-              <span>End (optional)</span>
-              <input
-                type="datetime-local"
-                value={endTime}
-                onChange={(event) => setEndTime(event.target.value)}
-                disabled={!startTime}
-                className={cx("ui-textInput", styles.timeInput)}
-              />
-            </label>
-          </div>
-        </div>
-        <button
-          type="submit"
-          disabled={sending || !text.trim()}
-          className={cx("ui-primaryButton", styles.sendButton)}
-        >
-          {sending ? "Sending…" : "Send"}
-        </button>
-      </form>
-
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
 
       <div className={styles.list}>

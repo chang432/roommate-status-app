@@ -15,6 +15,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/roommates/<id>/poke` | `{ requesterId }`         | `{ sent, pruned, failed }`                  |
 | `POST /api/activities`          | `{ text, proposedById, startAt?, endAt? }` | full updated activity list |
 | `PATCH /api/activities/<id>/schedule` | `{ requesterId, startAt?, endAt? }` | full updated activity list |
+| `POST /api/activities/<id>/archive` | `{ requesterId }` | full updated activity list |
 | `DELETE /api/activities/<id>`   | `{ requesterId }`          | full updated activity list                |
 | `POST /api/activities/<id>/start` | `{ requesterId }`        | full updated activity list                |
 | `POST /api/activities/<id>/end` | `{ requesterId }`          | full updated activity list                |
@@ -36,12 +37,14 @@ the server-generated epoch-millisecond time of the most recent status save, or
 `null` for records that have not been updated since this field was introduced.
 Every roommate shares the demo password **`roomie`** until real auth is added.
 New activities store both the creator's stable roommate id (`proposedById`) and
-canonical display name (`proposedBy`). Only that id can delete the activity;
-legacy activities without `proposedById` remain visible but cannot be deleted.
-Only the creator can edit an event schedule, start it early, end it, or restart
-it after expiration. Activities may overlap. A scheduled activity is live once
-its `startAt` passes and expires when its optional `endAt` passes. Manual end is
-terminal; restart starts immediately and clears the old end. Lifecycle is
+canonical display name (`proposedBy`). Any roommate can archive an activity,
+which sets its `endedAt` timestamp so it moves into expired history. Only the
+creator can permanently delete the activity, edit its schedule, start it early,
+end it, or restart it after expiration. Legacy activities without
+`proposedById` remain visible but cannot be deleted. Activities may overlap. A
+scheduled activity is live once its `startAt` passes and expires when its
+optional `endAt` passes. Manual end is terminal; restart starts immediately and
+clears the old end. Lifecycle is
 derived from server time, so visible apps pick up automatic changes through
 their five-second activity polling without scheduler infrastructure.
 Push subscriptions and activity participants are associated with stable
