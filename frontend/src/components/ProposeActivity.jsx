@@ -114,25 +114,6 @@ export default function ProposeActivity({
     }
   }
 
-  // Notify the other participants that you emphasized this activity.
-  async function handleNotify(activity) {
-    if (notifyingId) return;
-    setNotifyingId(activity.id);
-    setError("");
-    try {
-      await notifyActivity(activity.id, user.id);
-      setSentId(activity.id);
-      setTimeout(
-        () => setSentId((cur) => (cur === activity.id ? null : cur)),
-        2000,
-      );
-    } catch {
-      setError("Could not send the notification. Try again.");
-    } finally {
-      setNotifyingId(null);
-    }
-  }
-
   // Toggle the current user's membership of an activity. The member list comes
   // back from the server, so the count and panel stay in sync everywhere.
   async function handleToggleMember(activity, isMember) {
@@ -212,7 +193,7 @@ export default function ProposeActivity({
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={280}
-          placeholder="Pizza and a movie?"
+          placeholder="Rod D and Monopoly Deal?"
           className={cx("ui-textInput", styles.input)}
         />
         <button
@@ -314,20 +295,6 @@ export default function ProposeActivity({
                           : "Start"}
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleNotify(a);
-                    }}
-                    disabled={notifyingId === a.id}
-                    // Icon-only: text is dropped in favor of the bell; aria-label
-                    // keeps it accessible, and a ✓ briefly confirms a sent notify.
-                    aria-label="Notify participants"
-                    className={cx("ui-pillButton", styles.notifyButton)}
-                  >
-                    {sentId === a.id ? "✓" : "🔔"}
-                  </button>
                   {!canDelete && (
                     <button
                       type="button"

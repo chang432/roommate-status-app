@@ -1,4 +1,4 @@
-# York Terrace Roomie Status — Frontend
+# Yorkshire Roomie Status — Frontend
 
 A small React + Tailwind CSS web app where housemates set and view each other's
 availability to hang out. Built from the mockups in `../mockups`.
@@ -7,7 +7,7 @@ availability to hang out. Built from the mockups in `../mockups`.
 
 - **Login** by picking your name and entering a password.
 - **View** the whole household's current statuses at a glance.
-- **Set your status**: _Available to hang_, _Busy with something_, or a custom
+- **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.
 - **Gather banner**: when 3+ roommates are available, a notification banner
   invites everyone to hang out (PROJECT.md threshold).
@@ -48,17 +48,18 @@ Priya, Leo) with the demo password **`roomie`**.
 All backend calls live in `src/api/client.js`, which targets the Flask server
 (`../docker/flask`) under `/api`:
 
-| Function            | Method & path                     |
-| ------------------- | --------------------------------- |
-| `login`             | `POST /api/login`                 |
-| `getRoommates`      | `GET /api/roommates`              |
-| `updateStatus`      | `PUT /api/roommates/:id/status`   |
-| `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify` |
-| `proposeActivity`   | `POST /api/activities`            |
-| `deleteActivity`    | `DELETE /api/activities/:id`      |
-| `startActivity`     | `POST /api/activities/:id/start`  |
-| `endActivity`       | `POST /api/activities/:id/end`    |
-| `setCommentLiked`   | `PUT/DELETE /api/activities/:id/comments/:commentId/likes` |
+| Function                        | Method & path                                              |
+| ------------------------------- | ---------------------------------------------------------- |
+| `login`                         | `POST /api/login`                                          |
+| `getRoommates`                  | `GET /api/roommates`                                       |
+| `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
+| `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
+| `pokeRoommate`                  | `POST /api/roommates/:id/poke`                             |
+| `proposeActivity`               | `POST /api/activities`                                     |
+| `deleteActivity`                | `DELETE /api/activities/:id`                               |
+| `startActivity`                 | `POST /api/activities/:id/start`                           |
+| `endActivity`                   | `POST /api/activities/:id/end`                             |
+| `setCommentLiked`               | `PUT/DELETE /api/activities/:id/comments/:commentId/likes` |
 
 In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
 Point at a different server with `VITE_API_TARGET`:

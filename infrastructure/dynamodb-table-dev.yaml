@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  DynamoDB tables for the "dev" deployment of the York Terrace Roomie Status
+  DynamoDB tables for the "dev" deployment of the Yorkshire Roomie Status
   app:
     - RoommateStatus-dev: one item per roommate, keyed by a stable string id
       (e.g. "jordan"); name/status/statusText are schemaless, written by the app.

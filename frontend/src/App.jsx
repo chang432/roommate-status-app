@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import LoginPage from './pages/LoginPage.jsx'
 import StatusPage from './pages/StatusPage.jsx'
 import { useAuth } from './context/AuthContext.jsx'
@@ -6,7 +6,16 @@ import { useAuth } from './context/AuthContext.jsx'
 // Gate the status page behind authentication; bounce guests to /login.
 function RequireAuth({ children }) {
   const { user } = useAuth()
-  return user ? children : <Navigate to="/login" replace />
+  const location = useLocation()
+  return user ? (
+    children
+  ) : (
+    <Navigate
+      to="/login"
+      replace
+      state={{ returnTo: `${location.pathname}${location.search}` }}
+    />
+  )
 }
 
 export default function App() {

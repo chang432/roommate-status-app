@@ -3,7 +3,11 @@
 }
 
 .dialog {
-  @apply w-full max-w-[400px] rounded-md border border-line bg-card p-6 shadow-card;
+  @apply relative w-full max-w-[400px] rounded-md border border-line bg-card p-6 shadow-card;
+}
+
+.closeButton {
+  @apply absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full text-[26px] leading-none text-ink-soft transition hover:bg-[#faf6ef] hover:text-ink;
 }
 
 .titleRow {
@@ -30,6 +34,18 @@
   @apply mt-[12px] text-[12.5px] text-ink-soft;
 }
 
-.closeButton {
-  @apply mt-[20px] w-full py-[12px] text-[14px];
+.pokeResult {
+  @apply mt-3 text-center text-[13px] font-semibold text-accent-deep;
+}
+
+.pokeError {
+  @apply mt-3 text-center text-[13px] font-semibold text-status-red;
+}
+
+.actions {
+  @apply mt-[20px];
+}
+
+.actionButton {
+  @apply w-full py-[12px] text-[14px];
 }

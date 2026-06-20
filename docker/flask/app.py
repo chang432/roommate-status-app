@@ -1,4 +1,4 @@
-"""Flask backend for the York Terrace Roomie Status app.
+"""Flask backend for the Yorkshire Roomie Status app.
 
 Implements the endpoints the frontend calls (see frontend/src/api/client.js):
 
@@ -7,6 +7,7 @@ Implements the endpoints the frontend calls (see frontend/src/api/client.js):
                                              "statusUpdatedAt" }, ... ]
     PUT  /api/roommates/<id>/status    -> the full, updated household list
     POST /api/roommates/notify         -> { "sent", "pruned", "failed" }
+    POST /api/roommates/<id>/poke      -> { "sent", "pruned", "failed" }
 
 Plus the Web Push (PoC) endpoints:
 
@@ -155,7 +156,7 @@ def create_app() -> Flask:
             try:
                 push.notify_all(
                     title="Roomies are free!",
-                    body=f"{free} roomies are around right now — perfect time to gather.",
+                    body=f"{free} roomies are free! LETS HANG 🎉!",
                     url="/",
                     exclude_user_ids={roommate_id},
                 )
@@ -181,6 +182,40 @@ def create_app() -> Flask:
             url="/",
             exclude_user_ids={requester["id"]},
         )
+        return jsonify(result)
+
+    @app.post("/api/roommates/<roommate_id>/poke")
+    def poke_roommate(roommate_id: str):
+        """Send one roommate a targeted reminder that opens their status editor."""
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        requester = db.get_by_id(requester_id) if requester_id else None
+        target = db.get_by_id(roommate_id)
+        if requester is None or target is None:
+            return jsonify({"error": "Valid requester and roommate are required."}), 400
+        if requester["id"] == target["id"]:
+            return jsonify({"error": "You cannot poke yourself."}), 400
+        if not push.is_configured():
+            return jsonify({"error": "Push is not configured on the server."}), 503
+
+        result = push.notify_users(
+            user_ids={target["id"]},
+            title=f"{requester['name']} poked you 👋",
+            body="Update your status so they know what you're up to.",
+            url="/?updateStatus=1",
+        )
+        if result["sent"] == 0:
+            return (
+                jsonify(
+                    {
+                        "error": (
+                            f"Could not deliver the poke to {target['name']}. "
+                            "They may not have notifications enabled."
+                        )
+                    }
+                ),
+                409,
+            )
         return jsonify(result)
 
     # --- Web Push (PoC) -----------------------------------------------------

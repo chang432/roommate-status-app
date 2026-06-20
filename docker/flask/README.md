@@ -12,6 +12,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `GET  /api/roommates`          | —                          | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status` | `{ status, statusText }` | full updated household list              |
 | `POST /api/roommates/notify`   | `{ requesterId }`          | `{ sent, pruned, failed }`                  |
+| `POST /api/roommates/<id>/poke` | `{ requesterId }`         | `{ sent, pruned, failed }`                  |
 | `POST /api/activities`          | `{ text, proposedById }`   | full updated activity list                |
 | `DELETE /api/activities/<id>`   | `{ requesterId }`          | full updated activity list                |
 | `POST /api/activities/<id>/start` | `{ requesterId }`        | full updated activity list                |
@@ -34,6 +35,8 @@ Push subscriptions and activity participants are associated with stable
 roommate ids. User-triggered notifications always exclude the actor. New
 activity proposals and gather notifications go household-wide; event comments,
 joins, deletion, and emphasis go only to that event's participants.
+Roommate pokes target one roommate and open that recipient's status editor when
+the notification is selected.
 Event start/end notifications go household-wide.
 Comments may mention any household member with `@Name`. Mentioned roommates get
 a targeted push; unmentioned event participants still get the normal comment

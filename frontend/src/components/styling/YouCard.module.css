@@ -34,8 +34,80 @@
   @apply flex-none rounded-full border-[1.5px] border-[#e6c2ad] bg-white px-4 py-[9px] text-[14px] font-bold text-accent-deep transition hover:bg-[#fff3ec] active:translate-y-px;
 }
 
+.editor {
+  @apply grid w-full grid-cols-[minmax(140px,0.7fr)_minmax(0,1.3fr)_auto] items-end gap-3 border-t border-[#ecc9b6] pt-4;
+}
+
+.field {
+  @apply min-w-0;
+}
+
+.fieldLabel {
+  @apply mb-[6px] ml-[2px] block text-[11px] font-bold uppercase tracking-[0.06em] text-accent-deep;
+}
+
+.statusSelect {
+  @apply relative;
+}
+
+.statusSelectButton {
+  @apply flex h-[42px] w-full items-center justify-between gap-3 px-[11px] py-[8px] pr-[16px] text-left text-[14px] disabled:opacity-70;
+}
+
+.statusSelectButtonOpen {
+  @apply border-accent shadow-[0_0_0_3px_rgba(211,111,65,0.12)];
+}
+
+.statusSelectValue {
+  @apply flex min-w-0 items-center gap-[9px];
+}
+
+.statusSelectValue span:last-child {
+  @apply truncate;
+}
+
+.statusSelectArrow {
+  @apply ml-4 flex-none text-[14px] text-accent-deep;
+}
+
+.statusMenu {
+  @apply absolute left-0 right-0 top-[calc(100%+6px)] z-20 overflow-hidden rounded-md border border-[#e1cdbb] bg-white py-[5px] shadow-card;
+}
+
+.statusOption {
+  @apply flex w-full items-center gap-[9px] px-[11px] py-[9px] text-left text-[14px] font-semibold text-ink transition hover:bg-accent-soft;
+}
+
+.statusOptionSelected {
+  @apply bg-accent-soft text-accent-deep;
+}
+
+.noteInput {
+  @apply h-[42px] px-[11px] py-[8px] text-[14px];
+}
+
+.editorActions {
+  @apply flex gap-[8px];
+}
+
+.saveButton {
+  @apply h-[42px] px-[15px] text-[13.5px];
+}
+
+.cancelButton {
+  @apply h-[42px] px-[14px] text-[13.5px];
+}
+
 @media (max-width: 520px) {
   .editButton {
     @apply w-full;
+  }
+
+  .editor {
+    @apply grid-cols-1;
+  }
+
+  .editorActions {
+    @apply justify-end;
   }
 }
