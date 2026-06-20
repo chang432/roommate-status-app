@@ -3,7 +3,11 @@
 }
 
 .dialog {
-  @apply w-full max-w-[400px] rounded-md border border-line bg-card p-6 shadow-card;
+  @apply relative w-full max-w-[400px] rounded-md border border-line bg-card p-6 shadow-card;
+}
+
+.closeButton {
+  @apply absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full text-[26px] leading-none text-ink-soft transition hover:bg-[#faf6ef] hover:text-ink;
 }
 
 .titleRow {
@@ -35,9 +39,9 @@
 }
 
 .actions {
-  @apply mt-[20px] grid grid-cols-2 gap-3;
+  @apply mt-[20px];
 }
 
 .actionButton {
-  @apply py-[12px] text-[14px];
+  @apply w-full py-[12px] text-[14px];
 }

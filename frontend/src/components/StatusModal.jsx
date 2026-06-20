@@ -6,8 +6,8 @@ import { cx } from '../utils/classNames.js'
 import styles from './styling/StatusModal.module.css'
 
 // Centered popup showing a roommate's full status — used when a compact card
-// truncates a long supplemental note. Closes on backdrop click, the Close
-// button, or Escape.
+// truncates a long supplemental note. Closes on backdrop click, the top-right
+// close button, or Escape.
 export default function StatusModal({ roommate, onPoke, onClose }) {
   const [poking, setPoking] = useState(false)
   const [pokeResult, setPokeResult] = useState('')
@@ -46,6 +46,14 @@ export default function StatusModal({ roommate, onPoke, onClose }) {
         onClick={(e) => e.stopPropagation()}
         className={styles.dialog}
       >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className={styles.closeButton}
+        >
+          ×
+        </button>
         <div className={styles.titleRow}>
           <StatusDot status={roommate.status} />
           <span className={styles.name}>{roommate.name}</span>
@@ -75,14 +83,7 @@ export default function StatusModal({ roommate, onPoke, onClose }) {
             disabled={poking || pokeResult === 'Poked!'}
             className={cx('ui-primaryButton', styles.actionButton)}
           >
-            {poking ? 'Poking…' : pokeResult === 'Poked!' ? 'Poked!' : `Poke ${roommate.name}`}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className={cx('ui-secondaryButton', styles.actionButton)}
-          >
-            Close
+            {poking ? 'Poking…' : pokeResult === 'Poked!' ? 'Poked!' : '👉 Poke'}
           </button>
         </div>
       </div>
