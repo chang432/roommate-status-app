@@ -142,6 +142,10 @@
   @apply mt-[14px] flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[12px];
 }
 
+.actionButtonRow {
+  @apply flex flex-wrap items-center justify-end gap-[8px] ml-auto;
+}
+
 .deletePrompt {
   @apply mr-auto text-[12.5px] font-semibold text-status-red max-[400px]:w-full;
 }

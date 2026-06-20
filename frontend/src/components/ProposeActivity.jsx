@@ -426,13 +426,13 @@ export default function ProposeActivity({
                 readOnly={activity.isExpired}
               />
 
-              {!activity.isExpired && (
+              {(!activity.isExpired || isOwner) && (
                 <div
                   className={styles.deleteActions}
                   onClick={(event) => event.stopPropagation()}
                   onKeyDown={(event) => event.stopPropagation()}
                 >
-                  {confirmingArchiveId === activity.id ? (
+                  {!activity.isExpired && confirmingArchiveId === activity.id ? (
                     <>
                       <span className={styles.deletePrompt}>Archive this event?</span>
                       <button
@@ -458,28 +458,9 @@ export default function ProposeActivity({
                         {archivingId === activity.id ? "Archiving…" : "Archive"}
                       </button>
                     </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmingArchiveId(activity.id)}
-                      className={cx(
-                        "ui-pillButton ui-pillSecondary",
-                        styles.smallPill,
-                      )}
-                    >
-                      Archive event
-                    </button>
-                  )}
-                </div>
-              )}
+                  ) : null}
 
-              {isOwner && (
-                <div
-                  className={styles.deleteActions}
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                  {confirmingDeleteId === activity.id ? (
+                  {!activity.isExpired && confirmingDeleteId === activity.id ? (
                     <>
                       <span className={styles.deletePrompt}>Delete this event?</span>
                       <button
@@ -505,10 +486,56 @@ export default function ProposeActivity({
                         {deletingId === activity.id ? "Deleting…" : "Delete"}
                       </button>
                     </>
-                  ) : (
+                  ) : null}
+
+                  {!activity.isExpired &&
+                  confirmingArchiveId !== activity.id &&
+                  confirmingDeleteId !== activity.id ? (
+                    <div className={styles.actionButtonRow}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmingDeleteId(null);
+                          setConfirmingArchiveId(activity.id);
+                        }}
+                        className={cx(
+                          "ui-pillButton ui-pillSecondary",
+                          styles.smallPill,
+                        )}
+                      >
+                        Archive event
+                      </button>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmingArchiveId(null);
+                            setConfirmingDeleteId(activity.id);
+                          }}
+                          disabled={activity.isLive}
+                          title={
+                            activity.isLive
+                              ? "End the event before deleting it"
+                              : undefined
+                          }
+                          className={cx(
+                            "ui-pillButton ui-pillDangerSoft",
+                            styles.smallPill,
+                          )}
+                        >
+                          Delete event
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {activity.isExpired && isOwner ? (
                     <button
                       type="button"
-                      onClick={() => setConfirmingDeleteId(activity.id)}
+                      onClick={() => {
+                        setConfirmingArchiveId(null);
+                        setConfirmingDeleteId(activity.id);
+                      }}
                       disabled={activity.isLive}
                       title={
                         activity.isLive
@@ -522,7 +549,7 @@ export default function ProposeActivity({
                     >
                       Delete event
                     </button>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
