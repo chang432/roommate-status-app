@@ -1,0 +1,39 @@
+.comments {
+  @apply mt-[14px] border-t border-line pt-[12px];
+}
+
+.panelTitle {
+  @apply mb-[8px] text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft;
+}
+
+.emptyComments {
+  @apply mb-[10px] text-[13px] text-ink-soft;
+}
+
+.commentScroller {
+  @apply mb-[10px] max-h-[220px] overflow-y-auto pr-2;
+}
+
+.commentList {
+  @apply mb-[10px] space-y-[8px];
+}
+
+.comment {
+  @apply text-[13px];
+}
+
+.commentMeta {
+  @apply flex items-center gap-2;
+}
+
+.commentAuthor {
+  @apply font-bold text-ink;
+}
+
+.commentTime {
+  @apply text-[11px] text-ink-soft;
+}
+
+.commentText {
+  @apply text-ink;
+}

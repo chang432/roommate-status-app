@@ -77,22 +77,22 @@ export async function savePushSubscription(subscription, userId) {
   })
 }
 
-// GET /api/activities — the most recent proposed activities, newest first.
+// GET /api/activities — current activities followed by expired history.
 export async function getActivities() {
   return request('/activities')
 }
 
 // POST /api/activities — propose an activity (also pushes it to everyone).
-// Returns the refreshed recent list.
-export async function proposeActivity(text, proposedById) {
+// Returns the refreshed activity list.
+export async function proposeActivity(text, proposedById, startAt = null, endAt = null) {
   return request('/activities', {
     method: 'POST',
-    body: JSON.stringify({ text, proposedById }),
+    body: JSON.stringify({ text, proposedById, startAt, endAt }),
   })
 }
 
 // DELETE /api/activities/:id — permanently remove an activity owned by the
-// requesting roommate. Returns the refreshed recent list.
+// requesting roommate. Returns the refreshed activity list.
 export async function deleteActivity(id, requesterId) {
   return request(`/activities/${id}`, {
     method: 'DELETE',
@@ -116,8 +116,16 @@ export async function endActivity(id, requesterId) {
   })
 }
 
+// PATCH /api/activities/:id/schedule — replace a pending owner's schedule.
+export async function updateActivitySchedule(id, requesterId, startAt, endAt) {
+  return request(`/activities/${id}/schedule`, {
+    method: 'PATCH',
+    body: JSON.stringify({ requesterId, startAt, endAt }),
+  })
+}
+
 // POST /api/activities/:id/join — add the identified roommate to an activity.
-// Returns the refreshed recent list (with updated member counts).
+// Returns the refreshed activity list (with updated member counts).
 export async function joinActivity(id, userId) {
   return request(`/activities/${id}/join`, {
     method: 'POST',
@@ -126,7 +134,7 @@ export async function joinActivity(id, userId) {
 }
 
 // POST /api/activities/:id/leave — remove the identified roommate from an activity.
-// Returns the refreshed recent list.
+// Returns the refreshed activity list.
 export async function leaveActivity(id, userId) {
   return request(`/activities/${id}/leave`, {
     method: 'POST',
@@ -135,7 +143,7 @@ export async function leaveActivity(id, userId) {
 }
 
 // POST /api/activities/:id/comments — add a comment to an activity.
-// Returns the refreshed recent list (each activity carries its latest comments).
+// Returns the refreshed activity list (each activity carries its latest comments).
 export async function commentOnActivity(id, authorId, text) {
   return request(`/activities/${id}/comments`, {
     method: 'POST',
@@ -147,6 +155,54 @@ export async function commentOnActivity(id, authorId, text) {
 // update the signed-in roommate's reaction and return the refreshed feed.
 export async function setCommentLiked(id, commentId, userId, liked) {
   return request(`/activities/${id}/comments/${commentId}/likes`, {
+    method: liked ? 'PUT' : 'DELETE',
+    body: JSON.stringify({ userId }),
+  })
+}
+
+// GET /api/requests — recent household requests, newest first.
+export async function getRequests() {
+  return request('/requests')
+}
+
+// POST /api/requests — create a targeted request for specific roommates.
+// Returns the refreshed request list.
+export async function createRequest(text, requesterId, requestedIds) {
+  return request('/requests', {
+    method: 'POST',
+    body: JSON.stringify({ text, requesterId, requestedIds }),
+  })
+}
+
+// POST /api/requests/:id/responses — accept or deny a request.
+// `response` is "accepted" or "denied".
+export async function respondToRequest(id, userId, response) {
+  return request(`/requests/${id}/responses`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, response }),
+  })
+}
+
+// POST /api/requests/:id/complete — mark a request completed.
+export async function completeRequest(id, userId) {
+  return request(`/requests/${id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}
+
+// POST /api/requests/:id/comments — add a comment to a request.
+export async function commentOnRequest(id, authorId, text) {
+  return request(`/requests/${id}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ authorId, text }),
+  })
+}
+
+// PUT/DELETE /api/requests/:id/comments/:commentId/likes — update a request
+// comment reaction and return the refreshed request list.
+export async function setRequestCommentLiked(id, commentId, userId, liked) {
+  return request(`/requests/${id}/comments/${commentId}/likes`, {
     method: liked ? 'PUT' : 'DELETE',
     body: JSON.stringify({ userId }),
   })

@@ -13,11 +13,18 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `PUT  /api/roommates/<id>/status` | `{ status, statusText }` | full updated household list              |
 | `POST /api/roommates/notify`   | `{ requesterId }`          | `{ sent, pruned, failed }`                  |
 | `POST /api/roommates/<id>/poke` | `{ requesterId }`         | `{ sent, pruned, failed }`                  |
-| `POST /api/activities`          | `{ text, proposedById }`   | full updated activity list                |
+| `POST /api/activities`          | `{ text, proposedById, startAt?, endAt? }` | full updated activity list |
+| `PATCH /api/activities/<id>/schedule` | `{ requesterId, startAt?, endAt? }` | full updated activity list |
 | `DELETE /api/activities/<id>`   | `{ requesterId }`          | full updated activity list                |
 | `POST /api/activities/<id>/start` | `{ requesterId }`        | full updated activity list                |
 | `POST /api/activities/<id>/end` | `{ requesterId }`          | full updated activity list                |
 | `PUT/DELETE /api/activities/<id>/comments/<commentId>/likes` | `{ userId }` | full updated activity list |
+| `GET /api/requests`              | —                          | full request list                          |
+| `POST /api/requests`             | `{ text, requesterId, requestedIds }` | full updated request list    |
+| `POST /api/requests/<id>/responses` | `{ userId, response }`  | full updated request list                  |
+| `POST /api/requests/<id>/complete` | `{ userId }`             | full updated request list                  |
+| `POST /api/requests/<id>/comments` | `{ authorId, text }`     | full updated request list                  |
+| `PUT/DELETE /api/requests/<id>/comments/<commentId>/likes` | `{ userId }` | full updated request list |
 | `POST /api/push/subscribe`      | `{ subscription, userId }` | `{ ok: true }`                            |
 | `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
 
@@ -29,8 +36,12 @@ Every roommate shares the demo password **`roomie`** until real auth is added.
 New activities store both the creator's stable roommate id (`proposedById`) and
 canonical display name (`proposedBy`). Only that id can delete the activity;
 legacy activities without `proposedById` remain visible but cannot be deleted.
-Only the creator can start or end an event. One event may be live household-wide
-at a time; ending it returns it to proposed status so it can be restarted.
+Only the creator can edit an event schedule, start it early, end it, or restart
+it after expiration. Activities may overlap. A scheduled activity is live once
+its `startAt` passes and expires when its optional `endAt` passes. Manual end is
+terminal; restart starts immediately and clears the old end. Lifecycle is
+derived from server time, so visible apps pick up automatic changes through
+their five-second activity polling without scheduler infrastructure.
 Push subscriptions and activity participants are associated with stable
 roommate ids. User-triggered notifications always exclude the actor. New
 activity proposals and gather notifications go household-wide; event comments,
@@ -46,6 +57,10 @@ Comments have stable ids and can be liked once per non-author roommate; likes
 are idempotent, can be removed, and do not send push notifications.
 Live-event pushes include an activity-change event type so open apps refresh
 their banner immediately.
+Requests are stored as typed records in the activities table, targeted to
+specific roommate ids, and support comments and comment likes. Requested
+roommates can accept or deny, any roommate can complete a request, and request
+notifications target the requested users or the requester as appropriate.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).
@@ -64,8 +79,7 @@ Configuration:
 | `DYNAMODB_ENDPOINT` | —                     | Local dev only: point boto3 at a DynamoDB Local instead of real AWS |
 
 The runtime AWS principal must allow `dynamodb:DeleteItem` on the activities
-table for creator-owned event deletion and `dynamodb:TransactWriteItems` for
-atomic live-event transitions.
+table for creator-owned event deletion.
 
 Credentials resolve via the standard AWS chain. The deploy script lives in
 `infrastructure/`; once the table exists, seed the initial household **once**:

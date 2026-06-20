@@ -6,12 +6,15 @@ import StatusCard from "../components/StatusCard.jsx";
 import NotificationBanner from "../components/NotificationBanner.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
 import EnableNotifications from "../components/EnableNotifications.jsx";
+import FeatureTabs from "../components/FeatureTabs.jsx";
 import ProposeActivity from "../components/ProposeActivity.jsx";
 import PullToRefreshIndicator from "../components/PullToRefreshIndicator.jsx";
+import RequestFeature from "../components/RequestFeature.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   endActivity,
   getActivities,
+  getRequests,
   getRoommates,
   notifyRoommatesToUpdateStatus,
   pokeRoommate,
@@ -42,6 +45,7 @@ export default function StatusPage() {
 
   const [roommates, setRoommates] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
@@ -50,6 +54,7 @@ export default function StatusPage() {
   const [saving, setSaving] = useState(false);
   const [notifyingHousehold, setNotifyingHousehold] = useState(false);
   const [activityFocusRequest, setActivityFocusRequest] = useState(null);
+  const [activeBoardTab, setActiveBoardTab] = useState("activities");
 
   // Fetch the household; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
@@ -70,13 +75,22 @@ export default function StatusPage() {
     }
   }, []);
 
-  // Load both page-level data sets so the live banner and activity cards share
-  // one source of truth from the first render onward.
+  const loadRequests = useCallback(async () => {
+    try {
+      setRequests(await getRequests());
+      setLiveError("");
+    } catch {
+      setLiveError("Could not load household requests.");
+    }
+  }, []);
+
+  // Load page-level data sets so household, activities, and requests share one
+  // source of truth from the first render onward.
   useEffect(() => {
-    Promise.all([loadRoommates(), loadActivities()]).finally(() =>
+    Promise.all([loadRoommates(), loadActivities(), loadRequests()]).finally(() =>
       setLoading(false),
     );
-  }, [loadActivities, loadRoommates]);
+  }, [loadActivities, loadRequests, loadRoommates]);
 
   // Keep live-event state current across household devices. Push-enabled open
   // apps refresh immediately from the service worker; visible-page polling and
@@ -106,6 +120,7 @@ export default function StatusPage() {
 
     function handleServiceWorkerMessage(event) {
       if (event.data?.type === "activities-changed") loadActivities();
+      if (event.data?.type === "requests-changed") loadRequests();
     }
 
     startPolling();
@@ -125,12 +140,12 @@ export default function StatusPage() {
         handleServiceWorkerMessage,
       );
     };
-  }, [loadActivities]);
+  }, [loadActivities, loadRequests]);
 
-  // Pull down from the top to refresh both household and event state.
+  // Pull down from the top to refresh household, activity, and request state.
   const handleRefresh = useCallback(async () => {
-    await Promise.all([loadRoommates(), loadActivities()]);
-  }, [loadActivities, loadRoommates]);
+    await Promise.all([loadRoommates(), loadActivities(), loadRequests()]);
+  }, [loadActivities, loadRequests, loadRoommates]);
 
   const { pull, refreshing, threshold } = usePullToRefresh(handleRefresh);
 
@@ -147,7 +162,7 @@ export default function StatusPage() {
 
   const freeCount = availableCount(roommates);
   const showBanner = freeCount >= AVAILABLE_THRESHOLD;
-  const liveEvent = activities.find((activity) => activity.isLive) ?? null;
+  const liveEvents = activities.filter((activity) => activity.isLive);
 
   // Poke notifications carry this one-shot intent. Open the editor after the
   // household loads, then remove the query so refreshes do not reopen it.
@@ -205,10 +220,10 @@ export default function StatusPage() {
     await pokeRoommate(roommateId, user.id);
   }
 
-  function handleLiveBannerClick() {
-    if (!liveEvent) return;
+  function handleLiveBannerClick(activityId) {
+    setActiveBoardTab("activities");
     setActivityFocusRequest((current) => ({
-      activityId: liveEvent.id,
+      activityId,
       requestId: (current?.requestId ?? 0) + 1,
     }));
   }
@@ -258,15 +273,20 @@ export default function StatusPage() {
               <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
             )}
 
-            {liveEvent && (
-              <LiveEventBanner
-                event={liveEvent}
-                canEnd={liveEvent.proposedById === user.id}
-                ending={transitioningId === liveEvent.id}
-                onEnd={() => handleLiveTransition(liveEvent, "end")}
-                user={user}
-                onBannerClick={handleLiveBannerClick}
-              />
+            {liveEvents.length > 0 && (
+              <div className={styles.liveEvents}>
+                {liveEvents.map((liveEvent) => (
+                  <LiveEventBanner
+                    key={liveEvent.id}
+                    event={liveEvent}
+                    canEnd={liveEvent.proposedById === user.id}
+                    ending={transitioningId === liveEvent.id}
+                    onEnd={() => handleLiveTransition(liveEvent, "end")}
+                    user={user}
+                    onBannerClick={() => handleLiveBannerClick(liveEvent.id)}
+                  />
+                ))}
+              </div>
             )}
 
             <EnableNotifications />
@@ -316,14 +336,37 @@ export default function StatusPage() {
               ))}
             </div>
 
-            <ProposeActivity
-              activities={activities}
-              onActivitiesChange={setActivities}
-              liveEvent={liveEvent}
-              transitioningId={transitioningId}
-              onLiveTransition={handleLiveTransition}
-              roommates={roommates}
-              activityFocusRequest={activityFocusRequest}
+            <FeatureTabs
+              defaultTabId="activities"
+              activeTabId={activeBoardTab}
+              onActiveTabChange={setActiveBoardTab}
+              tabs={[
+                {
+                  id: "activities",
+                  label: "Activities",
+                  content: (
+                    <ProposeActivity
+                      activities={activities}
+                      onActivitiesChange={setActivities}
+                      transitioningId={transitioningId}
+                      onLiveTransition={handleLiveTransition}
+                      roommates={roommates}
+                      activityFocusRequest={activityFocusRequest}
+                    />
+                  ),
+                },
+                {
+                  id: "requests",
+                  label: "Requests",
+                  content: (
+                    <RequestFeature
+                      requests={requests}
+                      onRequestsChange={setRequests}
+                      roommates={roommates}
+                    />
+                  ),
+                },
+              ]}
             />
           </>
         )}

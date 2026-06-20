@@ -1,8 +1,8 @@
 .banner {
-  @apply mb-[26px] mt-[22px] rounded-md border border-[#e8b9ae] bg-gradient-to-br from-[#fff0ec] to-[#fbe2dc] px-4 py-[14px] text-[#713c32] shadow-sm;
+  @apply rounded-md border border-[#e8b9ae] bg-gradient-to-br from-[#fff0ec] to-[#fbe2dc] px-4 py-[14px] text-[#713c32] shadow-sm;
 }
 .involvedBanner {
-  @apply mb-[26px] mt-[22px] rounded-md border border-[#e8b9ae] bg-gradient-to-br from-[#e8b9ae] to-[#e3a496] px-4 py-[14px] text-[#713c32] shadow-sm;
+  @apply rounded-md border border-[#e8b9ae] bg-gradient-to-br from-[#e8b9ae] to-[#e3a496] px-4 py-[14px] text-[#713c32] shadow-sm;
 }
 
 .clickable {

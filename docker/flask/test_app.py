@@ -23,6 +23,7 @@ from moto import mock_aws
 
 import activities
 import db
+import household_requests
 import push
 from app import create_app, mentions_all, resolve_mentions
 
@@ -425,11 +426,38 @@ def _b64url(raw: bytes) -> str:
 
 
 # --- Proposed activities ----------------------------------------------------
-def _propose(client, text: str, creator_id: str = "andre"):
+def _propose(
+    client,
+    text: str,
+    creator_id: str = "andre",
+    start_at: int | None = None,
+    end_at: int | None = None,
+):
     """Create an activity through the public API with a real roommate owner."""
     return client.post(
         "/api/activities",
-        json={"text": text, "proposedById": creator_id},
+        json={
+            "text": text,
+            "proposedById": creator_id,
+            "startAt": start_at,
+            "endAt": end_at,
+        },
+    )
+
+
+def _make_request(
+    client,
+    text: str = "Please take out recycling",
+    requester_id: str = "andre",
+    requested_ids: list[str] | None = None,
+):
+    return client.post(
+        "/api/requests",
+        json={
+            "text": text,
+            "requesterId": requester_id,
+            "requestedIds": requested_ids or ["kayla", "ting"],
+        },
     )
 
 
@@ -443,9 +471,192 @@ def test_propose_activity_creates_and_returns_list(client):
     assert data[0]["memberIds"] == ["andre"]
     assert isinstance(data[0]["createdAt"], int)
     assert data[0]["isLive"] is False
+    assert data[0]["isExpired"] is False
+    assert data[0]["startAt"] is None
+    assert data[0]["endAt"] is None
+    assert data[0]["endedAt"] is None
     assert data[0]["liveStartedAt"] is None
     # The proposer is auto-joined, so membership starts at exactly them.
     assert data[0]["members"] == ["Andre"]
+
+
+def test_create_request_targets_roommates_and_notifies_them(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+
+    res = _make_request(client, "  Please grab milk  ", requested_ids=["kayla", "ting"])
+
+    assert res.status_code == 200
+    request_item = res.get_json()[0]
+    assert request_item["text"] == "Please grab milk"
+    assert request_item["requester"] == "Andre"
+    assert request_item["requesterId"] == "andre"
+    assert request_item["requestedIds"] == ["kayla", "ting"]
+    assert request_item["requested"] == [
+        {"id": "kayla", "name": "Kayla", "response": "pending"},
+        {"id": "ting", "name": "Ting", "response": "pending"},
+    ]
+    assert request_item["isCompleted"] is False
+    assert request_item["completedAt"] is None
+    assert client.get("/api/activities").get_json() == []
+    assert calls == [
+        (
+            "users",
+            {
+                "user_ids": {"kayla", "ting"},
+                "title": "New request",
+                "body": "Andre requested: Please grab milk",
+                "url": "/",
+                "event_type": "requests-changed",
+            },
+        )
+    ]
+
+
+def test_create_request_rejects_empty_invalid_and_self_only(client):
+    assert _make_request(client, "   ").status_code == 400
+    assert _make_request(client, requester_id="ghost").status_code == 400
+    assert _make_request(client, requested_ids=["ghost"]).status_code == 400
+    assert _make_request(client, requested_ids=["andre"]).status_code == 400
+
+
+def test_requested_roommate_can_accept_or_deny(client, monkeypatch):
+    request_item = _make_request(client, requested_ids=["kayla", "ting"]).get_json()[0]
+    calls = _capture_notifications(monkeypatch)
+
+    accepted = client.post(
+        f"/api/requests/{request_item['id']}/responses",
+        json={"userId": "kayla", "response": "accepted"},
+    )
+
+    assert accepted.status_code == 200
+    updated = accepted.get_json()[0]
+    assert next(person for person in updated["requested"] if person["id"] == "kayla")[
+        "response"
+    ] == "accepted"
+    assert calls[-1] == (
+        "users",
+        {
+            "user_ids": {"andre"},
+            "exclude_user_ids": {"kayla"},
+            "title": "Request response",
+            "body": "Kayla accepted “Please take out recycling”",
+            "url": "/",
+            "event_type": "requests-changed",
+        },
+    )
+
+    denied = client.post(
+        f"/api/requests/{request_item['id']}/responses",
+        json={"userId": "ting", "response": "denied"},
+    )
+    assert denied.status_code == 200
+    assert next(person for person in denied.get_json()[0]["requested"] if person["id"] == "ting")[
+        "response"
+    ] == "denied"
+
+
+def test_request_response_requires_requested_roommate(client):
+    request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
+    not_requested = client.post(
+        f"/api/requests/{request_item['id']}/responses",
+        json={"userId": "ting", "response": "accepted"},
+    )
+    invalid_response = client.post(
+        f"/api/requests/{request_item['id']}/responses",
+        json={"userId": "kayla", "response": "maybe"},
+    )
+    assert not_requested.status_code == 404
+    assert invalid_response.status_code == 400
+
+
+def test_any_roommate_can_complete_request_and_notify_requester(client, monkeypatch):
+    request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
+    calls = _capture_notifications(monkeypatch)
+
+    completed = client.post(
+        f"/api/requests/{request_item['id']}/complete",
+        json={"userId": "ting"},
+    )
+
+    assert completed.status_code == 200
+    updated = completed.get_json()[0]
+    assert updated["isCompleted"] is True
+    assert updated["completedById"] == "ting"
+    assert updated["completedBy"] == "Ting"
+    assert isinstance(updated["completedAt"], int)
+    assert calls == [
+        (
+            "users",
+            {
+                "user_ids": {"andre"},
+                "exclude_user_ids": {"ting"},
+                "title": "Request completed",
+                "body": "Ting completed “Please take out recycling”",
+                "url": "/",
+                "event_type": "requests-changed",
+            },
+        )
+    ]
+
+
+def test_request_comments_and_likes_match_activity_shape(client, monkeypatch):
+    request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
+    calls = _capture_notifications(monkeypatch)
+
+    posted = client.post(
+        f"/api/requests/{request_item['id']}/comments",
+        json={"authorId": "kayla", "text": "I can do this"},
+    )
+
+    assert posted.status_code == 200
+    comment = posted.get_json()[0]["comments"][0]
+    assert comment["author"] == "Kayla"
+    assert comment["authorId"] == "kayla"
+    assert comment["text"] == "I can do this"
+    assert comment["likeCount"] == 0
+    assert calls[-1] == (
+        "users",
+        {
+            "user_ids": {"andre"},
+            "title": "New request comment",
+            "body": "Kayla on “Please take out recycling”: I can do this",
+            "url": "/",
+            "event_type": "requests-changed",
+        },
+    )
+
+    liked = client.put(
+        f"/api/requests/{request_item['id']}/comments/{comment['id']}/likes",
+        json={"userId": "andre"},
+    )
+    assert liked.status_code == 200
+    assert liked.get_json()[0]["comments"][0]["likedByIds"] == ["andre"]
+
+
+def test_request_comment_mentions_target_named_users(client, monkeypatch):
+    request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
+    calls = _capture_notifications(monkeypatch)
+
+    posted = client.post(
+        f"/api/requests/{request_item['id']}/comments",
+        json={"authorId": "kayla", "text": "@Ting can you help?"},
+    )
+
+    assert posted.status_code == 200
+    assert posted.get_json()[0]["comments"][0]["mentions"] == [
+        {"id": "ting", "name": "Ting"}
+    ]
+    assert calls[0] == (
+        "users",
+        {
+            "user_ids": {"ting"},
+            "title": "Kayla mentioned you",
+            "body": "On request “Please take out recycling”: @Ting can you help?",
+            "url": "/",
+            "event_type": "requests-changed",
+        },
+    )
+    assert calls[1][1]["user_ids"] == {"andre"}
 
 
 def test_propose_activity_uses_canonical_creator_name(client):
@@ -852,14 +1063,14 @@ def test_live_transition_conflicts_and_missing_event(client):
             f"/api/activities/{second['id']}/start",
             json={"requesterId": "kayla"},
         ).status_code
-        == 409
+        == 200
     )
     assert (
         client.post(
             f"/api/activities/{second['id']}/end",
             json={"requesterId": "kayla"},
         ).status_code
-        == 409
+        == 200
     )
     assert (
         client.post(
@@ -870,7 +1081,7 @@ def test_live_transition_conflicts_and_missing_event(client):
     )
 
 
-def test_concurrent_starts_produce_one_live_event(client):
+def test_concurrent_starts_allow_multiple_live_events(client):
     first = _propose(client, "Dinner", creator_id="andre").get_json()[0]
     second = _propose(client, "Movie", creator_id="kayla").get_json()[0]
 
@@ -882,9 +1093,9 @@ def test_concurrent_starts_produce_one_live_event(client):
             )
         )
 
-    assert sorted(results) == sorted([activities.LIVE_OK, activities.LIVE_CONFLICT])
+    assert results == [activities.LIVE_OK, activities.LIVE_OK]
     feed = activities.list_recent(consistent=True)
-    assert sum(item["isLive"] for item in feed) == 1
+    assert sum(item["isLive"] for item in feed) == 2
 
 
 def test_live_event_cannot_be_deleted(client):
@@ -918,7 +1129,7 @@ def test_live_transition_survives_push_failure(client, monkeypatch):
     assert activities.get(created["id"], consistent=True)["isLive"] is True
 
 
-def test_older_live_event_remains_in_capped_feed(client):
+def test_activity_feed_is_not_capped(client):
     table = activities._get_table()
     for i in range(6):
         table.put_item(
@@ -933,8 +1144,214 @@ def test_older_live_event_remains_in_capped_feed(client):
 
     assert activities.start_owned("owned-0", "andre") == activities.LIVE_OK
     feed = activities.list_recent(consistent=True)
-    assert len(feed) == activities.RECENT_LIMIT
+    assert len(feed) == 6
     assert any(item["id"] == "owned-0" and item["isLive"] for item in feed)
+
+
+def test_scheduled_activity_automatically_starts_and_expires(client, monkeypatch):
+    monkeypatch.setattr(activities.time, "time", lambda: 1_000)
+    created = _propose(
+        client,
+        "Scheduled dinner",
+        start_at=1_001_000,
+        end_at=1_002_000,
+    ).get_json()[0]
+    assert created["isLive"] is False
+    assert created["isExpired"] is False
+
+    monkeypatch.setattr(activities.time, "time", lambda: 1_001.5)
+    live = activities.get(created["id"], consistent=True)
+    assert live["isLive"] is True
+    assert live["liveStartedAt"] == 1_001_000
+
+    monkeypatch.setattr(activities.time, "time", lambda: 1_002)
+    expired = activities.get(created["id"], consistent=True)
+    assert expired["isLive"] is False
+    assert expired["isExpired"] is True
+
+
+def test_activity_schedule_validation(client):
+    assert _propose(client, "Dinner", end_at=2_000).status_code == 400
+    assert _propose(
+        client,
+        "Dinner",
+        start_at=2_000,
+        end_at=2_000,
+    ).status_code == 400
+    invalid_type = client.post(
+        "/api/activities",
+        json={"text": "Dinner", "proposedById": "andre", "startAt": "tomorrow"},
+    )
+    assert invalid_type.status_code == 400
+
+
+def test_owner_can_edit_only_pending_schedule(client, monkeypatch):
+    monkeypatch.setattr(activities.time, "time", lambda: 1_000)
+    created = _propose(client, "Dinner", start_at=2_000_000).get_json()[0]
+    url = f"/api/activities/{created['id']}/schedule"
+
+    denied = client.patch(
+        url,
+        json={"requesterId": "kayla", "startAt": 3_000_000, "endAt": None},
+    )
+    assert denied.status_code == 403
+
+    updated = client.patch(
+        url,
+        json={"requesterId": "andre", "startAt": 3_000_000, "endAt": 4_000_000},
+    )
+    assert updated.status_code == 200
+    item = next(entry for entry in updated.get_json() if entry["id"] == created["id"])
+    assert item["startAt"] == 3_000_000
+    assert item["endAt"] == 4_000_000
+
+    monkeypatch.setattr(activities.time, "time", lambda: 3_500)
+    conflict = client.patch(
+        url,
+        json={"requesterId": "andre", "startAt": None, "endAt": None},
+    )
+    assert conflict.status_code == 409
+
+
+def test_early_start_retains_future_end_and_manual_end_is_terminal(client, monkeypatch):
+    monkeypatch.setattr(activities.time, "time", lambda: 1_000)
+    created = _propose(
+        client,
+        "Dinner",
+        start_at=2_000_000,
+        end_at=3_000_000,
+    ).get_json()[0]
+
+    started = client.post(
+        f"/api/activities/{created['id']}/start",
+        json={"requesterId": "andre"},
+    )
+    live = next(entry for entry in started.get_json() if entry["id"] == created["id"])
+    assert live["startAt"] == 1_000_000
+    assert live["endAt"] == 3_000_000
+    assert live["isLive"] is True
+
+    ended = client.post(
+        f"/api/activities/{created['id']}/end",
+        json={"requesterId": "andre"},
+    )
+    expired = next(entry for entry in ended.get_json() if entry["id"] == created["id"])
+    assert expired["isExpired"] is True
+    assert expired["endedAt"] == 1_000_000
+
+
+def test_expired_activity_is_read_only_but_owner_can_restart_or_delete(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setattr(activities.time, "time", lambda: 1_000)
+    created = _propose(client, "Dinner").get_json()[0]
+    client.post(
+        f"/api/activities/{created['id']}/comments",
+        json={"authorId": "kayla", "text": "Before it ended"},
+    )
+    client.post(
+        f"/api/activities/{created['id']}/start",
+        json={"requesterId": "andre"},
+    )
+    client.post(
+        f"/api/activities/{created['id']}/end",
+        json={"requesterId": "andre"},
+    )
+    comment_id = activities.get(created["id"])["comments"][0]["id"]
+
+    assert client.post(
+        f"/api/activities/{created['id']}/join",
+        json={"userId": "kayla"},
+    ).status_code == 409
+    assert client.post(
+        f"/api/activities/{created['id']}/comments",
+        json={"authorId": "kayla", "text": "Too late"},
+    ).status_code == 409
+    assert client.put(
+        f"/api/activities/{created['id']}/comments/{comment_id}/likes",
+        json={"userId": "andre"},
+    ).status_code == 409
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+    assert client.post(
+        f"/api/activities/{created['id']}/notify",
+        json={"emphasizedById": "kayla"},
+    ).status_code == 409
+
+    monkeypatch.setattr(activities.time, "time", lambda: 1_100)
+    restarted = client.post(
+        f"/api/activities/{created['id']}/start",
+        json={"requesterId": "andre"},
+    )
+    live = next(entry for entry in restarted.get_json() if entry["id"] == created["id"])
+    assert live["isLive"] is True
+    assert live["startAt"] == 1_100_000
+    assert live["endAt"] is None
+    assert live["endedAt"] is None
+
+    client.post(
+        f"/api/activities/{created['id']}/end",
+        json={"requesterId": "andre"},
+    )
+    assert client.delete(
+        f"/api/activities/{created['id']}",
+        json={"requesterId": "andre"},
+    ).status_code == 200
+
+
+def test_activity_sorting_and_typed_request_isolation(client, monkeypatch):
+    monkeypatch.setattr(activities.time, "time", lambda: 10)
+    table = activities._get_table()
+    for item in (
+        {"id": "unscheduled-old", "text": "U1", "proposedBy": "A", "createdAt": 1},
+        {"id": "unscheduled-new", "text": "U2", "proposedBy": "A", "createdAt": 2},
+        {
+            "id": "scheduled-later",
+            "text": "S2",
+            "proposedBy": "A",
+            "createdAt": 4,
+            "startAt": 30_000,
+        },
+        {
+            "id": "scheduled-sooner",
+            "text": "S1",
+            "proposedBy": "A",
+            "createdAt": 3,
+            "startAt": 20_000,
+        },
+        {
+            "id": "expired-old",
+            "text": "E1",
+            "proposedBy": "A",
+            "createdAt": 5,
+            "startAt": 1_000,
+            "endAt": 8_000,
+        },
+        {
+            "id": "expired-new",
+            "text": "E2",
+            "proposedBy": "A",
+            "createdAt": 6,
+            "startAt": 1_000,
+            "endAt": 9_000,
+        },
+        {
+            "id": "request-record",
+            "itemType": household_requests.REQUEST_TYPE,
+            "text": "Not an activity",
+            "createdAt": 7,
+        },
+    ):
+        table.put_item(Item=item)
+
+    assert [item["id"] for item in activities.list_recent(consistent=True)] == [
+        "unscheduled-new",
+        "unscheduled-old",
+        "scheduled-sooner",
+        "scheduled-later",
+        "expired-new",
+        "expired-old",
+    ]
 
 
 def test_status_notification_excludes_roommate_who_triggered_it(client, monkeypatch):
@@ -1298,7 +1715,7 @@ def test_emphasize_unknown_activity_404(client):
     assert res.status_code == 404
 
 
-def test_activities_recent_newest_first_capped(client):
+def test_activities_unscheduled_newest_first_without_cap(client):
     # Insert 6 proposals with controlled, increasing timestamps for determinism.
     table = activities._get_table()
     for i in range(6):
@@ -1308,9 +1725,8 @@ def test_activities_recent_newest_first_capped(client):
     res = client.get("/api/activities")
     assert res.status_code == 200
     data = res.get_json()
-    assert len(data) == 5  # capped at RECENT_LIMIT
-    # Newest (highest createdAt) first; oldest ("activity 0") dropped.
-    assert [d["text"] for d in data] == [f"activity {i}" for i in (5, 4, 3, 2, 1)]
+    assert len(data) == 6
+    assert [d["text"] for d in data] == [f"activity {i}" for i in (5, 4, 3, 2, 1, 0)]
 
 
 if __name__ == "__main__":

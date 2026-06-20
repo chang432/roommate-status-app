@@ -31,14 +31,15 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     Promise.all([
       self.registration.showNotification(title, options),
-      // Open app windows refresh their activity feed immediately when a live
-      // event starts or ends. Closed apps still receive the visible push.
-      data.eventType === 'activities-changed'
+      // Open app windows refresh the affected feed immediately when the server
+      // marks a push as a data-changing event. Closed apps still receive the
+      // visible push.
+      data.eventType
         ? self.clients
             .matchAll({ type: 'window', includeUncontrolled: true })
             .then((windows) =>
               windows.forEach((client) =>
-                client.postMessage({ type: 'activities-changed' }),
+                client.postMessage({ type: data.eventType }),
               ),
             )
         : Promise.resolve(),

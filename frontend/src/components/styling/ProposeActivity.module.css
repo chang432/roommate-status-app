@@ -1,9 +1,13 @@
 .section {
-  @apply mt-[34px];
+  @apply min-w-0;
 }
 
 .form {
-  @apply mt-3 flex gap-[10px];
+  @apply mt-3 flex items-end gap-[10px];
+}
+
+.proposalFields {
+  @apply min-w-0 flex-1 space-y-2;
 }
 
 .input {
@@ -12,6 +16,18 @@
 
 .sendButton {
   @apply flex-none px-[20px] py-[12px] text-[14px];
+}
+
+.timeFields {
+  @apply grid grid-cols-2 gap-2 max-[480px]:grid-cols-1;
+}
+
+.timeField {
+  @apply min-w-0 text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
+}
+
+.timeInput {
+  @apply mt-1 px-3 py-2 text-[12px] font-normal normal-case tracking-normal disabled:cursor-not-allowed disabled:bg-[#f7f3ec] disabled:opacity-60;
 }
 
 .error {
@@ -34,6 +50,10 @@
   @apply cursor-pointer rounded-sm border border-[#e8b9ae] bg-gradient-to-br from-[#fff0ec] to-[#fbe2dc] px-[14px] py-[10px] transition hover:border-accent-soft;
 }
 
+.expiredCard {
+  @apply border-[#ddd4c7] bg-[#f5f1ea] opacity-90;
+}
+
 .summary {
   @apply flex items-center gap-[10px];
 }
@@ -54,8 +74,16 @@
   @apply rounded-full bg-status-red px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white;
 }
 
+.expiredChip {
+  @apply rounded-full bg-ink-soft px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white;
+}
+
 .meta {
   @apply mt-[2px] text-[12px] text-ink-soft;
+}
+
+.scheduleMeta {
+  @apply mt-1 text-[11.5px] font-semibold text-[#756958];
 }
 
 .memberCount {
@@ -110,36 +138,20 @@
   @apply rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink;
 }
 
-.comments {
+.schedulePanel {
   @apply mt-[14px] border-t border-line pt-[12px];
 }
 
-.emptyComments {
-  @apply mb-[10px] text-[13px] text-ink-soft;
+.scheduleHeader {
+  @apply flex items-center justify-between;
 }
 
-.commentList {
-  @apply mb-[10px] space-y-[8px];
+.scheduleValue {
+  @apply text-[13px] text-ink-soft;
 }
 
-.commentScroller {
-  @apply mb-[10px] max-h-[220px] overflow-y-auto pr-2;
-}
-
-.comment {
-  @apply text-[13px];
-}
-
-.commentAuthor {
-  @apply font-bold text-ink;
-}
-
-.commentTime {
-  @apply text-[11px] text-ink-soft;
-}
-
-.commentText {
-  @apply text-ink;
+.scheduleActions {
+  @apply mt-2 flex justify-end gap-2;
 }
 
 .deleteActions {
@@ -152,4 +164,16 @@
 
 .smallPill {
   @apply px-[13px] py-[7px] text-[12.5px];
+}
+
+.medPill {
+  @apply min-w-[57px] px-3;
+}
+
+.expiredSection {
+  @apply mt-5 border-t border-line pt-4;
+}
+
+.expiredToggle {
+  @apply flex w-full items-center justify-between rounded-sm px-1 py-2 text-left text-[13px] font-bold text-ink-soft transition hover:text-ink;
 }
