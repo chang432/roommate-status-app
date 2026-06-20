@@ -21,6 +21,8 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Comment likes**: roommates can like or unlike other people’s comments and
   see their own reaction state, the total like count, and a popover listing
   who liked each comment.
+- **Requests**: a tabbed household board lets users ask specific roommates for
+  help, track accept/deny responses, comment, and mark requests complete.
 
 ## Tech
 
@@ -59,6 +61,12 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `startActivity`                 | `POST /api/activities/:id/start`                           |
 | `endActivity`                   | `POST /api/activities/:id/end`                             |
 | `setCommentLiked`               | `PUT/DELETE /api/activities/:id/comments/:commentId/likes` |
+| `getRequests`                   | `GET /api/requests`                                        |
+| `createRequest`                 | `POST /api/requests`                                       |
+| `respondToRequest`              | `POST /api/requests/:id/responses`                         |
+| `completeRequest`               | `POST /api/requests/:id/complete`                          |
+| `commentOnRequest`              | `POST /api/requests/:id/comments`                          |
+| `setRequestCommentLiked`        | `PUT/DELETE /api/requests/:id/comments/:commentId/likes`   |
 
 In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
 Point at a different server with `VITE_API_TARGET`:

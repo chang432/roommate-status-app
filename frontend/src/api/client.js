@@ -142,3 +142,51 @@ export async function setCommentLiked(id, commentId, userId, liked) {
     body: JSON.stringify({ userId }),
   })
 }
+
+// GET /api/requests — recent household requests, newest first.
+export async function getRequests() {
+  return request('/requests')
+}
+
+// POST /api/requests — create a targeted request for specific roommates.
+// Returns the refreshed request list.
+export async function createRequest(text, requesterId, requestedIds) {
+  return request('/requests', {
+    method: 'POST',
+    body: JSON.stringify({ text, requesterId, requestedIds }),
+  })
+}
+
+// POST /api/requests/:id/responses — accept or deny a request.
+// `response` is "accepted" or "denied".
+export async function respondToRequest(id, userId, response) {
+  return request(`/requests/${id}/responses`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, response }),
+  })
+}
+
+// POST /api/requests/:id/complete — mark a request completed.
+export async function completeRequest(id, userId) {
+  return request(`/requests/${id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}
+
+// POST /api/requests/:id/comments — add a comment to a request.
+export async function commentOnRequest(id, authorId, text) {
+  return request(`/requests/${id}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ authorId, text }),
+  })
+}
+
+// PUT/DELETE /api/requests/:id/comments/:commentId/likes — update a request
+// comment reaction and return the refreshed request list.
+export async function setRequestCommentLiked(id, commentId, userId, liked) {
+  return request(`/requests/${id}/comments/${commentId}/likes`, {
+    method: liked ? 'PUT' : 'DELETE',
+    body: JSON.stringify({ userId }),
+  })
+}

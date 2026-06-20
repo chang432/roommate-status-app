@@ -3,20 +3,15 @@ import { useAuth } from "../context/AuthContext.jsx";
 import {
   proposeActivity,
   deleteActivity,
-  notifyActivity,
   joinActivity,
   leaveActivity,
   commentOnActivity,
   setCommentLiked,
 } from "../api/client.js";
-import CommentComposer from "./CommentComposer.jsx";
-import CommentLikeButton from "./CommentLikeButton.jsx";
-import MentionText from "./MentionText.jsx";
+import FeedComments from "./FeedComments.jsx";
 import { relativeTime } from "../utils/time.js";
 import { cx } from "../utils/classNames.js";
 import styles from "./styling/ProposeActivity.module.css";
-
-const COLLAPSED_COMMENT_LIMIT = 10;
 
 // "Propose an activity": a text field + Send button that pushes the proposal to
 // everyone, with the most recent proposals listed below (newest nearest the
@@ -35,10 +30,6 @@ export default function ProposeActivity({
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  // Per-activity notify state: the id currently sending, and the id just sent
-  // (briefly shown as a confirmation).
-  const [notifyingId, setNotifyingId] = useState(null);
-  const [sentId, setSentId] = useState(null);
   // The id of the activity whose member panel is expanded, and the id whose
   // join/leave request is currently in flight (to disable its button).
   const [expandedId, setExpandedId] = useState(null);
@@ -50,11 +41,9 @@ export default function ProposeActivity({
   const [commentingId, setCommentingId] = useState(null);
   const [likingCommentIds, setLikingCommentIds] = useState([]);
   const [openLikesCommentId, setOpenLikesCommentId] = useState(null);
-  const [showOlderComments, setShowOlderComments] = useState(false);
   // Deletion is owner-only and uses a two-step inline confirmation.
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-  const commentScrollerRef = useRef(null);
 
   useEffect(() => {
     if (!activityFocusRequest?.activityId) return;
@@ -77,7 +66,6 @@ export default function ProposeActivity({
     setExpandedId((cur) => (cur === id ? null : id));
     setCommentText("");
     setOpenLikesCommentId(null);
-    setShowOlderComments(false);
     setConfirmingDeleteId(null);
   }
 
@@ -152,14 +140,6 @@ export default function ProposeActivity({
       setCommentingId(null);
     }
   }
-
-  // Scroll the comment scroller to the bottom when new comments are added.
-  useEffect(() => {
-    if (commentScrollerRef.current) {
-      commentScrollerRef.current.scrollTop =
-        commentScrollerRef.current.scrollHeight;
-    }
-  }, [activities]);
 
   async function handleCommentLike(activity, comment) {
     if (likingCommentIds.includes(comment.id)) return;
@@ -345,82 +325,19 @@ export default function ProposeActivity({
                         </div>
                       )}
 
-                      {/* Comments — the activity's most recent messages (oldest
-                          first, newest nearest the input) plus a box to add one.
-                          Clicks/keys are kept inside so typing or focusing the
-                          input doesn't toggle the surrounding card. */}
-                      <div
-                        className={styles.comments}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                      >
-                        <p className={styles.panelTitle}>Comments</p>
-                        {comments.length === 0 ? (
-                          <p className={styles.emptyComments}>
-                            No comments yet.
-                          </p>
-                        ) : (
-                          <div
-                            className={styles.commentScroller}
-                            ref={commentScrollerRef}
-                          >
-                            <ul className={styles.commentList}>
-                              {comments.map((c, i) => (
-                                <li
-                                  key={c.id ?? `${c.createdAt}-${i}`}
-                                  className="text-[13px]"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-ink">
-                                      {c.author}
-                                    </span>
-                                    <span className="text-[11px] text-ink-soft">
-                                      {relativeTime(c.createdAt)}
-                                    </span>
-                                    <CommentLikeButton
-                                      count={c.likeCount ?? 0}
-                                      liked={(c.likedByIds ?? []).includes(
-                                        user.id,
-                                      )}
-                                      ownComment={
-                                        c.authorId === user.id ||
-                                        (!c.authorId &&
-                                          c.author.toLowerCase() ===
-                                            user.name.toLowerCase())
-                                      }
-                                      busy={likingCommentIds.includes(c.id)}
-                                      onToggle={() => handleCommentLike(a, c)}
-                                      likedByIds={c.likedByIds ?? []}
-                                      roommates={roommates}
-                                      open={openLikesCommentId === c.id}
-                                      onOpenChange={(open) =>
-                                        setOpenLikesCommentId(
-                                          open ? c.id : null,
-                                        )
-                                      }
-                                    />
-                                  </div>
-                                  <p className="text-ink">
-                                    <MentionText
-                                      text={c.text}
-                                      mentions={c.mentions}
-                                      mentionsAll={c.mentionsAll}
-                                    />
-                                  </p>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        <CommentComposer
-                          value={commentText}
-                          onChange={setCommentText}
-                          onSubmit={(event) => handleComment(event, a)}
-                          roommates={roommates}
-                          currentUserId={user.id}
-                          busy={commentingId === a.id}
-                        />
-                      </div>
+                      <FeedComments
+                        comments={comments}
+                        commentText={commentText}
+                        onCommentTextChange={setCommentText}
+                        onSubmitComment={(event) => handleComment(event, a)}
+                        roommates={roommates}
+                        user={user}
+                        commenting={commentingId === a.id}
+                        likingCommentIds={likingCommentIds}
+                        onToggleLike={(comment) => handleCommentLike(a, comment)}
+                        openLikesCommentId={openLikesCommentId}
+                        onOpenLikesChange={setOpenLikesCommentId}
+                      />
 
                       {canDelete && (
                         <div

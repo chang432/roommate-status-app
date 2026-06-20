@@ -29,8 +29,19 @@ And the proposed-activities feed:
     PUT/DELETE /api/activities/<id>/comments/<comment_id>/likes
                                         -> the updated recent list
 
+And the household request feed:
+
+    GET  /api/requests                 -> recent requests
+    POST /api/requests                 -> the updated recent request list
+    POST /api/requests/<id>/responses  -> the updated recent request list
+    POST /api/requests/<id>/complete   -> the updated recent request list
+    POST /api/requests/<id>/comments   -> the updated recent request list
+    PUT/DELETE /api/requests/<id>/comments/<comment_id>/likes
+                                       -> the updated recent request list
+
 Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
-in push.py; proposals are in activities.py. Routes stay storage-agnostic.
+in push.py; proposals are in activities.py; requests are in household_requests.py.
+Routes stay storage-agnostic.
 """
 
 from __future__ import annotations
@@ -43,9 +54,10 @@ from flask_cors import CORS
 
 import activities
 import db
+import household_requests
 import push
 
-# Cap proposal text so a notification body stays sane.
+# Cap proposal/request text so a notification body stays sane.
 MAX_ACTIVITY_LEN = 280
 
 # Cap comment text the same way proposal text is capped.
@@ -477,6 +489,211 @@ def create_app() -> Flask:
         if result == activities.LIKE_SELF_FORBIDDEN:
             return jsonify({"error": "You cannot like your own comment."}), 403
         return jsonify(activities.list_recent(consistent=True))
+
+    # --- Requests -----------------------------------------------------------
+    @app.get("/api/requests")
+    def get_requests():
+        """Return recent household requests, newest first."""
+        return jsonify(household_requests.list_recent())
+
+    @app.post("/api/requests")
+    def create_request():
+        """Create a targeted request and notify the requested roommates."""
+        body = request.get_json(silent=True) or {}
+        text = (body.get("text") or "").strip()
+        requester_id = (body.get("requesterId") or "").strip()
+        requested_ids = {
+            (user_id or "").strip()
+            for user_id in (body.get("requestedIds") or [])
+            if (user_id or "").strip()
+        }
+
+        if not text:
+            return jsonify({"error": "A request is required."}), 400
+        if len(text) > MAX_ACTIVITY_LEN:
+            return jsonify({"error": f"Keep it under {MAX_ACTIVITY_LEN} characters."}), 400
+        requester = db.get_by_id(requester_id) if requester_id else None
+        if requester is None:
+            return jsonify({"error": "A valid requester is required."}), 400
+        requested_ids.discard(requester["id"])
+        if not requested_ids:
+            return jsonify({"error": "Choose at least one roommate to request."}), 400
+
+        requested_roommates = []
+        for user_id in sorted(requested_ids):
+            roommate = db.get_by_id(user_id)
+            if roommate is None:
+                return jsonify({"error": "Every requested roommate must be valid."}), 400
+            requested_roommates.append(roommate)
+
+        household_requests.add_request(
+            text,
+            requester["id"],
+            requester["name"],
+            requested_roommates,
+        )
+        try:
+            push.notify_users(
+                user_ids={roommate["id"] for roommate in requested_roommates},
+                title="New request",
+                body=f"{requester['name']} requested: {text}",
+                url="/",
+                event_type="requests-changed",
+            )
+        except Exception:  # noqa: BLE001 - never let push break request creation
+            app.logger.exception("Failed to send request notification")
+        return jsonify(household_requests.list_recent(consistent=True))
+
+    @app.post("/api/requests/<request_id>/responses")
+    def respond_to_request(request_id: str):
+        """Let a requested roommate accept or deny a request."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        response = (body.get("response") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        if response not in household_requests.VALID_RESPONSES:
+            return jsonify({"error": "Response must be accepted or denied."}), 400
+
+        updated = household_requests.set_response(request_id, roommate["id"], response)
+        if updated is None:
+            return jsonify({"error": "Unknown request or roommate."}), 404
+
+        try:
+            push.notify_users(
+                user_ids={updated["requesterId"]},
+                exclude_user_ids={roommate["id"]},
+                title="Request response",
+                body=f"{roommate['name']} {response} “{updated['text']}”",
+                url="/",
+                event_type="requests-changed",
+            )
+        except Exception:  # noqa: BLE001 - response must remain successful
+            app.logger.exception("Failed to send request response notification")
+        return jsonify(household_requests.list_recent(consistent=True))
+
+    @app.post("/api/requests/<request_id>/complete")
+    def complete_request(request_id: str):
+        """Mark a request complete; any valid roommate may do this."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+
+        updated = household_requests.complete(request_id, roommate["id"], roommate["name"])
+        if updated is None:
+            return jsonify({"error": f"Unknown request: {request_id}"}), 404
+
+        try:
+            push.notify_users(
+                user_ids={updated["requesterId"]},
+                exclude_user_ids={roommate["id"]},
+                title="Request completed",
+                body=f"{roommate['name']} completed “{updated['text']}”",
+                url="/",
+                event_type="requests-changed",
+            )
+        except Exception:  # noqa: BLE001 - completion must remain successful
+            app.logger.exception("Failed to send request completion notification")
+        return jsonify(household_requests.list_recent(consistent=True))
+
+    @app.post("/api/requests/<request_id>/comments")
+    def comment_on_request(request_id: str):
+        """Append a comment to a request and notify the request participants."""
+        body = request.get_json(silent=True) or {}
+        author_id = (body.get("authorId") or "").strip()
+        text = (body.get("text") or "").strip()
+        author = db.get_by_id(author_id) if author_id else None
+        if author is None:
+            return jsonify({"error": "A valid author is required."}), 400
+        if not text:
+            return jsonify({"error": "A comment is required."}), 400
+        if len(text) > MAX_COMMENT_LEN:
+            return jsonify({"error": f"Keep it under {MAX_COMMENT_LEN} characters."}), 400
+
+        mentions = resolve_mentions(text, db.get_all(), author["id"])
+        mentions_everyone = mentions_all(text)
+        updated = household_requests.add_comment(
+            request_id,
+            author["name"],
+            text,
+            mentions,
+            mentions_everyone,
+            author["id"],
+        )
+        if updated is None:
+            return jsonify({"error": f"Unknown request: {request_id}"}), 404
+
+        mentioned_ids = {mention["id"] for mention in mentions}
+        participant_ids = (
+            {updated["requesterId"], *updated["requestedIds"]}
+            - mentioned_ids
+            - {author["id"]}
+        )
+
+        def notify_request_users(user_ids: set[str], title: str, notification_body: str):
+            try:
+                push.notify_users(
+                    user_ids=user_ids,
+                    title=title,
+                    body=notification_body,
+                    url="/",
+                    event_type="requests-changed",
+                )
+            except Exception:  # noqa: BLE001 - never let push break the comment
+                app.logger.exception("Failed to send request comment notification")
+
+        if mentions_everyone:
+            try:
+                push.notify_all(
+                    title=f"{author['name']} mentioned everyone",
+                    body=f"On request “{updated['text']}”: {text}",
+                    url="/",
+                    event_type="requests-changed",
+                    exclude_user_ids={author["id"]},
+                )
+            except Exception:  # noqa: BLE001
+                app.logger.exception("Failed to send request comment @all notification")
+        elif mentioned_ids:
+            notify_request_users(
+                mentioned_ids,
+                f"{author['name']} mentioned you",
+                f"On request “{updated['text']}”: {text}",
+            )
+        if participant_ids and not mentions_everyone:
+            notify_request_users(
+                participant_ids,
+                "New request comment",
+                f"{author['name']} on “{updated['text']}”: {text}",
+            )
+        return jsonify(household_requests.list_recent(consistent=True))
+
+    @app.route(
+        "/api/requests/<request_id>/comments/<comment_id>/likes",
+        methods=["PUT", "DELETE"],
+    )
+    def update_request_comment_like(request_id: str, comment_id: str):
+        """Idempotently like or unlike one request comment."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+
+        result = household_requests.set_comment_like(
+            request_id,
+            comment_id,
+            roommate["id"],
+            roommate["name"],
+            request.method == "PUT",
+        )
+        if result == household_requests.LIKE_NOT_FOUND:
+            return jsonify({"error": "Unknown request or comment."}), 404
+        if result == household_requests.LIKE_SELF_FORBIDDEN:
+            return jsonify({"error": "You cannot like your own comment."}), 403
+        return jsonify(household_requests.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/notify")
     def emphasize_activity(activity_id: str):

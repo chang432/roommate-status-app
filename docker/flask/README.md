@@ -17,6 +17,12 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/activities/<id>/start` | `{ requesterId }`        | full updated activity list                |
 | `POST /api/activities/<id>/end` | `{ requesterId }`          | full updated activity list                |
 | `PUT/DELETE /api/activities/<id>/comments/<commentId>/likes` | `{ userId }` | full updated activity list |
+| `GET /api/requests`              | —                          | full request list                          |
+| `POST /api/requests`             | `{ text, requesterId, requestedIds }` | full updated request list    |
+| `POST /api/requests/<id>/responses` | `{ userId, response }`  | full updated request list                  |
+| `POST /api/requests/<id>/complete` | `{ userId }`             | full updated request list                  |
+| `POST /api/requests/<id>/comments` | `{ authorId, text }`     | full updated request list                  |
+| `PUT/DELETE /api/requests/<id>/comments/<commentId>/likes` | `{ userId }` | full updated request list |
 | `POST /api/push/subscribe`      | `{ subscription, userId }` | `{ ok: true }`                            |
 | `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
 
@@ -43,6 +49,10 @@ Comments have stable ids and can be liked once per non-author roommate; likes
 are idempotent, can be removed, and do not send push notifications.
 Live-event pushes include an activity-change event type so open apps refresh
 their banner immediately.
+Requests are stored as typed records in the activities table, targeted to
+specific roommate ids, and support comments and comment likes. Requested
+roommates can accept or deny, any roommate can complete a request, and request
+notifications target the requested users or the requester as appropriate.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).

@@ -5,12 +5,15 @@ import StatusCard from "../components/StatusCard.jsx";
 import NotificationBanner from "../components/NotificationBanner.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
 import EnableNotifications from "../components/EnableNotifications.jsx";
+import FeatureTabs from "../components/FeatureTabs.jsx";
 import ProposeActivity from "../components/ProposeActivity.jsx";
 import PullToRefreshIndicator from "../components/PullToRefreshIndicator.jsx";
+import RequestFeature from "../components/RequestFeature.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   endActivity,
   getActivities,
+  getRequests,
   getRoommates,
   notifyRoommatesToUpdateStatus,
   startActivity,
@@ -38,6 +41,7 @@ export default function StatusPage() {
 
   const [roommates, setRoommates] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
@@ -66,13 +70,22 @@ export default function StatusPage() {
     }
   }, []);
 
-  // Load both page-level data sets so the live banner and activity cards share
-  // one source of truth from the first render onward.
+  const loadRequests = useCallback(async () => {
+    try {
+      setRequests(await getRequests());
+      setLiveError("");
+    } catch {
+      setLiveError("Could not load household requests.");
+    }
+  }, []);
+
+  // Load page-level data sets so household, activities, and requests share one
+  // source of truth from the first render onward.
   useEffect(() => {
-    Promise.all([loadRoommates(), loadActivities()]).finally(() =>
+    Promise.all([loadRoommates(), loadActivities(), loadRequests()]).finally(() =>
       setLoading(false),
     );
-  }, [loadActivities, loadRoommates]);
+  }, [loadActivities, loadRequests, loadRoommates]);
 
   // Keep live-event state current across household devices. Push-enabled open
   // apps refresh immediately from the service worker; visible-page polling and
@@ -102,6 +115,7 @@ export default function StatusPage() {
 
     function handleServiceWorkerMessage(event) {
       if (event.data?.type === "activities-changed") loadActivities();
+      if (event.data?.type === "requests-changed") loadRequests();
     }
 
     startPolling();
@@ -121,12 +135,12 @@ export default function StatusPage() {
         handleServiceWorkerMessage,
       );
     };
-  }, [loadActivities]);
+  }, [loadActivities, loadRequests]);
 
-  // Pull down from the top to refresh both household and event state.
+  // Pull down from the top to refresh household, activity, and request state.
   const handleRefresh = useCallback(async () => {
-    await Promise.all([loadRoommates(), loadActivities()]);
-  }, [loadActivities, loadRoommates]);
+    await Promise.all([loadRoommates(), loadActivities(), loadRequests()]);
+  }, [loadActivities, loadRequests, loadRoommates]);
 
   const { pull, refreshing, threshold } = usePullToRefresh(handleRefresh);
 
@@ -293,14 +307,36 @@ export default function StatusPage() {
               ))}
             </div>
 
-            <ProposeActivity
-              activities={activities}
-              onActivitiesChange={setActivities}
-              liveEvent={liveEvent}
-              transitioningId={transitioningId}
-              onLiveTransition={handleLiveTransition}
-              roommates={roommates}
-              activityFocusRequest={activityFocusRequest}
+            <FeatureTabs
+              defaultTabId="activities"
+              tabs={[
+                {
+                  id: "activities",
+                  label: "Activities",
+                  content: (
+                    <ProposeActivity
+                      activities={activities}
+                      onActivitiesChange={setActivities}
+                      liveEvent={liveEvent}
+                      transitioningId={transitioningId}
+                      onLiveTransition={handleLiveTransition}
+                      roommates={roommates}
+                      activityFocusRequest={activityFocusRequest}
+                    />
+                  ),
+                },
+                {
+                  id: "requests",
+                  label: "Requests",
+                  content: (
+                    <RequestFeature
+                      requests={requests}
+                      onRequestsChange={setRequests}
+                      roommates={roommates}
+                    />
+                  ),
+                },
+              ]}
             />
           </>
         )}

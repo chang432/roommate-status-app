@@ -1,5 +1,5 @@
 .section {
-  @apply mt-[34px];
+  @apply min-w-0;
 }
 
 .form {
@@ -108,38 +108,6 @@
 
 .memberPill {
   @apply rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink;
-}
-
-.comments {
-  @apply mt-[14px] border-t border-line pt-[12px];
-}
-
-.emptyComments {
-  @apply mb-[10px] text-[13px] text-ink-soft;
-}
-
-.commentList {
-  @apply mb-[10px] space-y-[8px];
-}
-
-.commentScroller {
-  @apply mb-[10px] max-h-[220px] overflow-y-auto pr-2;
-}
-
-.comment {
-  @apply text-[13px];
-}
-
-.commentAuthor {
-  @apply font-bold text-ink;
-}
-
-.commentTime {
-  @apply text-[11px] text-ink-soft;
-}
-
-.commentText {
-  @apply text-ink;
 }
 
 .deleteActions {
