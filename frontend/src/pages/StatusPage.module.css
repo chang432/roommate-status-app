@@ -65,3 +65,11 @@
 .householdGrid {
   @apply grid grid-cols-2 gap-[14px];
 }
+
+.createButton {
+  @apply w-full px-[18px] py-[12px] text-[14px];
+}
+
+.createModal {
+  @apply max-w-[560px];
+}

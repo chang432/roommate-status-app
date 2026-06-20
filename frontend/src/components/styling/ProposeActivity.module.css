@@ -2,22 +2,6 @@
   @apply min-w-0;
 }
 
-.form {
-  @apply mt-3 flex items-end gap-[10px];
-}
-
-.proposalFields {
-  @apply min-w-0 flex-1 space-y-2;
-}
-
-.input {
-  @apply flex-1 px-[14px] py-[12px] text-[14px];
-}
-
-.sendButton {
-  @apply flex-none px-[20px] py-[12px] text-[14px];
-}
-
 .timeFields {
   @apply grid grid-cols-2 gap-2 max-[480px]:grid-cols-1;
 }
@@ -31,11 +15,11 @@
 }
 
 .error {
-  @apply mt-2;
+  @apply mb-[14px];
 }
 
 .list {
-  @apply mt-[14px] space-y-[10px];
+  @apply space-y-[10px];
 }
 
 .empty {
@@ -156,6 +140,10 @@
 
 .deleteActions {
   @apply mt-[14px] flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[12px];
+}
+
+.actionButtonRow {
+  @apply flex flex-wrap items-center justify-end gap-[8px] ml-auto;
 }
 
 .deletePrompt {

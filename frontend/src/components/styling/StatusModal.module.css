@@ -1,17 +1,13 @@
-.backdrop {
-  @apply fixed inset-0 z-50 grid place-items-center bg-black/40 px-5;
-}
-
 .dialog {
-  @apply relative w-full max-w-[400px] rounded-md border border-line bg-card p-6 shadow-card;
-}
-
-.closeButton {
-  @apply absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full text-[26px] leading-none text-ink-soft transition hover:bg-[#faf6ef] hover:text-ink;
+  @apply max-w-[400px];
 }
 
 .titleRow {
   @apply flex items-center gap-[9px];
+}
+
+.content {
+  @apply mt-0;
 }
 
 .name {

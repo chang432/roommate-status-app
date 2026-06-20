@@ -7,9 +7,12 @@ import NotificationBanner from "../components/NotificationBanner.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
 import EnableNotifications from "../components/EnableNotifications.jsx";
 import FeatureTabs from "../components/FeatureTabs.jsx";
+import ModalShell from "../components/ModalShell.jsx";
 import ProposeActivity from "../components/ProposeActivity.jsx";
 import PullToRefreshIndicator from "../components/PullToRefreshIndicator.jsx";
 import RequestFeature from "../components/RequestFeature.jsx";
+import ActivityCreateForm from "../components/ActivityCreateForm.jsx";
+import RequestCreateForm from "../components/RequestCreateForm.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   endActivity,
@@ -56,6 +59,7 @@ export default function StatusPage() {
   const [activityFocusRequest, setActivityFocusRequest] = useState(null);
   const [requestFocusRequest, setRequestFocusRequest] = useState(null);
   const [activeBoardTab, setActiveBoardTab] = useState("activities");
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   // Fetch the household; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
@@ -244,6 +248,9 @@ export default function StatusPage() {
     }));
   }
 
+  const createButtonLabel =
+    activeBoardTab === "requests" ? "New request" : "New activity";
+
   return (
     <>
       {/* Lives off-screen above the top; the pull drags it into view. */}
@@ -356,6 +363,15 @@ export default function StatusPage() {
               defaultTabId="activities"
               activeTabId={activeBoardTab}
               onActiveTabChange={setActiveBoardTab}
+              actions={
+                <button
+                  type="button"
+                  onClick={() => setCreateModalOpen(true)}
+                  className={cx("ui-primaryButton", styles.createButton)}
+                >
+                  {createButtonLabel}
+                </button>
+              }
               tabs={[
                 {
                   id: "activities",
@@ -385,6 +401,32 @@ export default function StatusPage() {
                 },
               ]}
             />
+            {createModalOpen && (
+              <ModalShell
+                title={
+                  activeBoardTab === "requests"
+                    ? "Create a request"
+                    : "Create an activity"
+                }
+                onClose={() => setCreateModalOpen(false)}
+                widthClassName={styles.createModal}
+              >
+                {activeBoardTab === "requests" ? (
+                  <RequestCreateForm
+                    roommates={roommates}
+                    onRequestsChange={setRequests}
+                    onSuccess={() => setCreateModalOpen(false)}
+                    onCancel={() => setCreateModalOpen(false)}
+                  />
+                ) : (
+                  <ActivityCreateForm
+                    onActivitiesChange={setActivities}
+                    onSuccess={() => setCreateModalOpen(false)}
+                    onCancel={() => setCreateModalOpen(false)}
+                  />
+                )}
+              </ModalShell>
+            )}
           </>
         )}
       </div>

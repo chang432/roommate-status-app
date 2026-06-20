@@ -60,6 +60,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
 | `pokeRoommate`                  | `POST /api/roommates/:id/poke`                             |
 | `proposeActivity`               | `POST /api/activities`                                     |
+| `archiveActivity`               | `POST /api/activities/:id/archive`                         |
 | `deleteActivity`                | `DELETE /api/activities/:id`                               |
 | `startActivity`                 | `POST /api/activities/:id/start`                           |
 | `endActivity`                   | `POST /api/activities/:id/end`                             |

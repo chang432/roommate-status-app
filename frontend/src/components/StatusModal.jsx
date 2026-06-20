@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import ModalShell from './ModalShell.jsx'
 import StatusDot from './StatusDot.jsx'
 import StatusTimestamp from './StatusTimestamp.jsx'
 import { statusLabel, statusNote } from '../utils/status.js'
@@ -11,15 +12,6 @@ import styles from './styling/StatusModal.module.css'
 export default function StatusModal({ roommate, pokeCount, onPoke, onClose }) {
   const [poking, setPoking] = useState(false)
   const [pokeError, setPokeError] = useState('')
-
-  // Allow Escape to dismiss, like a standard dialog.
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
 
   const note = statusNote(roommate)
 
@@ -37,22 +29,13 @@ export default function StatusModal({ roommate, pokeCount, onPoke, onClose }) {
   }
 
   return (
-    // Backdrop: clicking it closes; clicks inside the dialog are stopped below.
-    <div onClick={onClose} className={styles.backdrop}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-        className={styles.dialog}
-      >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className={styles.closeButton}
-        >
-          ×
-        </button>
+    <ModalShell
+      onClose={onClose}
+      ariaLabel={`${roommate.name} status details`}
+      widthClassName={styles.dialog}
+      contentClassName={styles.content}
+    >
+      <>
         <div className={styles.titleRow}>
           <StatusDot status={roommate.status} />
           <span className={styles.name}>{roommate.name}</span>
@@ -90,7 +73,7 @@ export default function StatusModal({ roommate, pokeCount, onPoke, onClose }) {
             {poking ? 'Poking…' : '👉 Poke'}
           </button>
         </div>
-      </div>
-    </div>
+      </>
+    </ModalShell>
   )
 }

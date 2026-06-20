@@ -6,6 +6,10 @@
   @apply flex flex-wrap items-center justify-between gap-3;
 }
 
+.actions {
+  @apply mt-3;
+}
+
 .tabList {
   @apply flex rounded-full border border-line bg-card p-[3px] shadow-soft;
 }

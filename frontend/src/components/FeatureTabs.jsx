@@ -7,6 +7,7 @@ export default function FeatureTabs({
   defaultTabId,
   activeTabId,
   onActiveTabChange,
+  actions,
 }) {
   const [internalActiveId, setInternalActiveId] = useState(
     defaultTabId ?? tabs[0]?.id,
@@ -43,6 +44,7 @@ export default function FeatureTabs({
           ))}
         </div>
       </div>
+      {actions ? <div className={styles.actions}>{actions}</div> : null}
       <div
         id={`${activeTab.id}-panel`}
         role="tabpanel"
