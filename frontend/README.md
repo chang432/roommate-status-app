@@ -11,9 +11,10 @@ availability to hang out. Built from the mockups in `../mockups`.
   message.
 - **Gather banner**: when 3+ roommates are available, a notification banner
   invites everyone to hang out (PROJECT.md threshold).
-- **Live events**: event creators can start/end an event, with one live-event
-  banner shown household-wide. Open apps refresh from live-event push messages,
-  focus changes, or visible-page polling.
+- **Scheduled and live events**: activities can have optional start/end times,
+  automatically become live, overlap, and expire into collapsible history.
+  Open apps refresh from activity push messages, focus changes, or visible-page
+  polling.
 - **Comment mentions**: typing `@` suggests household members or `@all`,
   highlights valid mentions, and notifies the selected audience.
 - **Comment history**: event panels show the latest 10 comments first and can
@@ -61,6 +62,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `deleteActivity`                | `DELETE /api/activities/:id`                               |
 | `startActivity`                 | `POST /api/activities/:id/start`                           |
 | `endActivity`                   | `POST /api/activities/:id/end`                             |
+| `updateActivitySchedule`        | `PATCH /api/activities/:id/schedule`                       |
 | `setCommentLiked`               | `PUT/DELETE /api/activities/:id/comments/:commentId/likes` |
 | `getRequests`                   | `GET /api/requests`                                        |
 | `createRequest`                 | `POST /api/requests`                                       |

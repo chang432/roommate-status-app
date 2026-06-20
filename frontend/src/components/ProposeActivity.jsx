@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   proposeActivity,
@@ -7,19 +7,21 @@ import {
   leaveActivity,
   commentOnActivity,
   setCommentLiked,
+  updateActivitySchedule,
 } from "../api/client.js";
 import FeedComments from "./FeedComments.jsx";
-import { relativeTime } from "../utils/time.js";
+import {
+  activityTimeLabel,
+  fromDateTimeLocal,
+  relativeTime,
+  toDateTimeLocal,
+} from "../utils/time.js";
 import { cx } from "../utils/classNames.js";
 import styles from "./styling/ProposeActivity.module.css";
 
-// "Propose an activity": a text field + Send button that pushes the proposal to
-// everyone, with the most recent proposals listed below (newest nearest the
-// input).
 export default function ProposeActivity({
   activities,
   onActivitiesChange,
-  liveEvent,
   transitioningId,
   onLiveTransition,
   roommates,
@@ -28,22 +30,31 @@ export default function ProposeActivity({
   const { user } = useAuth();
   const activityRefs = useRef(new Map());
   const [text, setText] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  // The id of the activity whose member panel is expanded, and the id whose
-  // join/leave request is currently in flight (to disable its button).
   const [expandedId, setExpandedId] = useState(null);
   const [joiningId, setJoiningId] = useState(null);
-  // The comment draft for the currently expanded activity, and the id whose
-  // comment is currently being posted (only one panel is open at a time, so a
-  // single draft string is enough — it's cleared whenever the panel changes).
   const [commentText, setCommentText] = useState("");
   const [commentingId, setCommentingId] = useState(null);
   const [likingCommentIds, setLikingCommentIds] = useState([]);
   const [openLikesCommentId, setOpenLikesCommentId] = useState(null);
-  // Deletion is owner-only and uses a two-step inline confirmation.
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [editingScheduleId, setEditingScheduleId] = useState(null);
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editEndTime, setEditEndTime] = useState("");
+  const [savingScheduleId, setSavingScheduleId] = useState(null);
+  const [showExpired, setShowExpired] = useState(false);
+
+  const { currentActivities, expiredActivities } = useMemo(
+    () => ({
+      currentActivities: activities.filter((activity) => !activity.isExpired),
+      expiredActivities: activities.filter((activity) => activity.isExpired),
+    }),
+    [activities],
+  );
 
   useEffect(() => {
     if (!activityFocusRequest?.activityId) return;
@@ -51,7 +62,6 @@ export default function ProposeActivity({
     setExpandedId(activityId);
     setCommentText("");
     setConfirmingDeleteId(null);
-
     requestAnimationFrame(() => {
       activityRefs.current.get(activityId)?.scrollIntoView({
         behavior: "smooth",
@@ -60,27 +70,50 @@ export default function ProposeActivity({
     });
   }, [activityFocusRequest]);
 
-  // Open/close an activity's panel, clearing any half-typed comment so a draft
-  // never bleeds from one activity's panel into another's.
   function toggleExpanded(id) {
-    setExpandedId((cur) => (cur === id ? null : id));
+    setExpandedId((current) => (current === id ? null : id));
     setCommentText("");
     setOpenLikesCommentId(null);
     setConfirmingDeleteId(null);
+    setEditingScheduleId(null);
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
+  function validateTimes(startValue, endValue) {
+    if (endValue && !startValue) return "Choose a start time before an end time.";
+    if (
+      startValue &&
+      endValue &&
+      fromDateTimeLocal(endValue) <= fromDateTimeLocal(startValue)
+    ) {
+      return "End time must be later than start time.";
+    }
+    return "";
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
     const trimmed = text.trim();
+    const timeError = validateTimes(startTime, endTime);
+    if (timeError) {
+      setError(timeError);
+      return;
+    }
     if (!trimmed || sending) return;
     setSending(true);
     setError("");
     try {
-      const updated = await proposeActivity(trimmed, user.id);
+      const updated = await proposeActivity(
+        trimmed,
+        user.id,
+        fromDateTimeLocal(startTime),
+        fromDateTimeLocal(endTime),
+      );
       onActivitiesChange(updated);
       setText("");
-    } catch {
-      setError("Could not send your proposal. Try again.");
+      setStartTime("");
+      setEndTime("");
+    } catch (err) {
+      setError(err.message || "Could not send your proposal. Try again.");
     } finally {
       setSending(false);
     }
@@ -91,19 +124,16 @@ export default function ProposeActivity({
     setDeletingId(activity.id);
     setError("");
     try {
-      const updated = await deleteActivity(activity.id, user.id);
-      onActivitiesChange(updated);
+      onActivitiesChange(await deleteActivity(activity.id, user.id));
       setConfirmingDeleteId(null);
       setExpandedId((current) => (current === activity.id ? null : current));
-    } catch {
-      setError("Could not delete the activity. Try again.");
+    } catch (err) {
+      setError(err.message || "Could not delete the activity. Try again.");
     } finally {
       setDeletingId(null);
     }
   }
 
-  // Toggle the current user's membership of an activity. The member list comes
-  // back from the server, so the count and panel stay in sync everywhere.
   async function handleToggleMember(activity, isMember) {
     if (joiningId) return;
     setJoiningId(activity.id);
@@ -113,29 +143,29 @@ export default function ProposeActivity({
         ? await leaveActivity(activity.id, user.id)
         : await joinActivity(activity.id, user.id);
       onActivitiesChange(updated);
-    } catch {
+    } catch (err) {
       setError(
-        `Could not ${isMember ? "leave" : "join"} the activity. Try again.`,
+        err.message ||
+          `Could not ${isMember ? "leave" : "join"} the activity. Try again.`,
       );
     } finally {
       setJoiningId(null);
     }
   }
 
-  // Post the current draft as a comment on `activity`. The server returns the
-  // refreshed feed (with the new comment), so counts and lists stay in sync.
-  async function handleComment(e, activity) {
-    e.preventDefault();
+  async function handleComment(event, activity) {
+    event.preventDefault();
     const trimmed = commentText.trim();
     if (!trimmed || commentingId) return;
     setCommentingId(activity.id);
     setError("");
     try {
-      const updated = await commentOnActivity(activity.id, user.id, trimmed);
-      onActivitiesChange(updated);
+      onActivitiesChange(
+        await commentOnActivity(activity.id, user.id, trimmed),
+      );
       setCommentText("");
-    } catch {
-      setError("Could not post your comment. Try again.");
+    } catch (err) {
+      setError(err.message || "Could not post your comment. Try again.");
     } finally {
       setCommentingId(null);
     }
@@ -147,15 +177,16 @@ export default function ProposeActivity({
     setError("");
     try {
       const liked = (comment.likedByIds ?? []).includes(user.id);
-      const updated = await setCommentLiked(
-        activity.id,
-        comment.id,
-        user.id,
-        !liked,
+      onActivitiesChange(
+        await setCommentLiked(
+          activity.id,
+          comment.id,
+          user.id,
+          !liked,
+        ),
       );
-      onActivitiesChange(updated);
-    } catch {
-      setError("Could not update the comment like. Try again.");
+    } catch (err) {
+      setError(err.message || "Could not update the comment like. Try again.");
     } finally {
       setLikingCommentIds((current) =>
         current.filter((id) => id !== comment.id),
@@ -163,19 +194,350 @@ export default function ProposeActivity({
     }
   }
 
+  function beginScheduleEdit(activity) {
+    setEditingScheduleId(activity.id);
+    setEditStartTime(toDateTimeLocal(activity.startAt));
+    setEditEndTime(toDateTimeLocal(activity.endAt));
+  }
+
+  async function handleScheduleSave(activity) {
+    const timeError = validateTimes(editStartTime, editEndTime);
+    if (timeError) {
+      setError(timeError);
+      return;
+    }
+    setSavingScheduleId(activity.id);
+    setError("");
+    try {
+      onActivitiesChange(
+        await updateActivitySchedule(
+          activity.id,
+          user.id,
+          fromDateTimeLocal(editStartTime),
+          fromDateTimeLocal(editEndTime),
+        ),
+      );
+      setEditingScheduleId(null);
+    } catch (err) {
+      setError(err.message || "Could not update the schedule. Try again.");
+    } finally {
+      setSavingScheduleId(null);
+    }
+  }
+
+  function renderActivity(activity) {
+    const members = activity.members ?? [];
+    const comments = activity.comments ?? [];
+    const isMember = (activity.memberIds ?? []).includes(user.id);
+    const isOwner = activity.proposedById === user.id;
+    const expanded = expandedId === activity.id;
+    const scheduleLabel = activityTimeLabel(activity);
+    const editingSchedule = editingScheduleId === activity.id;
+    return (
+      <div
+        key={activity.id}
+        ref={(node) => {
+          if (node) activityRefs.current.set(activity.id, node);
+          else activityRefs.current.delete(activity.id);
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={() => toggleExpanded(activity.id)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleExpanded(activity.id);
+          }
+        }}
+        className={cx(
+          activity.isLive ? styles.activeCard : styles.card,
+          activity.isExpired ? styles.expiredCard : "",
+        )}
+      >
+        <div className={styles.summary}>
+          <div className={styles.summaryText}>
+            <div className={styles.titleRow}>
+              <p className={styles.activityText}>{activity.text}</p>
+              {activity.isLive && <span className={styles.liveChip}>Live</span>}
+              {activity.isExpired && (
+                <span className={styles.expiredChip}>Expired</span>
+              )}
+            </div>
+            <p className={styles.meta}>
+              {activity.proposedBy} · {relativeTime(activity.createdAt)}
+            </p>
+            {scheduleLabel && (
+              <p className={styles.scheduleMeta}>{scheduleLabel}</p>
+            )}
+          </div>
+          <span className={styles.memberCount} title={`${members.length} joined`}>
+            👥 {members.length}
+          </span>
+          {isOwner && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onLiveTransition(
+                  activity,
+                  activity.isLive ? "end" : "start",
+                );
+              }}
+              disabled={Boolean(transitioningId)}
+              className={cx(
+                "ui-pillButton",
+                styles.liveToggle,
+                activity.isLive ? "ui-pillDanger" : "ui-pillPrimary",
+                styles.medPill,
+              )}
+            >
+              {transitioningId === activity.id
+                ? activity.isLive
+                  ? "Ending…"
+                  : "Starting…"
+                : activity.isLive
+                  ? "End"
+                  : activity.isExpired
+                    ? "Restart"
+                    : "Start"}
+            </button>
+          )}
+          {!isOwner && !activity.isExpired && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleToggleMember(activity, isMember);
+              }}
+              disabled={joiningId === activity.id}
+              className={cx(
+                "ui-pillButton",
+                styles.membershipButton,
+                isMember ? "ui-pillSecondary" : "ui-pillPrimary",
+                styles.medPill,
+              )}
+            >
+              {isMember ? "Leave" : "Join"}
+            </button>
+          )}
+        </div>
+
+        <div
+          className={cx(
+            styles.expandedRegion,
+            expanded ? styles.expanded : styles.collapsed,
+          )}
+        >
+          <div
+            className={styles.expandedInner}
+            {...(!expanded ? { inert: "" } : {})}
+          >
+            <div className={styles.panel}>
+              <p className={styles.panelTitle}>Who’s in</p>
+              <div className={styles.memberList}>
+                {members.map((name) => (
+                  <span key={name} className={styles.memberPill}>
+                    {name}
+                  </span>
+                ))}
+              </div>
+
+              {isOwner && !activity.isLive && !activity.isExpired && (
+                <div
+                  className={styles.schedulePanel}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <div className={styles.scheduleHeader}>
+                    <p className={styles.panelTitle}>Schedule</p>
+                    {!editingSchedule && (
+                      <button
+                        type="button"
+                        onClick={() => beginScheduleEdit(activity)}
+                        className={cx(
+                          "ui-pillButton ui-pillSecondary",
+                          styles.smallPill,
+                        )}
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </div>
+                  {editingSchedule ? (
+                    <>
+                      <div className={styles.timeFields}>
+                        <label className={styles.timeField}>
+                          <span>Start</span>
+                          <input
+                            type="datetime-local"
+                            value={editStartTime}
+                            onChange={(event) => {
+                              setEditStartTime(event.target.value)
+                              if (!event.target.value) setEditEndTime("")
+                            }}
+                            className={cx("ui-textInput", styles.timeInput)}
+                          />
+                        </label>
+                        <label className={styles.timeField}>
+                          <span>End (optional)</span>
+                          <input
+                            type="datetime-local"
+                            value={editEndTime}
+                            onChange={(event) =>
+                              setEditEndTime(event.target.value)
+                            }
+                            disabled={!editStartTime}
+                            className={cx("ui-textInput", styles.timeInput)}
+                          />
+                        </label>
+                      </div>
+                      <div className={styles.scheduleActions}>
+                        <button
+                          type="button"
+                          onClick={() => setEditingScheduleId(null)}
+                          className={cx(
+                            "ui-pillButton ui-pillSecondary",
+                            styles.smallPill,
+                          )}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleScheduleSave(activity)}
+                          disabled={savingScheduleId === activity.id}
+                          className={cx(
+                            "ui-pillButton ui-pillPrimary",
+                            styles.smallPill,
+                          )}
+                        >
+                          {savingScheduleId === activity.id ? "Saving…" : "Save"}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className={styles.scheduleValue}>
+                      {scheduleLabel || "No start time"}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <FeedComments
+                comments={comments}
+                commentText={commentText}
+                onCommentTextChange={setCommentText}
+                onSubmitComment={(event) => handleComment(event, activity)}
+                roommates={roommates}
+                user={user}
+                commenting={commentingId === activity.id}
+                likingCommentIds={likingCommentIds}
+                onToggleLike={(comment) =>
+                  handleCommentLike(activity, comment)
+                }
+                openLikesCommentId={openLikesCommentId}
+                onOpenLikesChange={setOpenLikesCommentId}
+                readOnly={activity.isExpired}
+              />
+
+              {isOwner && (
+                <div
+                  className={styles.deleteActions}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  {confirmingDeleteId === activity.id ? (
+                    <>
+                      <span className={styles.deletePrompt}>Delete this event?</span>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingDeleteId(null)}
+                        disabled={deletingId === activity.id}
+                        className={cx(
+                          "ui-pillButton ui-pillSecondary",
+                          styles.smallPill,
+                        )}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(activity)}
+                        disabled={deletingId === activity.id || activity.isLive}
+                        className={cx(
+                          "ui-pillButton ui-pillDanger",
+                          styles.smallPill,
+                        )}
+                      >
+                        {deletingId === activity.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDeleteId(activity.id)}
+                      disabled={activity.isLive}
+                      title={
+                        activity.isLive
+                          ? "End the event before deleting it"
+                          : undefined
+                      }
+                      className={cx(
+                        "ui-pillButton ui-pillDangerSoft",
+                        styles.smallPill,
+                      )}
+                    >
+                      Delete event
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section className={styles.section}>
       <p className="ui-sectionLabel">Propose an activity</p>
-
       <form onSubmit={handleSubmit} className={styles.form}>
-        <input
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          maxLength={280}
-          placeholder="Rod D and Monopoly Deal?"
-          className={cx("ui-textInput", styles.input)}
-        />
+        <div className={styles.proposalFields}>
+          <input
+            type="text"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            maxLength={280}
+            placeholder="Rod D and Monopoly Deal?"
+            className={cx("ui-textInput", styles.input)}
+          />
+          <div className={styles.timeFields}>
+            <label className={styles.timeField}>
+              <span>Start (optional)</span>
+              <input
+                type="datetime-local"
+                value={startTime}
+                onChange={(event) => {
+                  setStartTime(event.target.value);
+                  if (!event.target.value) setEndTime("");
+                }}
+                className={cx("ui-textInput", styles.timeInput)}
+              />
+            </label>
+            <label className={styles.timeField}>
+              <span>End (optional)</span>
+              <input
+                type="datetime-local"
+                value={endTime}
+                onChange={(event) => setEndTime(event.target.value)}
+                disabled={!startTime}
+                className={cx("ui-textInput", styles.timeInput)}
+              />
+            </label>
+          </div>
+        </div>
         <button
           type="submit"
           disabled={sending || !text.trim()}
@@ -188,224 +550,31 @@ export default function ProposeActivity({
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
 
       <div className={styles.list}>
-        {activities.length === 0 ? (
-          <p className={styles.empty}>
-            No activities yet — propose the first one!
-          </p>
+        {currentActivities.length === 0 ? (
+          <p className={styles.empty}>No current activities.</p>
         ) : (
-          activities.map((a) => {
-            const members = a.members ?? [];
-            const comments = a.comments ?? [];
-            const isMember = (a.memberIds ?? []).includes(user.id);
-            // The proposer is permanently part of their own activity, so they
-            // get no Join/Leave button.
-            const canDelete = a.proposedById === user.id;
-            const expanded = expandedId === a.id;
-            return (
-              <div
-                key={a.id}
-                ref={(node) => {
-                  if (node) {
-                    activityRefs.current.set(a.id, node);
-                  } else {
-                    activityRefs.current.delete(a.id);
-                  }
-                }}
-                // The whole card is a toggle that expands the member panel; the
-                // action buttons inside stop propagation so they don't toggle it.
-                role="button"
-                tabIndex={0}
-                aria-expanded={expanded}
-                onClick={() => toggleExpanded(a.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    toggleExpanded(a.id);
-                  }
-                }}
-                className={a.isLive ? styles.activeCard : styles.card}
-              >
-                <div className={styles.summary}>
-                  <div className={styles.summaryText}>
-                    <div className={styles.titleRow}>
-                      <p className={styles.activityText}>{a.text}</p>
-                      {a.isLive && (
-                        <span className={styles.liveChip}>Live</span>
-                      )}
-                    </div>
-                    <p className={styles.meta}>
-                      {a.proposedBy} · {relativeTime(a.createdAt)}
-                    </p>
-                  </div>
-                  {/* Member count — at least 1 since the proposer auto-joins. */}
-                  <span
-                    className={styles.memberCount}
-                    title={`${members.length} joined`}
-                  >
-                    👥 {members.length}
-                  </span>
-                  {canDelete && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onLiveTransition(a, a.isLive ? "end" : "start");
-                      }}
-                      disabled={
-                        Boolean(transitioningId) ||
-                        (!a.isLive && Boolean(liveEvent))
-                      }
-                      title={
-                        !a.isLive && liveEvent
-                          ? `${liveEvent.text} is already live`
-                          : undefined
-                      }
-                      className={cx(
-                        "ui-pillButton",
-                        styles.liveToggle,
-                        a.isLive ? "ui-pillDanger" : "ui-pillPrimary",
-                        styles.medPill,
-                      )}
-                    >
-                      {transitioningId === a.id
-                        ? a.isLive
-                          ? "Ending…"
-                          : "Starting…"
-                        : a.isLive
-                          ? "End"
-                          : "Start"}
-                    </button>
-                  )}
-                  {!canDelete && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleMember(a, isMember);
-                      }}
-                      disabled={joiningId === a.id}
-                      className={cx(
-                        "ui-pillButton",
-                        styles.membershipButton,
-                        isMember ? "ui-pillSecondary" : "ui-pillPrimary",
-                        styles.medPill,
-                      )}
-                    >
-                      {isMember ? "Leave" : "Join"}
-                    </button>
-                  )}
-                </div>
-
-                {/* Expandable panel. Kept mounted (not conditionally rendered)
-                    so its height can animate via the grid 0fr→1fr trick, which
-                    slides smoothly to the content's natural height with no magic
-                    max-height. `inert` while collapsed keeps the hidden controls
-                    out of the tab order and unclickable. */}
-                <div
-                  className={cx(
-                    styles.expandedRegion,
-                    expanded ? styles.expanded : styles.collapsed,
-                  )}
-                >
-                  <div
-                    className={styles.expandedInner}
-                    {...(!expanded ? { inert: "" } : {})}
-                  >
-                    <div className={styles.panel}>
-                      <p className={styles.panelTitle}>Who’s in</p>
-                      {members.length === 0 ? (
-                        <p className={styles.emptyPanelText}>No one yet.</p>
-                      ) : (
-                        <div className={styles.memberList}>
-                          {members.map((name) => (
-                            <span key={name} className={styles.memberPill}>
-                              {name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      <FeedComments
-                        comments={comments}
-                        commentText={commentText}
-                        onCommentTextChange={setCommentText}
-                        onSubmitComment={(event) => handleComment(event, a)}
-                        roommates={roommates}
-                        user={user}
-                        commenting={commentingId === a.id}
-                        likingCommentIds={likingCommentIds}
-                        onToggleLike={(comment) => handleCommentLike(a, comment)}
-                        openLikesCommentId={openLikesCommentId}
-                        onOpenLikesChange={setOpenLikesCommentId}
-                      />
-
-                      {canDelete && (
-                        <div
-                          className={styles.deleteActions}
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        >
-                          {confirmingDeleteId === a.id ? (
-                            <>
-                              <span className={styles.deletePrompt}>
-                                Delete this event?
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmingDeleteId(null)}
-                                disabled={deletingId === a.id}
-                                className={cx(
-                                  "ui-pillButton ui-pillSecondary",
-                                  styles.smallPill,
-                                )}
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(a)}
-                                disabled={deletingId === a.id || a.isLive}
-                                title={
-                                  a.isLive
-                                    ? "End the event before deleting it"
-                                    : undefined
-                                }
-                                className={cx(
-                                  "ui-pillButton ui-pillDanger",
-                                  styles.smallPill,
-                                )}
-                              >
-                                {deletingId === a.id ? "Deleting…" : "Delete"}
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmingDeleteId(a.id)}
-                              disabled={a.isLive}
-                              title={
-                                a.isLive
-                                  ? "End the event before deleting it"
-                                  : undefined
-                              }
-                              className={cx(
-                                "ui-pillButton ui-pillDangerSoft",
-                                styles.smallPill,
-                              )}
-                            >
-                              Delete event
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })
+          currentActivities.map(renderActivity)
         )}
       </div>
+
+      {expiredActivities.length > 0 && (
+        <div className={styles.expiredSection}>
+          <button
+            type="button"
+            onClick={() => setShowExpired((current) => !current)}
+            className={styles.expiredToggle}
+            aria-expanded={showExpired}
+          >
+            <span>Expired activities ({expiredActivities.length})</span>
+            <span aria-hidden="true">{showExpired ? "▴" : "▾"}</span>
+          </button>
+          {showExpired && (
+            <div className={styles.list}>
+              {expiredActivities.map(renderActivity)}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

@@ -13,7 +13,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `PUT  /api/roommates/<id>/status` | `{ status, statusText }` | full updated household list              |
 | `POST /api/roommates/notify`   | `{ requesterId }`          | `{ sent, pruned, failed }`                  |
 | `POST /api/roommates/<id>/poke` | `{ requesterId }`         | `{ sent, pruned, failed }`                  |
-| `POST /api/activities`          | `{ text, proposedById }`   | full updated activity list                |
+| `POST /api/activities`          | `{ text, proposedById, startAt?, endAt? }` | full updated activity list |
+| `PATCH /api/activities/<id>/schedule` | `{ requesterId, startAt?, endAt? }` | full updated activity list |
 | `DELETE /api/activities/<id>`   | `{ requesterId }`          | full updated activity list                |
 | `POST /api/activities/<id>/start` | `{ requesterId }`        | full updated activity list                |
 | `POST /api/activities/<id>/end` | `{ requesterId }`          | full updated activity list                |
@@ -35,8 +36,12 @@ Every roommate shares the demo password **`roomie`** until real auth is added.
 New activities store both the creator's stable roommate id (`proposedById`) and
 canonical display name (`proposedBy`). Only that id can delete the activity;
 legacy activities without `proposedById` remain visible but cannot be deleted.
-Only the creator can start or end an event. One event may be live household-wide
-at a time; ending it returns it to proposed status so it can be restarted.
+Only the creator can edit an event schedule, start it early, end it, or restart
+it after expiration. Activities may overlap. A scheduled activity is live once
+its `startAt` passes and expires when its optional `endAt` passes. Manual end is
+terminal; restart starts immediately and clears the old end. Lifecycle is
+derived from server time, so visible apps pick up automatic changes through
+their five-second activity polling without scheduler infrastructure.
 Push subscriptions and activity participants are associated with stable
 roommate ids. User-triggered notifications always exclude the actor. New
 activity proposals and gather notifications go household-wide; event comments,
@@ -74,8 +79,7 @@ Configuration:
 | `DYNAMODB_ENDPOINT` | —                     | Local dev only: point boto3 at a DynamoDB Local instead of real AWS |
 
 The runtime AWS principal must allow `dynamodb:DeleteItem` on the activities
-table for creator-owned event deletion and `dynamodb:TransactWriteItems` for
-atomic live-event transitions.
+table for creator-owned event deletion.
 
 Credentials resolve via the standard AWS chain. The deploy script lives in
 `infrastructure/`; once the table exists, seed the initial household **once**:

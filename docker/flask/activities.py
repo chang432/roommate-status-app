@@ -5,9 +5,9 @@ push notification (handled in app.py); this module just owns persistence.
 
 Stored in its own DynamoDB table — separate from the roommate table so the
 household scan in db.py stays clean — provisioned by CloudFormation alongside
-the other tables (infrastructure/dynamodb-table-{dev,main}.yaml). The table is
-tiny and the UI only ever shows the most recent few, so a scan + in-app sort is
-the right tool (mirrors db.get_all); no secondary index needed.
+the other tables (infrastructure/dynamodb-table-{dev,main}.yaml). The household
+data set is small, so a scan + in-app lifecycle sort is the right tool (mirrors
+db.get_all); no secondary index is needed.
 
 Configuration (env):
     ACTIVITIES_TABLE  - override the table name
@@ -28,9 +28,6 @@ from botocore.exceptions import ClientError
 # the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
 from db import resource
 
-# How many recent proposals the feed returns / the UI shows.
-RECENT_LIMIT = 5
-
 # How many of an activity's most recent comments the feed returns. Storage
 # remains unbounded; the frontend initially shows only the latest 10.
 COMMENTS_LIMIT = 100
@@ -47,11 +44,12 @@ LIVE_NOT_FOUND = "not_found"
 LIVE_FORBIDDEN = "forbidden"
 LIVE_CONFLICT = "conflict"
 
-# One reserved item coordinates the household-wide single-live-event invariant.
-# Keeping it in the activities table lets DynamoDB update the event and lock in
-# one transaction without introducing another table or schema migration.
-LIVE_CONTROL_ID = "__live_event_control__"
-LIVE_CONTROL_TYPE = "liveControl"
+SCHEDULE_OK = "ok"
+SCHEDULE_NOT_FOUND = "not_found"
+SCHEDULE_FORBIDDEN = "forbidden"
+SCHEDULE_CONFLICT = "conflict"
+
+MUTATION_EXPIRED = "expired"
 COMMENT_LIKE_TYPE = "commentLike"
 
 LIKE_OK = "ok"
@@ -107,7 +105,37 @@ def _comment_entries(item: dict) -> list[tuple[str, dict]]:
     ]
 
 
-def _project(item: dict, likes_by_comment: dict[str, set[str]] | None = None) -> dict:
+def _timestamp(item: dict, field: str) -> int | None:
+    value = item.get(field)
+    return int(value) if value is not None else None
+
+
+def _lifecycle(item: dict, now_ms: int | None = None) -> dict:
+    """Derive lifecycle from timestamps so no scheduler or background write is needed."""
+    now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+    start_at = _timestamp(item, "startAt")
+    end_at = _timestamp(item, "endAt")
+    ended_at = _timestamp(item, "endedAt")
+    is_expired = ended_at is not None or (end_at is not None and end_at <= now_ms)
+    is_live = not is_expired and start_at is not None and start_at <= now_ms
+    return {
+        "startAt": start_at,
+        "endAt": end_at,
+        "endedAt": ended_at,
+        "isLive": is_live,
+        "isExpired": is_expired,
+        "liveStartedAt": start_at if is_live else None,
+        "effectiveEndedAt": (
+            ended_at if ended_at is not None else (end_at if is_expired else None)
+        ),
+    }
+
+
+def _project(
+    item: dict,
+    likes_by_comment: dict[str, set[str]] | None = None,
+    now_ms: int | None = None,
+) -> dict:
     """Shape a raw DynamoDB item to what the frontend expects.
 
     createdAt is stored as a number (epoch millis) and comes back as a Decimal,
@@ -145,6 +173,7 @@ def _project(item: dict, likes_by_comment: dict[str, set[str]] | None = None) ->
         }
         for comment_id, c in _comment_entries(item)[-COMMENTS_LIMIT:]
     ]
+    lifecycle = _lifecycle(item, now_ms)
     return {
         "id": item["id"],
         "text": item["text"],
@@ -154,14 +183,22 @@ def _project(item: dict, likes_by_comment: dict[str, set[str]] | None = None) ->
         "members": members,
         "memberIds": sorted(member_ids),
         "comments": comments,
-        "isLive": bool(item.get("isLive", False)),
-        "liveStartedAt": (
-            int(item["liveStartedAt"]) if item.get("liveStartedAt") is not None else None
-        ),
+        "startAt": lifecycle["startAt"],
+        "endAt": lifecycle["endAt"],
+        "endedAt": lifecycle["endedAt"],
+        "isLive": lifecycle["isLive"],
+        "isExpired": lifecycle["isExpired"],
+        "liveStartedAt": lifecycle["liveStartedAt"],
     }
 
 
-def add_activity(text: str, proposed_by_id: str, proposed_by: str) -> dict:
+def add_activity(
+    text: str,
+    proposed_by_id: str,
+    proposed_by: str,
+    start_at: int | None = None,
+    end_at: int | None = None,
+) -> dict:
     """Store a new proposal and return it. Caller is responsible for validation."""
     item = {
         "id": uuid.uuid4().hex,
@@ -174,38 +211,64 @@ def add_activity(text: str, proposed_by_id: str, proposed_by: str) -> dict:
         "members": {proposed_by},
         "memberIds": {proposed_by_id},
     }
+    if start_at is not None:
+        item["startAt"] = start_at
+    if end_at is not None:
+        item["endAt"] = end_at
     _get_table().put_item(Item=item)
     return _project(item)
 
 
-def _set_membership(activity_id: str, user_id: str, name: str, op: str) -> dict | None:
+def _set_membership(
+    activity_id: str,
+    user_id: str,
+    name: str,
+    op: str,
+) -> dict | str | None:
     """Add or remove a roommate from an activity; return it, or None.
 
     `op` is "ADD" (join) or "DELETE" (leave). Both are atomic and idempotent at
     the DynamoDB level — joining twice or leaving when absent is a no-op. None
     means the activity doesn't exist.
     """
+    table = _get_table()
+    existing = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+    if existing is None or existing.get("itemType"):
+        return None
+    if _lifecycle(existing)["isExpired"]:
+        return MUTATION_EXPIRED
     try:
-        resp = _get_table().update_item(
+        resp = table.update_item(
             Key={"id": activity_id},
             UpdateExpression=f"{op} members :m, memberIds :i",
-            ExpressionAttributeValues={":m": {name}, ":i": {user_id}},
-            ConditionExpression="attribute_exists(id)",
+            ExpressionAttributeValues={
+                ":m": {name},
+                ":i": {user_id},
+                ":now": int(time.time() * 1000),
+            },
+            ConditionExpression=(
+                "attribute_exists(id) AND attribute_not_exists(itemType) AND "
+                "attribute_not_exists(endedAt) AND "
+                "(attribute_not_exists(endAt) OR endAt > :now)"
+            ),
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            return None  # Unknown activity id.
+            current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+            if current and not current.get("itemType") and _lifecycle(current)["isExpired"]:
+                return MUTATION_EXPIRED
+            return None
         raise
     return _project(resp["Attributes"])
 
 
-def join(activity_id: str, user_id: str, name: str) -> dict | None:
+def join(activity_id: str, user_id: str, name: str) -> dict | str | None:
     """Add a roommate to an activity. None if the activity is unknown."""
     return _set_membership(activity_id, user_id, name, "ADD")
 
 
-def leave(activity_id: str, user_id: str, name: str) -> dict | None:
+def leave(activity_id: str, user_id: str, name: str) -> dict | str | None:
     """Remove a roommate from an activity. None if the activity is unknown."""
     return _set_membership(activity_id, user_id, name, "DELETE")
 
@@ -217,7 +280,7 @@ def add_comment(
     mentions: list[dict] | None = None,
     mentions_all: bool = False,
     author_id: str | None = None,
-) -> dict | None:
+) -> dict | str | None:
     """Append a comment to an activity; return it, or None if unknown.
 
     Comments are stored as an ordered DynamoDB list of
@@ -226,6 +289,12 @@ def add_comment(
     each other. if_not_exists seeds an empty list for activities (legacy or
     otherwise) that have never been commented on.
     """
+    table = _get_table()
+    existing = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+    if existing is None or existing.get("itemType"):
+        return None
+    if _lifecycle(existing)["isExpired"]:
+        return MUTATION_EXPIRED
     comment = {
         "id": uuid.uuid4().hex,
         "author": author,
@@ -241,16 +310,27 @@ def add_comment(
         "createdAt": int(time.time() * 1000),
     }
     try:
-        resp = _get_table().update_item(
+        resp = table.update_item(
             Key={"id": activity_id},
             UpdateExpression="SET comments = list_append(if_not_exists(comments, :empty), :c)",
-            ExpressionAttributeValues={":c": [comment], ":empty": []},
-            ConditionExpression="attribute_exists(id)",
+            ExpressionAttributeValues={
+                ":c": [comment],
+                ":empty": [],
+                ":now": int(time.time() * 1000),
+            },
+            ConditionExpression=(
+                "attribute_exists(id) AND attribute_not_exists(itemType) AND "
+                "attribute_not_exists(endedAt) AND "
+                "(attribute_not_exists(endAt) OR endAt > :now)"
+            ),
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            return None  # Unknown activity id.
+            current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+            if current and not current.get("itemType") and _lifecycle(current)["isExpired"]:
+                return MUTATION_EXPIRED
+            return None
         raise
     return _project(resp["Attributes"])
 
@@ -272,6 +352,8 @@ def set_comment_like(
     activity = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
     if activity is None or activity.get("itemType"):
         return LIKE_NOT_FOUND
+    if _lifecycle(activity)["isExpired"]:
+        return MUTATION_EXPIRED
 
     comment = next(
         (raw for candidate_id, raw in _comment_entries(activity) if candidate_id == comment_id),
@@ -303,79 +385,65 @@ def set_comment_like(
 
 def get(activity_id: str, consistent: bool = False) -> dict | None:
     """Return one proposal by id, or None if it doesn't exist."""
-    if activity_id == LIVE_CONTROL_ID:
-        return None
     item = _get_table().get_item(
         Key={"id": activity_id},
         ConsistentRead=consistent,
     ).get("Item")
-    return _project(item) if item and item.get("itemType") != LIVE_CONTROL_TYPE else None
-
-
-def _live_control(consistent: bool = True) -> dict:
-    """Return the singleton live-event coordination item, or an empty dict."""
-    return (
-        _get_table()
-        .get_item(Key={"id": LIVE_CONTROL_ID}, ConsistentRead=consistent)
-        .get("Item", {})
-    )
+    return _project(item) if item and not item.get("itemType") else None
 
 
 def start_owned(activity_id: str, requester_id: str) -> str:
-    """Atomically make an owned event the household's only live event."""
+    """Start an owned activity now; expired activities restart without an end."""
     table = _get_table()
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") == LIVE_CONTROL_TYPE:
+    if item is None or item.get("itemType"):
         return LIVE_NOT_FOUND
     if item.get("proposedById") != requester_id:
         return LIVE_FORBIDDEN
-    if item.get("isLive"):
-        return LIVE_CONFLICT
-    if _live_control().get("liveActivityId"):
+    lifecycle = _lifecycle(item)
+    if lifecycle["isLive"]:
         return LIVE_CONFLICT
 
     started_at = int(time.time() * 1000)
     try:
-        table.meta.client.transact_write_items(
-            TransactItems=[
-                {
-                    "Update": {
-                        "TableName": TABLE_NAME,
-                        "Key": {"id": activity_id},
-                        "UpdateExpression": "SET isLive = :true, liveStartedAt = :started",
-                        "ConditionExpression": (
-                            "proposedById = :requester AND "
-                            "(attribute_not_exists(isLive) OR isLive = :false)"
-                        ),
-                        "ExpressionAttributeValues": {
-                            ":true": True,
-                            ":false": False,
-                            ":started": started_at,
-                            ":requester": requester_id,
-                        },
-                    }
-                },
-                {
-                    "Update": {
-                        "TableName": TABLE_NAME,
-                        "Key": {"id": LIVE_CONTROL_ID},
-                        "UpdateExpression": (
-                            "SET itemType = :type, liveActivityId = :activity"
-                        ),
-                        "ConditionExpression": "attribute_not_exists(liveActivityId)",
-                        "ExpressionAttributeValues": {
-                            ":type": LIVE_CONTROL_TYPE,
-                            ":activity": activity_id,
-                        },
-                    }
-                },
-            ]
+        remove_fields = " REMOVE endedAt, isLive, liveStartedAt"
+        if lifecycle["isExpired"]:
+            remove_fields += ", endAt"
+        condition = (
+            "proposedById = :requester AND attribute_not_exists(itemType)"
+        )
+        values = {
+            ":started": started_at,
+            ":requester": requester_id,
+        }
+        if lifecycle["endedAt"] is not None:
+            condition += " AND endedAt = :expected_ended"
+            values[":expected_ended"] = lifecycle["endedAt"]
+        elif lifecycle["isExpired"]:
+            condition += (
+                " AND attribute_not_exists(endedAt) AND endAt = :expected_end"
+            )
+            values[":expected_end"] = lifecycle["endAt"]
+        elif lifecycle["startAt"] is None:
+            condition += (
+                " AND attribute_not_exists(startAt) AND attribute_not_exists(endedAt)"
+            )
+        else:
+            condition += (
+                " AND startAt = :expected_start AND attribute_not_exists(endedAt)"
+            )
+            values[":expected_start"] = lifecycle["startAt"]
+        table.update_item(
+            Key={"id": activity_id},
+            UpdateExpression=f"SET startAt = :started{remove_fields}",
+            ConditionExpression=condition,
+            ExpressionAttributeValues=values,
         )
     except ClientError as err:
-        if err.response["Error"]["Code"] != "TransactionCanceledException":
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None:
+        if current is None or current.get("itemType"):
             return LIVE_NOT_FOUND
         if current.get("proposedById") != requester_id:
             return LIVE_FORBIDDEN
@@ -384,55 +452,98 @@ def start_owned(activity_id: str, requester_id: str) -> str:
 
 
 def end_owned(activity_id: str, requester_id: str) -> str:
-    """Atomically end a live owned event and release the household live lock."""
+    """End a live owned activity permanently."""
     table = _get_table()
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") == LIVE_CONTROL_TYPE:
+    if item is None or item.get("itemType"):
         return LIVE_NOT_FOUND
     if item.get("proposedById") != requester_id:
         return LIVE_FORBIDDEN
-    if not item.get("isLive"):
+    if not _lifecycle(item)["isLive"]:
         return LIVE_CONFLICT
 
+    ended_at = int(time.time() * 1000)
     try:
-        table.meta.client.transact_write_items(
-            TransactItems=[
-                {
-                    "Update": {
-                        "TableName": TABLE_NAME,
-                        "Key": {"id": activity_id},
-                        "UpdateExpression": "SET isLive = :false REMOVE liveStartedAt",
-                        "ConditionExpression": (
-                            "proposedById = :requester AND isLive = :true"
-                        ),
-                        "ExpressionAttributeValues": {
-                            ":false": False,
-                            ":true": True,
-                            ":requester": requester_id,
-                        },
-                    }
-                },
-                {
-                    "Update": {
-                        "TableName": TABLE_NAME,
-                        "Key": {"id": LIVE_CONTROL_ID},
-                        "UpdateExpression": "REMOVE liveActivityId",
-                        "ConditionExpression": "liveActivityId = :activity",
-                        "ExpressionAttributeValues": {":activity": activity_id},
-                    }
-                },
-            ]
+        table.update_item(
+            Key={"id": activity_id},
+            UpdateExpression="SET endedAt = :ended REMOVE isLive, liveStartedAt",
+            ConditionExpression=(
+                "proposedById = :requester AND attribute_not_exists(itemType) AND "
+                "startAt = :expected_start AND attribute_not_exists(endedAt)"
+            ),
+            ExpressionAttributeValues={
+                ":ended": ended_at,
+                ":requester": requester_id,
+                ":expected_start": _timestamp(item, "startAt"),
+            },
         )
     except ClientError as err:
-        if err.response["Error"]["Code"] != "TransactionCanceledException":
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None:
+        if current is None or current.get("itemType"):
             return LIVE_NOT_FOUND
         if current.get("proposedById") != requester_id:
             return LIVE_FORBIDDEN
         return LIVE_CONFLICT
     return LIVE_OK
+
+
+def update_schedule_owned(
+    activity_id: str,
+    requester_id: str,
+    start_at: int | None,
+    end_at: int | None,
+) -> str:
+    """Replace an owned pending activity's schedule."""
+    table = _get_table()
+    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("itemType"):
+        return SCHEDULE_NOT_FOUND
+    if item.get("proposedById") != requester_id:
+        return SCHEDULE_FORBIDDEN
+    lifecycle = _lifecycle(item)
+    if lifecycle["isLive"] or lifecycle["isExpired"]:
+        return SCHEDULE_CONFLICT
+
+    if start_at is None:
+        expression = "REMOVE startAt, endAt, endedAt, isLive, liveStartedAt"
+        values = {":requester": requester_id}
+    elif end_at is None:
+        expression = "SET startAt = :start REMOVE endAt, endedAt, isLive, liveStartedAt"
+        values = {":requester": requester_id, ":start": start_at}
+    else:
+        expression = (
+            "SET startAt = :start, endAt = :end "
+            "REMOVE endedAt, isLive, liveStartedAt"
+        )
+        values = {
+            ":requester": requester_id,
+            ":start": start_at,
+            ":end": end_at,
+        }
+    try:
+        now_ms = int(time.time() * 1000)
+        table.update_item(
+            Key={"id": activity_id},
+            UpdateExpression=expression,
+            ConditionExpression=(
+                "proposedById = :requester AND attribute_not_exists(itemType) AND "
+                "attribute_not_exists(endedAt) AND "
+                "(attribute_not_exists(startAt) OR startAt > :now)"
+            ),
+            ExpressionAttributeValues={**values, ":now": now_ms},
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+        if current is None or current.get("itemType"):
+            return SCHEDULE_NOT_FOUND
+        if current.get("proposedById") != requester_id:
+            return SCHEDULE_FORBIDDEN
+        return SCHEDULE_CONFLICT
+    return SCHEDULE_OK
 
 
 def delete_owned(activity_id: str, requester_id: str) -> str:
@@ -449,17 +560,16 @@ def delete_owned(activity_id: str, requester_id: str) -> str:
         return DELETE_NOT_FOUND
     if item.get("proposedById") != requester_id:
         return DELETE_FORBIDDEN
-    if item.get("isLive"):
+    if _lifecycle(item)["isLive"]:
         return DELETE_LIVE
 
     try:
         table.delete_item(
             Key={"id": activity_id},
             ConditionExpression=(
-                "proposedById = :requester AND "
-                "(attribute_not_exists(isLive) OR isLive = :false)"
+                "proposedById = :requester AND attribute_not_exists(itemType)"
             ),
-            ExpressionAttributeValues={":requester": requester_id, ":false": False},
+            ExpressionAttributeValues={":requester": requester_id},
         )
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
@@ -470,7 +580,7 @@ def delete_owned(activity_id: str, requester_id: str) -> str:
             return DELETE_NOT_FOUND
         if current.get("proposedById") != requester_id:
             return DELETE_FORBIDDEN
-        return DELETE_LIVE
+        return DELETE_LIVE if _lifecycle(current)["isLive"] else DELETE_FORBIDDEN
 
     # Likes are separate idempotent records so concurrent reactions cannot
     # clobber the embedded comment list. Remove them with their parent event.
@@ -483,8 +593,8 @@ def delete_owned(activity_id: str, requester_id: str) -> str:
     return DELETE_OK
 
 
-def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
-    """Return the most recent proposals, newest first.
+def list_recent(limit: int | None = None, consistent: bool = False) -> list[dict]:
+    """Return all activities in active-then-expired display order.
 
     Pass consistent=True for the response that follows a write (propose / join /
     leave / delete): DynamoDB scans are eventually consistent by default, so a
@@ -505,13 +615,33 @@ def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dic
         for item in items
         if not item.get("itemType") and "createdAt" in item
     ]
-    items.sort(key=lambda i: int(i["createdAt"]), reverse=True)
-    selected = items[:limit]
+    now_ms = int(time.time() * 1000)
+    active = []
+    expired = []
+    for item in items:
+        lifecycle = _lifecycle(item, now_ms)
+        (expired if lifecycle["isExpired"] else active).append((item, lifecycle))
 
-    # An older live event must remain in the feed because its card contains the
-    # creator's End control. Replace the oldest selected proposal if necessary.
-    live_item = next((item for item in items if item.get("isLive")), None)
-    if live_item and live_item not in selected and limit > 0:
-        selected[-1] = live_item
-        selected.sort(key=lambda i: int(i["createdAt"]), reverse=True)
-    return [_project(i, likes_by_activity.get(i["id"])) for i in selected]
+    # Unscheduled proposals stay at the top; scheduled entries follow by start.
+    active.sort(
+        key=lambda pair: (
+            0 if pair[1]["startAt"] is None else 1,
+            -int(pair[0]["createdAt"])
+            if pair[1]["startAt"] is None
+            else pair[1]["startAt"],
+            -int(pair[0]["createdAt"]),
+        )
+    )
+    expired.sort(
+        key=lambda pair: (
+            -(pair[1]["effectiveEndedAt"] or 0),
+            -int(pair[0]["createdAt"]),
+        )
+    )
+    ordered = active + expired
+    if limit is not None:
+        ordered = ordered[:limit]
+    return [
+        _project(item, likes_by_activity.get(item["id"]), now_ms)
+        for item, _lifecycle_data in ordered
+    ]

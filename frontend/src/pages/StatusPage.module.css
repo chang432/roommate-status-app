@@ -34,6 +34,10 @@
   @apply mt-4;
 }
 
+.liveEvents {
+  @apply mb-[26px] mt-[22px] space-y-3;
+}
+
 .loading {
   @apply mt-10 text-center text-[14px] text-ink-soft;
 }

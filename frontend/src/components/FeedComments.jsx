@@ -16,6 +16,7 @@ export default function FeedComments({
   onToggleLike,
   openLikesCommentId,
   onOpenLikesChange,
+  readOnly = false,
 }) {
   return (
     <div
@@ -47,7 +48,7 @@ export default function FeedComments({
                       (!comment.authorId &&
                         comment.author.toLowerCase() === user.name.toLowerCase())
                     }
-                    busy={likingCommentIds.includes(comment.id)}
+                    busy={readOnly || likingCommentIds.includes(comment.id)}
                     onToggle={() => onToggleLike(comment)}
                     likedByIds={comment.likedByIds ?? []}
                     roommates={roommates}
@@ -69,14 +70,16 @@ export default function FeedComments({
           </ul>
         </div>
       )}
-      <CommentComposer
-        value={commentText}
-        onChange={onCommentTextChange}
-        onSubmit={onSubmitComment}
-        roommates={roommates}
-        currentUserId={user.id}
-        busy={commenting}
-      />
+      {!readOnly && (
+        <CommentComposer
+          value={commentText}
+          onChange={onCommentTextChange}
+          onSubmit={onSubmitComment}
+          roommates={roommates}
+          currentUserId={user.id}
+          busy={commenting}
+        />
+      )}
     </div>
   )
 }

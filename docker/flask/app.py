@@ -17,18 +17,17 @@ Plus the Web Push (PoC) endpoints:
 
 And the proposed-activities feed:
 
-    GET  /api/activities               -> [ { "id", "text", "proposedBy",
-                                             "proposedById", "createdAt", "members",
-                                             "memberIds" }, ... ]
-    POST /api/activities               -> the updated recent list (and pushes it)
-    DELETE /api/activities/<id>        -> the updated recent list
-    POST /api/activities/<id>/start    -> the updated recent list (and pushes it)
-    POST /api/activities/<id>/end      -> the updated recent list (and pushes it)
-    POST /api/activities/<id>/join     -> the updated recent list (and pushes it)
-    POST /api/activities/<id>/leave    -> the updated recent list
-    POST /api/activities/<id>/comments -> the updated recent list (and pushes it)
+    GET  /api/activities               -> current + expired activity history
+    POST /api/activities               -> the updated activity list (and pushes it)
+    PATCH /api/activities/<id>/schedule -> the updated activity list
+    DELETE /api/activities/<id>        -> the updated activity list
+    POST /api/activities/<id>/start    -> the updated activity list (and pushes it)
+    POST /api/activities/<id>/end      -> the updated activity list (and pushes it)
+    POST /api/activities/<id>/join     -> the updated activity list (and pushes it)
+    POST /api/activities/<id>/leave    -> the updated activity list
+    POST /api/activities/<id>/comments -> the updated activity list (and pushes it)
     PUT/DELETE /api/activities/<id>/comments/<comment_id>/likes
-                                        -> the updated recent list
+                                        -> the updated activity list
 
 And the household request feed:
 
@@ -100,6 +99,33 @@ def resolve_mentions(text: str, roommates: list[dict], author_id: str) -> list[d
             resolved.append({"id": roommate["id"], "name": roommate["name"]})
             used_ids.add(roommate["id"])
     return resolved
+
+
+def optional_epoch_millis(body: dict, field: str) -> tuple[int | None, str | None]:
+    """Parse a nullable epoch-millisecond field without accepting booleans."""
+    value = body.get(field)
+    if value is None:
+        return None, None
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None, f"{field} must be an epoch-millisecond timestamp or null."
+    parsed = int(value)
+    if parsed < 0:
+        return None, f"{field} must be an epoch-millisecond timestamp or null."
+    return parsed, None
+
+
+def validate_activity_schedule(body: dict) -> tuple[int | None, int | None, str | None]:
+    start_at, error = optional_epoch_millis(body, "startAt")
+    if error:
+        return None, None, error
+    end_at, error = optional_epoch_millis(body, "endAt")
+    if error:
+        return None, None, error
+    if end_at is not None and start_at is None:
+        return None, None, "An end time requires a start time."
+    if start_at is not None and end_at is not None and end_at <= start_at:
+        return None, None, "End time must be later than start time."
+    return start_at, end_at, None
 
 
 def create_app() -> Flask:
@@ -266,12 +292,12 @@ def create_app() -> Flask:
     # --- Proposed activities ------------------------------------------------
     @app.get("/api/activities")
     def get_activities():
-        """Return the most recent proposed activities, newest first."""
+        """Return current activities followed by expired activity history."""
         return jsonify(activities.list_recent())
 
     @app.post("/api/activities")
     def propose_activity():
-        """Store a new proposal, push it to everyone, return the recent list."""
+        """Store a new proposal, push it to everyone, return the activity list."""
         body = request.get_json(silent=True) or {}
         text = (body.get("text") or "").strip()
         proposed_by_id = (body.get("proposedById") or "").strip()
@@ -283,8 +309,17 @@ def create_app() -> Flask:
         proposer = db.get_by_id(proposed_by_id) if proposed_by_id else None
         if proposer is None:
             return jsonify({"error": "A valid creator is required."}), 400
+        start_at, end_at, schedule_error = validate_activity_schedule(body)
+        if schedule_error:
+            return jsonify({"error": schedule_error}), 400
 
-        activities.add_activity(text, proposer["id"], proposer["name"])
+        activities.add_activity(
+            text,
+            proposer["id"],
+            proposer["name"],
+            start_at,
+            end_at,
+        )
 
         # Notify the household except the proposer. Best-effort: a push failure
         # must not fail the proposal the user just made.
@@ -317,10 +352,8 @@ def create_app() -> Flask:
         if result == activities.LIVE_FORBIDDEN:
             return jsonify({"error": "Only the event creator can change its live status."}), 403
         if result == activities.LIVE_CONFLICT:
-            message = (
-                "Another event is already live."
-                if action == "start"
-                else "This event is not currently live."
+            message = "This event is already live." if action == "start" else (
+                "This event is not currently live."
             )
             return jsonify({"error": message}), 409
 
@@ -346,13 +379,38 @@ def create_app() -> Flask:
 
     @app.post("/api/activities/<activity_id>/start")
     def start_activity(activity_id: str):
-        """Let an event creator make their event the one live household event."""
+        """Let an event creator start or restart their event immediately."""
         return transition_activity_live(activity_id, "start")
 
     @app.post("/api/activities/<activity_id>/end")
     def end_activity(activity_id: str):
-        """Let an event creator end their live event so another may start."""
+        """Let an event creator permanently end their live event."""
         return transition_activity_live(activity_id, "end")
+
+    @app.patch("/api/activities/<activity_id>/schedule")
+    def update_activity_schedule(activity_id: str):
+        """Replace a pending activity's optional owner-controlled schedule."""
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        if not requester_id:
+            return jsonify({"error": "A requester id is required."}), 400
+        start_at, end_at, schedule_error = validate_activity_schedule(body)
+        if schedule_error:
+            return jsonify({"error": schedule_error}), 400
+
+        result = activities.update_schedule_owned(
+            activity_id,
+            requester_id,
+            start_at,
+            end_at,
+        )
+        if result == activities.SCHEDULE_NOT_FOUND:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        if result == activities.SCHEDULE_FORBIDDEN:
+            return jsonify({"error": "Only the event creator can edit its schedule."}), 403
+        if result == activities.SCHEDULE_CONFLICT:
+            return jsonify({"error": "Only pending events can be rescheduled."}), 409
+        return jsonify(activities.list_recent(consistent=True))
 
     @app.delete("/api/activities/<activity_id>")
     def delete_activity(activity_id: str):
@@ -395,6 +453,8 @@ def create_app() -> Flask:
         activity = activities.join(activity_id, roommate["id"], roommate["name"])
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        if activity == activities.MUTATION_EXPIRED:
+            return jsonify({"error": "Expired activities are read-only."}), 409
 
         # Notify the other participants that someone joined. Best-effort: a push
         # failure must not fail the join. Leaving remains intentionally quiet.
@@ -420,14 +480,17 @@ def create_app() -> Flask:
         roommate = db.get_by_id(user_id) if user_id else None
         if roommate is None:
             return jsonify({"error": "A valid roommate is required."}), 400
-        if activities.leave(activity_id, roommate["id"], roommate["name"]) is None:
+        result = activities.leave(activity_id, roommate["id"], roommate["name"])
+        if result is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        if result == activities.MUTATION_EXPIRED:
+            return jsonify({"error": "Expired activities are read-only."}), 409
         # Consistent read so the updated member list is reflected immediately.
         return jsonify(activities.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/comments")
     def comment_on_activity(activity_id: str):
-        """Append a comment to an activity; return the refreshed recent list."""
+        """Append a comment to an activity; return the refreshed activity list."""
         body = request.get_json(silent=True) or {}
         author_id = (body.get("authorId") or "").strip()
         text = (body.get("text") or "").strip()
@@ -450,6 +513,8 @@ def create_app() -> Flask:
         )
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        if activity == activities.MUTATION_EXPIRED:
+            return jsonify({"error": "Expired activities are read-only."}), 409
 
         # @all takes precedence over named and participant audiences so each
         # recipient gets at most one push for the comment.
@@ -523,6 +588,8 @@ def create_app() -> Flask:
             return jsonify({"error": "Unknown activity or comment."}), 404
         if result == activities.LIKE_SELF_FORBIDDEN:
             return jsonify({"error": "You cannot like your own comment."}), 403
+        if result == activities.MUTATION_EXPIRED:
+            return jsonify({"error": "Expired activities are read-only."}), 409
         return jsonify(activities.list_recent(consistent=True))
 
     # --- Requests -----------------------------------------------------------
@@ -747,6 +814,8 @@ def create_app() -> Flask:
         activity = activities.get(activity_id)
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        if activity["isExpired"]:
+            return jsonify({"error": "Expired activities are read-only."}), 409
         if not push.is_configured():
             return jsonify({"error": "Push is not configured on the server."}), 503
 

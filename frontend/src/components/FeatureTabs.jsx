@@ -2,9 +2,22 @@ import { useState } from 'react'
 import { cx } from '../utils/classNames.js'
 import styles from './styling/FeatureTabs.module.css'
 
-export default function FeatureTabs({ tabs, defaultTabId }) {
-  const [activeId, setActiveId] = useState(defaultTabId ?? tabs[0]?.id)
+export default function FeatureTabs({
+  tabs,
+  defaultTabId,
+  activeTabId,
+  onActiveTabChange,
+}) {
+  const [internalActiveId, setInternalActiveId] = useState(
+    defaultTabId ?? tabs[0]?.id,
+  )
+  const activeId = activeTabId ?? internalActiveId
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0]
+
+  function selectTab(id) {
+    setInternalActiveId(id)
+    onActiveTabChange?.(id)
+  }
 
   return (
     <section className={styles.section}>
@@ -19,7 +32,7 @@ export default function FeatureTabs({ tabs, defaultTabId }) {
               aria-selected={activeTab.id === tab.id}
               aria-controls={`${tab.id}-panel`}
               id={`${tab.id}-tab`}
-              onClick={() => setActiveId(tab.id)}
+              onClick={() => selectTab(tab.id)}
               className={cx(
                 styles.tab,
                 activeTab.id === tab.id ? styles.tabActive : '',

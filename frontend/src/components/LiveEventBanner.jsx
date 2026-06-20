@@ -19,13 +19,19 @@ export default function LiveEventBanner({
     <div
       className={cx(
         isInvolved ? styles.involvedBanner : styles.banner,
-        !isInvolved && styles.clickable,
+        styles.clickable,
       )}
       data-involved={isInvolved || undefined}
-      role={isInvolved ? undefined : "button"}
-      tabIndex={isInvolved ? undefined : 0}
-      aria-label={isInvolved ? undefined : "Open live activity"}
+      role="button"
+      tabIndex={0}
+      aria-label="Open live activity"
       onClick={onBannerClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onBannerClick();
+        }
+      }}
     >
       <div className={styles.content}>
         <span className={styles.dot} />
@@ -42,6 +48,7 @@ export default function LiveEventBanner({
         {canEnd && (
           <button
             type="button"
+            onKeyDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
               onEnd();

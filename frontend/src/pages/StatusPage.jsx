@@ -54,6 +54,7 @@ export default function StatusPage() {
   const [saving, setSaving] = useState(false);
   const [notifyingHousehold, setNotifyingHousehold] = useState(false);
   const [activityFocusRequest, setActivityFocusRequest] = useState(null);
+  const [activeBoardTab, setActiveBoardTab] = useState("activities");
 
   // Fetch the household; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
@@ -161,7 +162,7 @@ export default function StatusPage() {
 
   const freeCount = availableCount(roommates);
   const showBanner = freeCount >= AVAILABLE_THRESHOLD;
-  const liveEvent = activities.find((activity) => activity.isLive) ?? null;
+  const liveEvents = activities.filter((activity) => activity.isLive);
 
   // Poke notifications carry this one-shot intent. Open the editor after the
   // household loads, then remove the query so refreshes do not reopen it.
@@ -219,10 +220,10 @@ export default function StatusPage() {
     await pokeRoommate(roommateId, user.id);
   }
 
-  function handleLiveBannerClick() {
-    if (!liveEvent) return;
+  function handleLiveBannerClick(activityId) {
+    setActiveBoardTab("activities");
     setActivityFocusRequest((current) => ({
-      activityId: liveEvent.id,
+      activityId,
       requestId: (current?.requestId ?? 0) + 1,
     }));
   }
@@ -272,15 +273,20 @@ export default function StatusPage() {
               <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
             )}
 
-            {liveEvent && (
-              <LiveEventBanner
-                event={liveEvent}
-                canEnd={liveEvent.proposedById === user.id}
-                ending={transitioningId === liveEvent.id}
-                onEnd={() => handleLiveTransition(liveEvent, "end")}
-                user={user}
-                onBannerClick={handleLiveBannerClick}
-              />
+            {liveEvents.length > 0 && (
+              <div className={styles.liveEvents}>
+                {liveEvents.map((liveEvent) => (
+                  <LiveEventBanner
+                    key={liveEvent.id}
+                    event={liveEvent}
+                    canEnd={liveEvent.proposedById === user.id}
+                    ending={transitioningId === liveEvent.id}
+                    onEnd={() => handleLiveTransition(liveEvent, "end")}
+                    user={user}
+                    onBannerClick={() => handleLiveBannerClick(liveEvent.id)}
+                  />
+                ))}
+              </div>
             )}
 
             <EnableNotifications />
@@ -332,6 +338,8 @@ export default function StatusPage() {
 
             <FeatureTabs
               defaultTabId="activities"
+              activeTabId={activeBoardTab}
+              onActiveTabChange={setActiveBoardTab}
               tabs={[
                 {
                   id: "activities",
@@ -340,7 +348,6 @@ export default function StatusPage() {
                     <ProposeActivity
                       activities={activities}
                       onActivitiesChange={setActivities}
-                      liveEvent={liveEvent}
                       transitioningId={transitioningId}
                       onLiveTransition={handleLiveTransition}
                       roommates={roommates}
