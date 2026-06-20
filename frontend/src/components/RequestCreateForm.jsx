@@ -112,7 +112,7 @@ export default function RequestCreateForm({
         value={text}
         onChange={(event) => setText(event.target.value)}
         maxLength={280}
-        placeholder="Can someone bring in the bins?"
+        placeholder="Can someone feed the beasts?"
         className={cx('ui-textInput', styles.input)}
       />
       <RoommateChecklist

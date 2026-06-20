@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
+  archiveActivity,
   deleteActivity,
   joinActivity,
   leaveActivity,
@@ -35,6 +36,8 @@ export default function ProposeActivity({
   const [commentingId, setCommentingId] = useState(null);
   const [likingCommentIds, setLikingCommentIds] = useState([]);
   const [openLikesCommentId, setOpenLikesCommentId] = useState(null);
+  const [confirmingArchiveId, setConfirmingArchiveId] = useState(null);
+  const [archivingId, setArchivingId] = useState(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [editingScheduleId, setEditingScheduleId] = useState(null);
@@ -56,6 +59,7 @@ export default function ProposeActivity({
     const { activityId } = activityFocusRequest;
     setExpandedId(activityId);
     setCommentText("");
+    setConfirmingArchiveId(null);
     setConfirmingDeleteId(null);
     requestAnimationFrame(() => {
       activityRefs.current.get(activityId)?.scrollIntoView({
@@ -69,6 +73,7 @@ export default function ProposeActivity({
     setExpandedId((current) => (current === id ? null : id));
     setCommentText("");
     setOpenLikesCommentId(null);
+    setConfirmingArchiveId(null);
     setConfirmingDeleteId(null);
     setEditingScheduleId(null);
   }
@@ -97,6 +102,20 @@ export default function ProposeActivity({
       setError(err.message || "Could not delete the activity. Try again.");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleArchive(activity) {
+    if (archivingId) return;
+    setArchivingId(activity.id);
+    setError("");
+    try {
+      onActivitiesChange(await archiveActivity(activity.id, user.id));
+      setConfirmingArchiveId(null);
+    } catch (err) {
+      setError(err.message || "Could not archive the activity. Try again.");
+    } finally {
+      setArchivingId(null);
     }
   }
 
@@ -406,6 +425,53 @@ export default function ProposeActivity({
                 onOpenLikesChange={setOpenLikesCommentId}
                 readOnly={activity.isExpired}
               />
+
+              {!activity.isExpired && (
+                <div
+                  className={styles.deleteActions}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  {confirmingArchiveId === activity.id ? (
+                    <>
+                      <span className={styles.deletePrompt}>Archive this event?</span>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingArchiveId(null)}
+                        disabled={archivingId === activity.id}
+                        className={cx(
+                          "ui-pillButton ui-pillSecondary",
+                          styles.smallPill,
+                        )}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleArchive(activity)}
+                        disabled={archivingId === activity.id}
+                        className={cx(
+                          "ui-pillButton ui-pillDangerSoft",
+                          styles.smallPill,
+                        )}
+                      >
+                        {archivingId === activity.id ? "Archiving…" : "Archive"}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingArchiveId(activity.id)}
+                      className={cx(
+                        "ui-pillButton ui-pillSecondary",
+                        styles.smallPill,
+                      )}
+                    >
+                      Archive event
+                    </button>
+                  )}
+                </div>
+              )}
 
               {isOwner && (
                 <div
