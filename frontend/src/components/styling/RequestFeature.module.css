@@ -94,20 +94,20 @@
   @apply grid h-[32px] w-[32px] place-items-center rounded-full border text-[15px] font-black leading-none text-white transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
 }
 
-.acceptAction {
+.acceptedAction {
   @apply border-status-green bg-status-green;
 }
 
-.acceptedAction {
-  @apply border-status-hover-green bg-status-hover-green;
-}
-
-.denyAction {
-  @apply border-status-red bg-status-red;
+.acceptAction {
+  @apply border-status-highlight-green bg-status-highlight-green;
 }
 
 .deniedAction {
-  @apply border-status-hover-red bg-status-hover-red;
+  @apply border-status-red bg-status-red;
+}
+
+.denyAction {
+  @apply border-status-highlight-red bg-status-highlight-red;
 }
 
 .summaryReopen {

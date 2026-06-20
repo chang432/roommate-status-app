@@ -373,7 +373,8 @@ export default function RequestFeature({
                         onClick={() => handleResponse(requestItem, "accepted")}
                         className={cx(
                           styles.iconAction,
-                          requestedSelf.response === "accepted"
+                          requestedSelf.response === "accepted" ||
+                            requestedSelf.response === "pending"
                             ? styles.acceptedAction
                             : styles.acceptAction,
                         )}
@@ -388,7 +389,8 @@ export default function RequestFeature({
                         onClick={() => handleResponse(requestItem, "denied")}
                         className={cx(
                           styles.iconAction,
-                          requestedSelf.response === "denied"
+                          requestedSelf.response === "denied" ||
+                            requestedSelf.response === "pending"
                             ? styles.deniedAction
                             : styles.denyAction,
                         )}

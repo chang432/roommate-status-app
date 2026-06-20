@@ -18,12 +18,15 @@ export default {
         sage: '#8a9a7b',
         // Status dot colors
         'status-green': '#5aa469',
+        'status-hover-green': '#4f7b32',
+        'status-highlight-green': '#80c28e',
         'status-red': '#cf6b5e',
         'status-purple': '#9a78b8',
         'status-blue': '#6a86b8',
         'status-amber': '#d39a4f',
-        'status-hover-green': '#4f7b32',
         'status-hover-red': '#a0443b',
+        'status-highlight-red': '#e39d92',
+        'status-grey': '#757575',
       },
       fontFamily: {
         display: ['Fraunces', 'Georgia', 'serif'],
