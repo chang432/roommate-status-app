@@ -153,3 +153,7 @@
 .smallPill {
   @apply px-[13px] py-[7px] text-[12.5px];
 }
+
+.medPill {
+  @apply w-[57px];
+}

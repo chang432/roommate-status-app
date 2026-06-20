@@ -284,6 +284,7 @@ export default function ProposeActivity({
                         "ui-pillButton",
                         styles.liveToggle,
                         a.isLive ? "ui-pillDanger" : "ui-pillPrimary",
+                        styles.medPill,
                       )}
                     >
                       {transitioningId === a.id
@@ -307,6 +308,7 @@ export default function ProposeActivity({
                         "ui-pillButton",
                         styles.membershipButton,
                         isMember ? "ui-pillSecondary" : "ui-pillPrimary",
+                        styles.medPill,
                       )}
                     >
                       {isMember ? "Leave" : "Join"}
