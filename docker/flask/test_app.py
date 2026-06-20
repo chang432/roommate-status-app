@@ -261,6 +261,81 @@ def test_status_reminder_notifies_household_except_requester(client, monkeypatch
     ]
 
 
+def test_poke_roommate_sends_targeted_status_update_notification(client, monkeypatch):
+    calls = []
+
+    def fake_notify_users(**kwargs):
+        calls.append(("users", kwargs))
+        return {"sent": 1, "pruned": 0, "failed": 0}
+
+    monkeypatch.setattr(push, "notify_users", fake_notify_users)
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+
+    res = client.post(
+        "/api/roommates/sheryl/poke",
+        json={"requesterId": "andre"},
+    )
+
+    assert res.status_code == 200
+    assert calls == [
+        (
+            "users",
+            {
+                "user_ids": {"sheryl"},
+                "title": "Andre poked you 👋",
+                "body": "Update your status so they know what you're up to.",
+                "url": "/?updateStatus=1",
+            },
+        )
+    ]
+
+
+def test_poke_roommate_reports_when_notification_cannot_be_delivered(
+    client, monkeypatch
+):
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        push,
+        "notify_users",
+        lambda **_kwargs: {"sent": 0, "pruned": 0, "failed": 0},
+    )
+
+    res = client.post(
+        "/api/roommates/sheryl/poke",
+        json={"requesterId": "andre"},
+    )
+
+    assert res.status_code == 409
+    assert "may not have notifications enabled" in res.get_json()["error"]
+
+
+def test_poke_roommate_validates_participants(client, monkeypatch):
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+
+    missing_requester = client.post("/api/roommates/sheryl/poke", json={})
+    unknown_target = client.post(
+        "/api/roommates/ghost/poke",
+        json={"requesterId": "andre"},
+    )
+    self_poke = client.post(
+        "/api/roommates/andre/poke",
+        json={"requesterId": "andre"},
+    )
+
+    assert missing_requester.status_code == 400
+    assert unknown_target.status_code == 400
+    assert self_poke.status_code == 400
+
+
+def test_poke_roommate_requires_push_configuration(client):
+    res = client.post(
+        "/api/roommates/sheryl/poke",
+        json={"requesterId": "andre"},
+    )
+
+    assert res.status_code == 503
+
+
 def test_push_targets_selected_users_and_excludes_actor(client, monkeypatch):
     sent_endpoints = []
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useLocation, useNavigate, Navigate } from "react-router-dom";
 import Brandmark from "../components/Brandmark.jsx";
 import RoomiePicker from "../components/RoomiePicker.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -9,7 +9,9 @@ import styles from "./LoginPage.module.css";
 
 export default function LoginPage() {
   const { user, login } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
+  const returnTo = location.state?.returnTo || "/";
 
   const [roommates, setRoommates] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -35,7 +37,7 @@ export default function LoginPage() {
   }, []);
 
   // Already signed in? Skip the login screen.
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={returnTo} replace />;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -44,7 +46,7 @@ export default function LoginPage() {
     setError("");
     try {
       await login(selected.name, password);
-      navigate("/", { replace: true });
+      navigate(returnTo, { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
