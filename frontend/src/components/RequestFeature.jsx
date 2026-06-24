@@ -158,6 +158,30 @@ export default function RequestFeature({
 
   return (
     <div className={styles.wrap}>
+      <form onSubmit={handleSubmit} className={styles.form}>
+        <input
+          type="text"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          maxLength={280}
+          placeholder="Can someone feed the beasts?"
+          className={cx("ui-textInput", styles.input)}
+        />
+        <RoommateChecklist
+          roommates={requestableRoommates}
+          selectedIds={selectedIds}
+          onChange={setSelectedIds}
+          disabled={sending}
+        />
+        <button
+          type="submit"
+          disabled={sending || !text.trim() || selectedIds.length === 0}
+          className={cx("ui-primaryButton", styles.sendButton)}
+        >
+          {sending ? "Sending…" : "Request"}
+        </button>
+      </form>
+
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
 
       <div className={styles.list}>
