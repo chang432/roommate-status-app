@@ -35,6 +35,9 @@ export default function YouCard({
   }
 
   function selectStatus(value) {
+    if (value !== status) {
+      setDraftNote('')
+    }
     setStatus(value)
     setStatusMenuOpen(false)
   }
