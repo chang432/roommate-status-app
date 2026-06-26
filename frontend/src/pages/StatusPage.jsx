@@ -351,6 +351,14 @@ export default function StatusPage() {
           <p className={styles.loading}>Loading the household…</p>
         ) : (
           <>
+            {jam && (
+              <JamWidget
+                jam={jam}
+                onJamChange={setJam}
+                onReplace={() => setJamModalOpen(true)}
+              />
+            )}
+
             {liveError && (
               <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
             )}
@@ -369,14 +377,6 @@ export default function StatusPage() {
                   />
                 ))}
               </div>
-            )}
-
-            {jam && (
-              <JamWidget
-                jam={jam}
-                onJamChange={setJam}
-                onReplace={() => setJamModalOpen(true)}
-              />
             )}
 
             <EnableNotifications />
@@ -495,7 +495,7 @@ export default function StatusPage() {
                     ? "Create a request"
                     : activeBoardTab === "checklists"
                       ? "Create a checklist"
-                    : "Create an activity"
+                      : "Create an activity"
                 }
                 onClose={() => setCreateModalOpen(false)}
                 widthClassName={styles.createModal}

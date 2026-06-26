@@ -27,7 +27,7 @@
 }
 
 .waveform {
-  @apply flex h-[32px] w-[42px] flex-none items-center justify-center gap-[3px] rounded-sm bg-[#d9eadc];
+  @apply flex h-[40px] w-[42px] flex-none items-center justify-center gap-[3px] rounded-sm bg-[#d9eadc];
 }
 
 .waveform span {
