@@ -19,11 +19,11 @@
 }
 
 .recipientSelect {
-  @apply relative min-w-0 transition-[padding-bottom] duration-200 ease-out motion-reduce:transition-none;
+  @apply relative min-w-0 transition-[margin-bottom] duration-200 ease-out motion-reduce:transition-none;
 }
 
 .recipientSelectOpen {
-  padding-bottom: min(332px, 44vh);
+  margin-bottom: min(332px, 44vh);
 }
 
 .recipientButton {
