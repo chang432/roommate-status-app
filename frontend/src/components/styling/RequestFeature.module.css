@@ -83,7 +83,7 @@
 }
 
 .completedResponsePill {
-  @apply border-2 bg-card;
+  @apply border-2 bg-[#e1e1dd];
 }
 
 .responseOutlinePending {
