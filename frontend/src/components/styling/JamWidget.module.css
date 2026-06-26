@@ -1,9 +1,9 @@
 .wrap {
-  @apply mb-[24px] mt-[22px] rounded-md border border-[#bde4c7] bg-[#f1fbf3] px-4 py-[14px] shadow-sm;
+  @apply mb-[20px] mt-[18px] rounded-md border border-[#bde4c7] bg-[#f1fbf3] px-3 py-[9px] shadow-sm;
 }
 
-.header {
-  @apply flex items-start justify-between gap-3 max-[520px]:flex-col;
+.row {
+  @apply flex items-center justify-between gap-3;
 }
 
 .titleBlock {
@@ -15,24 +15,24 @@
 }
 
 .eyebrow {
-  @apply text-[11.5px] font-bold uppercase tracking-[0.08em] text-status-green;
+  @apply text-[10.5px] font-bold uppercase tracking-[0.08em] text-status-green;
 }
 
 .title {
-  @apply mt-[2px] text-[17px] font-bold text-ink;
+  @apply mt-[1px] truncate text-[14px] font-bold text-ink;
 }
 
 .meta {
-  @apply mt-[2px] text-[12.5px] text-ink-soft;
+  @apply mt-[1px] text-[11.5px] text-ink-soft;
 }
 
 .waveform {
-  @apply flex h-[42px] w-[52px] flex-none items-center justify-center gap-[4px] rounded-sm bg-[#d9eadc];
+  @apply flex h-[32px] w-[42px] flex-none items-center justify-center gap-[3px] rounded-sm bg-[#d9eadc];
 }
 
 .waveform span {
-  @apply block w-[5px] rounded-full bg-status-green;
-  animation: jam-wave 2600ms ease-in-out infinite;
+  @apply block w-[4px] rounded-full bg-status-green;
+  animation: jam-wave 4200ms ease-in-out infinite;
 }
 
 .waveform span:nth-child(1) {
@@ -42,22 +42,22 @@
 
 .waveform span:nth-child(2) {
   height: 24px;
-  animation-delay: 260ms;
+  animation-delay: 420ms;
 }
 
 .waveform span:nth-child(3) {
   height: 34px;
-  animation-delay: 520ms;
+  animation-delay: 840ms;
 }
 
 .waveform span:nth-child(4) {
   height: 22px;
-  animation-delay: 780ms;
+  animation-delay: 1260ms;
 }
 
 .waveform span:nth-child(5) {
   height: 16px;
-  animation-delay: 1040ms;
+  animation-delay: 1680ms;
 }
 
 @keyframes jam-wave {
@@ -79,16 +79,26 @@
   }
 }
 
-.joinButton {
-  @apply flex-none rounded-full border border-status-green bg-[#d9eadc] px-[16px] py-[9px] text-center text-[13px] font-bold text-status-green transition hover:bg-[#c8e3ce] active:translate-y-px max-[520px]:w-full;
-}
-
 .controls {
-  @apply mt-3 flex flex-wrap justify-end gap-2;
+  @apply flex flex-none items-center gap-2;
 }
 
-.controlButton {
-  @apply px-[13px] py-[7px] text-[12.5px];
+.joinButton,
+.replaceButton,
+.endButton {
+  @apply grid h-8 w-8 flex-none place-items-center rounded-full border transition active:translate-y-px disabled:opacity-60;
+}
+
+.joinButton {
+  @apply border-status-green bg-[#d9eadc] text-status-green hover:bg-[#c8e3ce];
+}
+
+.replaceButton {
+  @apply border-[#b8d6bf] bg-[#e7f4ea] text-[#4b7a54] hover:bg-[#d7ebdc];
+}
+
+.endButton {
+  @apply border-[#e8c5bf] bg-[#fbeae6] text-status-red hover:bg-[#f6ddd7];
 }
 
 .form {
@@ -120,5 +130,15 @@
 }
 
 .error {
-  @apply mt-3;
+  @apply mt-2;
+}
+
+@media (max-width: 520px) {
+  .row {
+    @apply flex-wrap items-start;
+  }
+
+  .controls {
+    @apply ml-auto;
+  }
 }

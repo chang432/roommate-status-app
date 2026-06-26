@@ -17,6 +17,65 @@ function Waveform() {
   )
 }
 
+function JoinIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  )
+}
+
+function ReplaceIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 7h13" />
+      <path d="m13 3 4 4-4 4" />
+      <path d="M21 17H8" />
+      <path d="m11 13-4 4 4 4" />
+    </svg>
+  )
+}
+
+function EndIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 6 18 18" />
+      <path d="M18 6 6 18" />
+    </svg>
+  )
+}
+
 export function JamShareForm({ currentJam, onJamChange, onSuccess }) {
   const { user } = useAuth()
   const [link, setLink] = useState('')
@@ -71,7 +130,7 @@ export function JamShareForm({ currentJam, onJamChange, onSuccess }) {
   )
 }
 
-export default function JamWidget({ jam, onJamChange }) {
+export default function JamWidget({ jam, onJamChange, onReplace }) {
   const { user } = useAuth()
   const [ending, setEnding] = useState(false)
   const [error, setError] = useState('')
@@ -94,7 +153,7 @@ export default function JamWidget({ jam, onJamChange }) {
 
   return (
     <section className={styles.wrap} aria-label="Spotify Jam">
-      <div className={styles.header}>
+      <div className={styles.row}>
         <div className={styles.titleBlock}>
           <Waveform />
           <div className={styles.titleText}>
@@ -103,27 +162,42 @@ export default function JamWidget({ jam, onJamChange }) {
             <p className={styles.meta}>Shared {relativeTime(jam.createdAt)}</p>
           </div>
         </div>
-        <a
-          href={jam.link}
-          target="_blank"
-          rel="noreferrer"
-          className={styles.joinButton}
-        >
-          Join Jam
-        </a>
-      </div>
 
-      <div className={styles.controls}>
+        <div className={styles.controls}>
+          {!isHost && (
+            <a
+              href={jam.link}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Join Jam"
+              title="Join Jam"
+              className={styles.joinButton}
+            >
+              <JoinIcon />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={onReplace}
+            aria-label="Replace Jam"
+            title="Replace Jam"
+            className={styles.replaceButton}
+          >
+            <ReplaceIcon />
+          </button>
         {isHost && (
           <button
             type="button"
             onClick={handleEnd}
             disabled={ending}
-            className={cx('ui-pillButton ui-pillDangerSoft', styles.controlButton)}
+            aria-label="End Jam"
+            title="End Jam"
+            className={styles.endButton}
           >
-            {ending ? 'Ending...' : 'End Jam'}
+            <EndIcon />
           </button>
         )}
+        </div>
       </div>
 
       {error ? <p className={cx('ui-errorText', styles.error)}>{error}</p> : null}

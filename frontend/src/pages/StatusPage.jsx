@@ -330,6 +330,7 @@ export default function StatusPage() {
               <JamWidget
                 jam={jam}
                 onJamChange={setJam}
+                onReplace={() => setJamModalOpen(true)}
               />
             )}
 
