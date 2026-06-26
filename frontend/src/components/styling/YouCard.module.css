@@ -1,5 +1,5 @@
 .card {
-  @apply flex flex-wrap items-center gap-4 rounded-lg border-[1.5px] border-[#ecc9b6] bg-gradient-to-br from-card to-accent-soft p-[22px] shadow-card;
+  @apply flex flex-wrap items-center gap-4 rounded-lg border-[1.5px] border-you-border bg-gradient-to-br from-card to-accent-soft p-[22px] shadow-card;
 }
 
 .body {
@@ -15,7 +15,7 @@
 }
 
 .youBadge {
-  @apply rounded-full border border-[#ecc9b6] bg-white px-2 py-[2px] text-[11px] font-bold uppercase tracking-[0.05em] text-accent-deep;
+  @apply rounded-full border border-you-border bg-white px-2 py-[2px] text-[11px] font-bold uppercase tracking-[0.05em] text-accent-deep;
 }
 
 .status {
@@ -31,11 +31,11 @@
 }
 
 .editButton {
-  @apply flex-none rounded-full border-[1.5px] border-[#e6c2ad] bg-white px-4 py-[9px] text-[14px] font-bold text-accent-deep transition hover:bg-[#fff3ec] active:translate-y-px;
+  @apply flex-none rounded-full border-[1.5px] border-you-action-border bg-white px-4 py-[9px] text-[14px] font-bold text-accent-deep transition hover:bg-you-hover active:translate-y-px;
 }
 
 .editor {
-  @apply grid w-full grid-cols-[minmax(140px,0.7fr)_minmax(0,1.3fr)_auto] items-end gap-3 border-t border-[#ecc9b6] pt-4;
+  @apply grid w-full grid-cols-[minmax(140px,0.7fr)_minmax(0,1.3fr)_auto] items-end gap-3 border-t border-you-border pt-4;
 }
 
 .field {
@@ -71,7 +71,7 @@
 }
 
 .statusMenu {
-  @apply absolute left-0 right-0 top-[calc(100%+6px)] z-20 overflow-hidden rounded-md border border-[#e1cdbb] bg-white py-[5px] shadow-card;
+  @apply absolute left-0 right-0 top-[calc(100%+6px)] z-20 overflow-hidden rounded-md border border-border-warm bg-white py-[5px] shadow-card;
 }
 
 .statusOption {

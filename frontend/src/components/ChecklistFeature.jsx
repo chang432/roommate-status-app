@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   addChecklistItem,
@@ -13,6 +13,65 @@ import { cx } from "../utils/classNames.js";
 import { relativeTime } from "../utils/time.js";
 import styles from "./styling/ChecklistFeature.module.css";
 
+function ChecklistItemEditor({
+  value,
+  onChange,
+  onSubmit,
+  onCancel,
+  onDelete,
+  busy,
+  placeholder,
+}) {
+  return (
+    <form
+      onSubmit={onSubmit}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) onCancel();
+      }}
+      className={styles.itemEditor}
+    >
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        maxLength={280}
+        placeholder={placeholder}
+        autoFocus
+        className={cx("ui-textInput", styles.itemEditorInput)}
+      />
+      <button
+        type="submit"
+        disabled={busy || !value.trim()}
+        className={cx("ui-pillButton ui-pillCheckSoft", styles.iconAction)}
+        aria-label="Save checklist item"
+        title="Save"
+      >
+        ✓
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onCancel}
+        className={cx("ui-pillButton ui-pillDangerSoft", styles.iconAction)}
+        aria-label="Cancel checklist item edit"
+        title="Cancel"
+      >
+        ×
+      </button>
+      {onDelete ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onDelete}
+          className={cx("ui-pillButton ui-pillDangerSoft", styles.deleteAction)}
+        >
+          Delete
+        </button>
+      ) : null}
+    </form>
+  );
+}
+
 export default function ChecklistFeature({
   checklists,
   onChecklistsChange,
@@ -22,12 +81,22 @@ export default function ChecklistFeature({
   const checklistRefs = useRef(new Map());
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+  const [addingChecklistId, setAddingChecklistId] = useState(null);
   const [newItemText, setNewItemText] = useState("");
   const [editingItem, setEditingItem] = useState(null);
   const [busyItemIds, setBusyItemIds] = useState([]);
   const [addingId, setAddingId] = useState(null);
   const [notifyingId, setNotifyingId] = useState(null);
   const [archivingId, setArchivingId] = useState(null);
+
+  const cancelAdding = useCallback(() => {
+    setAddingChecklistId(null);
+    setNewItemText("");
+  }, []);
+
+  const cancelEditing = useCallback(() => {
+    setEditingItem(null);
+  }, []);
 
   useEffect(() => {
     if (!checklistFocusRequest?.checklistId) return;
@@ -36,18 +105,18 @@ export default function ChecklistFeature({
     );
     if (!checklistExists) return;
     setExpandedId(checklistFocusRequest.checklistId);
-    setNewItemText("");
+    cancelAdding();
     setEditingItem(null);
     window.requestAnimationFrame(() => {
       checklistRefs.current
         .get(checklistFocusRequest.checklistId)
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
-  }, [checklistFocusRequest, checklists]);
+  }, [cancelAdding, checklistFocusRequest, checklists]);
 
   function toggleExpanded(id) {
     setExpandedId((current) => (current === id ? null : id));
-    setNewItemText("");
+    cancelAdding();
     setEditingItem(null);
   }
 
@@ -82,7 +151,7 @@ export default function ChecklistFeature({
       onChecklistsChange(
         await addChecklistItem(checklist.id, user.id, trimmed),
       );
-      setNewItemText("");
+      cancelAdding();
     } catch (err) {
       setError(err.message || "Could not add the item. Try again.");
     } finally {
@@ -121,7 +190,7 @@ export default function ChecklistFeature({
           trimmed,
         ),
       );
-      setEditingItem(null);
+      cancelEditing();
     } catch (err) {
       setError(err.message || "Could not edit the item. Try again.");
     } finally {
@@ -240,54 +309,24 @@ export default function ChecklistFeature({
                           return (
                             <li key={item.id} className={styles.item}>
                               {editing ? (
-                                <form
+                                <ChecklistItemEditor
+                                  value={editingItem.text}
+                                  onChange={(text) =>
+                                    setEditingItem({
+                                      ...editingItem,
+                                      text,
+                                    })
+                                  }
                                   onSubmit={(event) =>
                                     handleSaveItem(event, checklist)
                                   }
-                                  className={styles.editForm}
-                                >
-                                  <input
-                                    type="text"
-                                    value={editingItem.text}
-                                    onChange={(event) =>
-                                      setEditingItem({
-                                        ...editingItem,
-                                        text: event.target.value,
-                                      })
-                                    }
-                                    maxLength={280}
-                                    className={cx(
-                                      "ui-textInput",
-                                      styles.editInput,
-                                    )}
-                                  />
-                                  <button
-                                    type="submit"
-                                    disabled={
-                                      busyItemIds.includes(item.id) ||
-                                      !editingItem.text.trim()
-                                    }
-                                    className={cx(
-                                      "ui-pillButton ui-pillCheckSoft",
-                                      styles.smallAction,
-                                    )}
-                                  >
-                                    ✓
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={busyItemIds.includes(item.id)}
-                                    onClick={() =>
-                                      handleDeleteItem(checklist, item)
-                                    }
-                                    className={cx(
-                                      "ui-pillButton ui-pillDangerSoft",
-                                      styles.smallAction,
-                                    )}
-                                  >
-                                    ×
-                                  </button>
-                                </form>
+                                  onCancel={cancelEditing}
+                                  onDelete={() =>
+                                    handleDeleteItem(checklist, item)
+                                  }
+                                  busy={busyItemIds.includes(item.id)}
+                                  placeholder="Edit item"
+                                />
                               ) : (
                                 <>
                                   <button
@@ -341,30 +380,34 @@ export default function ChecklistFeature({
                         })}
                       </ul>
 
-                      <form
-                        onSubmit={(event) => handleAddItem(event, checklist)}
-                        className={styles.addForm}
-                      >
-                        <input
-                          type="text"
-                          value={newItemText}
-                          onChange={(event) =>
-                            setNewItemText(event.target.value)
-                          }
-                          maxLength={280}
-                          placeholder="Add an item"
-                          className={cx("ui-textInput", styles.addInput)}
-                        />
+                      {addingChecklistId === checklist.id ? (
+                        <div className={styles.addEditor}>
+                          <ChecklistItemEditor
+                            value={newItemText}
+                            onChange={setNewItemText}
+                            onSubmit={(event) =>
+                              handleAddItem(event, checklist)
+                            }
+                            onCancel={cancelAdding}
+                            busy={addingId === checklist.id}
+                            placeholder="Add an item"
+                          />
+                        </div>
+                      ) : (
                         <button
-                          type="submit"
-                          disabled={
-                            addingId === checklist.id || !newItemText.trim()
-                          }
-                          className={cx("ui-primaryButton", styles.addButton)}
+                          type="button"
+                          onClick={() => {
+                            setEditingItem(null);
+                            setAddingChecklistId(checklist.id);
+                          }}
+                          className={cx(
+                            "ui-pillButton ui-pillSecondary",
+                            styles.addButton,
+                          )}
                         >
-                          +
+                          Add item
                         </button>
-                      </form>
+                      )}
 
                       <div className={styles.actions}>
                         <button

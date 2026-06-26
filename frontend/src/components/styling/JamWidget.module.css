@@ -1,5 +1,5 @@
 .wrap {
-  @apply mb-[20px] mt-[18px] rounded-md border border-[#bde4c7] bg-[#f1fbf3] px-3 py-[9px] shadow-sm;
+  @apply mb-[20px] mt-[18px] rounded-md border border-jam-border bg-jam-panel px-3 py-[9px] shadow-sm;
 }
 
 .row {
@@ -27,7 +27,7 @@
 }
 
 .waveform {
-  @apply flex h-[40px] w-[42px] flex-none items-center justify-center gap-[3px] rounded-sm bg-[#d9eadc];
+  @apply flex h-[40px] w-[42px] flex-none items-center justify-center gap-[3px] rounded-sm bg-success-panel-strong;
 }
 
 .waveform span {
@@ -90,15 +90,15 @@
 }
 
 .joinButton {
-  @apply border-status-green bg-[#d9eadc] text-status-green hover:bg-[#c8e3ce];
+  @apply border-status-green bg-success-panel-strong text-status-green hover:bg-success-panel-hover;
 }
 
 .replaceButton {
-  @apply border-[#b8d6bf] bg-[#e7f4ea] text-[#4b7a54] hover:bg-[#d7ebdc];
+  @apply border-jam-border-muted bg-jam-action text-jam-action-text hover:bg-jam-action-hover;
 }
 
 .endButton {
-  @apply border-[#e8c5bf] bg-[#fbeae6] text-status-red hover:bg-[#f6ddd7];
+  @apply border-danger-soft-border bg-danger-soft text-status-red hover:bg-danger-soft-hover;
 }
 
 .form {
@@ -106,7 +106,7 @@
 }
 
 .formNote {
-  @apply rounded-sm border border-[#bde4c7] bg-[#f1fbf3] px-3 py-2 text-[13px] text-ink-soft;
+  @apply rounded-sm border border-jam-border bg-jam-panel px-3 py-2 text-[13px] text-ink-soft;
 }
 
 .field {

@@ -23,7 +23,7 @@
 }
 
 .suggestionIdle {
-  @apply text-ink hover:bg-[#faf6ef];
+  @apply text-ink hover:bg-surface-hover;
 }
 
 .sendButton {

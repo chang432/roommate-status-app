@@ -1,5 +1,5 @@
 .card {
-  @apply flex w-full items-center gap-[13px] rounded-md border border-line bg-card p-[18px] text-left shadow-soft transition hover:border-[#d9c9b3] active:translate-y-px;
+  @apply flex w-full items-center gap-[13px] rounded-md border border-line bg-card p-[18px] text-left shadow-soft transition hover:border-border-hover active:translate-y-px;
 }
 
 .body {

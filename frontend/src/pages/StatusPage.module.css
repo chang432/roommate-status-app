@@ -27,7 +27,7 @@
 }
 
 .signOut {
-  @apply flex-none rounded-full border border-line bg-white px-[14px] py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-[#faf6ef];
+  @apply flex-none rounded-full border border-line bg-white px-[14px] py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-surface-hover;
 }
 
 .pageError {

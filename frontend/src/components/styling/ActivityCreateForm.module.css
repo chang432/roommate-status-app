@@ -27,7 +27,7 @@
 }
 
 .timeInput {
-  @apply px-3 py-2 text-[12px] font-normal normal-case tracking-normal disabled:cursor-not-allowed disabled:bg-[#f7f3ec] disabled:opacity-60;
+  @apply px-3 py-2 text-[12px] font-normal normal-case tracking-normal disabled:cursor-not-allowed disabled:bg-surface-disabled disabled:opacity-60;
 }
 
 .error {
