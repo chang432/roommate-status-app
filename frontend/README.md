@@ -25,6 +25,9 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Requests**: a tabbed household board lets users ask specific roommates for
   help, track accept/deny responses, comment, mark requests complete, and open
   request notifications directly to the expanded request card.
+- **Checklists**: the household board includes shared checklists that can be
+  posted, expanded, added to, checked off by multiple roommates, notified, and
+  archived.
 
 ## Tech
 
@@ -74,6 +77,14 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `deleteRequest`                 | `DELETE /api/requests/:id`                                 |
 | `commentOnRequest`              | `POST /api/requests/:id/comments`                          |
 | `setRequestCommentLiked`        | `PUT/DELETE /api/requests/:id/comments/:commentId/likes`   |
+| `getChecklists`                 | `GET /api/checklists`                                      |
+| `createChecklist`               | `POST /api/checklists`                                     |
+| `notifyChecklist`               | `POST /api/checklists/:id/notify`                          |
+| `addChecklistItem`              | `POST /api/checklists/:id/items`                           |
+| `toggleChecklistItem`           | `POST /api/checklists/:id/items/:itemId/toggle`            |
+| `updateChecklistItem`           | `PATCH /api/checklists/:id/items/:itemId`                  |
+| `deleteChecklistItem`           | `DELETE /api/checklists/:id/items/:itemId`                 |
+| `archiveChecklist`              | `POST /api/checklists/:id/archive`                         |
 
 In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
 Point at a different server with `VITE_API_TARGET`:

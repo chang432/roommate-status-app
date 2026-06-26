@@ -253,3 +253,65 @@ export async function setRequestCommentLiked(id, commentId, userId, liked) {
     body: JSON.stringify({ userId }),
   })
 }
+
+// GET /api/checklists — recent active household checklists.
+export async function getChecklists() {
+  return request('/checklists')
+}
+
+// POST /api/checklists — create a checklist with an initial set of items.
+export async function createChecklist(title, createdById, items) {
+  return request('/checklists', {
+    method: 'POST',
+    body: JSON.stringify({ title, createdById, items }),
+  })
+}
+
+// POST /api/checklists/:id/notify — remind everyone else about a checklist.
+export async function notifyChecklist(id, requesterId) {
+  return request(`/checklists/${id}/notify`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
+// POST /api/checklists/:id/items — add one item to an active checklist.
+export async function addChecklistItem(id, userId, text) {
+  return request(`/checklists/${id}/items`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, text }),
+  })
+}
+
+// POST /api/checklists/:id/items/:itemId/toggle — toggle the signed-in user's
+// checkmark on one checklist item.
+export async function toggleChecklistItem(id, itemId, userId) {
+  return request(`/checklists/${id}/items/${itemId}/toggle`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}
+
+// PATCH /api/checklists/:id/items/:itemId — edit one item.
+export async function updateChecklistItem(id, itemId, userId, text) {
+  return request(`/checklists/${id}/items/${itemId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ userId, text }),
+  })
+}
+
+// DELETE /api/checklists/:id/items/:itemId — delete one item.
+export async function deleteChecklistItem(id, itemId, userId) {
+  return request(`/checklists/${id}/items/${itemId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ userId }),
+  })
+}
+
+// POST /api/checklists/:id/archive — remove a checklist from the active feed.
+export async function archiveChecklist(id, userId) {
+  return request(`/checklists/${id}/archive`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}

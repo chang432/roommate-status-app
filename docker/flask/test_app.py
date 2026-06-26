@@ -23,6 +23,7 @@ from moto import mock_aws
 
 import activities
 import db
+import household_checklists
 import household_requests
 import jam
 import push
@@ -524,6 +525,22 @@ def _make_request(
     )
 
 
+def _make_checklist(
+    client,
+    title: str = "Weekend reset",
+    created_by_id: str = "andre",
+    items: list[str] | None = None,
+):
+    return client.post(
+        "/api/checklists",
+        json={
+            "title": title,
+            "createdById": created_by_id,
+            "items": ["Vacuum", "Take bins out"] if items is None else items,
+        },
+    )
+
+
 def test_propose_activity_creates_and_returns_list(client):
     res = _propose(client, "  Taco night  ")
     assert res.status_code == 200
@@ -808,6 +825,153 @@ def test_request_comment_mentions_target_named_users(client, monkeypatch):
         },
     )
     assert calls[1][1]["user_ids"] == {"andre"}
+
+
+def test_create_checklist_returns_active_list_and_notifies_household(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+
+    res = _make_checklist(client, title="  Kitchen reset  ", items=[" Counters ", "", "Trash"])
+
+    assert res.status_code == 200
+    checklist = res.get_json()[0]
+    assert checklist["title"] == "Kitchen reset"
+    assert checklist["createdBy"] == "Andre"
+    assert checklist["createdById"] == "andre"
+    assert [item["text"] for item in checklist["items"]] == ["Counters", "Trash"]
+    assert checklist["items"][0]["checkedBy"] == []
+    assert checklist["isArchived"] is False
+    assert client.get("/api/activities").get_json() == []
+    assert client.get("/api/requests").get_json() == []
+    assert calls == [
+        (
+            "all",
+            {
+                "title": "New checklist",
+                "body": "Andre posted “Kitchen reset”",
+                "url": f"/?checklist={checklist['id']}",
+                "event_type": "checklists-changed",
+                "exclude_user_ids": {"andre"},
+            },
+        )
+    ]
+
+
+def test_create_checklist_rejects_invalid_payloads(client):
+    assert _make_checklist(client, title="   ").status_code == 400
+    assert _make_checklist(client, created_by_id="ghost").status_code == 400
+    assert _make_checklist(client, items=[]).status_code == 400
+    assert _make_checklist(client, items="not-a-list").status_code == 400
+
+
+def test_checklist_items_can_be_checked_by_multiple_roommates(client):
+    checklist = _make_checklist(client).get_json()[0]
+    item_id = checklist["items"][0]["id"]
+
+    kayla = client.post(
+        f"/api/checklists/{checklist['id']}/items/{item_id}/toggle",
+        json={"userId": "kayla"},
+    )
+    ting = client.post(
+        f"/api/checklists/{checklist['id']}/items/{item_id}/toggle",
+        json={"userId": "ting"},
+    )
+
+    assert kayla.status_code == 200
+    assert ting.status_code == 200
+    checked_item = ting.get_json()[0]["items"][0]
+    assert checked_item["checkedByIds"] == ["kayla", "ting"]
+    assert checked_item["checkedBy"] == [
+        {"id": "kayla", "name": "Kayla"},
+        {"id": "ting", "name": "Ting"},
+    ]
+
+    unchecked = client.post(
+        f"/api/checklists/{checklist['id']}/items/{item_id}/toggle",
+        json={"userId": "kayla"},
+    )
+    assert unchecked.get_json()[0]["items"][0]["checkedByIds"] == ["ting"]
+
+
+def test_checklist_items_can_be_added_edited_and_deleted(client):
+    checklist = _make_checklist(client).get_json()[0]
+
+    added = client.post(
+        f"/api/checklists/{checklist['id']}/items",
+        json={"userId": "kayla", "text": "  Mop  "},
+    )
+    added_item = added.get_json()[0]["items"][-1]
+    assert added.status_code == 200
+    assert added_item["text"] == "Mop"
+
+    edited = client.patch(
+        f"/api/checklists/{checklist['id']}/items/{added_item['id']}",
+        json={"userId": "ting", "text": "Mop kitchen"},
+    )
+    assert edited.status_code == 200
+    assert edited.get_json()[0]["items"][-1]["text"] == "Mop kitchen"
+
+    deleted = client.delete(
+        f"/api/checklists/{checklist['id']}/items/{added_item['id']}",
+        json={"userId": "andre"},
+    )
+    assert deleted.status_code == 200
+    assert [item["text"] for item in deleted.get_json()[0]["items"]] == [
+        "Vacuum",
+        "Take bins out",
+    ]
+
+
+def test_checklist_notify_all_excludes_requester(client, monkeypatch):
+    checklist = _make_checklist(client).get_json()[0]
+    calls = _capture_notifications(monkeypatch)
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+
+    res = client.post(
+        f"/api/checklists/{checklist['id']}/notify",
+        json={"requesterId": "kayla"},
+    )
+
+    assert res.status_code == 200
+    assert calls == [
+        (
+            "all",
+            {
+                "title": "Checklist reminder",
+                "body": "Kayla reminded everyone to update “Weekend reset”",
+                "url": f"/?checklist={checklist['id']}",
+                "event_type": "checklists-changed",
+                "exclude_user_ids": {"kayla"},
+            },
+        )
+    ]
+
+
+def test_archive_checklist_removes_it_from_active_feed(client, monkeypatch):
+    checklist = _make_checklist(client).get_json()[0]
+    calls = _capture_notifications(monkeypatch)
+
+    archived = client.post(
+        f"/api/checklists/{checklist['id']}/archive",
+        json={"userId": "ting"},
+    )
+
+    assert archived.status_code == 200
+    assert archived.get_json() == []
+    stored = household_checklists.get(checklist["id"], consistent=True)
+    assert stored["isArchived"] is True
+    assert stored["archivedBy"] == "Ting"
+    assert calls == [
+        (
+            "all",
+            {
+                "title": "Checklist archived",
+                "body": "Ting archived “Weekend reset”",
+                "url": "/",
+                "event_type": "checklists-changed",
+                "exclude_user_ids": {"ting"},
+            },
+        )
+    ]
 
 
 def test_propose_activity_uses_canonical_creator_name(client):
