@@ -48,24 +48,14 @@ function ChecklistItemEditor({
       >
         ✓
       </button>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={onCancel}
-        className={cx("ui-pillButton ui-pillDangerSoft", styles.iconAction)}
-        aria-label="Cancel checklist item edit"
-        title="Cancel"
-      >
-        ×
-      </button>
       {onDelete ? (
         <button
           type="button"
           disabled={busy}
           onClick={onDelete}
-          className={cx("ui-pillButton ui-pillDangerSoft", styles.deleteAction)}
+          className={cx("ui-pillButton ui-pillDangerSoft", styles.iconAction)}
         >
-          Delete
+          ×
         </button>
       ) : null}
     </form>

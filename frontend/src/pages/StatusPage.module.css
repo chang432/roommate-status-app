@@ -47,7 +47,7 @@
 }
 
 .householdHeader {
-  @apply mb-3 flex items-center justify-start gap-3;
+  @apply mb-3 flex items-center justify-start gap-[14px];
 }
 
 .householdTitle {
