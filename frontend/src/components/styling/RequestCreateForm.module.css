@@ -1,13 +1,29 @@
 .form {
+  @apply space-y-5;
+}
+
+.fields {
   @apply space-y-4;
 }
 
+.field {
+  @apply block min-w-0;
+}
+
+.fieldLabel {
+  @apply mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
+}
+
 .input {
-  @apply min-w-0 px-[14px] py-[12px] text-[14px];
+  @apply w-full min-w-0 px-[14px] py-[12px] text-[14px];
 }
 
 .recipientSelect {
-  @apply relative min-w-0;
+  @apply relative min-w-0 transition-[margin-bottom] duration-200 ease-out motion-reduce:transition-none;
+}
+
+.recipientSelectOpen {
+  margin-bottom: min(332px, 44vh);
 }
 
 .recipientButton {
@@ -23,11 +39,12 @@
 }
 
 .recipientMenu {
-  @apply absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-[260px] overflow-y-auto rounded-md border border-[#e1cdbb] bg-white py-[5px] shadow-card;
+  @apply absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-y-auto rounded-md border border-[#e1cdbb] bg-white py-[6px] shadow-card;
+  max-height: min(320px, 42vh);
 }
 
 .recipientOption {
-  @apply flex cursor-pointer items-center gap-[9px] px-[11px] py-[9px] text-[14px] font-semibold text-ink transition hover:bg-accent-soft;
+  @apply flex cursor-pointer items-center gap-[10px] px-[13px] py-[10px] text-[14px] font-semibold text-ink transition hover:bg-accent-soft;
 }
 
 .checkbox {
@@ -39,9 +56,9 @@
 }
 
 .actions {
-  @apply flex justify-end gap-2;
+  @apply flex flex-wrap justify-end gap-2;
 }
 
 .actionButton {
-  @apply min-w-[128px] px-[18px] py-[11px] text-[14px];
+  @apply min-w-[128px] px-[18px] py-[11px] text-[14px] max-[420px]:flex-1;
 }
