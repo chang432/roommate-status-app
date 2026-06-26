@@ -71,7 +71,7 @@ export function JamShareForm({ currentJam, onJamChange, onSuccess }) {
   )
 }
 
-export default function JamWidget({ jam, onJamChange, onReplace }) {
+export default function JamWidget({ jam, onJamChange }) {
   const { user } = useAuth()
   const [ending, setEnding] = useState(false)
   const [error, setError] = useState('')
@@ -107,20 +107,13 @@ export default function JamWidget({ jam, onJamChange, onReplace }) {
           href={jam.link}
           target="_blank"
           rel="noreferrer"
-          className={cx('ui-primaryButton', styles.joinButton)}
+          className={styles.joinButton}
         >
           Join Jam
         </a>
       </div>
 
       <div className={styles.controls}>
-        <button
-          type="button"
-          onClick={onReplace}
-          className={cx('ui-pillButton ui-pillSecondary', styles.controlButton)}
-        >
-          Replace Jam
-        </button>
         {isHost && (
           <button
             type="button"

@@ -32,7 +32,7 @@
 
 .waveform span {
   @apply block w-[5px] rounded-full bg-status-green;
-  animation: jam-wave 920ms ease-in-out infinite;
+  animation: jam-wave 2600ms ease-in-out infinite;
 }
 
 .waveform span:nth-child(1) {
@@ -42,22 +42,22 @@
 
 .waveform span:nth-child(2) {
   height: 24px;
-  animation-delay: 110ms;
+  animation-delay: 260ms;
 }
 
 .waveform span:nth-child(3) {
   height: 34px;
-  animation-delay: 220ms;
+  animation-delay: 520ms;
 }
 
 .waveform span:nth-child(4) {
   height: 22px;
-  animation-delay: 330ms;
+  animation-delay: 780ms;
 }
 
 .waveform span:nth-child(5) {
   height: 16px;
-  animation-delay: 440ms;
+  animation-delay: 1040ms;
 }
 
 @keyframes jam-wave {
@@ -80,7 +80,7 @@
 }
 
 .joinButton {
-  @apply flex-none px-[16px] py-[9px] text-[13px] max-[520px]:w-full;
+  @apply flex-none rounded-full border border-status-green bg-[#d9eadc] px-[16px] py-[9px] text-center text-[13px] font-bold text-status-green transition hover:bg-[#c8e3ce] active:translate-y-px max-[520px]:w-full;
 }
 
 .controls {
