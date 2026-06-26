@@ -279,9 +279,7 @@ export default function ChecklistFeature({
                     aria-label="Notify all about checklist"
                     title="Notify all"
                   >
-                    <span className={styles.notifyIcon} aria-hidden="true">
-                      🔔
-                    </span>
+                    <img src="/bell.png" alt="" className={styles.notifyIcon} />
                   </button>
                 </div>
 

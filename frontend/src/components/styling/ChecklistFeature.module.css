@@ -35,11 +35,11 @@
 }
 
 .notifyButton {
-  @apply grid h-[32px] w-[32px] flex-none place-items-center rounded-full border border-accent bg-accent text-[16px] leading-none text-white transition hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
+  @apply grid h-[32px] w-[32px] p-[7px] flex-none place-items-center rounded-full border border-accent bg-accent text-[16px] leading-none text-white transition hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .notifyIcon {
-  @apply block leading-none;
+  @apply block leading-none text-white;
 }
 
 .expandedRegion {
@@ -87,7 +87,7 @@
 }
 
 .checkedIcon {
-  @apply grid h-[24px] w-[24px] place-items-center rounded-full border-2 border-white bg-status-green text-[11px] font-bold uppercase text-white;
+  @apply grid h-[24px] w-[24px] place-items-center rounded-full border-2 border-white bg-status-grey text-[11px] font-bold uppercase text-white;
 }
 
 .itemEditor {
