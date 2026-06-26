@@ -12,7 +12,6 @@ import urllib.parse
 from botocore.exceptions import ClientError
 
 import activities
-import spotify
 
 JAM_TYPE = "spotifyJam"
 ACTIVE_JAM_ID = "activeJam"
@@ -38,30 +37,21 @@ def valid_spotify_link(link: str) -> bool:
     return host == "spotify.link" or host.endswith(".spotify.link") or host == "open.spotify.com"
 
 
-def _project(item: dict | None, include_playback: bool = True) -> dict | None:
+def _project(item: dict | None) -> dict | None:
     if item is None or item.get("itemType") != JAM_TYPE:
         return None
-    host_id = item.get("hostId")
-    playback = None
-    playback_status = "not_connected"
-    if include_playback and host_id:
-        playback, playback_status = spotify.current_playback(host_id)
     return {
         "id": item["id"],
         "link": item["link"],
-        "hostId": host_id,
+        "hostId": item.get("hostId"),
         "hostName": item.get("hostName", "Someone"),
         "createdAt": int(item["createdAt"]),
-        "spotifyConfigured": spotify.is_configured(),
-        "hostSpotifyConnected": spotify.has_token(host_id) if host_id else False,
-        "playbackStatus": playback_status,
-        "nowPlaying": playback,
     }
 
 
-def get_active(include_playback: bool = True) -> dict | None:
+def get_active() -> dict | None:
     item = _get_table().get_item(Key={"id": ACTIVE_JAM_ID}, ConsistentRead=True).get("Item")
-    return _project(item, include_playback=include_playback)
+    return _project(item)
 
 
 def share(link: str, host_id: str, host_name: str) -> dict:

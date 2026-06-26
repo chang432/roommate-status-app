@@ -7,7 +7,7 @@ import NotificationBanner from "../components/NotificationBanner.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
 import EnableNotifications from "../components/EnableNotifications.jsx";
 import FeatureTabs from "../components/FeatureTabs.jsx";
-import JamWidget from "../components/JamWidget.jsx";
+import JamWidget, { JamShareForm } from "../components/JamWidget.jsx";
 import ModalShell from "../components/ModalShell.jsx";
 import ProposeActivity from "../components/ProposeActivity.jsx";
 import PullToRefreshIndicator from "../components/PullToRefreshIndicator.jsx";
@@ -33,7 +33,6 @@ import { cx } from "../utils/classNames.js";
 import styles from "./StatusPage.module.css";
 
 const ACTIVITY_POLL_INTERVAL_MS = 5000;
-const JAM_POLL_INTERVAL_MS = 15000;
 
 // A friendly "Tuesday evening" style subtitle based on the current time.
 function whenLabel() {
@@ -64,6 +63,7 @@ export default function StatusPage() {
   const [requestFocusRequest, setRequestFocusRequest] = useState(null);
   const [activeBoardTab, setActiveBoardTab] = useState("activities");
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [jamModalOpen, setJamModalOpen] = useState(false);
 
   // Fetch the household; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
@@ -160,12 +160,6 @@ export default function StatusPage() {
       );
     };
   }, [loadActivities, loadJam, loadRequests]);
-
-  useEffect(() => {
-    if (!jam || document.visibilityState !== "visible") return undefined;
-    const pollId = window.setInterval(loadJam, JAM_POLL_INTERVAL_MS);
-    return () => window.clearInterval(pollId);
-  }, [jam, loadJam]);
 
   // Pull down from the top to refresh household, activity, and request state.
   const handleRefresh = useCallback(async () => {
@@ -332,7 +326,13 @@ export default function StatusPage() {
               </div>
             )}
 
-            <JamWidget jam={jam} onJamChange={setJam} />
+            {jam && (
+              <JamWidget
+                jam={jam}
+                onJamChange={setJam}
+                onReplace={() => setJamModalOpen(true)}
+              />
+            )}
 
             <EnableNotifications />
 
@@ -369,6 +369,15 @@ export default function StatusPage() {
                   alt=""
                   className={styles.notifyIcon}
                 />
+              </button>
+              <button
+                type="button"
+                onClick={() => setJamModalOpen(true)}
+                aria-label={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+                title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+                className={cx("ui-iconPrimary", styles.jamButton)}
+              >
+                Jam
               </button>
             </div>
             <div className={styles.householdGrid}>
@@ -447,6 +456,19 @@ export default function StatusPage() {
                     onCancel={() => setCreateModalOpen(false)}
                   />
                 )}
+              </ModalShell>
+            )}
+            {jamModalOpen && (
+              <ModalShell
+                title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+                onClose={() => setJamModalOpen(false)}
+                widthClassName={styles.jamModal}
+              >
+                <JamShareForm
+                  currentJam={jam}
+                  onJamChange={setJam}
+                  onSuccess={() => setJamModalOpen(false)}
+                />
               </ModalShell>
             )}
           </>

@@ -98,19 +98,6 @@ export async function endJam(hostId) {
   })
 }
 
-// GET /api/spotify/auth-url — begin host OAuth for now-playing display.
-export async function getSpotifyAuthUrl(userId) {
-  return request(`/spotify/auth-url?userId=${encodeURIComponent(userId)}`)
-}
-
-// DELETE /api/spotify/token — disconnect host playback access.
-export async function disconnectSpotify(userId) {
-  return request('/spotify/token', {
-    method: 'DELETE',
-    body: JSON.stringify({ userId }),
-  })
-}
-
 // GET /api/activities — current activities followed by expired history.
 export async function getActivities() {
   return request('/activities')

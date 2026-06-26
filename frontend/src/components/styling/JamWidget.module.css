@@ -3,7 +3,15 @@
 }
 
 .header {
-  @apply flex items-start justify-between gap-3;
+  @apply flex items-start justify-between gap-3 max-[520px]:flex-col;
+}
+
+.titleBlock {
+  @apply flex min-w-0 items-center gap-3;
+}
+
+.titleText {
+  @apply min-w-0;
 }
 
 .eyebrow {
@@ -14,49 +22,69 @@
   @apply mt-[2px] text-[17px] font-bold text-ink;
 }
 
+.meta {
+  @apply mt-[2px] text-[12.5px] text-ink-soft;
+}
+
+.waveform {
+  @apply flex h-[42px] w-[52px] flex-none items-center justify-center gap-[4px] rounded-sm bg-[#d9eadc];
+}
+
+.waveform span {
+  @apply block w-[5px] rounded-full bg-status-green;
+  animation: jam-wave 920ms ease-in-out infinite;
+}
+
+.waveform span:nth-child(1) {
+  height: 14px;
+  animation-delay: 0ms;
+}
+
+.waveform span:nth-child(2) {
+  height: 24px;
+  animation-delay: 110ms;
+}
+
+.waveform span:nth-child(3) {
+  height: 34px;
+  animation-delay: 220ms;
+}
+
+.waveform span:nth-child(4) {
+  height: 22px;
+  animation-delay: 330ms;
+}
+
+.waveform span:nth-child(5) {
+  height: 16px;
+  animation-delay: 440ms;
+}
+
+@keyframes jam-wave {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+    opacity: 0.65;
+  }
+
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waveform span {
+    animation: none;
+  }
+}
+
 .joinButton {
-  @apply flex-none px-[16px] py-[9px] text-[13px];
-}
-
-.activeBody {
-  @apply mt-3 space-y-3;
-}
-
-.playback {
-  @apply flex items-center gap-3;
-}
-
-.albumArt,
-.albumFallback {
-  @apply h-[54px] w-[54px] flex-none rounded-sm;
-}
-
-.albumArt {
-  @apply object-cover;
-}
-
-.albumFallback {
-  @apply grid place-items-center bg-[#d9eadc] text-[24px] font-black text-status-green;
-}
-
-.playbackText {
-  @apply min-w-0 flex-1;
-}
-
-.playbackStatus {
-  @apply text-[12px] font-semibold text-ink-soft;
-}
-
-.track {
-  @apply mt-[2px] truncate text-[15px] font-bold text-ink;
-}
-
-.artist {
-  @apply mt-[2px] truncate text-[12.5px] text-ink-soft;
+  @apply flex-none px-[16px] py-[9px] text-[13px] max-[520px]:w-full;
 }
 
 .controls {
-  @apply flex flex-wrap justify-end gap-2;
+  @apply mt-3 flex flex-wrap justify-end gap-2;
 }
 
 .controlButton {
@@ -64,19 +92,31 @@
 }
 
 .form {
-  @apply mt-3 flex gap-2 max-[520px]:flex-col;
+  @apply space-y-4;
+}
+
+.formNote {
+  @apply rounded-sm border border-[#bde4c7] bg-[#f1fbf3] px-3 py-2 text-[13px] text-ink-soft;
+}
+
+.field {
+  @apply block min-w-0;
+}
+
+.fieldLabel {
+  @apply mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
 }
 
 .input {
-  @apply min-w-0 flex-1 px-[14px] py-[12px] text-[14px];
+  @apply w-full min-w-0 px-[14px] py-[12px] text-[14px];
+}
+
+.formActions {
+  @apply flex justify-end;
 }
 
 .shareButton {
-  @apply flex-none px-[18px] py-[12px] text-[14px];
-}
-
-.note {
-  @apply mt-3 text-[12.5px] text-ink-soft;
+  @apply min-w-[128px] px-[18px] py-[12px] text-[14px];
 }
 
 .error {

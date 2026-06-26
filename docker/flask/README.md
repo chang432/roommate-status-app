@@ -31,9 +31,6 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `GET /api/jam`                     | —                        | active Spotify Jam or `null`               |
 | `POST /api/jam`                    | `{ hostId, link }`       | active Spotify Jam, replacing prior Jam    |
 | `DELETE /api/jam`                  | `{ hostId }`             | `null` after host ends active Jam          |
-| `GET /api/spotify/auth-url`        | `?userId=<id>`           | `{ url }` for Spotify OAuth                |
-| `GET /api/spotify/callback`        | Spotify redirect params  | redirects back to the app                  |
-| `DELETE /api/spotify/token`        | `{ userId }`             | `{ ok: true }`                             |
 | `POST /api/push/subscribe`      | `{ subscription, userId }` | `{ ok: true }`                            |
 | `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
 
@@ -76,10 +73,9 @@ Completed requests can be reopened by any roommate; only the requester can
 delete a request. Request notifications include a request deep link so tapping
 one opens the Requests tab with that request expanded.
 Only one Spotify Jam link is active for the household at a time. Sharing a new
-Jam replaces the previous link, and the host can end the active Jam. Roomie can
-optionally show the host account's currently playing Spotify track when Spotify
-OAuth is configured and the host connects their account; this is host playback,
-not a separate Spotify Jam session API.
+Jam replaces the previous link, and the host can end the active Jam. The Jam
+widget is hidden until someone shares a link; once active, roommates can join
+from the widget or replace it with a newer Jam link.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).
@@ -96,10 +92,6 @@ Configuration:
 | `ROOMMATE_TABLE`    | `RoommateStatus-main` | Table name                                   |
 | `AWS_REGION`        | —                     | Region (or use your AWS config/SSO)          |
 | `DYNAMODB_ENDPOINT` | —                     | Local dev only: point boto3 at a DynamoDB Local instead of real AWS |
-| `SPOTIFY_CLIENT_ID` | —                     | Spotify app client id for now-playing OAuth  |
-| `SPOTIFY_CLIENT_SECRET` | —                 | Spotify app client secret                    |
-| `SPOTIFY_REDIRECT_URI` | —                  | Spotify callback URL, e.g. `/api/spotify/callback` |
-| `SPOTIFY_SUCCESS_REDIRECT` | `/?spotify=connected` | Where to send users after OAuth succeeds |
 
 The runtime AWS principal must allow `dynamodb:DeleteItem` on the activities
 table for creator-owned event deletion.
