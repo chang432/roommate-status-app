@@ -527,7 +527,7 @@ def _make_request(
 
 def _make_checklist(
     client,
-    title: str = "Weekend reset",
+    title: str = "Costco Run",
     created_by_id: str = "andre",
     items: list[str] | None = None,
 ):
@@ -937,7 +937,7 @@ def test_checklist_notify_all_excludes_requester(client, monkeypatch):
             "all",
             {
                 "title": "Checklist reminder",
-                "body": "Kayla reminded everyone to update “Weekend reset”",
+                "body": "Kayla reminded everyone to update “Costco Run”",
                 "url": f"/?checklist={checklist['id']}",
                 "event_type": "checklists-changed",
                 "exclude_user_ids": {"kayla"},
@@ -965,7 +965,7 @@ def test_archive_checklist_removes_it_from_active_feed(client, monkeypatch):
             "all",
             {
                 "title": "Checklist archived",
-                "body": "Ting archived “Weekend reset”",
+                "body": "Ting archived “Costco Run”",
                 "url": "/",
                 "event_type": "checklists-changed",
                 "exclude_user_ids": {"ting"},

@@ -75,7 +75,7 @@
 }
 
 .checkButtonOn {
-  @apply border-status-green bg-status-green text-white;
+  @apply !border-status-green bg-status-green text-white;
 }
 
 .itemText {
@@ -111,7 +111,7 @@
 }
 
 .addButton {
-  @apply flex-none px-[15px] py-[10px] text-[13px];
+  @apply flex-none px-[15px] py-[0px] text-[13px];
 }
 
 .actions {

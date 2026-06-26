@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { useAuth } from '../context/AuthContext.jsx'
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
 import {
   addChecklistItem,
   archiveChecklist,
@@ -7,164 +7,176 @@ import {
   notifyChecklist,
   toggleChecklistItem,
   updateChecklistItem,
-} from '../api/client.js'
-import { initialOf } from '../utils/avatar.js'
-import { cx } from '../utils/classNames.js'
-import { relativeTime } from '../utils/time.js'
-import styles from './styling/ChecklistFeature.module.css'
+} from "../api/client.js";
+import { initialOf } from "../utils/avatar.js";
+import { cx } from "../utils/classNames.js";
+import { relativeTime } from "../utils/time.js";
+import styles from "./styling/ChecklistFeature.module.css";
 
 export default function ChecklistFeature({
   checklists,
   onChecklistsChange,
   checklistFocusRequest,
 }) {
-  const { user } = useAuth()
-  const checklistRefs = useRef(new Map())
-  const [error, setError] = useState('')
-  const [expandedId, setExpandedId] = useState(null)
-  const [newItemText, setNewItemText] = useState('')
-  const [editingItem, setEditingItem] = useState(null)
-  const [busyItemIds, setBusyItemIds] = useState([])
-  const [addingId, setAddingId] = useState(null)
-  const [notifyingId, setNotifyingId] = useState(null)
-  const [archivingId, setArchivingId] = useState(null)
+  const { user } = useAuth();
+  const checklistRefs = useRef(new Map());
+  const [error, setError] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
+  const [newItemText, setNewItemText] = useState("");
+  const [editingItem, setEditingItem] = useState(null);
+  const [busyItemIds, setBusyItemIds] = useState([]);
+  const [addingId, setAddingId] = useState(null);
+  const [notifyingId, setNotifyingId] = useState(null);
+  const [archivingId, setArchivingId] = useState(null);
 
   useEffect(() => {
-    if (!checklistFocusRequest?.checklistId) return
+    if (!checklistFocusRequest?.checklistId) return;
     const checklistExists = checklists.some(
       (checklist) => checklist.id === checklistFocusRequest.checklistId,
-    )
-    if (!checklistExists) return
-    setExpandedId(checklistFocusRequest.checklistId)
-    setNewItemText('')
-    setEditingItem(null)
+    );
+    if (!checklistExists) return;
+    setExpandedId(checklistFocusRequest.checklistId);
+    setNewItemText("");
+    setEditingItem(null);
     window.requestAnimationFrame(() => {
       checklistRefs.current
         .get(checklistFocusRequest.checklistId)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    })
-  }, [checklistFocusRequest, checklists])
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [checklistFocusRequest, checklists]);
 
   function toggleExpanded(id) {
-    setExpandedId((current) => (current === id ? null : id))
-    setNewItemText('')
-    setEditingItem(null)
+    setExpandedId((current) => (current === id ? null : id));
+    setNewItemText("");
+    setEditingItem(null);
   }
 
   function markItemBusy(itemId) {
-    setBusyItemIds((current) => [...current, itemId])
+    setBusyItemIds((current) => [...current, itemId]);
   }
 
   function clearItemBusy(itemId) {
-    setBusyItemIds((current) => current.filter((id) => id !== itemId))
+    setBusyItemIds((current) => current.filter((id) => id !== itemId));
   }
 
   async function handleNotify(checklist) {
-    if (notifyingId) return
-    setNotifyingId(checklist.id)
-    setError('')
+    if (notifyingId) return;
+    setNotifyingId(checklist.id);
+    setError("");
     try {
-      await notifyChecklist(checklist.id, user.id)
+      await notifyChecklist(checklist.id, user.id);
     } catch (err) {
-      setError(err.message || 'Could not notify the household. Try again.')
+      setError(err.message || "Could not notify the household. Try again.");
     } finally {
-      setNotifyingId(null)
+      setNotifyingId(null);
     }
   }
 
   async function handleAddItem(event, checklist) {
-    event.preventDefault()
-    const trimmed = newItemText.trim()
-    if (!trimmed || addingId) return
-    setAddingId(checklist.id)
-    setError('')
+    event.preventDefault();
+    const trimmed = newItemText.trim();
+    if (!trimmed || addingId) return;
+    setAddingId(checklist.id);
+    setError("");
     try {
-      onChecklistsChange(await addChecklistItem(checklist.id, user.id, trimmed))
-      setNewItemText('')
+      onChecklistsChange(
+        await addChecklistItem(checklist.id, user.id, trimmed),
+      );
+      setNewItemText("");
     } catch (err) {
-      setError(err.message || 'Could not add the item. Try again.')
+      setError(err.message || "Could not add the item. Try again.");
     } finally {
-      setAddingId(null)
+      setAddingId(null);
     }
   }
 
   async function handleToggleItem(checklist, item) {
-    if (busyItemIds.includes(item.id)) return
-    markItemBusy(item.id)
-    setError('')
+    if (busyItemIds.includes(item.id)) return;
+    markItemBusy(item.id);
+    setError("");
     try {
-      onChecklistsChange(await toggleChecklistItem(checklist.id, item.id, user.id))
+      onChecklistsChange(
+        await toggleChecklistItem(checklist.id, item.id, user.id),
+      );
     } catch (err) {
-      setError(err.message || 'Could not update the item. Try again.')
+      setError(err.message || "Could not update the item. Try again.");
     } finally {
-      clearItemBusy(item.id)
+      clearItemBusy(item.id);
     }
   }
 
   async function handleSaveItem(event, checklist) {
-    event.preventDefault()
-    const trimmed = editingItem?.text?.trim()
-    if (!editingItem || !trimmed || busyItemIds.includes(editingItem.id)) return
-    markItemBusy(editingItem.id)
-    setError('')
+    event.preventDefault();
+    const trimmed = editingItem?.text?.trim();
+    if (!editingItem || !trimmed || busyItemIds.includes(editingItem.id))
+      return;
+    markItemBusy(editingItem.id);
+    setError("");
     try {
       onChecklistsChange(
-        await updateChecklistItem(checklist.id, editingItem.id, user.id, trimmed),
-      )
-      setEditingItem(null)
+        await updateChecklistItem(
+          checklist.id,
+          editingItem.id,
+          user.id,
+          trimmed,
+        ),
+      );
+      setEditingItem(null);
     } catch (err) {
-      setError(err.message || 'Could not edit the item. Try again.')
+      setError(err.message || "Could not edit the item. Try again.");
     } finally {
-      clearItemBusy(editingItem.id)
+      clearItemBusy(editingItem.id);
     }
   }
 
   async function handleDeleteItem(checklist, item) {
-    if (busyItemIds.includes(item.id)) return
-    markItemBusy(item.id)
-    setError('')
+    if (busyItemIds.includes(item.id)) return;
+    markItemBusy(item.id);
+    setError("");
     try {
-      onChecklistsChange(await deleteChecklistItem(checklist.id, item.id, user.id))
-      setEditingItem((current) => (current?.id === item.id ? null : current))
+      onChecklistsChange(
+        await deleteChecklistItem(checklist.id, item.id, user.id),
+      );
+      setEditingItem((current) => (current?.id === item.id ? null : current));
     } catch (err) {
-      setError(err.message || 'Could not delete the item. Try again.')
+      setError(err.message || "Could not delete the item. Try again.");
     } finally {
-      clearItemBusy(item.id)
+      clearItemBusy(item.id);
     }
   }
 
   async function handleArchive(checklist) {
-    if (archivingId) return
-    setArchivingId(checklist.id)
-    setError('')
+    if (archivingId) return;
+    setArchivingId(checklist.id);
+    setError("");
     try {
-      onChecklistsChange(await archiveChecklist(checklist.id, user.id))
-      setExpandedId((current) => (current === checklist.id ? null : current))
+      onChecklistsChange(await archiveChecklist(checklist.id, user.id));
+      setExpandedId((current) => (current === checklist.id ? null : current));
     } catch (err) {
-      setError(err.message || 'Could not archive the checklist. Try again.')
+      setError(err.message || "Could not archive the checklist. Try again.");
     } finally {
-      setArchivingId(null)
+      setArchivingId(null);
     }
   }
 
   return (
     <div className={styles.wrap}>
-      {error && <p className={cx('ui-errorText', styles.error)}>{error}</p>}
+      {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
 
       <div className={styles.list}>
         {checklists.length === 0 ? (
           <p className={styles.empty}>No checklists yet.</p>
         ) : (
           checklists.map((checklist) => {
-            const expanded = expandedId === checklist.id
+            const expanded = expandedId === checklist.id;
             return (
               <div
                 key={checklist.id}
                 ref={(node) => {
                   if (node) {
-                    checklistRefs.current.set(checklist.id, node)
+                    checklistRefs.current.set(checklist.id, node);
                   } else {
-                    checklistRefs.current.delete(checklist.id)
+                    checklistRefs.current.delete(checklist.id);
                   }
                 }}
                 role="button"
@@ -172,9 +184,9 @@ export default function ChecklistFeature({
                 aria-expanded={expanded}
                 onClick={() => toggleExpanded(checklist.id)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    toggleExpanded(checklist.id)
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    toggleExpanded(checklist.id);
                   }
                 }}
                 className={styles.card}
@@ -183,15 +195,16 @@ export default function ChecklistFeature({
                   <div className={styles.summaryText}>
                     <p className={styles.title}>{checklist.title}</p>
                     <p className={styles.meta}>
-                      {checklist.createdBy} · {relativeTime(checklist.createdAt)}
+                      {checklist.createdBy} ·{" "}
+                      {relativeTime(checklist.createdAt)}
                     </p>
                   </div>
                   <button
                     type="button"
                     disabled={notifyingId === checklist.id}
                     onClick={(event) => {
-                      event.stopPropagation()
-                      handleNotify(checklist)
+                      event.stopPropagation();
+                      handleNotify(checklist);
                     }}
                     className={styles.notifyButton}
                     aria-label="Notify all about checklist"
@@ -211,7 +224,7 @@ export default function ChecklistFeature({
                 >
                   <div
                     className={styles.expandedInner}
-                    {...(!expanded ? { inert: '' } : {})}
+                    {...(!expanded ? { inert: "" } : {})}
                   >
                     <div
                       className={styles.panel}
@@ -220,13 +233,17 @@ export default function ChecklistFeature({
                     >
                       <ul className={styles.items}>
                         {checklist.items.map((item) => {
-                          const checkedByUser = (item.checkedByIds ?? []).includes(user.id)
-                          const editing = editingItem?.id === item.id
+                          const checkedByUser = (
+                            item.checkedByIds ?? []
+                          ).includes(user.id);
+                          const editing = editingItem?.id === item.id;
                           return (
                             <li key={item.id} className={styles.item}>
                               {editing ? (
                                 <form
-                                  onSubmit={(event) => handleSaveItem(event, checklist)}
+                                  onSubmit={(event) =>
+                                    handleSaveItem(event, checklist)
+                                  }
                                   className={styles.editForm}
                                 >
                                   <input
@@ -239,7 +256,10 @@ export default function ChecklistFeature({
                                       })
                                     }
                                     maxLength={280}
-                                    className={cx('ui-textInput', styles.editInput)}
+                                    className={cx(
+                                      "ui-textInput",
+                                      styles.editInput,
+                                    )}
                                   />
                                   <button
                                     type="submit"
@@ -248,32 +268,24 @@ export default function ChecklistFeature({
                                       !editingItem.text.trim()
                                     }
                                     className={cx(
-                                      'ui-pillButton ui-pillSecondary',
+                                      "ui-pillButton ui-pillCheckSoft",
                                       styles.smallAction,
                                     )}
                                   >
-                                    Save
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingItem(null)}
-                                    className={cx(
-                                      'ui-pillButton ui-pillSecondary',
-                                      styles.smallAction,
-                                    )}
-                                  >
-                                    Cancel
+                                    ✓
                                   </button>
                                   <button
                                     type="button"
                                     disabled={busyItemIds.includes(item.id)}
-                                    onClick={() => handleDeleteItem(checklist, item)}
+                                    onClick={() =>
+                                      handleDeleteItem(checklist, item)
+                                    }
                                     className={cx(
-                                      'ui-pillButton ui-pillDangerSoft',
+                                      "ui-pillButton ui-pillDangerSoft",
                                       styles.smallAction,
                                     )}
                                   >
-                                    Delete
+                                    ×
                                   </button>
                                 </form>
                               ) : (
@@ -281,24 +293,31 @@ export default function ChecklistFeature({
                                   <button
                                     type="button"
                                     disabled={busyItemIds.includes(item.id)}
-                                    onClick={() => handleToggleItem(checklist, item)}
+                                    onClick={() =>
+                                      handleToggleItem(checklist, item)
+                                    }
                                     className={cx(
                                       styles.checkButton,
-                                      checkedByUser ? styles.checkButtonOn : '',
+                                      checkedByUser ? styles.checkButtonOn : "",
                                     )}
                                     aria-label={
                                       checkedByUser
-                                        ? 'Uncheck checklist item'
-                                        : 'Check off checklist item'
+                                        ? "Uncheck checklist item"
+                                        : "Check off checklist item"
                                     }
-                                    title={checkedByUser ? 'Uncheck' : 'Check off'}
+                                    title={
+                                      checkedByUser ? "Uncheck" : "Check off"
+                                    }
                                   >
                                     ✓
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      setEditingItem({ id: item.id, text: item.text })
+                                      setEditingItem({
+                                        id: item.id,
+                                        text: item.text,
+                                      })
                                     }
                                     className={styles.itemText}
                                   >
@@ -318,7 +337,7 @@ export default function ChecklistFeature({
                                 </>
                               )}
                             </li>
-                          )
+                          );
                         })}
                       </ul>
 
@@ -329,17 +348,21 @@ export default function ChecklistFeature({
                         <input
                           type="text"
                           value={newItemText}
-                          onChange={(event) => setNewItemText(event.target.value)}
+                          onChange={(event) =>
+                            setNewItemText(event.target.value)
+                          }
                           maxLength={280}
                           placeholder="Add an item"
-                          className={cx('ui-textInput', styles.addInput)}
+                          className={cx("ui-textInput", styles.addInput)}
                         />
                         <button
                           type="submit"
-                          disabled={addingId === checklist.id || !newItemText.trim()}
-                          className={cx('ui-primaryButton', styles.addButton)}
+                          disabled={
+                            addingId === checklist.id || !newItemText.trim()
+                          }
+                          className={cx("ui-primaryButton", styles.addButton)}
                         >
-                          Add
+                          +
                         </button>
                       </form>
 
@@ -349,21 +372,23 @@ export default function ChecklistFeature({
                           disabled={archivingId === checklist.id}
                           onClick={() => handleArchive(checklist)}
                           className={cx(
-                            'ui-pillButton ui-pillSecondary',
+                            "ui-pillButton ui-pillSecondary",
                             styles.archiveButton,
                           )}
                         >
-                          {archivingId === checklist.id ? 'Archiving…' : 'Archive'}
+                          {archivingId === checklist.id
+                            ? "Archiving…"
+                            : "Archive"}
                         </button>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            )
+            );
           })
         )}
       </div>
     </div>
-  )
+  );
 }

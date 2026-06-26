@@ -46,6 +46,10 @@
   @apply border-[#e8c5bf] bg-[#fbeae6] text-status-red;
 }
 
+.ui-pillCheckSoft {
+  @apply border-[#94d9a3] bg-[#bfedc9] text-status-green;
+}
+
 .ui-iconPrimary {
   @apply grid flex-none place-items-center rounded-full border border-accent bg-accent text-white shadow-soft transition hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
 }
