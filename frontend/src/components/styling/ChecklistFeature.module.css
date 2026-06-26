@@ -67,7 +67,11 @@
 }
 
 .item {
-  @apply flex min-h-[40px] items-center gap-[8px] rounded-sm border border-line bg-white px-[9px] py-[7px];
+  @apply flex min-h-[40px] items-center gap-[8px] rounded-sm border border-line bg-white px-[9px] py-[7px] transition-colors;
+}
+
+.itemCovered {
+  @apply border-status-green bg-success-panel-strong;
 }
 
 .checkButton {

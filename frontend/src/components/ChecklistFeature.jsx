@@ -300,12 +300,20 @@ export default function ChecklistFeature({
                     >
                       <ul className={styles.items}>
                         {checklist.items.map((item) => {
+                          const checkedByCount = (item.checkedByIds ?? [])
+                            .length;
                           const checkedByUser = (
                             item.checkedByIds ?? []
                           ).includes(user.id);
                           const editing = editingItem?.id === item.id;
                           return (
-                            <li key={item.id} className={styles.item}>
+                            <li
+                              key={item.id}
+                              className={cx(
+                                styles.item,
+                                checkedByCount > 0 ? styles.itemCovered : "",
+                              )}
+                            >
                               {editing ? (
                                 <ChecklistItemEditor
                                   value={editingItem.text}
