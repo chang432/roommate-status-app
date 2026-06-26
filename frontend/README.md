@@ -25,7 +25,7 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Requests**: a tabbed household board lets users ask specific roommates for
   help, track accept/deny responses, comment, mark requests complete, and open
   request notifications directly to the expanded request card.
-- **Checklists**: the household board includes shared checklists that can be
+- **Checklists**: the shire board includes shared checklists that can be
   posted, expanded, added to, checked off by multiple roommates, notified, and
   archived.
 

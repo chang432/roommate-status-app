@@ -1,11 +1,11 @@
 """Web Push (PoC) for the Roomie Status backend.
 
-Sends a browser push notification to every subscribed device when the household
+Sends a browser push notification to every subscribed device when the shire
 crosses the "enough roomies are free" threshold. Uses the standard Web Push
 protocol + VAPID (works for installed PWAs on iOS 16.4+, Android, and desktop).
 
 Subscriptions are stored in their own DynamoDB table — separate from the
-roommate table so the household scan in db.py stays clean — keyed by a hash of
+roommate table so the shire scan in db.py stays clean — keyed by a hash of
 the push endpoint and associated with a stable roommate id for recipient
 selection. The table is provisioned by CloudFormation alongside the roommate
 table (infrastructure/dynamodb-table-{dev,main}.yaml), so it must already exist;

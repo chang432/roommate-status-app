@@ -6,41 +6,41 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 
 ## Endpoints
 
-| Method & path                  | Body                       | Returns                                  |
-| ------------------------------ | -------------------------- | ---------------------------------------- |
-| `POST /api/login`              | `{ name, password }`       | `{ user: { id, name } }` (401 on bad creds) |
-| `GET  /api/roommates`          | —                          | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
-| `PUT  /api/roommates/<id>/status` | `{ status, statusText }` | full updated household list              |
-| `POST /api/roommates/notify`   | `{ requesterId }`          | `{ sent, pruned, failed }`                  |
-| `POST /api/roommates/<id>/poke` | `{ requesterId }`         | `{ sent, pruned, failed }`                  |
-| `POST /api/activities`          | `{ text, proposedById, startAt?, endAt? }` | full updated activity list |
-| `PATCH /api/activities/<id>/schedule` | `{ requesterId, startAt?, endAt? }` | full updated activity list |
-| `POST /api/activities/<id>/archive` | `{ requesterId }` | full updated activity list |
-| `DELETE /api/activities/<id>`   | `{ requesterId }`          | full updated activity list                |
-| `POST /api/activities/<id>/start` | `{ requesterId }`        | full updated activity list                |
-| `POST /api/activities/<id>/end` | `{ requesterId }`          | full updated activity list                |
-| `PUT/DELETE /api/activities/<id>/comments/<commentId>/likes` | `{ userId }` | full updated activity list |
-| `GET /api/requests`              | —                          | full request list                          |
-| `POST /api/requests`             | `{ text, requesterId, requestedIds }` | full updated request list    |
-| `POST /api/requests/<id>/responses` | `{ userId, response }`  | full updated request list                  |
-| `POST /api/requests/<id>/complete` | `{ userId }`             | full updated request list                  |
-| `POST /api/requests/<id>/reopen` | `{ userId }`             | full updated request list                  |
-| `DELETE /api/requests/<id>`      | `{ requesterId }`        | full updated request list                  |
-| `POST /api/requests/<id>/comments` | `{ authorId, text }`     | full updated request list                  |
-| `PUT/DELETE /api/requests/<id>/comments/<commentId>/likes` | `{ userId }` | full updated request list |
-| `GET /api/checklists`            | —                          | full active checklist list                  |
-| `POST /api/checklists`           | `{ title, createdById, items }` | full updated checklist list          |
-| `POST /api/checklists/<id>/notify` | `{ requesterId }`        | `{ sent, pruned, failed }`                  |
-| `POST /api/checklists/<id>/items` | `{ userId, text }`        | full updated checklist list                 |
-| `POST /api/checklists/<id>/items/<itemId>/toggle` | `{ userId }` | full updated checklist list        |
-| `PATCH /api/checklists/<id>/items/<itemId>` | `{ userId, text }` | full updated checklist list       |
-| `DELETE /api/checklists/<id>/items/<itemId>` | `{ userId }`    | full updated checklist list                 |
-| `POST /api/checklists/<id>/archive` | `{ userId }`            | full updated checklist list                 |
-| `GET /api/jam`                     | —                        | active Spotify Jam or `null`               |
-| `POST /api/jam`                    | `{ hostId, link }`       | active Spotify Jam, replacing prior Jam    |
-| `DELETE /api/jam`                  | `{ hostId }`             | `null` after host ends active Jam          |
-| `POST /api/push/subscribe`      | `{ subscription, userId }` | `{ ok: true }`                            |
-| `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
+| Method & path                                                | Body                                       | Returns                                                 |
+| ------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------------------- |
+| `POST /api/login`                                            | `{ name, password }`                       | `{ user: { id, name } }` (401 on bad creds)             |
+| `GET  /api/roommates`                                        | —                                          | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
+| `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
+| `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
+| `POST /api/roommates/<id>/poke`                              | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
+| `POST /api/activities`                                       | `{ text, proposedById, startAt?, endAt? }` | full updated activity list                              |
+| `PATCH /api/activities/<id>/schedule`                        | `{ requesterId, startAt?, endAt? }`        | full updated activity list                              |
+| `POST /api/activities/<id>/archive`                          | `{ requesterId }`                          | full updated activity list                              |
+| `DELETE /api/activities/<id>`                                | `{ requesterId }`                          | full updated activity list                              |
+| `POST /api/activities/<id>/start`                            | `{ requesterId }`                          | full updated activity list                              |
+| `POST /api/activities/<id>/end`                              | `{ requesterId }`                          | full updated activity list                              |
+| `PUT/DELETE /api/activities/<id>/comments/<commentId>/likes` | `{ userId }`                               | full updated activity list                              |
+| `GET /api/requests`                                          | —                                          | full request list                                       |
+| `POST /api/requests`                                         | `{ text, requesterId, requestedIds }`      | full updated request list                               |
+| `POST /api/requests/<id>/responses`                          | `{ userId, response }`                     | full updated request list                               |
+| `POST /api/requests/<id>/complete`                           | `{ userId }`                               | full updated request list                               |
+| `POST /api/requests/<id>/reopen`                             | `{ userId }`                               | full updated request list                               |
+| `DELETE /api/requests/<id>`                                  | `{ requesterId }`                          | full updated request list                               |
+| `POST /api/requests/<id>/comments`                           | `{ authorId, text }`                       | full updated request list                               |
+| `PUT/DELETE /api/requests/<id>/comments/<commentId>/likes`   | `{ userId }`                               | full updated request list                               |
+| `GET /api/checklists`                                        | —                                          | full active checklist list                              |
+| `POST /api/checklists`                                       | `{ title, createdById, items }`            | full updated checklist list                             |
+| `POST /api/checklists/<id>/notify`                           | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
+| `POST /api/checklists/<id>/items`                            | `{ userId, text }`                         | full updated checklist list                             |
+| `POST /api/checklists/<id>/items/<itemId>/toggle`            | `{ userId }`                               | full updated checklist list                             |
+| `PATCH /api/checklists/<id>/items/<itemId>`                  | `{ userId, text }`                         | full updated checklist list                             |
+| `DELETE /api/checklists/<id>/items/<itemId>`                 | `{ userId }`                               | full updated checklist list                             |
+| `POST /api/checklists/<id>/archive`                          | `{ userId }`                               | full updated checklist list                             |
+| `GET /api/jam`                                               | —                                          | active Spotify Jam or `null`                            |
+| `POST /api/jam`                                              | `{ hostId, link }`                         | active Spotify Jam, replacing prior Jam                 |
+| `DELETE /api/jam`                                            | `{ hostId }`                               | `null` after host ends active Jam                       |
+| `POST /api/push/subscribe`                                   | `{ subscription, userId }`                 | `{ ok: true }`                                          |
+| `GET  /api/health`                                           | —                                          | `{ status: "ok" }`                                      |
 
 `status` is one of `available`, `busy`, `sleeping`, `ooh`. Any status may carry
 an optional `statusText` note that is shown alongside it. `statusUpdatedAt` is
@@ -68,7 +68,7 @@ Event start/end notifications go household-wide.
 Comments may mention any household member with `@Name`. Mentioned roommates get
 a targeted push; unmentioned event participants still get the normal comment
 push. The reserved `@all` mention sends one household-wide push excluding the
-author. Mention identities are resolved server-side from the household roster.
+author. Mention identities are resolved server-side from the shire roster.
 Comments have stable ids and can be liked once per non-author roommate; likes
 are idempotent, can be removed, and do not send push notifications.
 Live-event pushes include an activity-change event type so open apps refresh
@@ -86,7 +86,7 @@ checked off by multiple roommates per item, edited or pruned item-by-item, and
 archived by anyone. Checklist reminders are household-wide pushes that exclude
 the requester and include a checklist deep link so tapping one opens the
 expanded checklist card.
-Only one Spotify Jam link is active for the household at a time. Sharing a new
+Only one Spotify Jam link is active for the shire at a time. Sharing a new
 Jam replaces the previous link, and the host can end the active Jam. The Jam
 widget is hidden until someone shares a link; once active, roommates can join
 from the widget or replace it with a newer Jam link.
@@ -101,10 +101,10 @@ Backed by a per-deployment DynamoDB table — `RoommateStatus-dev` or
 `dynamodb-table-main.yaml`) — one item per roommate, keyed by `id`.
 Configuration:
 
-| Env var             | Default               | Purpose                                      |
-| ------------------- | --------------------- | -------------------------------------------- |
-| `ROOMMATE_TABLE`    | `RoommateStatus-main` | Table name                                   |
-| `AWS_REGION`        | —                     | Region (or use your AWS config/SSO)          |
+| Env var             | Default               | Purpose                                                             |
+| ------------------- | --------------------- | ------------------------------------------------------------------- |
+| `ROOMMATE_TABLE`    | `RoommateStatus-main` | Table name                                                          |
+| `AWS_REGION`        | —                     | Region (or use your AWS config/SSO)                                 |
 | `DYNAMODB_ENDPOINT` | —                     | Local dev only: point boto3 at a DynamoDB Local instead of real AWS |
 
 The runtime AWS principal must allow `dynamodb:DeleteItem` on the activities
@@ -122,7 +122,7 @@ python seed.py           # idempotent — safe to re-run
 `./start.sh` (repo root) runs the whole stack against an in-memory **DynamoDB
 Local** container — no AWS credentials or deployed tables required. It sets
 `DYNAMODB_ENDPOINT` so boto3 targets the local instance, then creates the tables
-and seeds the household automatically on every run. Real DynamoDB +
+and seeds the shire automatically on every run. Real DynamoDB +
 CloudFormation are only used by the production deploy.
 
 The local-DynamoDB wiring lives in `infrastructure/` (next to the CloudFormation
@@ -154,7 +154,7 @@ network; the only app-side pieces are the `DYNAMODB_ENDPOINT` hook in
     written alongside the user record in a `TransactWriteItems` whose lookup put
     is conditional on `attribute_not_exists(id)`. That item doubles as the login
     index, so login is two fast `get_item`s (email→id, then id→user) instead of
-    today's full-table scan — and a GSI on email would *not* enforce uniqueness,
+    today's full-table scan — and a GSI on email would _not_ enforce uniqueness,
     so it isn't needed. Keep these lookup items in their own table to keep the
     household scan clean (one additive CloudFormation table).
   - **Normalize emails** (lowercase + trim) at every read/write so case variants
@@ -164,7 +164,7 @@ network; the only app-side pieces are the `DYNAMODB_ENDPOINT` hook in
   - Store activity `proposedBy`/`members` as **user ids**, resolving id→name for
     display, so duplicate display names can't collide there either.
   - Migration is gentle: the 5 seeded ids are already stable strings, so just
-    backfill `email` + `passwordHash` and create their lookup items; only *new*
+    backfill `email` + `passwordHash` and create their lookup items; only _new_
     roommates get uuid ids. New IAM action required: `dynamodb:TransactWriteItems`.
 
 ## Run locally

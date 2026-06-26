@@ -5,7 +5,7 @@ push notification (handled in app.py); this module just owns persistence.
 
 Stored in its own DynamoDB table — separate from the roommate table so the
 household scan in db.py stays clean — provisioned by CloudFormation alongside
-the other tables (infrastructure/dynamodb-table-{dev,main}.yaml). The household
+the other tables (infrastructure/dynamodb-table-{dev,main}.yaml). the shire
 data set is small, so a scan + in-app lifecycle sort is the right tool (mirrors
 db.get_all); no secondary index is needed.
 
