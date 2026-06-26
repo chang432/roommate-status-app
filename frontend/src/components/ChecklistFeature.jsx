@@ -22,25 +22,12 @@ function ChecklistItemEditor({
   busy,
   placeholder,
 }) {
-  const pointerInsideRef = useRef(false);
-
-  function handlePointerDownCapture() {
-    // Mobile browsers can blur the input before the submit/cancel click runs.
-    // Treat pointer starts inside the form as internal focus movement.
-    pointerInsideRef.current = true;
-    window.setTimeout(() => {
-      pointerInsideRef.current = false;
-    }, 0);
-  }
-
   return (
     <form
       onSubmit={onSubmit}
-      onPointerDownCapture={handlePointerDownCapture}
-      onBlur={(event) => {
-        if (pointerInsideRef.current) return;
-        if (!event.currentTarget.contains(event.relatedTarget)) onCancel();
-      }}
+      // onBlur={(event) => {
+      //   if (!event.currentTarget.contains(event.relatedTarget)) onCancel();
+      // }}
       className={styles.itemEditor}
     >
       <input
