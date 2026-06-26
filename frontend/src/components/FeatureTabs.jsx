@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { cx } from '../utils/classNames.js'
-import styles from './styling/FeatureTabs.module.css'
+import { useState } from "react";
+import { cx } from "../utils/classNames.js";
+import styles from "./styling/FeatureTabs.module.css";
 
 export default function FeatureTabs({
   tabs,
@@ -11,20 +11,23 @@ export default function FeatureTabs({
 }) {
   const [internalActiveId, setInternalActiveId] = useState(
     defaultTabId ?? tabs[0]?.id,
-  )
-  const activeId = activeTabId ?? internalActiveId
-  const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0]
+  );
+  const activeId = activeTabId ?? internalActiveId;
+  const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
 
   function selectTab(id) {
-    setInternalActiveId(id)
-    onActiveTabChange?.(id)
+    setInternalActiveId(id);
+    onActiveTabChange?.(id);
   }
 
   return (
     <section className={styles.section}>
       <div className={styles.header}>
-        <p className="ui-sectionLabel">Household board</p>
-        <div className={styles.tabList} role="tablist" aria-label="Household board">
+        <div
+          className={styles.tabList}
+          role="tablist"
+          aria-label="Household board"
+        >
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -36,7 +39,7 @@ export default function FeatureTabs({
               onClick={() => selectTab(tab.id)}
               className={cx(
                 styles.tab,
-                activeTab.id === tab.id ? styles.tabActive : '',
+                activeTab.id === tab.id ? styles.tabActive : "",
               )}
             >
               {tab.label}
@@ -54,5 +57,5 @@ export default function FeatureTabs({
         {activeTab.content}
       </div>
     </section>
-  )
+  );
 }

@@ -105,9 +105,12 @@ export default function StatusPage() {
   // Load page-level data sets so household, activities, and requests share one
   // source of truth from the first render onward.
   useEffect(() => {
-    Promise.all([loadRoommates(), loadActivities(), loadRequests(), loadJam()]).finally(() =>
-      setLoading(false),
-    );
+    Promise.all([
+      loadRoommates(),
+      loadActivities(),
+      loadRequests(),
+      loadJam(),
+    ]).finally(() => setLoading(false));
   }, [loadActivities, loadJam, loadRequests, loadRoommates]);
 
   // Keep live-event state current across household devices. Push-enabled open
@@ -163,7 +166,12 @@ export default function StatusPage() {
 
   // Pull down from the top to refresh household, activity, and request state.
   const handleRefresh = useCallback(async () => {
-    await Promise.all([loadRoommates(), loadActivities(), loadRequests(), loadJam()]);
+    await Promise.all([
+      loadRoommates(),
+      loadActivities(),
+      loadRequests(),
+      loadJam(),
+    ]);
   }, [loadActivities, loadJam, loadRequests, loadRoommates]);
 
   const { pull, refreshing, threshold } = usePullToRefresh(handleRefresh);
@@ -192,7 +200,10 @@ export default function StatusPage() {
     nextParams.delete("updateStatus");
     setSearchParams(nextParams, { replace: true });
     window.requestAnimationFrame(() => {
-      ownCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      ownCardRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
     });
   }, [me, searchParams, setSearchParams]);
 
@@ -375,9 +386,9 @@ export default function StatusPage() {
                 onClick={() => setJamModalOpen(true)}
                 aria-label={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
                 title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-                className={cx("ui-iconPrimary", styles.jamButton)}
+                className={cx(styles.jamButton)}
               >
-                Jam
+                <img src="/spotify.png" alt="" className={styles.spotifyIcon} />
               </button>
             </div>
             <div className={styles.householdGrid}>

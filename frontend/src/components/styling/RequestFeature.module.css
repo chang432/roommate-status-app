@@ -62,8 +62,12 @@
   @apply border-status-red bg-status-red;
 }
 
-.mutedAction {
-  @apply border-[#c7c7c2] bg-[#d8d8d3] text-[#777771];
+.mutedAcceptAction {
+  @apply border-status-green bg-[#d8d8d3] text-status-green;
+}
+
+.mutedDenyAction {
+  @apply border-status-red bg-[#d8d8d3] text-status-red;
 }
 
 .summaryReopen {
