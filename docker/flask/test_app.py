@@ -24,7 +24,9 @@ from moto import mock_aws
 import activities
 import db
 import household_requests
+import jam
 import push
+import spotify
 from app import create_app, mentions_all, resolve_mentions
 
 
@@ -390,6 +392,126 @@ def test_user_triggered_broadcast_skips_actor_and_unowned_legacy_subscription(
 def test_push_test_unconfigured(client):
     res = client.post("/api/push/test")
     assert res.status_code == 503
+
+
+def test_share_jam_replaces_active_link_and_notifies(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+
+    first = client.post(
+        "/api/jam",
+        json={"hostId": "andre", "link": "https://spotify.link/first"},
+    )
+    second = client.post(
+        "/api/jam",
+        json={"hostId": "kayla", "link": "https://spotify.link/second"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.get_json()["link"] == "https://spotify.link/second"
+    assert second.get_json()["hostId"] == "kayla"
+    assert client.get("/api/jam").get_json()["link"] == "https://spotify.link/second"
+    stored = activities._get_table().get_item(Key={"id": jam.ACTIVE_JAM_ID})["Item"]
+    assert stored["hostId"] == "kayla"
+    assert calls[-1] == (
+        "all",
+        {
+            "title": "Spotify Jam is live",
+            "body": "Kayla shared a Jam. Tap to join.",
+            "url": "/",
+            "event_type": "jam-changed",
+            "exclude_user_ids": {"kayla"},
+        },
+    )
+
+
+def test_share_jam_validates_link_and_roommate(client):
+    missing_user = client.post(
+        "/api/jam",
+        json={"hostId": "ghost", "link": "https://spotify.link/first"},
+    )
+    bad_link = client.post(
+        "/api/jam",
+        json={"hostId": "andre", "link": "https://example.com/not-spotify"},
+    )
+
+    assert missing_user.status_code == 400
+    assert bad_link.status_code == 400
+
+
+def test_jam_projects_host_spotify_playback(client, monkeypatch):
+    monkeypatch.setattr(spotify, "is_configured", lambda: True)
+    monkeypatch.setattr(spotify, "has_token", lambda user_id: user_id == "andre")
+    monkeypatch.setattr(
+        spotify,
+        "current_playback",
+        lambda user_id: (
+            {
+                "isPlaying": True,
+                "title": "Apartment Song",
+                "artists": ["The Roomies"],
+                "album": "House Mix",
+                "albumImageUrl": "https://images/cover.jpg",
+                "externalUrl": "https://open.spotify.com/track/abc",
+                "progressMs": 1000,
+                "durationMs": 180000,
+                "updatedAt": 1234,
+            },
+            "connected",
+        ),
+    )
+
+    res = client.post(
+        "/api/jam",
+        json={"hostId": "andre", "link": "https://spotify.link/first"},
+    )
+
+    data = res.get_json()
+    assert data["spotifyConfigured"] is True
+    assert data["hostSpotifyConnected"] is True
+    assert data["playbackStatus"] == "connected"
+    assert data["nowPlaying"]["title"] == "Apartment Song"
+
+
+def test_end_jam_requires_host(client):
+    client.post("/api/jam", json={"hostId": "andre", "link": "https://spotify.link/first"})
+
+    forbidden = client.delete("/api/jam", json={"hostId": "kayla"})
+    ended = client.delete("/api/jam", json={"hostId": "andre"})
+
+    assert forbidden.status_code == 403
+    assert ended.status_code == 200
+    assert ended.get_json() is None
+
+
+def test_spotify_auth_url_requires_configuration(client, monkeypatch):
+    monkeypatch.delenv("SPOTIFY_CLIENT_ID", raising=False)
+    monkeypatch.delenv("SPOTIFY_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("SPOTIFY_REDIRECT_URI", raising=False)
+
+    res = client.get("/api/spotify/auth-url?userId=andre")
+
+    assert res.status_code == 503
+
+
+def test_spotify_auth_url_stores_state(client, monkeypatch):
+    monkeypatch.setenv("SPOTIFY_CLIENT_ID", "client")
+    monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("SPOTIFY_REDIRECT_URI", "https://roomie/api/spotify/callback")
+
+    res = client.get("/api/spotify/auth-url?userId=andre")
+
+    assert res.status_code == 200
+    url = res.get_json()["url"]
+    assert "accounts.spotify.com/authorize" in url
+    assert "user-read-currently-playing" in url
+    state_records = [
+        item
+        for item in activities._get_table().scan().get("Items", [])
+        if item.get("itemType") == spotify.STATE_TYPE
+    ]
+    assert len(state_records) == 1
+    assert state_records[0]["userId"] == "andre"
 
 
 def test_vapid_private_key_loads_through_pywebpush():

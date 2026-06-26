@@ -7,6 +7,7 @@ import NotificationBanner from "../components/NotificationBanner.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
 import EnableNotifications from "../components/EnableNotifications.jsx";
 import FeatureTabs from "../components/FeatureTabs.jsx";
+import JamWidget from "../components/JamWidget.jsx";
 import ModalShell from "../components/ModalShell.jsx";
 import ProposeActivity from "../components/ProposeActivity.jsx";
 import PullToRefreshIndicator from "../components/PullToRefreshIndicator.jsx";
@@ -17,6 +18,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import {
   endActivity,
   getActivities,
+  getJam,
   getRequests,
   getRoommates,
   notifyRoommatesToUpdateStatus,
@@ -31,6 +33,7 @@ import { cx } from "../utils/classNames.js";
 import styles from "./StatusPage.module.css";
 
 const ACTIVITY_POLL_INTERVAL_MS = 5000;
+const JAM_POLL_INTERVAL_MS = 15000;
 
 // A friendly "Tuesday evening" style subtitle based on the current time.
 function whenLabel() {
@@ -48,6 +51,7 @@ export default function StatusPage() {
 
   const [roommates, setRoommates] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [jam, setJam] = useState(null);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -89,13 +93,22 @@ export default function StatusPage() {
     }
   }, []);
 
+  const loadJam = useCallback(async () => {
+    try {
+      setJam(await getJam());
+      setLiveError("");
+    } catch {
+      setLiveError("Could not load the Spotify Jam.");
+    }
+  }, []);
+
   // Load page-level data sets so household, activities, and requests share one
   // source of truth from the first render onward.
   useEffect(() => {
-    Promise.all([loadRoommates(), loadActivities(), loadRequests()]).finally(() =>
+    Promise.all([loadRoommates(), loadActivities(), loadRequests(), loadJam()]).finally(() =>
       setLoading(false),
     );
-  }, [loadActivities, loadRequests, loadRoommates]);
+  }, [loadActivities, loadJam, loadRequests, loadRoommates]);
 
   // Keep live-event state current across household devices. Push-enabled open
   // apps refresh immediately from the service worker; visible-page polling and
@@ -126,6 +139,7 @@ export default function StatusPage() {
     function handleServiceWorkerMessage(event) {
       if (event.data?.type === "activities-changed") loadActivities();
       if (event.data?.type === "requests-changed") loadRequests();
+      if (event.data?.type === "jam-changed") loadJam();
     }
 
     startPolling();
@@ -145,12 +159,18 @@ export default function StatusPage() {
         handleServiceWorkerMessage,
       );
     };
-  }, [loadActivities, loadRequests]);
+  }, [loadActivities, loadJam, loadRequests]);
+
+  useEffect(() => {
+    if (!jam || document.visibilityState !== "visible") return undefined;
+    const pollId = window.setInterval(loadJam, JAM_POLL_INTERVAL_MS);
+    return () => window.clearInterval(pollId);
+  }, [jam, loadJam]);
 
   // Pull down from the top to refresh household, activity, and request state.
   const handleRefresh = useCallback(async () => {
-    await Promise.all([loadRoommates(), loadActivities(), loadRequests()]);
-  }, [loadActivities, loadRequests, loadRoommates]);
+    await Promise.all([loadRoommates(), loadActivities(), loadRequests(), loadJam()]);
+  }, [loadActivities, loadJam, loadRequests, loadRoommates]);
 
   const { pull, refreshing, threshold } = usePullToRefresh(handleRefresh);
 
@@ -311,6 +331,8 @@ export default function StatusPage() {
                 ))}
               </div>
             )}
+
+            <JamWidget jam={jam} onJamChange={setJam} />
 
             <EnableNotifications />
 

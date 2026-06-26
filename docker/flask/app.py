@@ -42,9 +42,18 @@ And the household request feed:
     PUT/DELETE /api/requests/<id>/comments/<comment_id>/likes
                                        -> the updated recent request list
 
+And the household Spotify Jam widget:
+
+    GET  /api/jam                      -> active Jam link + host playback state
+    POST /api/jam                      -> active Jam link, replacing any prior one
+    DELETE /api/jam                    -> end the caller's active Jam
+    GET  /api/spotify/auth-url         -> Spotify OAuth URL for a roommate
+    GET  /api/spotify/callback         -> Spotify OAuth redirect target
+
 Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
-in push.py; proposals are in activities.py; requests are in household_requests.py.
-Routes stay storage-agnostic.
+in push.py; proposals are in activities.py; requests are in household_requests.py;
+Jam state is in jam.py; Spotify OAuth/playback calls are in spotify.py. Routes
+stay storage-agnostic.
 """
 
 from __future__ import annotations
@@ -52,13 +61,15 @@ from __future__ import annotations
 import os
 import re
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, redirect, request
 from flask_cors import CORS
 
 import activities
 import db
 import household_requests
+import jam
 import push
+import spotify
 
 # Cap proposal/request text so a notification body stays sane.
 MAX_ACTIVITY_LEN = 280
@@ -291,6 +302,101 @@ def create_app() -> Flask:
             url="/",
         )
         return jsonify(result)
+
+    # --- Spotify Jam --------------------------------------------------------
+    @app.get("/api/jam")
+    def get_jam():
+        """Return the one active household Jam, if any."""
+        return jsonify(jam.get_active())
+
+    @app.post("/api/jam")
+    def share_jam():
+        """Replace the active household Jam link with the caller's link."""
+        body = request.get_json(silent=True) or {}
+        host_id = (body.get("hostId") or "").strip()
+        link = (body.get("link") or "").strip()
+        host = db.get_by_id(host_id) if host_id else None
+        if host is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        if not jam.valid_spotify_link(link):
+            return jsonify({"error": "Paste a valid Spotify Jam link."}), 400
+
+        active = jam.share(link, host["id"], host["name"])
+        try:
+            push.notify_all(
+                title="Spotify Jam is live",
+                body=f"{host['name']} shared a Jam. Tap to join.",
+                url="/",
+                event_type="jam-changed",
+                exclude_user_ids={host["id"]},
+            )
+        except Exception:  # noqa: BLE001 - sharing the link must remain successful
+            app.logger.exception("Failed to send Jam notification")
+        return jsonify(active)
+
+    @app.delete("/api/jam")
+    def end_jam():
+        """End the caller's active Jam link."""
+        body = request.get_json(silent=True) or {}
+        host_id = (body.get("hostId") or "").strip()
+        host = db.get_by_id(host_id) if host_id else None
+        if host is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        result = jam.end(host["id"])
+        if result == jam.END_NOT_FOUND:
+            return jsonify({"error": "No active Jam to end."}), 404
+        if result == jam.END_FORBIDDEN:
+            return jsonify({"error": "Only the Jam host can end it."}), 403
+        try:
+            push.notify_all(
+                title="Spotify Jam ended",
+                body=f"{host['name']} ended the active Jam.",
+                url="/",
+                event_type="jam-changed",
+                exclude_user_ids={host["id"]},
+            )
+        except Exception:  # noqa: BLE001 - ending the Jam must remain successful
+            app.logger.exception("Failed to send Jam ended notification")
+        return jsonify(jam.get_active())
+
+    @app.get("/api/spotify/auth-url")
+    def spotify_auth_url():
+        """Return a Spotify authorization URL for a roommate."""
+        user_id = (request.args.get("userId") or "").strip()
+        if db.get_by_id(user_id) is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        if not spotify.is_configured():
+            return jsonify({"error": "Spotify is not configured on the server."}), 503
+        return jsonify({"url": spotify.auth_url(user_id)})
+
+    @app.get("/api/spotify/callback")
+    def spotify_callback():
+        """Store Spotify OAuth tokens, then return the user to the app."""
+        code = (request.args.get("code") or "").strip()
+        state = (request.args.get("state") or "").strip()
+        if not code or not state:
+            return redirect("/?spotify=error", code=302)
+        try:
+            user_id = spotify.save_authorization_code(code, state)
+        except Exception:  # noqa: BLE001 - user-facing result is a redirect flag.
+            app.logger.exception("Failed to complete Spotify authorization")
+            return redirect("/?spotify=error", code=302)
+        if user_id is None:
+            return redirect("/?spotify=error", code=302)
+        return redirect(
+            os.environ.get("SPOTIFY_SUCCESS_REDIRECT", "/?spotify=connected"),
+            code=302,
+        )
+
+    @app.delete("/api/spotify/token")
+    def spotify_disconnect():
+        """Forget one roommate's Spotify refresh token."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        if db.get_by_id(user_id) is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        spotify.disconnect(user_id)
+        return jsonify({"ok": True})
 
     # --- Proposed activities ------------------------------------------------
     @app.get("/api/activities")

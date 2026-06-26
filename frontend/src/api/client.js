@@ -77,6 +77,40 @@ export async function savePushSubscription(subscription, userId) {
   })
 }
 
+// GET /api/jam — the one active household Spotify Jam, if any.
+export async function getJam() {
+  return request('/jam')
+}
+
+// POST /api/jam — replace the active household Jam link.
+export async function shareJam(link, hostId) {
+  return request('/jam', {
+    method: 'POST',
+    body: JSON.stringify({ link, hostId }),
+  })
+}
+
+// DELETE /api/jam — end the active Jam owned by the host.
+export async function endJam(hostId) {
+  return request('/jam', {
+    method: 'DELETE',
+    body: JSON.stringify({ hostId }),
+  })
+}
+
+// GET /api/spotify/auth-url — begin host OAuth for now-playing display.
+export async function getSpotifyAuthUrl(userId) {
+  return request(`/spotify/auth-url?userId=${encodeURIComponent(userId)}`)
+}
+
+// DELETE /api/spotify/token — disconnect host playback access.
+export async function disconnectSpotify(userId) {
+  return request('/spotify/token', {
+    method: 'DELETE',
+    body: JSON.stringify({ userId }),
+  })
+}
+
 // GET /api/activities — current activities followed by expired history.
 export async function getActivities() {
   return request('/activities')

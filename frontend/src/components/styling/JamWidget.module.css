@@ -1,0 +1,84 @@
+.wrap {
+  @apply mb-[24px] mt-[22px] rounded-md border border-[#bde4c7] bg-[#f1fbf3] px-4 py-[14px] shadow-sm;
+}
+
+.header {
+  @apply flex items-start justify-between gap-3;
+}
+
+.eyebrow {
+  @apply text-[11.5px] font-bold uppercase tracking-[0.08em] text-status-green;
+}
+
+.title {
+  @apply mt-[2px] text-[17px] font-bold text-ink;
+}
+
+.joinButton {
+  @apply flex-none px-[16px] py-[9px] text-[13px];
+}
+
+.activeBody {
+  @apply mt-3 space-y-3;
+}
+
+.playback {
+  @apply flex items-center gap-3;
+}
+
+.albumArt,
+.albumFallback {
+  @apply h-[54px] w-[54px] flex-none rounded-sm;
+}
+
+.albumArt {
+  @apply object-cover;
+}
+
+.albumFallback {
+  @apply grid place-items-center bg-[#d9eadc] text-[24px] font-black text-status-green;
+}
+
+.playbackText {
+  @apply min-w-0 flex-1;
+}
+
+.playbackStatus {
+  @apply text-[12px] font-semibold text-ink-soft;
+}
+
+.track {
+  @apply mt-[2px] truncate text-[15px] font-bold text-ink;
+}
+
+.artist {
+  @apply mt-[2px] truncate text-[12.5px] text-ink-soft;
+}
+
+.controls {
+  @apply flex flex-wrap justify-end gap-2;
+}
+
+.controlButton {
+  @apply px-[13px] py-[7px] text-[12.5px];
+}
+
+.form {
+  @apply mt-3 flex gap-2 max-[520px]:flex-col;
+}
+
+.input {
+  @apply min-w-0 flex-1 px-[14px] py-[12px] text-[14px];
+}
+
+.shareButton {
+  @apply flex-none px-[18px] py-[12px] text-[14px];
+}
+
+.note {
+  @apply mt-3 text-[12.5px] text-ink-soft;
+}
+
+.error {
+  @apply mt-3;
+}
