@@ -91,7 +91,7 @@
 }
 
 .checkedIcon {
-  @apply grid h-[24px] w-[24px] place-items-center rounded-full border-2 border-white bg-status-grey text-[11px] font-bold uppercase text-white;
+  @apply grid h-[24px] w-[24px] place-items-center rounded-full bg-status-grey text-[11px] font-bold uppercase text-white;
 }
 
 .itemEditor {
