@@ -1,25 +1,33 @@
 .form {
-  @apply space-y-4;
+  @apply space-y-5;
 }
 
 .fields {
-  @apply space-y-3;
+  @apply space-y-4;
+}
+
+.field {
+  @apply block min-w-0;
+}
+
+.fieldLabel {
+  @apply mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
 }
 
 .input {
-  @apply px-[14px] py-[12px] text-[14px];
+  @apply w-full px-[14px] py-[12px] text-[14px];
 }
 
 .timeFields {
-  @apply grid grid-cols-2 gap-2 max-[480px]:grid-cols-1;
+  @apply grid grid-cols-2 gap-3 max-[520px]:grid-cols-1;
 }
 
 .timeField {
-  @apply min-w-0 text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
+  @apply min-w-0;
 }
 
 .timeInput {
-  @apply mt-1 px-3 py-2 text-[12px] font-normal normal-case tracking-normal disabled:cursor-not-allowed disabled:bg-[#f7f3ec] disabled:opacity-60;
+  @apply px-3 py-2 text-[12px] font-normal normal-case tracking-normal disabled:cursor-not-allowed disabled:bg-[#f7f3ec] disabled:opacity-60;
 }
 
 .error {
@@ -27,9 +35,9 @@
 }
 
 .actions {
-  @apply flex justify-end gap-2;
+  @apply flex flex-wrap justify-end gap-2;
 }
 
 .actionButton {
-  @apply min-w-[128px] px-[18px] py-[11px] text-[14px];
+  @apply min-w-[128px] px-[18px] py-[11px] text-[14px] max-[420px]:flex-1;
 }

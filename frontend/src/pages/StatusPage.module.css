@@ -71,5 +71,5 @@
 }
 
 .createModal {
-  @apply max-w-[560px];
+  @apply max-w-[680px];
 }

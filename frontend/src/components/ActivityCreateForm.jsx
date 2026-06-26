@@ -59,17 +59,20 @@ export default function ActivityCreateForm({
   return (
     <form onSubmit={handleSubmit} className={styles.form}>
       <div className={styles.fields}>
-        <input
-          type="text"
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          maxLength={280}
-          placeholder="Rod D and Monopoly Deal?"
-          className={cx('ui-textInput', styles.input)}
-        />
+        <label className={styles.field}>
+          <span className={styles.fieldLabel}>Activity</span>
+          <input
+            type="text"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            maxLength={280}
+            placeholder="Rod D and Monopoly Deal?"
+            className={cx('ui-textInput', styles.input)}
+          />
+        </label>
         <div className={styles.timeFields}>
           <label className={styles.timeField}>
-            <span>Start (optional)</span>
+            <span className={styles.fieldLabel}>Start (optional)</span>
             <input
               type="datetime-local"
               value={startTime}
@@ -81,7 +84,7 @@ export default function ActivityCreateForm({
             />
           </label>
           <label className={styles.timeField}>
-            <span>End (optional)</span>
+            <span className={styles.fieldLabel}>End (optional)</span>
             <input
               type="datetime-local"
               value={endTime}

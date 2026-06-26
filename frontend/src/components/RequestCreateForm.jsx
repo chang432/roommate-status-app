@@ -26,7 +26,10 @@ function RoommateChecklist({ roommates, selectedIds, onChange, disabled }) {
 
   return (
     <div
-      className={styles.recipientSelect}
+      className={cx(
+        styles.recipientSelect,
+        open ? styles.recipientSelectOpen : '',
+      )}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
       }}
@@ -107,20 +110,28 @@ export default function RequestCreateForm({
 
   return (
     <form onSubmit={handleSubmit} className={styles.form}>
-      <input
-        type="text"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        maxLength={280}
-        placeholder="Can someone feed the beasts?"
-        className={cx('ui-textInput', styles.input)}
-      />
-      <RoommateChecklist
-        roommates={requestableRoommates}
-        selectedIds={selectedIds}
-        onChange={setSelectedIds}
-        disabled={sending}
-      />
+      <div className={styles.fields}>
+        <label className={styles.field}>
+          <span className={styles.fieldLabel}>Request</span>
+          <input
+            type="text"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            maxLength={280}
+            placeholder="Can someone feed the beasts?"
+            className={cx('ui-textInput', styles.input)}
+          />
+        </label>
+        <div className={styles.field}>
+          <span className={styles.fieldLabel}>Roommates</span>
+          <RoommateChecklist
+            roommates={requestableRoommates}
+            selectedIds={selectedIds}
+            onChange={setSelectedIds}
+            disabled={sending}
+          />
+        </div>
+      </div>
 
       {error ? <p className={cx('ui-errorText', styles.error)}>{error}</p> : null}
 
