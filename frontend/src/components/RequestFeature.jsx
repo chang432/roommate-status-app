@@ -27,7 +27,8 @@ const RESPONSE_OUTLINE_CLASS = {
 
 function responseActionClass(currentResponse, action) {
   if (currentResponse !== "pending" && currentResponse !== action) {
-    return styles.mutedAction;
+    if (action === "accepted") return styles.mutedAcceptAction;
+    else return styles.mutedDenyAction;
   }
   if (action === "accepted") return styles.acceptedAction;
   return styles.deniedAction;

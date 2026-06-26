@@ -7,11 +7,11 @@
 }
 
 .ui-textInput {
-  @apply w-full rounded-sm border border-line bg-white text-ink outline-none transition placeholder:text-[#b6a995] focus:border-accent;
+  @apply w-full rounded-sm border border-line bg-white text-ink outline-none transition placeholder:text-placeholder-muted focus:border-accent;
 }
 
 .ui-errorBox {
-  @apply rounded-sm bg-[#fbeae6] px-3 py-2 text-[13.5px] font-semibold text-status-red;
+  @apply rounded-sm bg-danger-soft px-3 py-2 text-[13.5px] font-semibold text-status-red;
 }
 
 .ui-errorText {
@@ -23,7 +23,7 @@
 }
 
 .ui-secondaryButton {
-  @apply rounded-sm border-[1.5px] border-line bg-white font-bold text-ink-soft transition hover:bg-[#faf6ef] disabled:opacity-60;
+  @apply rounded-sm border-[1.5px] border-line bg-white font-bold text-ink-soft transition hover:bg-surface-hover disabled:opacity-60;
 }
 
 .ui-pillButton {
@@ -35,7 +35,7 @@
 }
 
 .ui-pillSecondary {
-  @apply border-line bg-white text-ink-soft hover:bg-[#faf6ef];
+  @apply border-line bg-white text-ink-soft hover:bg-surface-hover;
 }
 
 .ui-pillDanger {
@@ -43,7 +43,11 @@
 }
 
 .ui-pillDangerSoft {
-  @apply border-[#e8c5bf] bg-[#fbeae6] text-status-red;
+  @apply border-danger-soft-border bg-danger-soft text-status-red;
+}
+
+.ui-pillCheckSoft {
+  @apply border-success-soft-border bg-success-soft text-status-green;
 }
 
 .ui-iconPrimary {

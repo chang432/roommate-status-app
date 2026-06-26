@@ -13,7 +13,7 @@
     @apply font-sans text-ink antialiased;
     /* Warm radial highlight over a soft diagonal gradient — the "homey" backdrop */
     background:
-      radial-gradient(1200px 600px at 80% -10%, #fff6ea 0%, transparent 60%),
+      radial-gradient(1200px 600px at 80% -10%, theme('colors.bg-highlight') 0%, transparent 60%),
       linear-gradient(160deg, theme('colors.bg-top'), theme('colors.bg-bottom'));
     min-height: 100vh;
   }

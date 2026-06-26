@@ -140,7 +140,7 @@ export default function CommentLikeButton({
     <span ref={rootRef} className="relative inline-flex">
       <span
         className={`inline-flex overflow-hidden rounded-full text-[11px] font-semibold ${
-          liked ? 'bg-[#fbeae6] text-status-red' : 'bg-[#f5f0e8] text-ink-soft'
+          liked ? 'bg-danger-soft text-status-red' : 'bg-surface-muted text-ink-soft'
         }`}
       >
         <button

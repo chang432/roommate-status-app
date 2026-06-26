@@ -1,0 +1,127 @@
+.wrap {
+  @apply min-w-0;
+}
+
+.error {
+  @apply mb-[14px];
+}
+
+.list {
+  @apply space-y-[10px];
+}
+
+.empty {
+  @apply text-[13.5px] text-ink-soft;
+}
+
+.card {
+  @apply cursor-pointer rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft;
+}
+
+.summary {
+  @apply flex items-center gap-[10px];
+}
+
+.summaryText {
+  @apply min-w-0 flex-1;
+}
+
+.title {
+  @apply truncate text-[14px] font-semibold text-ink;
+}
+
+.meta {
+  @apply mt-[2px] text-[12px] text-ink-soft;
+}
+
+.notifyButton {
+  @apply grid h-[32px] w-[32px] p-[7px] flex-none place-items-center rounded-full border border-accent bg-accent text-[16px] leading-none text-white transition hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.notifyIcon {
+  @apply block leading-none text-white;
+}
+
+.expandedRegion {
+  @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none;
+}
+
+.expanded {
+  grid-template-rows: 1fr;
+}
+
+.collapsed {
+  grid-template-rows: 0fr;
+}
+
+.expandedInner {
+  @apply min-h-0 overflow-hidden;
+}
+
+.panel {
+  @apply mt-[12px] border-t border-line pt-[12px];
+}
+
+.items {
+  @apply space-y-2;
+}
+
+.item {
+  @apply flex min-h-[40px] items-center gap-[8px] rounded-sm border border-line bg-white px-[9px] py-[7px] transition-colors;
+}
+
+.itemCovered {
+  @apply border-status-green bg-success-panel-strong;
+}
+
+.checkButton {
+  @apply grid h-[27px] w-[27px] flex-none place-items-center rounded-full border border-check-border bg-check-surface text-[13px] font-black leading-none text-transparent transition hover:border-accent disabled:opacity-60;
+}
+
+.checkButtonOn {
+  @apply !border-status-green bg-status-green text-white;
+}
+
+.itemText {
+  @apply min-w-0 flex-1 text-left text-[14px] font-medium text-ink transition hover:text-accent-deep;
+}
+
+.checkedIcons {
+  @apply flex flex-none -space-x-1;
+}
+
+.checkedIcon {
+  @apply grid h-[24px] w-[24px] place-items-center rounded-full bg-status-grey text-[11px] font-bold uppercase text-white;
+}
+
+.itemEditor {
+  @apply flex min-w-0 flex-1 flex-wrap items-center gap-2;
+}
+
+.itemEditorInput {
+  @apply min-w-[180px] flex-1 px-[11px] py-[8px] text-[13.5px];
+}
+
+.iconAction {
+  @apply grid h-[34px] w-[34px] place-items-center text-[14px];
+}
+
+.deleteAction {
+  @apply px-[11px] py-[7px] text-[12px];
+}
+
+.addButton {
+  @apply mt-[12px] px-[13px] py-[7px] text-[12.5px];
+}
+
+.addEditor {
+  @apply mt-[12px];
+}
+
+.actions {
+  @apply mt-[14px] flex justify-end border-t border-line pt-[12px];
+}
+
+.archiveButton {
+  @apply px-[13px] py-[7px] text-[12.5px];
+}

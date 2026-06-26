@@ -1,0 +1,144 @@
+.wrap {
+  @apply mb-[20px] mt-[18px] rounded-md border border-jam-border bg-jam-panel px-3 py-[9px] shadow-sm;
+}
+
+.row {
+  @apply flex items-center justify-between gap-3;
+}
+
+.titleBlock {
+  @apply flex min-w-0 items-center gap-3;
+}
+
+.titleText {
+  @apply min-w-0;
+}
+
+.eyebrow {
+  @apply text-[10.5px] font-bold uppercase tracking-[0.08em] text-status-green;
+}
+
+.title {
+  @apply mt-[1px] truncate text-[14px] font-bold text-ink;
+}
+
+.meta {
+  @apply mt-[1px] text-[11.5px] text-ink-soft;
+}
+
+.waveform {
+  @apply flex h-[40px] w-[42px] flex-none items-center justify-center gap-[3px] rounded-sm bg-success-panel-strong;
+}
+
+.waveform span {
+  @apply block w-[4px] rounded-full bg-status-green;
+  animation: jam-wave 4200ms ease-in-out infinite;
+}
+
+.waveform span:nth-child(1) {
+  height: 14px;
+  animation-delay: 0ms;
+}
+
+.waveform span:nth-child(2) {
+  height: 24px;
+  animation-delay: 420ms;
+}
+
+.waveform span:nth-child(3) {
+  height: 34px;
+  animation-delay: 840ms;
+}
+
+.waveform span:nth-child(4) {
+  height: 22px;
+  animation-delay: 1260ms;
+}
+
+.waveform span:nth-child(5) {
+  height: 16px;
+  animation-delay: 1680ms;
+}
+
+@keyframes jam-wave {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+    opacity: 0.65;
+  }
+
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waveform span {
+    animation: none;
+  }
+}
+
+.controls {
+  @apply flex flex-none items-center gap-2;
+}
+
+.joinButton,
+.replaceButton,
+.endButton {
+  @apply grid h-8 w-8 flex-none place-items-center rounded-full border transition active:translate-y-px disabled:opacity-60;
+}
+
+.joinButton {
+  @apply border-status-green bg-success-panel-strong text-status-green hover:bg-success-panel-hover;
+}
+
+.replaceButton {
+  @apply border-jam-border-muted bg-jam-action text-jam-action-text hover:bg-jam-action-hover;
+}
+
+.endButton {
+  @apply border-danger-soft-border bg-danger-soft text-status-red hover:bg-danger-soft-hover;
+}
+
+.form {
+  @apply space-y-4;
+}
+
+.formNote {
+  @apply rounded-sm border border-jam-border bg-jam-panel px-3 py-2 text-[13px] text-ink-soft;
+}
+
+.field {
+  @apply block min-w-0;
+}
+
+.fieldLabel {
+  @apply mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
+}
+
+.input {
+  @apply w-full min-w-0 px-[14px] py-[12px] text-[14px];
+}
+
+.formActions {
+  @apply flex justify-end;
+}
+
+.shareButton {
+  @apply min-w-[128px] px-[18px] py-[12px] text-[14px];
+}
+
+.error {
+  @apply mt-2;
+}
+
+@media (max-width: 520px) {
+  .row {
+    @apply flex-wrap items-start;
+  }
+
+  .controls {
+    @apply ml-auto;
+  }
+}

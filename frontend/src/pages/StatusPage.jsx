@@ -7,7 +7,10 @@ import NotificationBanner from "../components/NotificationBanner.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
 import EnableNotifications from "../components/EnableNotifications.jsx";
 import FeatureTabs from "../components/FeatureTabs.jsx";
+import JamWidget, { JamShareForm } from "../components/JamWidget.jsx";
 import ModalShell from "../components/ModalShell.jsx";
+import ChecklistCreateForm from "../components/ChecklistCreateForm.jsx";
+import ChecklistFeature from "../components/ChecklistFeature.jsx";
 import ProposeActivity from "../components/ProposeActivity.jsx";
 import PullToRefreshIndicator from "../components/PullToRefreshIndicator.jsx";
 import RequestFeature from "../components/RequestFeature.jsx";
@@ -17,6 +20,8 @@ import { useAuth } from "../context/AuthContext.jsx";
 import {
   endActivity,
   getActivities,
+  getChecklists,
+  getJam,
   getRequests,
   getRoommates,
   notifyRoommatesToUpdateStatus,
@@ -48,7 +53,9 @@ export default function StatusPage() {
 
   const [roommates, setRoommates] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [jam, setJam] = useState(null);
   const [requests, setRequests] = useState([]);
+  const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
@@ -58,8 +65,10 @@ export default function StatusPage() {
   const [notifyingHousehold, setNotifyingHousehold] = useState(false);
   const [activityFocusRequest, setActivityFocusRequest] = useState(null);
   const [requestFocusRequest, setRequestFocusRequest] = useState(null);
+  const [checklistFocusRequest, setChecklistFocusRequest] = useState(null);
   const [activeBoardTab, setActiveBoardTab] = useState("activities");
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [jamModalOpen, setJamModalOpen] = useState(false);
 
   // Fetch the household; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
@@ -89,13 +98,35 @@ export default function StatusPage() {
     }
   }, []);
 
+  const loadChecklists = useCallback(async () => {
+    try {
+      setChecklists(await getChecklists());
+      setLiveError("");
+    } catch {
+      setLiveError("Could not load household checklists.");
+    }
+  }, []);
+
+  const loadJam = useCallback(async () => {
+    try {
+      setJam(await getJam());
+      setLiveError("");
+    } catch {
+      setLiveError("Could not load the Spotify Jam.");
+    }
+  }, []);
+
   // Load page-level data sets so household, activities, and requests share one
   // source of truth from the first render onward.
   useEffect(() => {
-    Promise.all([loadRoommates(), loadActivities(), loadRequests()]).finally(() =>
-      setLoading(false),
-    );
-  }, [loadActivities, loadRequests, loadRoommates]);
+    Promise.all([
+      loadRoommates(),
+      loadActivities(),
+      loadRequests(),
+      loadChecklists(),
+      loadJam(),
+    ]).finally(() => setLoading(false));
+  }, [loadActivities, loadChecklists, loadJam, loadRequests, loadRoommates]);
 
   // Keep live-event state current across household devices. Push-enabled open
   // apps refresh immediately from the service worker; visible-page polling and
@@ -126,6 +157,8 @@ export default function StatusPage() {
     function handleServiceWorkerMessage(event) {
       if (event.data?.type === "activities-changed") loadActivities();
       if (event.data?.type === "requests-changed") loadRequests();
+      if (event.data?.type === "checklists-changed") loadChecklists();
+      if (event.data?.type === "jam-changed") loadJam();
     }
 
     startPolling();
@@ -145,12 +178,18 @@ export default function StatusPage() {
         handleServiceWorkerMessage,
       );
     };
-  }, [loadActivities, loadRequests]);
+  }, [loadActivities, loadChecklists, loadJam, loadRequests]);
 
   // Pull down from the top to refresh household, activity, and request state.
   const handleRefresh = useCallback(async () => {
-    await Promise.all([loadRoommates(), loadActivities(), loadRequests()]);
-  }, [loadActivities, loadRequests, loadRoommates]);
+    await Promise.all([
+      loadRoommates(),
+      loadActivities(),
+      loadRequests(),
+      loadChecklists(),
+      loadJam(),
+    ]);
+  }, [loadActivities, loadChecklists, loadJam, loadRequests, loadRoommates]);
 
   const { pull, refreshing, threshold } = usePullToRefresh(handleRefresh);
 
@@ -178,7 +217,10 @@ export default function StatusPage() {
     nextParams.delete("updateStatus");
     setSearchParams(nextParams, { replace: true });
     window.requestAnimationFrame(() => {
-      ownCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      ownCardRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
     });
   }, [me, searchParams, setSearchParams]);
 
@@ -192,6 +234,19 @@ export default function StatusPage() {
     }));
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("request");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const checklistId = searchParams.get("checklist");
+    if (!checklistId) return;
+    setActiveBoardTab("checklists");
+    setChecklistFocusRequest((current) => ({
+      checklistId,
+      requestKey: (current?.requestKey ?? 0) + 1,
+    }));
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("checklist");
     setSearchParams(nextParams, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -249,7 +304,11 @@ export default function StatusPage() {
   }
 
   const createButtonLabel =
-    activeBoardTab === "requests" ? "New request" : "New activity";
+    activeBoardTab === "requests"
+      ? "New request"
+      : activeBoardTab === "checklists"
+        ? "New checklist"
+        : "New activity";
 
   return (
     <>
@@ -292,6 +351,14 @@ export default function StatusPage() {
           <p className={styles.loading}>Loading the household…</p>
         ) : (
           <>
+            {jam && (
+              <JamWidget
+                jam={jam}
+                onJamChange={setJam}
+                onReplace={() => setJamModalOpen(true)}
+              />
+            )}
+
             {liveError && (
               <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
             )}
@@ -348,6 +415,15 @@ export default function StatusPage() {
                   className={styles.notifyIcon}
                 />
               </button>
+              <button
+                type="button"
+                onClick={() => setJamModalOpen(true)}
+                aria-label={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+                title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+                className={cx(styles.jamButton)}
+              >
+                <img src="/spotify.png" alt="" className={styles.spotifyIcon} />
+              </button>
             </div>
             <div className={styles.householdGrid}>
               {others.map((roommate) => (
@@ -399,6 +475,17 @@ export default function StatusPage() {
                     />
                   ),
                 },
+                {
+                  id: "checklists",
+                  label: "Checklists",
+                  content: (
+                    <ChecklistFeature
+                      checklists={checklists}
+                      onChecklistsChange={setChecklists}
+                      checklistFocusRequest={checklistFocusRequest}
+                    />
+                  ),
+                },
               ]}
             />
             {createModalOpen && (
@@ -406,7 +493,9 @@ export default function StatusPage() {
                 title={
                   activeBoardTab === "requests"
                     ? "Create a request"
-                    : "Create an activity"
+                    : activeBoardTab === "checklists"
+                      ? "Create a checklist"
+                      : "Create an activity"
                 }
                 onClose={() => setCreateModalOpen(false)}
                 widthClassName={styles.createModal}
@@ -418,6 +507,12 @@ export default function StatusPage() {
                     onSuccess={() => setCreateModalOpen(false)}
                     onCancel={() => setCreateModalOpen(false)}
                   />
+                ) : activeBoardTab === "checklists" ? (
+                  <ChecklistCreateForm
+                    onChecklistsChange={setChecklists}
+                    onSuccess={() => setCreateModalOpen(false)}
+                    onCancel={() => setCreateModalOpen(false)}
+                  />
                 ) : (
                   <ActivityCreateForm
                     onActivitiesChange={setActivities}
@@ -425,6 +520,19 @@ export default function StatusPage() {
                     onCancel={() => setCreateModalOpen(false)}
                   />
                 )}
+              </ModalShell>
+            )}
+            {jamModalOpen && (
+              <ModalShell
+                title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+                onClose={() => setJamModalOpen(false)}
+                widthClassName={styles.jamModal}
+              >
+                <JamShareForm
+                  currentJam={jam}
+                  onJamChange={setJam}
+                  onSuccess={() => setJamModalOpen(false)}
+                />
               </ModalShell>
             )}
           </>

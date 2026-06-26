@@ -1,8 +1,8 @@
 .banner {
-  @apply rounded-md border border-[#e8b9ae] bg-gradient-to-br from-[#fff0ec] to-[#fbe2dc] px-4 py-[14px] text-[#713c32] shadow-sm;
+  @apply rounded-md border border-live-border bg-gradient-to-br from-live-bg-start to-live-bg-end px-4 py-[14px] text-live-text shadow-sm;
 }
 .involvedBanner {
-  @apply rounded-md border border-[#e8b9ae] bg-gradient-to-br from-[#e8b9ae] to-[#e3a496] px-4 py-[14px] text-[#713c32] shadow-sm;
+  @apply rounded-md border border-live-border bg-gradient-to-br from-live-border to-live-bg-strong px-4 py-[14px] text-live-text shadow-sm;
 }
 
 .clickable {

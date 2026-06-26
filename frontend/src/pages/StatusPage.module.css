@@ -27,7 +27,7 @@
 }
 
 .signOut {
-  @apply flex-none rounded-full border border-line bg-white px-[14px] py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-[#faf6ef];
+  @apply flex-none rounded-full border border-line bg-white px-[14px] py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-surface-hover;
 }
 
 .pageError {
@@ -58,8 +58,16 @@
   @apply h-9 w-9;
 }
 
+.jamButton {
+  @apply h-9 min-w-9 text-[11px] font-black uppercase tracking-[0.02em];
+}
+
 .notifyIcon {
   @apply h-5 w-5 object-contain;
+}
+
+.spotifyIcon {
+  @apply h-[100%] w-[100%] object-contain;
 }
 
 .householdGrid {
@@ -72,4 +80,8 @@
 
 .createModal {
   @apply max-w-[680px];
+}
+
+.jamModal {
+  @apply max-w-[520px];
 }

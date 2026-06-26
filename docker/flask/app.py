@@ -42,9 +42,28 @@ And the household request feed:
     PUT/DELETE /api/requests/<id>/comments/<comment_id>/likes
                                        -> the updated recent request list
 
+And the household checklist feed:
+
+    GET  /api/checklists               -> recent active checklists
+    POST /api/checklists               -> the updated recent checklist list
+    POST /api/checklists/<id>/notify   -> push a checklist reminder to everyone else
+    POST /api/checklists/<id>/items    -> the updated recent checklist list
+    POST /api/checklists/<id>/items/<item_id>/toggle
+                                       -> the updated recent checklist list
+    PATCH/DELETE /api/checklists/<id>/items/<item_id>
+                                       -> the updated recent checklist list
+    POST /api/checklists/<id>/archive  -> the updated recent checklist list
+
+And the household Spotify Jam widget:
+
+    GET  /api/jam                      -> active Jam link
+    POST /api/jam                      -> active Jam link, replacing any prior one
+    DELETE /api/jam                    -> end the caller's active Jam
+
 Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
-in push.py; proposals are in activities.py; requests are in household_requests.py.
-Routes stay storage-agnostic.
+in push.py; proposals are in activities.py; requests are in household_requests.py;
+checklists are in household_checklists.py; Jam state is in jam.py. Routes stay
+storage-agnostic.
 """
 
 from __future__ import annotations
@@ -57,10 +76,12 @@ from flask_cors import CORS
 
 import activities
 import db
+import household_checklists
 import household_requests
+import jam
 import push
 
-# Cap proposal/request text so a notification body stays sane.
+# Cap proposal/request/checklist text so a notification body stays sane.
 MAX_ACTIVITY_LEN = 280
 
 # Cap comment text the same way proposal text is capped.
@@ -291,6 +312,62 @@ def create_app() -> Flask:
             url="/",
         )
         return jsonify(result)
+
+    # --- Spotify Jam --------------------------------------------------------
+    @app.get("/api/jam")
+    def get_jam():
+        """Return the one active household Jam, if any."""
+        return jsonify(jam.get_active())
+
+    @app.post("/api/jam")
+    def share_jam():
+        """Replace the active household Jam link with the caller's link."""
+        body = request.get_json(silent=True) or {}
+        host_id = (body.get("hostId") or "").strip()
+        link = (body.get("link") or "").strip()
+        host = db.get_by_id(host_id) if host_id else None
+        if host is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        if not jam.valid_spotify_link(link):
+            return jsonify({"error": "Paste a valid Spotify Jam link."}), 400
+
+        active = jam.share(link, host["id"], host["name"])
+        try:
+            push.notify_all(
+                title="Spotify Jam is live",
+                body=f"{host['name']} shared a Jam. Tap to join.",
+                url="/",
+                event_type="jam-changed",
+                exclude_user_ids={host["id"]},
+            )
+        except Exception:  # noqa: BLE001 - sharing the link must remain successful
+            app.logger.exception("Failed to send Jam notification")
+        return jsonify(active)
+
+    @app.delete("/api/jam")
+    def end_jam():
+        """End the caller's active Jam link."""
+        body = request.get_json(silent=True) or {}
+        host_id = (body.get("hostId") or "").strip()
+        host = db.get_by_id(host_id) if host_id else None
+        if host is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        result = jam.end(host["id"])
+        if result == jam.END_NOT_FOUND:
+            return jsonify({"error": "No active Jam to end."}), 404
+        if result == jam.END_FORBIDDEN:
+            return jsonify({"error": "Only the Jam host can end it."}), 403
+        try:
+            push.notify_all(
+                title="Spotify Jam ended",
+                body=f"{host['name']} ended the active Jam.",
+                url="/",
+                event_type="jam-changed",
+                exclude_user_ids={host["id"]},
+            )
+        except Exception:  # noqa: BLE001 - ending the Jam must remain successful
+            app.logger.exception("Failed to send Jam ended notification")
+        return jsonify(jam.get_active())
 
     # --- Proposed activities ------------------------------------------------
     @app.get("/api/activities")
@@ -885,6 +962,176 @@ def create_app() -> Flask:
         if result == household_requests.LIKE_SELF_FORBIDDEN:
             return jsonify({"error": "You cannot like your own comment."}), 403
         return jsonify(household_requests.list_recent(consistent=True))
+
+    # --- Checklists ---------------------------------------------------------
+    @app.get("/api/checklists")
+    def get_checklists():
+        """Return recent active household checklists, newest first."""
+        return jsonify(household_checklists.list_recent())
+
+    @app.post("/api/checklists")
+    def create_checklist():
+        """Create a household checklist and return the refreshed list."""
+        body = request.get_json(silent=True) or {}
+        title = (body.get("title") or "").strip()
+        created_by_id = (body.get("createdById") or "").strip()
+        item_texts = body.get("items") or []
+
+        if not title:
+            return jsonify({"error": "A checklist title is required."}), 400
+        if len(title) > MAX_ACTIVITY_LEN:
+            return jsonify({"error": f"Keep the title under {MAX_ACTIVITY_LEN} characters."}), 400
+        creator = db.get_by_id(created_by_id) if created_by_id else None
+        if creator is None:
+            return jsonify({"error": "A valid creator is required."}), 400
+        if not isinstance(item_texts, list):
+            return jsonify({"error": "Checklist items must be a list."}), 400
+
+        cleaned_items = [
+            (text or "").strip()
+            for text in item_texts
+            if (text or "").strip()
+        ]
+        if not cleaned_items:
+            return jsonify({"error": "Add at least one checklist item."}), 400
+        if any(len(text) > MAX_ACTIVITY_LEN for text in cleaned_items):
+            return jsonify({"error": f"Keep each item under {MAX_ACTIVITY_LEN} characters."}), 400
+
+        created = household_checklists.add_checklist(
+            title,
+            creator["id"],
+            creator["name"],
+            cleaned_items,
+        )
+        try:
+            push.notify_all(
+                title="New checklist",
+                body=f"{creator['name']} posted “{created['title']}”",
+                url=f"/?checklist={created['id']}",
+                event_type="checklists-changed",
+                exclude_user_ids={creator["id"]},
+            )
+        except Exception:  # noqa: BLE001 - creation must remain successful
+            app.logger.exception("Failed to send checklist notification")
+        return jsonify(household_checklists.list_recent(consistent=True))
+
+    @app.post("/api/checklists/<checklist_id>/notify")
+    def notify_checklist(checklist_id: str):
+        """Push a checklist reminder to every roommate except the requester."""
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        requester = db.get_by_id(requester_id) if requester_id else None
+        checklist = household_checklists.get(checklist_id, consistent=True)
+        if requester is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        if checklist is None or checklist["isArchived"]:
+            return jsonify({"error": f"Unknown checklist: {checklist_id}"}), 404
+        if not push.is_configured():
+            return jsonify({"error": "Push is not configured on the server."}), 503
+
+        result = push.notify_all(
+            title="Checklist reminder",
+            body=f"{requester['name']} reminded everyone to update “{checklist['title']}”",
+            url=f"/?checklist={checklist['id']}",
+            event_type="checklists-changed",
+            exclude_user_ids={requester["id"]},
+        )
+        return jsonify(result)
+
+    @app.post("/api/checklists/<checklist_id>/items")
+    def add_checklist_item(checklist_id: str):
+        """Add one item to an active checklist."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        text = (body.get("text") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        if not text:
+            return jsonify({"error": "A checklist item is required."}), 400
+        if len(text) > MAX_ACTIVITY_LEN:
+            return jsonify({"error": f"Keep it under {MAX_ACTIVITY_LEN} characters."}), 400
+
+        updated = household_checklists.add_item(checklist_id, text)
+        if updated is None:
+            return jsonify({"error": f"Unknown checklist: {checklist_id}"}), 404
+        return jsonify(household_checklists.list_recent(consistent=True))
+
+    @app.post("/api/checklists/<checklist_id>/items/<item_id>/toggle")
+    def toggle_checklist_item(checklist_id: str, item_id: str):
+        """Toggle the caller's check state for one checklist item."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+
+        updated = household_checklists.toggle_item(
+            checklist_id,
+            item_id,
+            roommate["id"],
+            roommate["name"],
+        )
+        if updated is None:
+            return jsonify({"error": "Unknown checklist or item."}), 404
+        return jsonify(household_checklists.list_recent(consistent=True))
+
+    @app.patch("/api/checklists/<checklist_id>/items/<item_id>")
+    def update_checklist_item(checklist_id: str, item_id: str):
+        """Edit one item in an active checklist."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        text = (body.get("text") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        if not text:
+            return jsonify({"error": "A checklist item is required."}), 400
+        if len(text) > MAX_ACTIVITY_LEN:
+            return jsonify({"error": f"Keep it under {MAX_ACTIVITY_LEN} characters."}), 400
+
+        updated = household_checklists.update_item(checklist_id, item_id, text)
+        if updated is None:
+            return jsonify({"error": "Unknown checklist or item."}), 404
+        return jsonify(household_checklists.list_recent(consistent=True))
+
+    @app.delete("/api/checklists/<checklist_id>/items/<item_id>")
+    def delete_checklist_item(checklist_id: str, item_id: str):
+        """Delete one item from an active checklist."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+
+        updated = household_checklists.delete_item(checklist_id, item_id)
+        if updated is None:
+            return jsonify({"error": "Unknown checklist or item."}), 404
+        return jsonify(household_checklists.list_recent(consistent=True))
+
+    @app.post("/api/checklists/<checklist_id>/archive")
+    def archive_checklist(checklist_id: str):
+        """Archive a checklist; any valid roommate may do this."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_by_id(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+
+        updated = household_checklists.archive(checklist_id, roommate["id"], roommate["name"])
+        if updated is None:
+            return jsonify({"error": f"Unknown checklist: {checklist_id}"}), 404
+        try:
+            push.notify_all(
+                title="Checklist archived",
+                body=f"{roommate['name']} archived “{updated['title']}”",
+                url="/",
+                event_type="checklists-changed",
+                exclude_user_ids={roommate["id"]},
+            )
+        except Exception:  # noqa: BLE001 - archive must remain successful
+            app.logger.exception("Failed to send checklist archive notification")
+        return jsonify(household_checklists.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/notify")
     def emphasize_activity(activity_id: str):

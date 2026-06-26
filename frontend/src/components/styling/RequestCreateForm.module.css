@@ -23,7 +23,7 @@
 }
 
 .recipientSelectOpen {
-  margin-bottom: min(332px, 44vh);
+  margin-bottom: min(240px, 39vh);
 }
 
 .recipientButton {
@@ -39,7 +39,7 @@
 }
 
 .recipientMenu {
-  @apply absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-y-auto rounded-md border border-[#e1cdbb] bg-white py-[6px] shadow-card;
+  @apply absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-y-auto rounded-md border border-border-warm bg-white py-[6px] shadow-card;
   max-height: min(320px, 42vh);
 }
 

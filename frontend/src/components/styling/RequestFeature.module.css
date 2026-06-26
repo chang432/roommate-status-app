@@ -19,7 +19,7 @@
 }
 
 .completedCard {
-  @apply bg-[#eeeeec] hover:border-line;
+  @apply bg-surface-completed hover:border-line;
 }
 
 .summary {
@@ -62,8 +62,12 @@
   @apply border-status-red bg-status-red;
 }
 
-.mutedAction {
-  @apply border-[#c7c7c2] bg-[#d8d8d3] text-[#777771];
+.mutedAcceptAction {
+  @apply border-status-green bg-neutral-action text-status-green;
+}
+
+.mutedDenyAction {
+  @apply border-status-red bg-neutral-action text-status-red;
 }
 
 .summaryReopen {
@@ -71,7 +75,7 @@
 }
 
 .responsePending {
-  @apply bg-[#a8a8a8] text-white;
+  @apply bg-response-pending text-white;
 }
 
 .responseAccepted {
@@ -83,11 +87,11 @@
 }
 
 .completedResponsePill {
-  @apply border-2 bg-[#e1e1dd];
+  @apply border-2 bg-completed-pill;
 }
 
 .responseOutlinePending {
-  @apply border-[#a8a8a8] text-[#777771];
+  @apply border-response-pending text-response-pending-text;
 }
 
 .responseOutlineAccepted {
@@ -128,10 +132,6 @@
 
 .responsePill {
   @apply rounded-md px-[12px] py-[8px] text-[13px] font-semibold;
-}
-
-.responseActions {
-  @apply mt-[12px] flex flex-wrap gap-[8px];
 }
 
 .requestActions {

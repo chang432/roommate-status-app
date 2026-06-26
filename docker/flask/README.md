@@ -28,6 +28,17 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `DELETE /api/requests/<id>`      | `{ requesterId }`        | full updated request list                  |
 | `POST /api/requests/<id>/comments` | `{ authorId, text }`     | full updated request list                  |
 | `PUT/DELETE /api/requests/<id>/comments/<commentId>/likes` | `{ userId }` | full updated request list |
+| `GET /api/checklists`            | —                          | full active checklist list                  |
+| `POST /api/checklists`           | `{ title, createdById, items }` | full updated checklist list          |
+| `POST /api/checklists/<id>/notify` | `{ requesterId }`        | `{ sent, pruned, failed }`                  |
+| `POST /api/checklists/<id>/items` | `{ userId, text }`        | full updated checklist list                 |
+| `POST /api/checklists/<id>/items/<itemId>/toggle` | `{ userId }` | full updated checklist list        |
+| `PATCH /api/checklists/<id>/items/<itemId>` | `{ userId, text }` | full updated checklist list       |
+| `DELETE /api/checklists/<id>/items/<itemId>` | `{ userId }`    | full updated checklist list                 |
+| `POST /api/checklists/<id>/archive` | `{ userId }`            | full updated checklist list                 |
+| `GET /api/jam`                     | —                        | active Spotify Jam or `null`               |
+| `POST /api/jam`                    | `{ hostId, link }`       | active Spotify Jam, replacing prior Jam    |
+| `DELETE /api/jam`                  | `{ hostId }`             | `null` after host ends active Jam          |
 | `POST /api/push/subscribe`      | `{ subscription, userId }` | `{ ok: true }`                            |
 | `GET  /api/health`             | —                          | `{ status: "ok" }`                       |
 
@@ -69,6 +80,16 @@ notifications target the requested users or the requester as appropriate.
 Completed requests can be reopened by any roommate; only the requester can
 delete a request. Request notifications include a request deep link so tapping
 one opens the Requests tab with that request expanded.
+Checklists are stored as typed records in the activities table. Active
+checklists can be expanded from the Checklists tab, added to by any roommate,
+checked off by multiple roommates per item, edited or pruned item-by-item, and
+archived by anyone. Checklist reminders are household-wide pushes that exclude
+the requester and include a checklist deep link so tapping one opens the
+expanded checklist card.
+Only one Spotify Jam link is active for the household at a time. Sharing a new
+Jam replaces the previous link, and the host can end the active Jam. The Jam
+widget is hidden until someone shares a link; once active, roommates can join
+from the widget or replace it with a newer Jam link.
 
 When 3+ roommates are available the server logs a notification line — the hook
 where a real backend would push a notification to everyone (see PROJECT.md).

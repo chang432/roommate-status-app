@@ -1,0 +1,47 @@
+.form {
+  @apply space-y-5;
+}
+
+.fields {
+  @apply space-y-4;
+}
+
+.field {
+  @apply block min-w-0;
+}
+
+.fieldLabel {
+  @apply mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
+}
+
+.input {
+  @apply w-full min-w-0 px-[14px] py-[12px] text-[14px];
+}
+
+.items {
+  @apply space-y-2;
+}
+
+.itemRow {
+  @apply flex items-center gap-2;
+}
+
+.removeItem {
+  @apply grid h-[36px] w-[36px] flex-none place-items-center rounded-full border border-line bg-white text-[20px] font-bold leading-none text-ink-soft transition hover:bg-surface-hover disabled:opacity-60;
+}
+
+.addItem {
+  @apply mt-3 px-[13px] py-[8px] text-[12.5px];
+}
+
+.error {
+  @apply mt-1;
+}
+
+.actions {
+  @apply flex flex-wrap justify-end gap-2;
+}
+
+.actionButton {
+  @apply min-w-[128px] px-[18px] py-[11px] text-[14px] max-[420px]:flex-1;
+}
