@@ -47,7 +47,7 @@
 }
 
 .householdHeader {
-  @apply mb-3 flex items-center justify-start;
+  @apply mb-3 flex items-center justify-start gap-2;
 }
 
 .householdTitle {
@@ -59,7 +59,7 @@
 }
 
 .jamButton {
-  @apply h-9 min-w-9 text-[11px] font-black uppercase tracking-[0.02em];
+  @apply h-9 max-w-9 text-[11px] font-black uppercase tracking-[0.02em];
 }
 
 .notifyIcon {
