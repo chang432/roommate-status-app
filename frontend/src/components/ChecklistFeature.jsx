@@ -23,13 +23,7 @@ function ChecklistItemEditor({
   placeholder,
 }) {
   return (
-    <form
-      onSubmit={onSubmit}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) onCancel();
-      }}
-      className={styles.itemEditor}
-    >
+    <form onSubmit={onSubmit} className={styles.itemEditor}>
       <input
         type="text"
         value={value}
@@ -48,24 +42,14 @@ function ChecklistItemEditor({
       >
         ✓
       </button>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={onCancel}
-        className={cx("ui-pillButton ui-pillDangerSoft", styles.iconAction)}
-        aria-label="Cancel checklist item edit"
-        title="Cancel"
-      >
-        ×
-      </button>
-      {onDelete ? (
+      {onDelete || onCancel ? (
         <button
           type="button"
           disabled={busy}
-          onClick={onDelete}
-          className={cx("ui-pillButton ui-pillDangerSoft", styles.deleteAction)}
+          onClick={onDelete ?? onCancel}
+          className={cx("ui-pillButton ui-pillDangerSoft", styles.iconAction)}
         >
-          Delete
+          ×
         </button>
       ) : null}
     </form>
@@ -135,7 +119,7 @@ export default function ChecklistFeature({
     try {
       await notifyChecklist(checklist.id, user.id);
     } catch (err) {
-      setError(err.message || "Could not notify the household. Try again.");
+      setError(err.message || "Could not notify the shire. Try again.");
     } finally {
       setNotifyingId(null);
     }

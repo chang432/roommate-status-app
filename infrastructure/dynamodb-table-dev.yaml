@@ -45,7 +45,7 @@ Resources:
           Value: dev
 
   # Web Push subscriptions for the dev deployment. Separate table (not the
-  # roommate table) so the household scan stays clean. Keyed by a hash of the
+  # roommate table) so the shire scan stays clean. Keyed by a hash of the
   # push endpoint; the subscription JSON lives in a non-key attribute.
   PushSubscriptionsTable:
     Type: AWS::DynamoDB::Table

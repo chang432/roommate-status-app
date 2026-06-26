@@ -70,7 +70,7 @@ export default function StatusPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [jamModalOpen, setJamModalOpen] = useState(false);
 
-  // Fetch the household; shared by the initial load and pull-to-refresh.
+  // Fetch the shire; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
     try {
       setRoommates(await getRoommates());
@@ -285,7 +285,7 @@ export default function StatusPage() {
     try {
       await notifyRoommatesToUpdateStatus(user.id);
     } catch {
-      setError("Could not notify the household. Try again.");
+      setError("Could not notify the shire. Try again.");
     } finally {
       setNotifyingHousehold(false);
     }
@@ -348,7 +348,7 @@ export default function StatusPage() {
         )}
 
         {loading ? (
-          <p className={styles.loading}>Loading the household…</p>
+          <p className={styles.loading}>Loading the shire…</p>
         ) : (
           <>
             {jam && (
@@ -399,7 +399,7 @@ export default function StatusPage() {
 
             <div className={styles.householdHeader}>
               <p className={cx("ui-sectionLabel", styles.householdTitle)}>
-                The household
+                The Shire
               </p>
               <button
                 type="button"

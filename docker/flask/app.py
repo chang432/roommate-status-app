@@ -30,7 +30,7 @@ And the proposed-activities feed:
     PUT/DELETE /api/activities/<id>/comments/<comment_id>/likes
                                         -> the updated activity list
 
-And the household request feed:
+And the shire request feed:
 
     GET  /api/requests                 -> recent requests
     POST /api/requests                 -> the updated recent request list
@@ -42,7 +42,7 @@ And the household request feed:
     PUT/DELETE /api/requests/<id>/comments/<comment_id>/likes
                                        -> the updated recent request list
 
-And the household checklist feed:
+And the shire checklist feed:
 
     GET  /api/checklists               -> recent active checklists
     POST /api/checklists               -> the updated recent checklist list
@@ -54,7 +54,7 @@ And the household checklist feed:
                                        -> the updated recent checklist list
     POST /api/checklists/<id>/archive  -> the updated recent checklist list
 
-And the household Spotify Jam widget:
+And the shire Spotify Jam widget:
 
     GET  /api/jam                      -> active Jam link
     POST /api/jam                      -> active Jam link, replacing any prior one
@@ -401,7 +401,7 @@ def create_app() -> Flask:
             end_at,
         )
 
-        # Notify the household except the proposer. Best-effort: a push failure
+        # Notify the shire except the proposer. Best-effort: a push failure
         # must not fail the proposal the user just made.
         try:
             push.notify_all(
@@ -418,7 +418,7 @@ def create_app() -> Flask:
         return jsonify(activities.list_recent(consistent=True))
 
     def transition_activity_live(activity_id: str, action: str):
-        """Apply a creator-owned live transition and notify the household."""
+        """Apply a creator-owned live transition and notify the shire."""
         body = request.get_json(silent=True) or {}
         requester_id = (body.get("requesterId") or "").strip()
         if not requester_id:

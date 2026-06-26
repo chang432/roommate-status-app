@@ -29,7 +29,7 @@ export default function LoginPage() {
         setSelected(list[0] ?? null);
       })
       .catch(() =>
-        setError("Could not load the household. Try again in a moment."),
+        setError("Could not load the shire. Try again in a moment."),
       );
     return () => {
       active = false;

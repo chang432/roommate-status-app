@@ -4,7 +4,7 @@ function escapeRegExp(value) {
 
 // Return the @query immediately before the caret. Mentions only trigger at the
 // start of text or after a non-word boundary, so email-like text does not open
-// the household picker.
+// the shire picker.
 export function activeMention(text, caret) {
   const beforeCaret = text.slice(0, caret)
   const match = beforeCaret.match(/(^|[^\w@])@([A-Za-z0-9_-]*)$/)

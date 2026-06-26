@@ -4,7 +4,7 @@
 #
 #   1. Ensures the shared network, then starts the local DynamoDB module
 #      (a separate compose project) and creates its tables.
-#   2. Builds the app, seeds the household, and starts it (Flask backend + Caddy
+#   2. Builds the app, seeds the shire, and starts it (Flask backend + Caddy
 #      serving the React frontend and proxying /api to Flask).
 #   3. Waits for the backend to become healthy.
 #   4. Tails the app logs in the foreground.
@@ -120,9 +120,9 @@ log "Creating tables…"
 log "Building the app backend image…"
 "${APP[@]}" build flask
 
-# Seed the household via the app image (seed.py + the roster live with the app).
+# Seed the shire via the app image (seed.py + the roster live with the app).
 # The run container joins the shared network, so it reaches DynamoDB Local.
-log "Seeding the household…"
+log "Seeding the shire…"
 "${APP[@]}" run --rm flask python seed.py
 
 log "Building & starting the app (Flask + Caddy/React)…"

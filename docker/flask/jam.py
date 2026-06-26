@@ -1,6 +1,6 @@
 """Household Spotify Jam link state.
 
-Only one Jam is active for the household. Sharing a new link overwrites the
+Only one Jam is active for the shire. Sharing a new link overwrites the
 fixed active record so the UI never has to resolve competing sessions.
 """
 
