@@ -19,7 +19,7 @@
 }
 
 .completedCard {
-  @apply bg-[#eeeeec] opacity-70 grayscale hover:border-line;
+  @apply bg-[#eeeeec] hover:border-line;
 }
 
 .summary {
@@ -58,16 +58,12 @@
   @apply border-status-green bg-status-green;
 }
 
-.acceptAction {
-  @apply border-status-highlight-green bg-status-highlight-green;
-}
-
 .deniedAction {
   @apply border-status-red bg-status-red;
 }
 
-.denyAction {
-  @apply border-status-highlight-red bg-status-highlight-red;
+.mutedAction {
+  @apply border-[#c7c7c2] bg-[#d8d8d3] text-[#777771];
 }
 
 .summaryReopen {
@@ -84,6 +80,22 @@
 
 .responseDenied {
   @apply bg-status-red text-white;
+}
+
+.completedResponsePill {
+  @apply border-2 bg-[#e1e1dd];
+}
+
+.responseOutlinePending {
+  @apply border-[#a8a8a8] text-[#777771];
+}
+
+.responseOutlineAccepted {
+  @apply border-status-green text-status-green;
+}
+
+.responseOutlineDenied {
+  @apply border-status-red text-status-red;
 }
 
 .expandedRegion {

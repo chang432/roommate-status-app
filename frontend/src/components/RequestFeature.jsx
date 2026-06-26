@@ -19,6 +19,20 @@ const RESPONSE_CLASS = {
   pending: styles.responsePending,
 };
 
+const RESPONSE_OUTLINE_CLASS = {
+  accepted: styles.responseOutlineAccepted,
+  denied: styles.responseOutlineDenied,
+  pending: styles.responseOutlinePending,
+};
+
+function responseActionClass(currentResponse, action) {
+  if (currentResponse !== "pending" && currentResponse !== action) {
+    return styles.mutedAction;
+  }
+  if (action === "accepted") return styles.acceptedAction;
+  return styles.deniedAction;
+}
+
 export default function RequestFeature({
   requests,
   onRequestsChange,
@@ -254,10 +268,10 @@ export default function RequestFeature({
                         onClick={() => handleResponse(requestItem, "accepted")}
                         className={cx(
                           styles.iconAction,
-                          requestedSelf.response === "accepted" ||
-                            requestedSelf.response === "pending"
-                            ? styles.acceptedAction
-                            : styles.acceptAction,
+                          responseActionClass(
+                            requestedSelf.response,
+                            "accepted",
+                          ),
                         )}
                         aria-label="Accept request"
                         title="Accept"
@@ -270,10 +284,7 @@ export default function RequestFeature({
                         onClick={() => handleResponse(requestItem, "denied")}
                         className={cx(
                           styles.iconAction,
-                          requestedSelf.response === "denied" ||
-                            requestedSelf.response === "pending"
-                            ? styles.deniedAction
-                            : styles.denyAction,
+                          responseActionClass(requestedSelf.response, "denied"),
                         )}
                         aria-label="Deny request"
                         title="Deny"
@@ -302,8 +313,14 @@ export default function RequestFeature({
                             key={person.id}
                             className={cx(
                               styles.responsePill,
-                              RESPONSE_CLASS[person.response] ??
-                                styles.responsePending,
+                              requestItem.isCompleted
+                                ? styles.completedResponsePill
+                                : "",
+                              requestItem.isCompleted
+                                ? (RESPONSE_OUTLINE_CLASS[person.response] ??
+                                    styles.responseOutlinePending)
+                                : (RESPONSE_CLASS[person.response] ??
+                                    styles.responsePending),
                             )}
                           >
                             {person.name}
