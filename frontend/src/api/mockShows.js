@@ -10,10 +10,11 @@
 // State lives only in this module's closure, so it resets on page reload.
 
 // A projected show looks like:
-//   { id, title, createdBy, createdById, createdAt,
+//   { id, title, createdBy, createdById, createdAt, completedAt, completed,
 //     members: [ { id, name, season, episode } ] }
 // where `members` are the roommates watching, each tracking their own season
-// and episode.
+// and episode. `completed` is a convenience flag derived from `completedAt`;
+// only the creator may toggle it, and completed shows are hidden by default.
 
 const SIMULATED_LATENCY_MS = 120;
 
@@ -33,6 +34,7 @@ const shows = [
     createdBy: "Sam",
     createdById: "seed-sam",
     createdAt: Date.now() - 1000 * 60 * 60 * 6,
+    completedAt: null,
     members: [
       { id: "seed-sam", name: "Sam", season: 2, episode: 5 },
       { id: "seed-alex", name: "Alex", season: 1, episode: 3 },
@@ -48,6 +50,7 @@ function snapshot() {
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((show) => ({
       ...show,
+      completed: Boolean(show.completedAt),
       members: show.members.map((member) => ({ ...member })),
     }));
 }
@@ -77,6 +80,7 @@ export async function createShow(title, createdById, createdByName) {
     createdBy: createdByName,
     createdById,
     createdAt: Date.now(),
+    completedAt: null,
     members: [{ id: createdById, name: createdByName, season: 1, episode: 1 }],
   });
   return respond();
@@ -97,6 +101,30 @@ export async function leaveShow(showId, userId) {
   const show = findShow(showId);
   if (!show) throw new Error("Unknown show.");
   show.members = show.members.filter((member) => member.id !== userId);
+  return respond();
+}
+
+// Mark a show completed so it drops out of the active list. Only the creator
+// may do this, mirroring the owner-only lifecycle controls on activities.
+export async function completeShow(showId, requesterId) {
+  const show = findShow(showId);
+  if (!show) throw new Error("Unknown show.");
+  if (show.createdById !== requesterId) {
+    throw new Error("Only the show's creator can complete it.");
+  }
+  show.completedAt = Date.now();
+  return respond();
+}
+
+// Reopen a completed show back into the active list. Creator-only, so the
+// completion can be undone the same way an owner restarts an expired activity.
+export async function reopenShow(showId, requesterId) {
+  const show = findShow(showId);
+  if (!show) throw new Error("Unknown show.");
+  if (show.createdById !== requesterId) {
+    throw new Error("Only the show's creator can reopen it.");
+  }
+  show.completedAt = null;
   return respond();
 }
 

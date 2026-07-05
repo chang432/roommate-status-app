@@ -18,6 +18,11 @@
   @apply cursor-pointer rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft;
 }
 
+/* A completed show, shown read-only in the collapsible section. */
+.completedCard {
+  @apply border-surface-expired-border bg-surface-muted opacity-90;
+}
+
 .summary {
   @apply flex items-center gap-[10px];
 }
@@ -26,8 +31,16 @@
   @apply min-w-0 flex-1;
 }
 
+.titleRow {
+  @apply flex flex-wrap items-center gap-[7px];
+}
+
 .title {
   @apply truncate text-[14px] font-semibold text-ink;
+}
+
+.completedChip {
+  @apply rounded-full bg-ink-soft px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white;
 }
 
 .meta {
@@ -126,4 +139,14 @@
 
 .watcherRemove {
   @apply grid h-[26px] w-[26px] flex-none place-items-center rounded-full text-[18px] leading-none text-ink-soft transition hover:bg-surface-hover hover:text-status-red disabled:opacity-60;
+}
+
+/* Collapsible section that hides completed shows, mirroring the activities'
+   expired history. */
+.completedSection {
+  @apply mt-5 border-t border-line pt-4;
+}
+
+.completedToggle {
+  @apply flex w-full items-center justify-between rounded-sm px-1 py-2 text-left text-[13px] font-bold text-ink-soft transition hover:text-ink;
 }

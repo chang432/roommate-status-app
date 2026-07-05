@@ -364,6 +364,18 @@ export async function leaveShow(id, userId) {
   return mockShows.leaveShow(id, userId)
 }
 
+// POST /api/shows/:id/complete — creator-only: mark a show completed so it
+// leaves the active list. Returns the refreshed show list.
+export async function completeShow(id, requesterId) {
+  return mockShows.completeShow(id, requesterId)
+}
+
+// POST /api/shows/:id/reopen — creator-only: move a completed show back to the
+// active list. Returns the refreshed show list.
+export async function reopenShow(id, requesterId) {
+  return mockShows.reopenShow(id, requesterId)
+}
+
 // PATCH /api/shows/:id/watchers/:memberId/:field — bump one watcher's season or
 // episode by delta (+1 / -1). Any roommate may edit any watcher's number.
 export async function adjustProgress(id, memberId, field, delta) {
