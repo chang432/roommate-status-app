@@ -286,6 +286,11 @@ export default function ShowTrackerFeature({ shows, onShowsChange }) {
     const isMember = show.members.some((member) => member.id === user.id);
     // Only the creator sees the complete/reopen control.
     const isCreator = show.createdById === user.id;
+    // Furthest-along watchers first: sort by season, then episode, descending.
+    // Copied so we never mutate the show list's member array in place.
+    const orderedMembers = [...show.members].sort(
+      (a, b) => b.season - a.season || b.episode - a.episode,
+    );
     return (
       <div
         key={show.id}
@@ -372,7 +377,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange }) {
                 </p>
               ) : (
                 <ul className={styles.watchers}>
-                  {show.members.map((member) => (
+                  {orderedMembers.map((member) => (
                     <WatcherRow
                       key={member.id}
                       member={member}

@@ -143,21 +143,28 @@ function requireField(field) {
   if (!PROGRESS_FIELDS.has(field)) throw new Error("Unknown progress field.");
 }
 
-// Nudge one member's season or episode by delta (+1 / -1), clamped at 1. Anyone
-// may edit anyone's number, matching the feature's intentionally loose
-// ownership. Season and episode are tracked independently.
+// Write a clamped, 1-based season/episode value. Changing the season restarts
+// the episode at 1, since a new season begins from its first episode. Shared by
+// both the +/- adjuster and the manual editor so the reset always applies.
+function writeProgress(member, field, value) {
+  member[field] = Math.max(1, Math.floor(value));
+  if (field === "season") member.episode = 1;
+}
+
+// Nudge one member's season or episode by delta (+1 / -1). Anyone may edit
+// anyone's number, matching the feature's intentionally loose ownership.
 export async function adjustProgress(showId, memberId, field, delta) {
   requireField(field);
   const member = requireMember(showId, memberId);
-  member[field] = Math.max(1, member[field] + delta);
+  writeProgress(member, field, member[field] + delta);
   return respond();
 }
 
-// Set one member's season or episode to an absolute value, clamped at 1. Backs
-// the long-press manual editor; like adjustProgress, anyone may edit any number.
+// Set one member's season or episode to an absolute value. Backs the long-press
+// manual editor; like adjustProgress, anyone may edit any number.
 export async function setProgress(showId, memberId, field, value) {
   requireField(field);
   const member = requireMember(showId, memberId);
-  member[field] = Math.max(1, Math.floor(value));
+  writeProgress(member, field, value);
   return respond();
 }
