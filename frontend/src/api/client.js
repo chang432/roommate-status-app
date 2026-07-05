@@ -5,10 +5,6 @@
 // server's REST endpoints under /api (proxied in dev via vite.config.js to the
 // VITE_API_TARGET, default http://localhost:8000).
 
-// The TV show tracker currently runs against an in-memory mock instead of the
-// Flask server (see the show functions at the bottom of this file).
-import * as mockShows from './mockShows.js'
-
 const API_BASE = '/api'
 
 // Thin wrapper around fetch that throws on non-2xx and parses JSON.
@@ -336,54 +332,74 @@ export async function archiveChecklist(id, userId) {
   })
 }
 
-// --- TV show tracker (MOCK backend) --------------------------------------
-// These delegate to an in-memory mock (src/api/mockShows.js) instead of the
-// Flask server, so the Shows tab works without a running backend. The exported
-// signatures already match what real /api/shows endpoints would return (the
-// full, refreshed show list), so replacing these bodies with `request(...)`
-// calls later needs no changes in the components. See the swap-over plan in
-// docs/tv-show-tracker-plan.md.
+// --- TV show tracker -----------------------------------------------------
+// Backed by the Flask server's /api/shows endpoints (docker/flask/
+// household_shows.py), which persist to a dedicated DynamoDB table. Every
+// mutation returns the full, refreshed show list so the UI can recompute in one
+// pass. The display name on join/create is resolved server-side from the
+// roommate's account; it is sent here only so callers keep a stable signature.
 
-// GET /api/shows — every show with its watchers and their episode numbers.
+// GET /api/shows — every show with its watchers and their season/episode.
 export async function getShows() {
-  return mockShows.getShows()
+  return request('/shows')
 }
 
 // POST /api/shows — create a show; the creator is auto-added as a watcher.
 export async function createShow(title, createdById, createdByName) {
-  return mockShows.createShow(title, createdById, createdByName)
+  return request('/shows', {
+    method: 'POST',
+    body: JSON.stringify({ title, createdById, createdByName }),
+  })
 }
 
 // POST /api/shows/:id/join — add a roommate to a show's watcher list.
 export async function joinShow(id, userId, userName) {
-  return mockShows.joinShow(id, userId, userName)
+  return request(`/shows/${id}/join`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, userName }),
+  })
 }
 
 // POST /api/shows/:id/leave — remove a roommate from a show's watcher list.
 export async function leaveShow(id, userId) {
-  return mockShows.leaveShow(id, userId)
+  return request(`/shows/${id}/leave`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
 }
 
 // POST /api/shows/:id/complete — creator-only: mark a show completed so it
 // leaves the active list. Returns the refreshed show list.
 export async function completeShow(id, requesterId) {
-  return mockShows.completeShow(id, requesterId)
+  return request(`/shows/${id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
 }
 
 // POST /api/shows/:id/reopen — creator-only: move a completed show back to the
 // active list. Returns the refreshed show list.
 export async function reopenShow(id, requesterId) {
-  return mockShows.reopenShow(id, requesterId)
+  return request(`/shows/${id}/reopen`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
 }
 
 // PATCH /api/shows/:id/watchers/:memberId/:field — bump one watcher's season or
 // episode by delta (+1 / -1). Any roommate may edit any watcher's number.
 export async function adjustProgress(id, memberId, field, delta) {
-  return mockShows.adjustProgress(id, memberId, field, delta)
+  return request(`/shows/${id}/watchers/${memberId}/${field}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ delta }),
+  })
 }
 
 // PUT /api/shows/:id/watchers/:memberId/:field — set one watcher's season or
 // episode to an absolute value. Backs the long-press manual editor.
 export async function setProgress(id, memberId, field, value) {
-  return mockShows.setProgress(id, memberId, field, value)
+  return request(`/shows/${id}/watchers/${memberId}/${field}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value }),
+  })
 }

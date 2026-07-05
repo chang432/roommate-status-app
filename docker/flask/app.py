@@ -81,6 +81,7 @@ import activities
 import db
 import household_checklists
 import household_requests
+import household_shows
 import jam
 import push
 
@@ -1165,6 +1166,116 @@ def create_app() -> Flask:
         except Exception:  # noqa: BLE001 - archive must remain successful
             app.logger.exception("Failed to send checklist archive notification")
         return jsonify(household_checklists.list_recent(consistent=True))
+
+    # --- Shows --------------------------------------------------------------
+    def shows_response(result):
+        """Map a household_shows watcher-mutation result to a JSON response.
+
+        None -> unknown show or watcher (404); MUTATION_COMPLETED -> the show is
+        completed and read-only (409); otherwise the refreshed show list.
+        """
+        if result is None:
+            return jsonify({"error": "Unknown show or watcher."}), 404
+        if result == household_shows.MUTATION_COMPLETED:
+            return jsonify({"error": "Completed shows are read-only."}), 409
+        return jsonify(household_shows.list_recent(consistent=True))
+
+    @app.get("/api/shows")
+    def get_shows():
+        """Return recent shows, newest first."""
+        return jsonify(household_shows.list_recent())
+
+    @app.post("/api/shows")
+    def create_show():
+        """Create a show (auto-joining the creator) and return the refreshed list."""
+        body = request.get_json(silent=True) or {}
+        title = (body.get("title") or "").strip()
+        created_by_id = (body.get("createdById") or "").strip()
+        if not title:
+            return jsonify({"error": "A show title is required."}), 400
+        if len(title) > MAX_ACTIVITY_LEN:
+            return jsonify({"error": f"Keep the title under {MAX_ACTIVITY_LEN} characters."}), 400
+        creator = db.get_group_member(created_by_id) if created_by_id else None
+        if creator is None:
+            return jsonify({"error": "A valid creator is required."}), 400
+
+        household_shows.add_show(title, creator["id"], creator["name"])
+        return jsonify(household_shows.list_recent(consistent=True))
+
+    @app.post("/api/shows/<show_id>/join")
+    def join_show(show_id: str):
+        """Add the caller as a watcher; the display name comes from their account."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_group_member(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        return shows_response(
+            household_shows.join(show_id, roommate["id"], roommate["name"])
+        )
+
+    @app.post("/api/shows/<show_id>/leave")
+    def leave_show(show_id: str):
+        """Remove the caller from a show's watcher list."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_group_member(user_id) if user_id else None
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        return shows_response(household_shows.leave(show_id, roommate["id"]))
+
+    @app.patch("/api/shows/<show_id>/watchers/<member_id>/<field>")
+    def adjust_show_progress(show_id: str, member_id: str, field: str):
+        """Nudge one watcher's season or episode by an integer delta (+1 / -1).
+
+        Episode edits are intentionally open to every roommate (matching the
+        feature's loose ownership), so no per-caller check gates this route.
+        """
+        if field not in household_shows.PROGRESS_FIELDS:
+            return jsonify({"error": "Progress field must be season or episode."}), 400
+        body = request.get_json(silent=True) or {}
+        delta = body.get("delta")
+        if not isinstance(delta, int) or isinstance(delta, bool):
+            return jsonify({"error": "A whole-number delta is required."}), 400
+        return shows_response(
+            household_shows.adjust_progress(show_id, member_id, field, delta)
+        )
+
+    @app.put("/api/shows/<show_id>/watchers/<member_id>/<field>")
+    def set_show_progress(show_id: str, member_id: str, field: str):
+        """Set one watcher's season or episode to an absolute value."""
+        if field not in household_shows.PROGRESS_FIELDS:
+            return jsonify({"error": "Progress field must be season or episode."}), 400
+        body = request.get_json(silent=True) or {}
+        value = body.get("value")
+        if not isinstance(value, int) or isinstance(value, bool):
+            return jsonify({"error": "A whole-number value is required."}), 400
+        return shows_response(
+            household_shows.set_progress(show_id, member_id, field, value)
+        )
+
+    @app.post("/api/shows/<show_id>/complete")
+    def complete_show(show_id: str):
+        """Creator-only: mark a show completed so it leaves the active list."""
+        return _toggle_show_completion(show_id, household_shows.complete, "complete")
+
+    @app.post("/api/shows/<show_id>/reopen")
+    def reopen_show(show_id: str):
+        """Creator-only: move a completed show back to the active list."""
+        return _toggle_show_completion(show_id, household_shows.reopen, "reopen")
+
+    def _toggle_show_completion(show_id, action, verb):
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        requester = db.get_group_member(requester_id) if requester_id else None
+        if requester is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        result = action(show_id, requester["id"])
+        if result is None:
+            return jsonify({"error": f"Unknown show: {show_id}"}), 404
+        if result == household_shows.COMPLETE_FORBIDDEN:
+            return jsonify({"error": f"Only the show's creator can {verb} it."}), 403
+        return jsonify(household_shows.list_recent(consistent=True))
 
     @app.post("/api/activities/<activity_id>/notify")
     def emphasize_activity(activity_id: str):

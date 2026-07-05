@@ -25,6 +25,7 @@ import activities
 import db
 import household_checklists
 import household_requests
+import household_shows
 import jam
 import push
 from app import create_app, mentions_all, resolve_mentions
@@ -41,7 +42,12 @@ def _dynamodb():
     """
     with mock_aws():
         ddb = boto3.resource("dynamodb")
-        for table_name in (db.TABLE_NAME, push.TABLE_NAME, activities.TABLE_NAME):
+        for table_name in (
+            db.TABLE_NAME,
+            push.TABLE_NAME,
+            activities.TABLE_NAME,
+            household_shows.TABLE_NAME,
+        ):
             ddb.create_table(
                 TableName=table_name,
                 KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
@@ -55,7 +61,7 @@ def _dynamodb():
 def client():
     db.reset()  # Isolate each test from prior status mutations.
     # Clear mutable tables so each test starts with no activities/subscriptions.
-    for table in (activities._get_table(), push._get_table()):
+    for table in (activities._get_table(), push._get_table(), household_shows._get_table()):
         for item in table.scan().get("Items", []):
             table.delete_item(Key={"id": item["id"]})
     app = create_app()
@@ -2188,6 +2194,111 @@ def test_activities_unscheduled_newest_first_without_cap(client):
     data = res.get_json()
     assert len(data) == 6
     assert [d["text"] for d in data] == [f"activity {i}" for i in (5, 4, 3, 2, 1, 0)]
+
+
+# --- Shows ------------------------------------------------------------------
+
+
+def _make_show(client, title="Severance", creator="sheryl"):
+    """Create a show and return its projected dict (newest, so first in list)."""
+    res = client.post("/api/shows", json={"title": title, "createdById": creator})
+    assert res.status_code == 200
+    return res.get_json()[0]
+
+
+def test_create_show_auto_joins_creator_at_s1e1(client):
+    show = _make_show(client)
+    assert show["title"] == "Severance"
+    assert show["createdById"] == "sheryl"
+    assert show["completed"] is False
+    assert show["members"] == [
+        {"id": "sheryl", "name": "Sheryl", "season": 1, "episode": 1}
+    ]
+
+
+def test_create_show_requires_title_and_valid_creator(client):
+    assert client.post("/api/shows", json={"createdById": "sheryl"}).status_code == 400
+    assert client.post("/api/shows", json={"title": "X", "createdById": "ghost"}).status_code == 400
+
+
+def test_join_is_idempotent_then_leave_removes(client):
+    show = _make_show(client)
+    show_id = show["id"]
+
+    client.post(f"/api/shows/{show_id}/join", json={"userId": "andre"})
+    res = client.post(f"/api/shows/{show_id}/join", json={"userId": "andre"})
+    assert res.status_code == 200
+    members = res.get_json()[0]["members"]
+    assert [m["id"] for m in members].count("andre") == 1
+
+    res = client.post(f"/api/shows/{show_id}/leave", json={"userId": "andre"})
+    assert "andre" not in [m["id"] for m in res.get_json()[0]["members"]]
+
+
+def test_set_season_resets_episode_to_one(client):
+    show = _make_show(client)
+    show_id = show["id"]
+
+    # Advance the creator's episode a few times, then jump the season.
+    client.patch(f"/api/shows/{show_id}/watchers/sheryl/episode", json={"delta": 1})
+    client.put(f"/api/shows/{show_id}/watchers/sheryl/episode", json={"value": 8})
+    res = client.put(f"/api/shows/{show_id}/watchers/sheryl/season", json={"value": 3})
+    member = res.get_json()[0]["members"][0]
+    assert member["season"] == 3
+    assert member["episode"] == 1
+
+
+def test_progress_clamps_at_one_and_validates_input(client):
+    show = _make_show(client)
+    show_id = show["id"]
+
+    res = client.put(f"/api/shows/{show_id}/watchers/sheryl/episode", json={"value": 0})
+    assert res.get_json()[0]["members"][0]["episode"] == 1
+
+    assert client.put(
+        f"/api/shows/{show_id}/watchers/sheryl/episode", json={"value": "x"}
+    ).status_code == 400
+    assert client.patch(
+        f"/api/shows/{show_id}/watchers/sheryl/rating", json={"delta": 1}
+    ).status_code == 400
+
+
+def test_only_creator_can_complete_and_reopen(client):
+    show = _make_show(client, creator="sheryl")
+    show_id = show["id"]
+
+    # A non-creator is refused.
+    assert client.post(
+        f"/api/shows/{show_id}/complete", json={"requesterId": "andre"}
+    ).status_code == 403
+
+    res = client.post(f"/api/shows/{show_id}/complete", json={"requesterId": "sheryl"})
+    assert res.get_json()[0]["completed"] is True
+
+    res = client.post(f"/api/shows/{show_id}/reopen", json={"requesterId": "sheryl"})
+    assert res.get_json()[0]["completed"] is False
+
+
+def test_completed_show_is_read_only(client):
+    show = _make_show(client)
+    show_id = show["id"]
+    client.post(f"/api/shows/{show_id}/complete", json={"requesterId": "sheryl"})
+
+    assert client.post(
+        f"/api/shows/{show_id}/join", json={"userId": "andre"}
+    ).status_code == 409
+    assert client.patch(
+        f"/api/shows/{show_id}/watchers/sheryl/episode", json={"delta": 1}
+    ).status_code == 409
+
+
+def test_show_and_watcher_mutations_404(client):
+    assert client.post("/api/shows/ghost/join", json={"userId": "andre"}).status_code == 404
+    show = _make_show(client)
+    # Unknown watcher on a real show is also a 404.
+    assert client.put(
+        f"/api/shows/{show['id']}/watchers/nobody/episode", json={"value": 2}
+    ).status_code == 404
 
 
 if __name__ == "__main__":

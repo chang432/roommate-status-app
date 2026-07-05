@@ -35,5 +35,6 @@ create_table() {
 
 create_table "$ROOMMATE_TABLE" id
 create_table "$ROOMMATE_TABLE-activities" id
+create_table "$ROOMMATE_TABLE-shows" id
 create_table "$ROOMMATE_TABLE-pushsubs" id
 create_table "$ROOMMATE_TABLE-groups" groupId

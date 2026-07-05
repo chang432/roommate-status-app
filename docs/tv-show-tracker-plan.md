@@ -1,69 +1,53 @@
-# TV Show Tracker — Implementation Plan
+# TV Show Tracker — Backend
 
-The Shows tab currently runs against an **in-memory mock** so the feature works
-without a backend. This doc describes what a real backend looks like and how to
-swap the mock out with no changes to the React components.
-
-## Current state (mock)
-
-- `frontend/src/api/mockShows.js` — in-memory store + async functions that
-  return the full, refreshed show list (matching how the real feed endpoints
-  behave). State resets on page reload.
-- `frontend/src/api/client.js` — the `getShows` / `createShow` / `joinShow` /
-  `leaveShow` / `adjustEpisode` exports delegate to the mock. Their signatures
-  already match the intended REST contract, so only these bodies change.
-- `frontend/src/components/ShowTrackerFeature.jsx` + `ShowCreateForm.jsx` — UI,
-  identical in shape to the Checklist feature (expandable rows, create modal).
+The Shows tab is backed by the Flask server persisting to its **own DynamoDB
+table**, following the same "one table per concern" pattern as the activities,
+push-subscriptions, and groups tables. (An earlier draft of this doc proposed
+sharing the activities table via an `itemType` discriminator; a dedicated table
+was chosen instead so shows stay isolated and the activities scan stays clean.)
 
 ## Data model
 
-A show is one typed item in the existing single DynamoDB table (same pattern as
-`household_checklists.py`, which shares the activities table via an `itemType`
-discriminator — no new infrastructure needed).
+One item per show in the `RoommateStatus-{dev,main}-shows` table, keyed by a
+generated `id`. Watchers are embedded on the item (like checklist items), each
+tracking their own season and episode, so a show is a single read/write.
 
 ```
 {
   "id":          "<uuid4 hex>",          # partition key
-  "itemType":    "show",                 # discriminator for table scans
   "title":       "Severance",
   "createdBy":   "Sam",                  # denormalized display name
   "createdById": "<roommate id>",
   "createdAt":   1720200000000,          # epoch ms
-  "members": [                           # watchers, embedded like checklist items
-    { "id": "<roommate id>", "name": "Sam", "episode": 5 }
-  ],
-  "isArchived":  false
+  "completedAt": 1720300000000,          # epoch ms; ABSENT while active
+  "members": [
+    { "id": "<roommate id>", "name": "Sam", "season": 2, "episode": 5 }
+  ]
 }
 ```
 
-Embedding `members` on the show item (rather than separate rows) mirrors how
-checklist items are stored and keeps a show a single read/write. The watcher
-count is small (household size), so the item stays well under DynamoDB's 400 KB
-limit.
+`completedAt` is present only while a show is completed; the API projects a
+derived `completed` boolean and omits the attribute when active, so
+`attribute_not_exists(completedAt)` cleanly means "active".
 
 ## Backend module: `docker/flask/household_shows.py`
 
-Model it directly on `household_checklists.py`:
+Modeled on `activities.py` (own-table setup) + `household_checklists.py`
+(embedded-list mutations via an optimistic `update_item`):
 
-- `add_show(title, created_by_id, created_by)` — put a new item; auto-join the
-  creator as the first member at episode 1.
-- `get(show_id, consistent=False)` / `list_recent(limit, consistent=False)` —
-  scan by `itemType == "show"`, newest first, `_project(...)` to the shape above.
-- `join(show_id, user_id, name)` — append to `members` if not already present
-  (reuse a `_mutate_members` helper analogous to `_mutate_items`, using an
-  optimistic `update_item` with a `ConditionExpression` so concurrent joins from
-  two roommates don't clobber each other).
-- `leave(show_id, user_id)` — remove from `members`.
-- `set_episode(show_id, member_id, episode)` — clamp at 0, write the absolute
-  value. Prefer sending the absolute target from the client (compute
-  `current + delta` in the component) so retries are idempotent; the `/adjust`
-  delta endpoint is a mock convenience only.
+- `add_show(title, created_by_id, created_by)` — put a new item, auto-joining the
+  creator as the first watcher at season 1, episode 1.
+- `get` / `list_recent(limit, consistent)` — scan, newest first. The active vs.
+  completed split and per-watcher ordering are done in the frontend.
+- `join(show_id, user_id, name)` / `leave(show_id, user_id)` — append/remove a
+  watcher; both idempotent, rejected on completed shows.
+- `adjust_progress` / `set_progress(show_id, member_id, field, value)` — `field`
+  is `season` or `episode`, clamped at 1. **Writing a season resets that
+  watcher's episode to 1** (a new season starts from episode 1).
+- `complete` / `reopen(show_id, requester_id)` — creator-only lifecycle toggle;
+  non-creators get a `COMPLETE_FORBIDDEN` sentinel the route maps to 403.
 
 ## Routes: `docker/flask/app.py`
-
-Add alongside the checklist routes, validating a real roommate via
-`db.get_by_id(...)` exactly like the existing feeds. Each returns
-`household_shows.list_recent(consistent=True)`:
 
 | Method & path | Handler |
 |---|---|
@@ -71,36 +55,45 @@ Add alongside the checklist routes, validating a real roommate via
 | `POST /api/shows` | validate title (≤ `MAX_ACTIVITY_LEN`) + creator → `add_show` |
 | `POST /api/shows/<id>/join` | validate roommate → `join` |
 | `POST /api/shows/<id>/leave` | validate roommate → `leave` |
-| `PATCH /api/shows/<id>/watchers/<member_id>/episode` | validate roommate + integer episode ≥ 0 → `set_episode` |
+| `PATCH /api/shows/<id>/watchers/<member_id>/<field>` | integer `delta` → `adjust_progress` |
+| `PUT   /api/shows/<id>/watchers/<member_id>/<field>` | integer `value` → `set_progress` |
+| `POST /api/shows/<id>/complete` | validate requester → `complete` (creator-only) |
+| `POST /api/shows/<id>/reopen` | validate requester → `reopen` (creator-only) |
 
-Then flip the five functions in `client.js` from `mockShows.*` to `request(...)`
-calls and delete `mockShows.js`. No component changes.
+Progress edits are intentionally open to every roommate (matching the feature's
+loose ownership), so they take no per-caller check. The frontend `client.js`
+show functions call these endpoints directly; the in-memory mock has been
+removed.
 
-## Real-time + notifications (optional, to match other feeds)
+## Real-time + notifications (not implemented)
 
-The other feeds push a service-worker event (`event_type="…-changed"`) so open
-apps refresh instantly, and `StatusPage` polls on visibility. For shows:
-
-- Emit a `shows-changed` event on join/leave so watcher lists stay in sync, and
-  handle it in `StatusPage`'s `handleServiceWorkerMessage` by calling
-  `loadShows`.
-- Episode bumps are high-frequency and low-importance — skip push for those, or
-  debounce, to avoid notification spam.
+Unlike the other feeds, shows do **not** emit a `shows-changed` push event or
+participate in `StatusPage`'s visibility polling. Episode bumps are
+high-frequency and low-importance, so this was skipped to avoid notification
+spam and service-worker churn. Add a debounced `shows-changed` emit on
+join/leave/complete later if live sync becomes desirable.
 
 ## Testing
 
-Add cases to `docker/flask/test_app.py` mirroring the checklist tests: create →
-appears in `GET`; join is idempotent; leave removes; episode clamps at 0; a
-non-existent show/roommate returns 404/400.
+`docker/flask/test_app.py` covers: create auto-joins the creator at S1 E1; join
+is idempotent; leave removes; setting a season resets the episode; progress
+clamps at 1 and rejects bad input/fields; only the creator can complete/reopen;
+completed shows are read-only (409); unknown show/watcher → 404. DynamoDB is
+mocked with `moto`.
 
 ## Cost estimate
 
-No new paid services. Shows reuse the existing DynamoDB table and Flask/Caddy
-containers, so incremental cost is a handful of extra small items and requests —
-effectively $0 on top of current usage (comfortably within DynamoDB free tier at
-household scale).
+No new paid services. The shows table is on-demand (PAY_PER_REQUEST) like the
+others; at household scale it stays comfortably within the DynamoDB free tier —
+effectively $0 on top of current usage.
 
 ## Manual Setup Required From Owner
 
-None. The feature reuses the existing table and deployment; no console, secret,
-or account changes are required to ship the real backend.
+- **Provision the table** in each environment before deploying the app that
+  reads it: `python infrastructure/deploy.py --dev` and (for production)
+  `python infrastructure/deploy.py --main`. This creates
+  `RoommateStatus-dev-shows` / `RoommateStatus-main-shows` via CloudFormation.
+- **Local dev** needs no action: `infrastructure/create-tables.sh` (run by
+  `start.sh`) now creates the `-shows` table in DynamoDB Local automatically.
+- The app's IAM role/credentials must allow DynamoDB access to the new table
+  (same actions already granted for the activities table).
