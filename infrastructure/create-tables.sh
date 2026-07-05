@@ -12,28 +12,28 @@ set -eu
 : "${DYNAMODB_ENDPOINT:?DYNAMODB_ENDPOINT must be set (local-only helper)}"
 : "${ROOMMATE_TABLE:?ROOMMATE_TABLE must be set}"
 
-# The app derives these three names from ROOMMATE_TABLE — see
-# docker/flask/{db,activities,push}.py. Keep the -activities / -pushsubs
-# suffixes in sync with those modules (and with the CloudFormation templates
-# here). All three share one trivial schema: a single string hash key `id`,
-# on-demand billing — the prod-only knobs in CFN (encryption, PITR, retention)
-# don't apply to a throwaway local instance.
-for table in \
-  "$ROOMMATE_TABLE" \
-  "$ROOMMATE_TABLE-activities" \
-  "$ROOMMATE_TABLE-pushsubs"
-do
+# The prod-only CFN knobs (encryption, PITR, retention) don't apply to a
+# throwaway local instance.
+create_table() {
+  table=$1
+  partition_key=$2
+
   if aws dynamodb describe-table \
       --table-name "$table" \
       --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then
     echo "  table '$table' already exists — leaving as-is"
-    continue
+    return
   fi
   aws dynamodb create-table \
     --table-name "$table" \
-    --attribute-definitions AttributeName=id,AttributeType=S \
-    --key-schema AttributeName=id,KeyType=HASH \
+    --attribute-definitions AttributeName="$partition_key",AttributeType=S \
+    --key-schema AttributeName="$partition_key",KeyType=HASH \
     --billing-mode PAY_PER_REQUEST \
     --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null
   echo "  created table '$table'"
-done
+}
+
+create_table "$ROOMMATE_TABLE" id
+create_table "$ROOMMATE_TABLE-activities" id
+create_table "$ROOMMATE_TABLE-pushsubs" id
+create_table "$ROOMMATE_TABLE-groups" groupId
