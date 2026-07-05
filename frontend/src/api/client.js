@@ -348,14 +348,14 @@ export async function leaveShow(id, userId) {
   return mockShows.leaveShow(id, userId)
 }
 
-// PATCH /api/shows/:id/watchers/:memberId/episode — bump one watcher's episode
-// by delta (+1 / -1). Any roommate may edit any watcher's number.
-export async function adjustEpisode(id, memberId, delta) {
-  return mockShows.adjustEpisode(id, memberId, delta)
+// PATCH /api/shows/:id/watchers/:memberId/:field — bump one watcher's season or
+// episode by delta (+1 / -1). Any roommate may edit any watcher's number.
+export async function adjustProgress(id, memberId, field, delta) {
+  return mockShows.adjustProgress(id, memberId, field, delta)
 }
 
-// PUT /api/shows/:id/watchers/:memberId/episode — set one watcher's episode to
-// an absolute value. Backs the long-press manual editor.
-export async function setEpisode(id, memberId, episode) {
-  return mockShows.setEpisode(id, memberId, episode)
+// PUT /api/shows/:id/watchers/:memberId/:field — set one watcher's season or
+// episode to an absolute value. Backs the long-press manual editor.
+export async function setProgress(id, memberId, field, value) {
+  return mockShows.setProgress(id, memberId, field, value)
 }

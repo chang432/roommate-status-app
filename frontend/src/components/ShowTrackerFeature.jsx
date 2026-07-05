@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import { adjustEpisode, joinShow, leaveShow, setEpisode } from "../api/client.js";
+import { adjustProgress, joinShow, leaveShow, setProgress } from "../api/client.js";
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
 import { relativeTime } from "../utils/time.js";
@@ -9,11 +9,10 @@ import styles from "./styling/ShowTrackerFeature.module.css";
 // How long the counter must be held before it flips into manual-edit mode.
 const LONG_PRESS_MS = 500;
 
-// Watcher sub-entry: roommate name, their episode, and a +/edit pill. Episode
-// edits are open to everyone, so no ownership check gates the controls.
-// Tapping + advances an episode; long-pressing the number opens a text field
-// to type an exact episode.
-function WatcherRow({ member, busy, onAdjust, onSetEpisode, onRemove }) {
+// A single labeled counter: shows a value with a + button that advances it, and
+// long-pressing the number opens a text field to type an exact value. Season
+// and episode each render one of these, so the long-press logic lives here once.
+function CounterPill({ label, name, noun, value, busy, onIncrement, onSet }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const pressTimer = useRef(null);
@@ -22,7 +21,7 @@ function WatcherRow({ member, busy, onAdjust, onSetEpisode, onRemove }) {
 
   function beginEdit() {
     finished.current = false;
-    setDraft(String(member.episode));
+    setDraft(String(value));
     setEditing(true);
   }
 
@@ -46,25 +45,18 @@ function WatcherRow({ member, busy, onAdjust, onSetEpisode, onRemove }) {
     setEditing(false);
     if (!apply) return;
     const next = Number.parseInt(draft, 10);
-    if (Number.isNaN(next) || next === member.episode) return;
-    onSetEpisode(member, Math.max(0, next));
+    if (Number.isNaN(next) || next === value) return;
+    onSet(Math.max(1, next));
   }
 
   return (
-    <li className={styles.watcher}>
-      <span className={styles.watcherAvatar} title={member.name}>
-        {initialOf(member.name)}
-      </span>
-      <div className={styles.watcherText}>
-        <p className={styles.watcherName}>{member.name}</p>
-        <p className={styles.watcherEpisode}>Episode {member.episode}</p>
-      </div>
-
+    <div className={styles.counter}>
+      <span className={styles.counterLabel}>{label}</span>
       <div className={styles.pill}>
         {editing ? (
           <input
             type="number"
-            min="0"
+            min="1"
             inputMode="numeric"
             autoFocus
             value={draft}
@@ -81,44 +73,84 @@ function WatcherRow({ member, busy, onAdjust, onSetEpisode, onRemove }) {
               }
             }}
             className={styles.pillInput}
-            aria-label={`Set ${member.name}'s episode`}
+            aria-label={`Set ${name}'s ${noun}`}
           />
         ) : (
           <span
             role="button"
             tabIndex={0}
             className={styles.pillValue}
-            title="Long-press to edit episode"
+            title={`Long-press to edit ${noun}`}
             onPointerDown={startPress}
             onPointerUp={cancelPress}
             onPointerLeave={cancelPress}
             onPointerCancel={cancelPress}
           >
-            {member.episode}
+            {value}
           </span>
         )}
         <button
           type="button"
           disabled={busy || editing}
-          onClick={() => onAdjust(member, 1)}
+          onClick={onIncrement}
           className={styles.pillButton}
-          aria-label={`Increase ${member.name}'s episode`}
-          title="Forward one episode"
+          aria-label={`Increase ${name}'s ${noun}`}
+          title={`Forward one ${noun}`}
         >
           +
         </button>
       </div>
+    </div>
+  );
+}
 
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => onRemove(member)}
-        className={styles.watcherRemove}
-        aria-label={`Remove ${member.name} from this show`}
-        title="Remove watcher"
-      >
-        ×
-      </button>
+// Watcher sub-entry: roommate name plus independent season and episode counters.
+// Edits are open to everyone, so no ownership check gates the controls.
+function WatcherRow({ member, busy, onAdjust, onSetProgress, onRemove }) {
+  return (
+    <li className={styles.watcher}>
+      <div className={styles.watcherHead}>
+        <span className={styles.watcherAvatar} title={member.name}>
+          {initialOf(member.name)}
+        </span>
+        <div className={styles.watcherText}>
+          <p className={styles.watcherName}>{member.name}</p>
+          <p className={styles.watcherEpisode}>
+            Season {member.season} · Episode {member.episode}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onRemove(member)}
+          className={styles.watcherRemove}
+          aria-label={`Remove ${member.name} from this show`}
+          title="Remove watcher"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className={styles.counters}>
+        <CounterPill
+          label="Season"
+          noun="season"
+          name={member.name}
+          value={member.season}
+          busy={busy}
+          onIncrement={() => onAdjust(member, "season", 1)}
+          onSet={(value) => onSetProgress(member, "season", value)}
+        />
+        <CounterPill
+          label="Episode"
+          noun="episode"
+          name={member.name}
+          value={member.episode}
+          busy={busy}
+          onIncrement={() => onAdjust(member, "episode", 1)}
+          onSet={(value) => onSetProgress(member, "episode", value)}
+        />
+      </div>
     </li>
   );
 }
@@ -160,27 +192,27 @@ export default function ShowTrackerFeature({ shows, onShowsChange }) {
     }
   }
 
-  async function handleAdjust(show, member, delta) {
+  async function handleAdjust(show, member, field, delta) {
     if (busyMemberIds.includes(member.id)) return;
     markMemberBusy(member.id);
     setError("");
     try {
-      onShowsChange(await adjustEpisode(show.id, member.id, delta));
+      onShowsChange(await adjustProgress(show.id, member.id, field, delta));
     } catch (err) {
-      setError(err.message || "Could not update the episode. Try again.");
+      setError(err.message || `Could not update the ${field}. Try again.`);
     } finally {
       clearMemberBusy(member.id);
     }
   }
 
-  async function handleSetEpisode(show, member, episode) {
+  async function handleSetProgress(show, member, field, value) {
     if (busyMemberIds.includes(member.id)) return;
     markMemberBusy(member.id);
     setError("");
     try {
-      onShowsChange(await setEpisode(show.id, member.id, episode));
+      onShowsChange(await setProgress(show.id, member.id, field, value));
     } catch (err) {
-      setError(err.message || "Could not update the episode. Try again.");
+      setError(err.message || `Could not update the ${field}. Try again.`);
     } finally {
       clearMemberBusy(member.id);
     }
@@ -282,11 +314,11 @@ export default function ShowTrackerFeature({ shows, onShowsChange }) {
                               key={member.id}
                               member={member}
                               busy={busyMemberIds.includes(member.id)}
-                              onAdjust={(target, delta) =>
-                                handleAdjust(show, target, delta)
+                              onAdjust={(target, field, delta) =>
+                                handleAdjust(show, target, field, delta)
                               }
-                              onSetEpisode={(target, episode) =>
-                                handleSetEpisode(show, target, episode)
+                              onSetProgress={(target, field, value) =>
+                                handleSetProgress(show, target, field, value)
                               }
                               onRemove={(target) => handleRemove(show, target)}
                             />

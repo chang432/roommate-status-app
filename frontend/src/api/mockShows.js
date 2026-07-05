@@ -11,8 +11,9 @@
 
 // A projected show looks like:
 //   { id, title, createdBy, createdById, createdAt,
-//     members: [ { id, name, episode } ] }
-// where `members` are the roommates watching, each tracking their own episode.
+//     members: [ { id, name, season, episode } ] }
+// where `members` are the roommates watching, each tracking their own season
+// and episode.
 
 const SIMULATED_LATENCY_MS = 120;
 
@@ -33,8 +34,8 @@ const shows = [
     createdById: "seed-sam",
     createdAt: Date.now() - 1000 * 60 * 60 * 6,
     members: [
-      { id: "seed-sam", name: "Sam", episode: 5 },
-      { id: "seed-alex", name: "Alex", episode: 3 },
+      { id: "seed-sam", name: "Sam", season: 2, episode: 5 },
+      { id: "seed-alex", name: "Alex", season: 1, episode: 3 },
     ],
   },
 ];
@@ -76,7 +77,7 @@ export async function createShow(title, createdById, createdByName) {
     createdBy: createdByName,
     createdById,
     createdAt: Date.now(),
-    members: [{ id: createdById, name: createdByName, episode: 1 }],
+    members: [{ id: createdById, name: createdByName, season: 1, episode: 1 }],
   });
   return respond();
 }
@@ -86,7 +87,7 @@ export async function joinShow(showId, userId, userName) {
   const show = findShow(showId);
   if (!show) throw new Error("Unknown show.");
   if (!show.members.some((member) => member.id === userId)) {
-    show.members.push({ id: userId, name: userName, episode: 1 });
+    show.members.push({ id: userId, name: userName, season: 1, episode: 1 });
   }
   return respond();
 }
@@ -99,24 +100,36 @@ export async function leaveShow(showId, userId) {
   return respond();
 }
 
-// Nudge one member's episode by delta (+1 / -1), clamped at 0. Anyone may edit
-// anyone's number, matching the feature's intentionally loose ownership.
-export async function adjustEpisode(showId, memberId, delta) {
+// Season and episode are both 1-based, so every progress value clamps here.
+const PROGRESS_FIELDS = new Set(["season", "episode"]);
+
+function requireMember(showId, memberId) {
   const show = findShow(showId);
   if (!show) throw new Error("Unknown show.");
   const member = show.members.find((candidate) => candidate.id === memberId);
   if (!member) throw new Error("Unknown watcher.");
-  member.episode = Math.max(0, member.episode + delta);
+  return member;
+}
+
+function requireField(field) {
+  if (!PROGRESS_FIELDS.has(field)) throw new Error("Unknown progress field.");
+}
+
+// Nudge one member's season or episode by delta (+1 / -1), clamped at 1. Anyone
+// may edit anyone's number, matching the feature's intentionally loose
+// ownership. Season and episode are tracked independently.
+export async function adjustProgress(showId, memberId, field, delta) {
+  requireField(field);
+  const member = requireMember(showId, memberId);
+  member[field] = Math.max(1, member[field] + delta);
   return respond();
 }
 
-// Set one member's episode to an absolute value, clamped at 0. Backs the
-// long-press manual editor; like adjustEpisode, anyone may edit any number.
-export async function setEpisode(showId, memberId, episode) {
-  const show = findShow(showId);
-  if (!show) throw new Error("Unknown show.");
-  const member = show.members.find((candidate) => candidate.id === memberId);
-  if (!member) throw new Error("Unknown watcher.");
-  member.episode = Math.max(0, Math.floor(episode));
+// Set one member's season or episode to an absolute value, clamped at 1. Backs
+// the long-press manual editor; like adjustProgress, anyone may edit any number.
+export async function setProgress(showId, memberId, field, value) {
+  requireField(field);
+  const member = requireMember(showId, memberId);
+  member[field] = Math.max(1, Math.floor(value));
   return respond();
 }

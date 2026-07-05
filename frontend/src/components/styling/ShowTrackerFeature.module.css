@@ -67,7 +67,12 @@
 }
 
 .watcher {
-  @apply flex min-h-[44px] items-center gap-[10px] rounded-sm border border-line bg-white px-[10px] py-[7px];
+  @apply flex flex-col gap-[8px] rounded-sm border border-line bg-white px-[10px] py-[9px];
+}
+
+/* Top line of a watcher: avatar, name/progress, and remove button. */
+.watcherHead {
+  @apply flex min-h-[30px] items-center gap-[10px];
 }
 
 .watcherAvatar {
@@ -86,7 +91,21 @@
   @apply mt-[1px] text-[12px] text-ink-soft;
 }
 
-/* The value/+ episode pill. Long-pressing the value swaps it for an input. */
+/* Season + episode counters, aligned under the name (past the avatar). */
+.counters {
+  @apply flex flex-wrap items-center gap-x-[16px] gap-y-[8px] pl-[40px];
+}
+
+/* One labeled counter: the label sits left of its value/+ pill. */
+.counter {
+  @apply flex items-center gap-[6px];
+}
+
+.counterLabel {
+  @apply text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-soft;
+}
+
+/* The value/+ pill. Long-pressing the value swaps it for an input. */
 .pill {
   @apply flex flex-none items-center gap-[2px] rounded-full border border-line bg-surface-hover p-[3px];
 }
