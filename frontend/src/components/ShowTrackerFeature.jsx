@@ -12,7 +12,7 @@ const LONG_PRESS_MS = 500;
 // A single labeled counter: shows a value with a + button that advances it, and
 // long-pressing the number opens a text field to type an exact value. Season
 // and episode each render one of these, so the long-press logic lives here once.
-function CounterPill({ name, noun, value, busy, onIncrement, onSet }) {
+function CounterPill({ label, name, noun, value, busy, onIncrement, onSet }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const pressTimer = useRef(null);
@@ -51,6 +51,7 @@ function CounterPill({ name, noun, value, busy, onIncrement, onSet }) {
 
   return (
     <div className={styles.counter}>
+      <span className={styles.counterLabel}>{label}</span>
       <div className={styles.pill}>
         {editing ? (
           <input
@@ -132,6 +133,7 @@ function WatcherRow({ member, busy, onAdjust, onSetProgress, onRemove }) {
 
       <div className={styles.counters}>
         <CounterPill
+          label="Season"
           noun="season"
           name={member.name}
           value={member.season}
@@ -140,6 +142,7 @@ function WatcherRow({ member, busy, onAdjust, onSetProgress, onRemove }) {
           onSet={(value) => onSetProgress(member, "season", value)}
         />
         <CounterPill
+          label="Episode"
           noun="episode"
           name={member.name}
           value={member.episode}

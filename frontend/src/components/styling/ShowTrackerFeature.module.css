@@ -96,10 +96,13 @@
   @apply flex flex-wrap items-center gap-x-[16px] gap-y-[8px] pl-[40px];
 }
 
-/* One counter: just its value/+ pill (season vs. episode is shown in the
-   summary line above). */
+/* One labeled counter: the label sits left of its value/+ pill. */
 .counter {
-  @apply flex items-center;
+  @apply flex items-center gap-[6px];
+}
+
+.counterLabel {
+  @apply text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-soft;
 }
 
 /* The value/+ pill. Long-pressing the value swaps it for an input. */
