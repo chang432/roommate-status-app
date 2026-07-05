@@ -109,3 +109,14 @@ export async function adjustEpisode(showId, memberId, delta) {
   member.episode = Math.max(0, member.episode + delta);
   return respond();
 }
+
+// Set one member's episode to an absolute value, clamped at 0. Backs the
+// long-press manual editor; like adjustEpisode, anyone may edit any number.
+export async function setEpisode(showId, memberId, episode) {
+  const show = findShow(showId);
+  if (!show) throw new Error("Unknown show.");
+  const member = show.members.find((candidate) => candidate.id === memberId);
+  if (!member) throw new Error("Unknown watcher.");
+  member.episode = Math.max(0, Math.floor(episode));
+  return respond();
+}

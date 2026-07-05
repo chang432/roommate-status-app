@@ -1,14 +1,55 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import { adjustEpisode, joinShow, leaveShow } from "../api/client.js";
+import { adjustEpisode, joinShow, leaveShow, setEpisode } from "../api/client.js";
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
 import { relativeTime } from "../utils/time.js";
 import styles from "./styling/ShowTrackerFeature.module.css";
 
-// Watcher sub-entry: roommate name, their episode, and a +/- pill. Episode
-// edits are open to everyone, so no ownership check gates the buttons.
-function WatcherRow({ member, busy, onAdjust, onRemove }) {
+// How long the counter must be held before it flips into manual-edit mode.
+const LONG_PRESS_MS = 500;
+
+// Watcher sub-entry: roommate name, their episode, and a +/edit pill. Episode
+// edits are open to everyone, so no ownership check gates the controls.
+// Tapping + advances an episode; long-pressing the number opens a text field
+// to type an exact episode.
+function WatcherRow({ member, busy, onAdjust, onSetEpisode, onRemove }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const pressTimer = useRef(null);
+  // Guards against onBlur double-firing after Enter/Escape already finished.
+  const finished = useRef(false);
+
+  function beginEdit() {
+    finished.current = false;
+    setDraft(String(member.episode));
+    setEditing(true);
+  }
+
+  function startPress() {
+    if (busy) return;
+    cancelPress();
+    pressTimer.current = setTimeout(beginEdit, LONG_PRESS_MS);
+  }
+
+  function cancelPress() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+
+  // apply=true commits the typed value; apply=false discards it.
+  function finishEdit(apply) {
+    if (finished.current) return;
+    finished.current = true;
+    setEditing(false);
+    if (!apply) return;
+    const next = Number.parseInt(draft, 10);
+    if (Number.isNaN(next) || next === member.episode) return;
+    onSetEpisode(member, Math.max(0, next));
+  }
+
   return (
     <li className={styles.watcher}>
       <span className={styles.watcherAvatar} title={member.name}>
@@ -20,20 +61,45 @@ function WatcherRow({ member, busy, onAdjust, onRemove }) {
       </div>
 
       <div className={styles.pill}>
+        {editing ? (
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            autoFocus
+            value={draft}
+            disabled={busy}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => finishEdit(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                finishEdit(true);
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                finishEdit(false);
+              }
+            }}
+            className={styles.pillInput}
+            aria-label={`Set ${member.name}'s episode`}
+          />
+        ) : (
+          <span
+            role="button"
+            tabIndex={0}
+            className={styles.pillValue}
+            title="Long-press to edit episode"
+            onPointerDown={startPress}
+            onPointerUp={cancelPress}
+            onPointerLeave={cancelPress}
+            onPointerCancel={cancelPress}
+          >
+            {member.episode}
+          </span>
+        )}
         <button
           type="button"
-          disabled={busy || member.episode <= 0}
-          onClick={() => onAdjust(member, -1)}
-          className={styles.pillButton}
-          aria-label={`Decrease ${member.name}'s episode`}
-          title="Back one episode"
-        >
-          −
-        </button>
-        <span className={styles.pillValue}>{member.episode}</span>
-        <button
-          type="button"
-          disabled={busy}
+          disabled={busy || editing}
           onClick={() => onAdjust(member, 1)}
           className={styles.pillButton}
           aria-label={`Increase ${member.name}'s episode`}
@@ -100,6 +166,19 @@ export default function ShowTrackerFeature({ shows, onShowsChange }) {
     setError("");
     try {
       onShowsChange(await adjustEpisode(show.id, member.id, delta));
+    } catch (err) {
+      setError(err.message || "Could not update the episode. Try again.");
+    } finally {
+      clearMemberBusy(member.id);
+    }
+  }
+
+  async function handleSetEpisode(show, member, episode) {
+    if (busyMemberIds.includes(member.id)) return;
+    markMemberBusy(member.id);
+    setError("");
+    try {
+      onShowsChange(await setEpisode(show.id, member.id, episode));
     } catch (err) {
       setError(err.message || "Could not update the episode. Try again.");
     } finally {
@@ -205,6 +284,9 @@ export default function ShowTrackerFeature({ shows, onShowsChange }) {
                               busy={busyMemberIds.includes(member.id)}
                               onAdjust={(target, delta) =>
                                 handleAdjust(show, target, delta)
+                              }
+                              onSetEpisode={(target, episode) =>
+                                handleSetEpisode(show, target, episode)
                               }
                               onRemove={(target) => handleRemove(show, target)}
                             />

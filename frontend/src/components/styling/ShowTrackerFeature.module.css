@@ -86,7 +86,7 @@
   @apply mt-[1px] text-[12px] text-ink-soft;
 }
 
-/* The -/value/+ episode pill. */
+/* The value/+ episode pill. Long-pressing the value swaps it for an input. */
 .pill {
   @apply flex flex-none items-center gap-[2px] rounded-full border border-line bg-surface-hover p-[3px];
 }
@@ -96,7 +96,13 @@
 }
 
 .pillValue {
-  @apply min-w-[26px] text-center text-[14px] font-semibold tabular-nums text-ink;
+  @apply min-w-[26px] cursor-pointer select-none text-center text-[14px] font-semibold tabular-nums text-ink;
+}
+
+/* Manual episode editor shown while long-press editing. Sized to match the
+   value it replaces so the pill doesn't jump. */
+.pillInput {
+  @apply h-[28px] w-[44px] rounded-full border border-accent-soft bg-white text-center text-[14px] font-semibold tabular-nums text-ink outline-none focus:border-accent;
 }
 
 .watcherRemove {

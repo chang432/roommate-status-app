@@ -353,3 +353,9 @@ export async function leaveShow(id, userId) {
 export async function adjustEpisode(id, memberId, delta) {
   return mockShows.adjustEpisode(id, memberId, delta)
 }
+
+// PUT /api/shows/:id/watchers/:memberId/episode — set one watcher's episode to
+// an absolute value. Backs the long-press manual editor.
+export async function setEpisode(id, memberId, episode) {
+  return mockShows.setEpisode(id, memberId, episode)
+}
