@@ -18,11 +18,27 @@
   @apply mb-7 text-center text-[14.5px] text-ink-soft;
 }
 
-.passwordField {
-  @apply mb-[26px];
+.modeSwitch {
+  @apply mb-6 grid grid-cols-2 rounded-full border border-line bg-surface-muted p-1;
 }
 
-.passwordInput {
+.modeButton {
+  @apply rounded-full px-3 py-2 text-[13px] font-black uppercase tracking-[0.04em] text-ink-soft transition hover:text-ink;
+}
+
+.modeButtonActive {
+  @apply bg-white text-ink shadow-soft;
+}
+
+.field {
+  @apply mb-5;
+}
+
+.passwordField {
+  @apply mb-5;
+}
+
+.textInput {
   @apply border-[1.5px] px-4 py-[14px] text-[15px] focus:shadow-[0_0_0_4px_rgba(201,123,90,0.14)];
 }
 

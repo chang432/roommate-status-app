@@ -47,7 +47,7 @@ function whenLabel() {
 }
 
 export default function StatusPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, deleteAccount } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const ownCardRef = useRef(null);
 
@@ -295,6 +295,17 @@ export default function StatusPage() {
     await pokeRoommate(roommateId, user.id);
   }
 
+  async function handleDeleteAccount() {
+    const password = window.prompt("Enter your password to delete this account.");
+    if (!password) return;
+    if (!window.confirm("Delete your account? This cannot be undone.")) return;
+    try {
+      await deleteAccount(password);
+    } catch (err) {
+      setError(err.message || "Could not delete your account.");
+    }
+  }
+
   function handleLiveBannerClick(activityId) {
     setActiveBoardTab("activities");
     setActivityFocusRequest((current) => ({
@@ -338,9 +349,18 @@ export default function StatusPage() {
             <h1 className={styles.title}>Yorkshire Roomie Status</h1>
             <p className={styles.subtitle}>{whenLabel()}</p>
           </div>
-          <button type="button" onClick={logout} className={styles.signOut}>
-            Sign out
-          </button>
+          <div className={styles.accountActions}>
+            <button type="button" onClick={logout} className={styles.signOut}>
+              Sign out
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              className={styles.deleteAccount}
+            >
+              Delete
+            </button>
+          </div>
         </header>
 
         {error && (

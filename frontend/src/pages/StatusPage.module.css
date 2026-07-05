@@ -26,8 +26,16 @@
   @apply mt-[2px] text-[13.5px] text-ink-soft;
 }
 
+.accountActions {
+  @apply flex flex-none items-center gap-2;
+}
+
 .signOut {
   @apply flex-none rounded-full border border-line bg-white px-[14px] py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-surface-hover;
+}
+
+.deleteAccount {
+  @apply flex-none rounded-full border border-line bg-white px-[12px] py-[7px] text-[13px] font-bold text-ink-soft transition hover:border-red-300 hover:bg-red-50 hover:text-red-700;
 }
 
 .pageError {

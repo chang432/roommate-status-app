@@ -1,5 +1,9 @@
 import { createContext, useContext, useState, useCallback } from 'react'
-import { login as apiLogin } from '../api/client.js'
+import {
+  createAccount as apiCreateAccount,
+  deleteAccount as apiDeleteAccount,
+  login as apiLogin,
+} from '../api/client.js'
 
 // Holds the signed-in roommate and exposes login/logout. The session is kept in
 // localStorage so a refresh doesn't bounce the user back to the login page.
@@ -10,7 +14,10 @@ const SESSION_KEY = 'roomie-session'
 function readSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY)
-    return raw ? JSON.parse(raw) : null
+    if (!raw) return null
+    const user = JSON.parse(raw)
+    const hasGroup = user.hasGroup ?? (user.groupId ? true : user.groupId === undefined)
+    return { ...user, hasGroup }
   } catch {
     return null
   }
@@ -19,20 +26,35 @@ function readSession() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(readSession)
 
-  const login = useCallback(async (name, password) => {
-    const { user: signedIn } = await apiLogin(name, password)
+  const persistUser = useCallback((signedIn) => {
     setUser(signedIn)
     localStorage.setItem(SESSION_KEY, JSON.stringify(signedIn))
     return signedIn
   }, [])
+
+  const login = useCallback(async (username, password) => {
+    const { user: signedIn } = await apiLogin(username, password)
+    return persistUser(signedIn)
+  }, [persistUser])
+
+  const createAccount = useCallback(async (username, name, password) => {
+    const { user: signedIn } = await apiCreateAccount(username, name, password)
+    return persistUser(signedIn)
+  }, [persistUser])
 
   const logout = useCallback(() => {
     setUser(null)
     localStorage.removeItem(SESSION_KEY)
   }, [])
 
+  const deleteAccount = useCallback(async (password) => {
+    if (!user) return
+    await apiDeleteAccount(user.id, password)
+    logout()
+  }, [logout, user])
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, createAccount, deleteAccount, logout }}>
       {children}
     </AuthContext.Provider>
   )

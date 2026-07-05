@@ -1,52 +1,40 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, Navigate } from "react-router-dom";
 import Brandmark from "../components/Brandmark.jsx";
-import RoomiePicker from "../components/RoomiePicker.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { getRoommates } from "../api/client.js";
 import { cx } from "../utils/classNames.js";
 import styles from "./LoginPage.module.css";
 
 export default function LoginPage() {
-  const { user, login } = useAuth();
+  const { user, login, createAccount } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const returnTo = location.state?.returnTo || "/";
 
-  const [roommates, setRoommates] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [mode, setMode] = useState("login");
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Populate the roommate picker from the API.
   useEffect(() => {
-    let active = true;
-    getRoommates()
-      .then((list) => {
-        if (!active) return;
-        setRoommates(list);
-        setSelected(list[0] ?? null);
-      })
-      .catch(() =>
-        setError("Could not load the shire. Try again in a moment."),
-      );
-    return () => {
-      active = false;
-    };
-  }, []);
+    setError("");
+  }, [mode]);
 
   // Already signed in? Skip the login screen.
-  if (user) return <Navigate to={returnTo} replace />;
+  if (user) return <Navigate to={user.hasGroup ? returnTo : "/pending"} replace />;
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!selected) return;
     setSubmitting(true);
     setError("");
     try {
-      await login(selected.name, password);
-      navigate(returnTo, { replace: true });
+      const signedIn = mode === "login"
+        ? await login(username, password)
+        : await handleCreateAccount();
+      navigate(signedIn.hasGroup ? returnTo : "/pending", { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -54,13 +42,14 @@ export default function LoginPage() {
     }
   }
 
+  async function handleCreateAccount() {
+    if (password !== confirmPassword) {
+      throw new Error("Passwords do not match.");
+    }
+    return createAccount(username, name, password);
+  }
+
   return (
-    // grid-cols-1 makes the single column minmax(0,1fr) rather than the implicit
-    // `auto` track. An `auto` track grows to its content's intrinsic width, which
-    // let RoomiePicker's intentionally-too-wide, horizontally-scrolling row
-    // stretch the form past the viewport (page-level horizontal scrollbar).
-    // minmax(0,1fr) caps the column at the available width so that row scrolls
-    // internally — as intended — instead of widening the page.
     <main className={styles.page}>
       <form onSubmit={handleSubmit} className={styles.form}>
         <Brandmark className={styles.brandmark} />
@@ -71,14 +60,59 @@ export default function LoginPage() {
           Roomie Status
         </h1>
         <p className={styles.subtitle}>
-          Welcome home — pick your name to sign in.
+          {mode === "login"
+            ? "Welcome home — sign in with your username."
+            : "Create an account now. Group joining comes later."}
         </p>
 
-        <RoomiePicker
-          roommates={roommates}
-          selectedId={selected?.id}
-          onSelect={setSelected}
-        />
+        <div className={styles.modeSwitch} role="tablist" aria-label="Account mode">
+          <button
+            type="button"
+            className={cx(styles.modeButton, mode === "login" && styles.modeButtonActive)}
+            onClick={() => setMode("login")}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            className={cx(styles.modeButton, mode === "create" && styles.modeButtonActive)}
+            onClick={() => setMode("create")}
+          >
+            Create account
+          </button>
+        </div>
+
+        {mode === "create" && (
+          <div className={styles.field}>
+            <label htmlFor="name" className="ui-formLabel">
+              Display name
+            </label>
+            <input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="What should roommates call you?"
+              className={cx("ui-textInput", styles.textInput)}
+              autoComplete="name"
+            />
+          </div>
+        )}
+
+        <div className={styles.field}>
+          <label htmlFor="username" className="ui-formLabel">
+            Username
+          </label>
+          <input
+            id="username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="andre"
+            className={cx("ui-textInput", styles.textInput)}
+            autoComplete="username"
+          />
+        </div>
 
         <div className={styles.passwordField}>
           <label htmlFor="password" className="ui-formLabel">
@@ -90,21 +124,45 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter your password"
-            className={cx("ui-textInput", styles.passwordInput)}
+            className={cx("ui-textInput", styles.textInput)}
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
           />
         </div>
+
+        {mode === "create" && (
+          <div className={styles.passwordField}>
+            <label htmlFor="confirmPassword" className="ui-formLabel">
+              Confirm password
+            </label>
+            <input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter your password"
+              className={cx("ui-textInput", styles.textInput)}
+              autoComplete="new-password"
+            />
+          </div>
+        )}
 
         {error && <p className={cx("ui-errorBox", styles.error)}>{error}</p>}
 
         <button
           type="submit"
-          disabled={submitting || !selected}
+          disabled={submitting}
           className={cx("ui-primaryButton", styles.submit)}
         >
-          {submitting ? "Signing in…" : "Sign in"}
+          {submitting
+            ? (mode === "login" ? "Signing in…" : "Creating…")
+            : (mode === "login" ? "Sign in" : "Create account")}
         </button>
 
-        <p className={styles.footer}>Just the six of us · 1024 Yorkshire</p>
+        <p className={styles.footer}>
+          {mode === "login"
+            ? "Seeded roommates use their lowercase name and password roomie."
+            : "New accounts wait here until group joining is available."}
+        </p>
       </form>
     </main>
   );
