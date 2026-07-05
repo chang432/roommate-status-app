@@ -24,6 +24,8 @@ import uuid
 
 from botocore.exceptions import ClientError
 
+import db
+
 # Reuse db's resource builder so all tables sign requests the same way and share
 # the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
 from db import resource
@@ -65,6 +67,20 @@ TABLE_NAME = os.environ.get("ACTIVITIES_TABLE") or (
 
 _table = None
 _table_lock = threading.Lock()
+
+
+def backfill_default_group_records() -> None:
+    """Assign the seeded group to legacy records that predate group isolation."""
+    table = _get_table()
+    for item in _scan_all(consistent=True):
+        if item.get("groupId"):
+            continue
+        table.update_item(
+            Key={"id": item["id"]},
+            UpdateExpression="SET groupId = :groupId",
+            ExpressionAttributeValues={":groupId": db.DEFAULT_GROUP_ID},
+            ConditionExpression="attribute_exists(id) AND attribute_not_exists(groupId)",
+        )
 
 
 def _get_table():
@@ -179,6 +195,7 @@ def _project(
     lifecycle = _lifecycle(item, now_ms)
     return {
         "id": item["id"],
+        "groupId": item.get("groupId"),
         "text": item["text"],
         "proposedBy": item.get("proposedBy", "Someone"),
         "proposedById": proposer_id,
@@ -195,10 +212,15 @@ def _project(
     }
 
 
+def _in_group(item: dict | None, group_id: str | None) -> bool:
+    return item is not None and item.get("groupId") == group_id
+
+
 def add_activity(
     text: str,
     proposed_by_id: str,
     proposed_by: str,
+    group_id: str,
     start_at: int | None = None,
     end_at: int | None = None,
 ) -> dict:
@@ -208,6 +230,7 @@ def add_activity(
         "text": text,
         "proposedBy": proposed_by,
         "proposedById": proposed_by_id,
+        "groupId": group_id,
         # Epoch millis drives newest-first ordering in list_recent().
         "createdAt": int(time.time() * 1000),
         # The proposer joins automatically, so the count starts at 1.
@@ -226,6 +249,7 @@ def _set_membership(
     activity_id: str,
     user_id: str,
     name: str,
+    group_id: str,
     op: str,
 ) -> dict | str | None:
     """Add or remove a roommate from an activity; return it, or None.
@@ -236,7 +260,7 @@ def _set_membership(
     """
     table = _get_table()
     existing = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if existing is None or existing.get("itemType"):
+    if existing is None or existing.get("itemType") or not _in_group(existing, group_id):
         return None
     if _lifecycle(existing)["isExpired"]:
         return MUTATION_EXPIRED
@@ -248,9 +272,11 @@ def _set_membership(
                 ":m": {name},
                 ":i": {user_id},
                 ":now": int(time.time() * 1000),
+                ":groupId": group_id,
             },
             ConditionExpression=(
                 "attribute_exists(id) AND attribute_not_exists(itemType) AND "
+                "groupId = :groupId AND "
                 "attribute_not_exists(endedAt) AND "
                 "(attribute_not_exists(endAt) OR endAt > :now)"
             ),
@@ -259,27 +285,28 @@ def _set_membership(
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-            if current and not current.get("itemType") and _lifecycle(current)["isExpired"]:
+            if current and not current.get("itemType") and _in_group(current, group_id) and _lifecycle(current)["isExpired"]:
                 return MUTATION_EXPIRED
             return None
         raise
     return _project(resp["Attributes"])
 
 
-def join(activity_id: str, user_id: str, name: str) -> dict | str | None:
+def join(activity_id: str, user_id: str, name: str, group_id: str) -> dict | str | None:
     """Add a roommate to an activity. None if the activity is unknown."""
-    return _set_membership(activity_id, user_id, name, "ADD")
+    return _set_membership(activity_id, user_id, name, group_id, "ADD")
 
 
-def leave(activity_id: str, user_id: str, name: str) -> dict | str | None:
+def leave(activity_id: str, user_id: str, name: str, group_id: str) -> dict | str | None:
     """Remove a roommate from an activity. None if the activity is unknown."""
-    return _set_membership(activity_id, user_id, name, "DELETE")
+    return _set_membership(activity_id, user_id, name, group_id, "DELETE")
 
 
 def add_comment(
     activity_id: str,
     author: str,
     text: str,
+    group_id: str,
     mentions: list[dict] | None = None,
     mentions_all: bool = False,
     author_id: str | None = None,
@@ -294,7 +321,7 @@ def add_comment(
     """
     table = _get_table()
     existing = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if existing is None or existing.get("itemType"):
+    if existing is None or existing.get("itemType") or not _in_group(existing, group_id):
         return None
     if _lifecycle(existing)["isExpired"]:
         return MUTATION_EXPIRED
@@ -320,9 +347,11 @@ def add_comment(
                 ":c": [comment],
                 ":empty": [],
                 ":now": int(time.time() * 1000),
+                ":groupId": group_id,
             },
             ConditionExpression=(
                 "attribute_exists(id) AND attribute_not_exists(itemType) AND "
+                "groupId = :groupId AND "
                 "attribute_not_exists(endedAt) AND "
                 "(attribute_not_exists(endAt) OR endAt > :now)"
             ),
@@ -331,7 +360,7 @@ def add_comment(
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-            if current and not current.get("itemType") and _lifecycle(current)["isExpired"]:
+            if current and not current.get("itemType") and _in_group(current, group_id) and _lifecycle(current)["isExpired"]:
                 return MUTATION_EXPIRED
             return None
         raise
@@ -348,12 +377,13 @@ def set_comment_like(
     comment_id: str,
     user_id: str,
     user_name: str,
+    group_id: str,
     liked: bool,
 ) -> str:
     """Like or unlike a comment, returning a stable route-level result."""
     table = _get_table()
     activity = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if activity is None or activity.get("itemType"):
+    if activity is None or activity.get("itemType") or not _in_group(activity, group_id):
         return LIKE_NOT_FOUND
     if _lifecycle(activity)["isExpired"]:
         return MUTATION_EXPIRED
@@ -378,6 +408,7 @@ def set_comment_like(
                 "itemType": COMMENT_LIKE_TYPE,
                 "activityId": activity_id,
                 "commentId": comment_id,
+                "groupId": group_id,
                 "userId": user_id,
             }
         )
@@ -386,20 +417,20 @@ def set_comment_like(
     return LIKE_OK
 
 
-def get(activity_id: str, consistent: bool = False) -> dict | None:
+def get(activity_id: str, group_id: str, consistent: bool = False) -> dict | None:
     """Return one proposal by id, or None if it doesn't exist."""
     item = _get_table().get_item(
         Key={"id": activity_id},
         ConsistentRead=consistent,
     ).get("Item")
-    return _project(item) if item and not item.get("itemType") else None
+    return _project(item) if item and not item.get("itemType") and _in_group(item, group_id) else None
 
 
-def start_owned(activity_id: str, requester_id: str) -> str:
+def start_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     """Start an owned activity now; expired activities restart without an end."""
     table = _get_table()
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType"):
+    if item is None or item.get("itemType") or not _in_group(item, group_id):
         return LIVE_NOT_FOUND
     if item.get("proposedById") != requester_id:
         return LIVE_FORBIDDEN
@@ -446,7 +477,7 @@ def start_owned(activity_id: str, requester_id: str) -> str:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType"):
+        if current is None or current.get("itemType") or not _in_group(current, group_id):
             return LIVE_NOT_FOUND
         if current.get("proposedById") != requester_id:
             return LIVE_FORBIDDEN
@@ -454,11 +485,11 @@ def start_owned(activity_id: str, requester_id: str) -> str:
     return LIVE_OK
 
 
-def end_owned(activity_id: str, requester_id: str) -> str:
+def end_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     """End a live owned activity permanently."""
     table = _get_table()
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType"):
+    if item is None or item.get("itemType") or not _in_group(item, group_id):
         return LIVE_NOT_FOUND
     if item.get("proposedById") != requester_id:
         return LIVE_FORBIDDEN
@@ -484,7 +515,7 @@ def end_owned(activity_id: str, requester_id: str) -> str:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType"):
+        if current is None or current.get("itemType") or not _in_group(current, group_id):
             return LIVE_NOT_FOUND
         if current.get("proposedById") != requester_id:
             return LIVE_FORBIDDEN
@@ -495,13 +526,14 @@ def end_owned(activity_id: str, requester_id: str) -> str:
 def update_schedule_owned(
     activity_id: str,
     requester_id: str,
+    group_id: str,
     start_at: int | None,
     end_at: int | None,
 ) -> str:
     """Replace an owned pending activity's schedule."""
     table = _get_table()
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType"):
+    if item is None or item.get("itemType") or not _in_group(item, group_id):
         return SCHEDULE_NOT_FOUND
     if item.get("proposedById") != requester_id:
         return SCHEDULE_FORBIDDEN
@@ -541,7 +573,7 @@ def update_schedule_owned(
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType"):
+        if current is None or current.get("itemType") or not _in_group(current, group_id):
             return SCHEDULE_NOT_FOUND
         if current.get("proposedById") != requester_id:
             return SCHEDULE_FORBIDDEN
@@ -549,7 +581,7 @@ def update_schedule_owned(
     return SCHEDULE_OK
 
 
-def archive(activity_id: str, _requester_id: str) -> str:
+def archive(activity_id: str, _requester_id: str, group_id: str) -> str:
     """Move an activity into the expired section without deleting it.
 
     Archiving is a shared-household action rather than an owner-only one. We
@@ -558,7 +590,7 @@ def archive(activity_id: str, _requester_id: str) -> str:
     """
     table = _get_table()
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType"):
+    if item is None or item.get("itemType") or not _in_group(item, group_id):
         return ARCHIVE_NOT_FOUND
     if _lifecycle(item)["isExpired"]:
         return ARCHIVE_OK
@@ -576,13 +608,13 @@ def archive(activity_id: str, _requester_id: str) -> str:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType"):
+        if current is None or current.get("itemType") or not _in_group(current, group_id):
             return ARCHIVE_NOT_FOUND
         return ARCHIVE_OK
     return ARCHIVE_OK
 
 
-def delete_owned(activity_id: str, requester_id: str) -> str:
+def delete_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     """Delete an activity only when requester_id is its stored creator.
 
     The initial consistent read gives the route a useful 404 vs. 403 result.
@@ -592,7 +624,7 @@ def delete_owned(activity_id: str, requester_id: str) -> str:
     """
     table = _get_table()
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None:
+    if item is None or not _in_group(item, group_id):
         return DELETE_NOT_FOUND
     if item.get("proposedById") != requester_id:
         return DELETE_FORBIDDEN
@@ -612,7 +644,7 @@ def delete_owned(activity_id: str, requester_id: str) -> str:
             raise
         # Resolve the rare race into the same stable API outcomes.
         current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None:
+        if current is None or not _in_group(current, group_id):
             return DELETE_NOT_FOUND
         if current.get("proposedById") != requester_id:
             return DELETE_FORBIDDEN
@@ -623,13 +655,14 @@ def delete_owned(activity_id: str, requester_id: str) -> str:
     for reaction in _scan_all(consistent=True):
         if (
             reaction.get("itemType") == COMMENT_LIKE_TYPE
+            and reaction.get("groupId") == group_id
             and reaction.get("activityId") == activity_id
         ):
             table.delete_item(Key={"id": reaction["id"]})
     return DELETE_OK
 
 
-def list_recent(limit: int | None = None, consistent: bool = False) -> list[dict]:
+def list_recent(group_id: str, limit: int | None = None, consistent: bool = False) -> list[dict]:
     """Return all activities in active-then-expired display order.
 
     Pass consistent=True for the response that follows a write (propose / join /
@@ -640,7 +673,7 @@ def list_recent(limit: int | None = None, consistent: bool = False) -> list[dict
     items = _scan_all(consistent=consistent)
     likes_by_activity: dict[str, dict[str, set[str]]] = {}
     for item in items:
-        if item.get("itemType") != COMMENT_LIKE_TYPE:
+        if item.get("itemType") != COMMENT_LIKE_TYPE or item.get("groupId") != group_id:
             continue
         likes_by_activity.setdefault(item["activityId"], {}).setdefault(
             item["commentId"], set()
@@ -649,7 +682,7 @@ def list_recent(limit: int | None = None, consistent: bool = False) -> list[dict
     items = [
         item
         for item in items
-        if not item.get("itemType") and "createdAt" in item
+        if not item.get("itemType") and "createdAt" in item and item.get("groupId") == group_id
     ]
     now_ms = int(time.time() * 1000)
     active = []

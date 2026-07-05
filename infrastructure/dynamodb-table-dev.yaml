@@ -133,9 +133,18 @@ Resources:
       AttributeDefinitions:
         - AttributeName: groupId
           AttributeType: S
+        - AttributeName: joinCode
+          AttributeType: S
       KeySchema:
         - AttributeName: groupId
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: JoinCodeIndex
+          KeySchema:
+            - AttributeName: joinCode
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
       SSESpecification:
         SSEEnabled: true
       PointInTimeRecoverySpecification:

@@ -4,8 +4,8 @@ CloudFormation + a deploy script for the app's AWS resources.
 
 | File                       | Purpose                                                        |
 | -------------------------- | -------------------------------------------------------------- |
-| `dynamodb-table-dev.yaml`  | CloudFormation template: the **dev** tables (`RoommateStatus-dev` + `-pushsubs` + `-activities`)  |
-| `dynamodb-table-main.yaml` | CloudFormation template: the **main** tables (`RoommateStatus-main` + `-pushsubs` + `-activities`) |
+| `dynamodb-table-dev.yaml`  | CloudFormation template: the **dev** tables (`RoommateStatus-dev` + `-pushsubs` + `-activities` + `-groups`)  |
+| `dynamodb-table-main.yaml` | CloudFormation template: the **main** tables (`RoommateStatus-main` + `-pushsubs` + `-activities` + `-groups`) |
 | `deploy.py`                | Creates/updates a stack via boto3 and prints outputs           |
 | `requirements.txt`         | Python deps (`boto3`)                                          |
 | `docker-compose.dynamodb-local.yml` | Local-dev only: in-memory DynamoDB Local + a one-off table-creator (the local stand-in for the CloudFormation tables) |
@@ -14,18 +14,20 @@ CloudFormation + a deploy script for the app's AWS resources.
 ## DynamoDB tables
 
 There are two independent deployments, each with its own template and stack so
-dev and main can never share data. Each stack provisions **three** tables — the
-roommate table, a Web Push subscriptions table, and a proposed-activities table:
+dev and main can never share data. Each stack provisions **four** tables — the
+roommate table, a groups table, a Web Push subscriptions table, and a proposed-activities table:
 
-| Deployment | Stack                  | Roommate table        | Push subscriptions table       | Activities table                |
-| ---------- | ---------------------- | --------------------- | ------------------------------ | ------------------------------- |
-| `dev`      | `roomie-dynamodb-dev`  | `RoommateStatus-dev`  | `RoommateStatus-dev-pushsubs`  | `RoommateStatus-dev-activities`  |
-| `main`     | `roomie-dynamodb-main` | `RoommateStatus-main` | `RoommateStatus-main-pushsubs` | `RoommateStatus-main-activities` |
+| Deployment | Stack                  | Roommate table        | Groups table              | Push subscriptions table       | Activities table                |
+| ---------- | ---------------------- | --------------------- | ------------------------- | ------------------------------ | ------------------------------- |
+| `dev`      | `roomie-dynamodb-dev`  | `RoommateStatus-dev`  | `RoommateStatus-dev-groups`  | `RoommateStatus-dev-pushsubs`  | `RoommateStatus-dev-activities`  |
+| `main`     | `roomie-dynamodb-main` | `RoommateStatus-main` | `RoommateStatus-main-groups` | `RoommateStatus-main-pushsubs` | `RoommateStatus-main-activities` |
 
 The roommate table holds one item per account, keyed by a string `id` (the
 normalized username). Grouped accounts also appear as roommates; account and
 status attributes (`username`, `name`, `passwordHash`, `groupId`, `status`,
-`statusText`, `statusUpdatedAt`) are schemaless and written by the app. The push subscriptions
+`statusText`, `statusUpdatedAt`) are schemaless and written by the app. The groups table
+holds one item per household, keyed by `groupId`, with a `joinCode` global
+secondary index for reusable invite-code lookup. The push subscriptions
 table holds one item per browser Web Push subscription, keyed by a hash of the
 push endpoint and associated with a roommate `userId` (see
 `docker/flask/push.py`). The activities table holds activity records plus typed

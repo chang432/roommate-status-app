@@ -62,6 +62,30 @@
   @apply mt-1 block text-[11.5px] font-semibold text-ink-soft;
 }
 
+.groupCard {
+  @apply rounded-sm border border-line bg-surface-muted p-4;
+}
+
+.groupName {
+  @apply text-[16px] font-black text-ink;
+}
+
+.groupCodeLabel {
+  @apply mt-1 text-[12px] font-semibold uppercase tracking-[0.05em] text-ink-soft;
+}
+
+.groupCodeRow {
+  @apply mt-4 flex items-center gap-3 max-[420px]:flex-col max-[420px]:items-stretch;
+}
+
+.groupCode {
+  @apply flex-1 rounded-sm border border-line bg-card px-3 py-[11px] text-center text-[15px] font-black tracking-[0.2em] text-accent-deep;
+}
+
+.copyButton {
+  @apply rounded-sm border border-line bg-card px-4 py-[11px] text-[13px] font-black text-ink-soft transition hover:bg-surface-hover;
+}
+
 .signOutButton {
   @apply w-full rounded-sm border border-line bg-card px-4 py-[12px] text-[14px] font-black text-ink-soft transition hover:bg-surface-hover;
 }

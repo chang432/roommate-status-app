@@ -14,7 +14,6 @@ from botocore.exceptions import ClientError
 import activities
 
 JAM_TYPE = "spotifyJam"
-ACTIVE_JAM_ID = "activeJam"
 
 END_NOT_FOUND = "not_found"
 END_FORBIDDEN = "forbidden"
@@ -42,6 +41,7 @@ def _project(item: dict | None) -> dict | None:
         return None
     return {
         "id": item["id"],
+        "groupId": item.get("groupId"),
         "link": item["link"],
         "hostId": item.get("hostId"),
         "hostName": item.get("hostName", "Someone"),
@@ -49,15 +49,20 @@ def _project(item: dict | None) -> dict | None:
     }
 
 
-def get_active() -> dict | None:
-    item = _get_table().get_item(Key={"id": ACTIVE_JAM_ID}, ConsistentRead=True).get("Item")
+def _active_jam_id(group_id: str) -> str:
+    return f"activeJam#{group_id}"
+
+
+def get_active(group_id: str) -> dict | None:
+    item = _get_table().get_item(Key={"id": _active_jam_id(group_id)}, ConsistentRead=True).get("Item")
     return _project(item)
 
 
-def share(link: str, host_id: str, host_name: str) -> dict:
+def share(link: str, host_id: str, host_name: str, group_id: str) -> dict:
     item = {
-        "id": ACTIVE_JAM_ID,
+        "id": _active_jam_id(group_id),
         "itemType": JAM_TYPE,
+        "groupId": group_id,
         "link": link,
         "hostId": host_id,
         "hostName": host_name,
@@ -67,23 +72,23 @@ def share(link: str, host_id: str, host_name: str) -> dict:
     return _project(item)
 
 
-def end(host_id: str) -> str:
+def end(host_id: str, group_id: str) -> str:
     table = _get_table()
-    item = table.get_item(Key={"id": ACTIVE_JAM_ID}, ConsistentRead=True).get("Item")
+    item = table.get_item(Key={"id": _active_jam_id(group_id)}, ConsistentRead=True).get("Item")
     if item is None or item.get("itemType") != JAM_TYPE:
         return END_NOT_FOUND
     if item.get("hostId") != host_id:
         return END_FORBIDDEN
     try:
         table.delete_item(
-            Key={"id": ACTIVE_JAM_ID},
-            ConditionExpression="itemType = :jam AND hostId = :host",
-            ExpressionAttributeValues={":jam": JAM_TYPE, ":host": host_id},
+            Key={"id": _active_jam_id(group_id)},
+            ConditionExpression="itemType = :jam AND hostId = :host AND groupId = :groupId",
+            ExpressionAttributeValues={":jam": JAM_TYPE, ":host": host_id, ":groupId": group_id},
         )
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
-        current = table.get_item(Key={"id": ACTIVE_JAM_ID}, ConsistentRead=True).get("Item")
+        current = table.get_item(Key={"id": _active_jam_id(group_id)}, ConsistentRead=True).get("Item")
         if current is None or current.get("itemType") != JAM_TYPE:
             return END_NOT_FOUND
         return END_FORBIDDEN

@@ -10,6 +10,7 @@ Description: >-
       generated id (see docker/flask/activities.py).
     - RoommateStatus-main-shows: one item per TV show, keyed by a generated id,
       with watchers embedded (see docker/flask/household_shows.py).
+    - RoommateStatus-main-groups: one item per group, keyed by groupId.
 
   This is the "-main" half of the dev/main split (see dynamodb-table-dev.yaml
   for the dev tables). Table names are fixed per template so the two
@@ -121,6 +122,38 @@ Resources:
         - Key: Environment
           Value: main
 
+  GroupsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-main-groups
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: joinCode
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: JoinCodeIndex
+          KeySchema:
+            - AttributeName: joinCode
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: main
+
 Outputs:
   TableName:
     Description: Name of the roommate-status DynamoDB table.
@@ -169,3 +202,15 @@ Outputs:
     Value: !GetAtt ShowsTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ShowsTableArn"
+
+  GroupsTableName:
+    Description: Name of the groups DynamoDB table.
+    Value: !Ref GroupsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-GroupsTableName"
+
+  GroupsTableArn:
+    Description: ARN of the groups DynamoDB table.
+    Value: !GetAtt GroupsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-GroupsTableArn"

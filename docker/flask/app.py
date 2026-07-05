@@ -73,12 +73,14 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 import activities
 import db
+import groups
 import household_checklists
 import household_requests
 import household_shows
@@ -94,6 +96,8 @@ MAX_COMMENT_LEN = 280
 # Number of available roommates that triggers the "gather" push (PROJECT.md:
 # "3 or more"). Override with the AVAILABLE_THRESHOLD env var.
 PUSH_THRESHOLD = int(os.environ.get("AVAILABLE_THRESHOLD", "3"))
+_group_setup_done = False
+_group_setup_lock = threading.Lock()
 
 
 def mentions_all(text: str) -> bool:
@@ -156,6 +160,51 @@ def validate_activity_schedule(body: dict) -> tuple[int | None, int | None, str 
     return start_at, end_at, None
 
 
+def ensure_group_features_ready() -> None:
+    global _group_setup_done
+    if _group_setup_done:
+        return
+    with _group_setup_lock:
+        if _group_setup_done:
+            return
+        groups.ensure_default_group()
+        activities.backfill_default_group_records()
+        household_shows.backfill_default_group_records()
+        _group_setup_done = True
+
+
+def group_member_from_query() -> tuple[dict | None, tuple | None]:
+    ensure_group_features_ready()
+    user_id = (request.args.get("userId") or "").strip()
+    member = db.get_group_member(user_id) if user_id else None
+    if member is None:
+        return None, (jsonify({"error": "A valid roommate is required."}), 400)
+    return member, None
+
+
+def group_user_ids(group_id: str) -> set[str]:
+    ensure_group_features_ready()
+    return set(db.get_group_user_ids(group_id, consistent=True))
+
+
+def notify_group(
+    group_id: str,
+    title: str,
+    body: str,
+    url: str = "/",
+    event_type: str | None = None,
+    exclude_user_ids: set[str] | None = None,
+) -> dict:
+    return push.notify_users(
+        user_ids=group_user_ids(group_id),
+        title=title,
+        body=body,
+        url=url,
+        event_type=event_type,
+        exclude_user_ids=exclude_user_ids,
+    )
+
+
 def create_app() -> Flask:
     """Application factory so tests can build isolated app instances."""
     app = Flask(__name__)
@@ -164,6 +213,11 @@ def create_app() -> Flask:
     # In production the frontend is served behind the same proxy, but permissive
     # CORS keeps local development friction-free.
     CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+    @app.before_request
+    def ensure_group_state():
+        if request.path.startswith("/api/"):
+            ensure_group_features_ready()
 
     @app.get("/api/health")
     def health():
@@ -221,10 +275,43 @@ def create_app() -> Flask:
         push.delete_user_subscriptions(db.normalize_username(user_id))
         return jsonify({"ok": True})
 
+    @app.post("/api/groups/join")
+    def join_group():
+        """Assign a pending account to the household behind a reusable code."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        code = body.get("code", "")
+        user, error = groups.join_group(user_id, code)
+        if error == "invalid_code":
+            return jsonify({"error": "Enter a valid group code."}), 400
+        if error == "unknown_code":
+            return jsonify({"error": "That group code was not recognized."}), 404
+        if error == "already_grouped":
+            return jsonify({"error": "This account already belongs to a group."}), 409
+        if error == "unknown_user" or user is None:
+            return jsonify({"error": "A valid account is required."}), 400
+        group = groups.get_group_by_id(user["groupId"])
+        return jsonify({"user": user, "group": group})
+
+    @app.get("/api/groups/current")
+    def get_current_group():
+        """Return the signed-in user's current group metadata."""
+        user_id = (request.args.get("userId") or "").strip()
+        user = db.get_group_member(user_id) if user_id else None
+        if user is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
+        group = groups.get_group_by_id(user["groupId"])
+        if group is None:
+            return jsonify({"error": "That group no longer exists."}), 404
+        return jsonify({"group": group})
+
     @app.get("/api/roommates")
     def get_roommates():
         """Return the whole household with their current statuses."""
-        return jsonify(db.get_all())
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify(db.get_all(viewer["groupId"]))
 
     @app.put("/api/roommates/<roommate_id>/status")
     def update_status(roommate_id: str):
@@ -239,18 +326,23 @@ def create_app() -> Flask:
                 400,
             )
 
-        roommates = db.update_status(roommate_id, status, status_text)
+        roommate = db.get_group_member(roommate_id)
+        if roommate is None:
+            return jsonify({"error": f"Unknown roommate: {roommate_id}"}), 404
+
+        roommates = db.update_status(roommate_id, roommate["groupId"], status, status_text)
         if roommates is None:
             return jsonify({"error": f"Unknown roommate: {roommate_id}"}), 404
 
         # When enough roommates are free, push a "gather!" notification to every
         # subscribed device. Sending is best-effort: a push failure must not
         # fail the status update the user just made.
-        free = db.available_count(roommates)
+        free = db.available_count(roommate["groupId"], roommates)
         if free >= PUSH_THRESHOLD:
             app.logger.info("Notification: %d roommates are available — time to gather!", free)
             try:
-                push.notify_all(
+                notify_group(
+                    roommate["groupId"],
                     title="Roomies are free!",
                     body=f"{free} roomies are free! LETS HANG 🎉!",
                     url="/",
@@ -272,7 +364,8 @@ def create_app() -> Flask:
         if not push.is_configured():
             return jsonify({"error": "Push is not configured on the server."}), 503
 
-        result = push.notify_all(
+        result = notify_group(
+            requester["groupId"],
             title="Update your status",
             body=f"{requester['name']} wants to know what you're up to 👀",
             url="/",
@@ -286,7 +379,7 @@ def create_app() -> Flask:
         body = request.get_json(silent=True) or {}
         requester_id = (body.get("requesterId") or "").strip()
         requester = db.get_group_member(requester_id) if requester_id else None
-        target = db.get_group_member(roommate_id)
+        target = db.get_group_member(roommate_id, requester["groupId"]) if requester else None
         if requester is None or target is None:
             return jsonify({"error": "Valid requester and roommate are required."}), 400
         if requester["id"] == target["id"]:
@@ -338,9 +431,13 @@ def create_app() -> Flask:
     @app.post("/api/push/test")
     def push_test():
         """Send a test notification to every subscribed device (PoC helper)."""
+        viewer, error = group_member_from_query()
+        if error:
+            return error
         if not push.is_configured():
             return jsonify({"error": "Push is not configured on the server."}), 503
-        result = push.notify_all(
+        result = notify_group(
+            viewer["groupId"],
             title="Roomie Status test",
             body="If you can see this, push notifications work 🎉",
             url="/",
@@ -351,7 +448,10 @@ def create_app() -> Flask:
     @app.get("/api/jam")
     def get_jam():
         """Return the one active household Jam, if any."""
-        return jsonify(jam.get_active())
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify(jam.get_active(viewer["groupId"]))
 
     @app.post("/api/jam")
     def share_jam():
@@ -365,9 +465,10 @@ def create_app() -> Flask:
         if not jam.valid_spotify_link(link):
             return jsonify({"error": "Paste a valid Spotify Jam link."}), 400
 
-        active = jam.share(link, host["id"], host["name"])
+        active = jam.share(link, host["id"], host["name"], host["groupId"])
         try:
-            push.notify_all(
+            notify_group(
+                host["groupId"],
                 title="Spotify Jam is live",
                 body=f"{host['name']} shared a Jam. Tap to join.",
                 url="/",
@@ -386,13 +487,14 @@ def create_app() -> Flask:
         host = db.get_group_member(host_id) if host_id else None
         if host is None:
             return jsonify({"error": "A valid roommate is required."}), 400
-        result = jam.end(host["id"])
+        result = jam.end(host["id"], host["groupId"])
         if result == jam.END_NOT_FOUND:
             return jsonify({"error": "No active Jam to end."}), 404
         if result == jam.END_FORBIDDEN:
             return jsonify({"error": "Only the Jam host can end it."}), 403
         try:
-            push.notify_all(
+            notify_group(
+                host["groupId"],
                 title="Spotify Jam ended",
                 body=f"{host['name']} ended the active Jam.",
                 url="/",
@@ -401,13 +503,16 @@ def create_app() -> Flask:
             )
         except Exception:  # noqa: BLE001 - ending the Jam must remain successful
             app.logger.exception("Failed to send Jam ended notification")
-        return jsonify(jam.get_active())
+        return jsonify(jam.get_active(host["groupId"]))
 
     # --- Proposed activities ------------------------------------------------
     @app.get("/api/activities")
     def get_activities():
         """Return current activities followed by expired activity history."""
-        return jsonify(activities.list_recent())
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify(activities.list_recent(viewer["groupId"]))
 
     @app.post("/api/activities")
     def propose_activity():
@@ -431,6 +536,7 @@ def create_app() -> Flask:
             text,
             proposer["id"],
             proposer["name"],
+            proposer["groupId"],
             start_at,
             end_at,
         )
@@ -438,7 +544,8 @@ def create_app() -> Flask:
         # Notify the shire except the proposer. Best-effort: a push failure
         # must not fail the proposal the user just made.
         try:
-            push.notify_all(
+            notify_group(
+                proposer["groupId"],
                 title="New activity proposed 🎉",
                 body=f"{proposer['name']}: {text}",
                 url="/",
@@ -449,7 +556,7 @@ def create_app() -> Flask:
 
         # Return the refreshed list so the UI updates in one round-trip.
         # Consistent read so the just-created proposal is always included.
-        return jsonify(activities.list_recent(consistent=True))
+        return jsonify(activities.list_recent(proposer["groupId"], consistent=True))
 
     def transition_activity_live(activity_id: str, action: str):
         """Apply a creator-owned live transition and notify the shire."""
@@ -457,10 +564,13 @@ def create_app() -> Flask:
         requester_id = (body.get("requesterId") or "").strip()
         if not requester_id:
             return jsonify({"error": "A requester id is required."}), 400
+        requester = db.get_group_member(requester_id) if requester_id else None
+        if requester is None:
+            return jsonify({"error": "A valid requester is required."}), 400
 
-        activity = activities.get(activity_id, consistent=True)
+        activity = activities.get(activity_id, requester["groupId"], consistent=True)
         transition = activities.start_owned if action == "start" else activities.end_owned
-        result = transition(activity_id, requester_id)
+        result = transition(activity_id, requester_id, requester["groupId"])
         if result == activities.LIVE_NOT_FOUND:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
         if result == activities.LIVE_FORBIDDEN:
@@ -474,7 +584,8 @@ def create_app() -> Flask:
         # Live transitions are household-wide events. Push remains best-effort
         # so notification configuration or delivery cannot undo persisted state.
         try:
-            push_result = push.notify_all(
+            push_result = notify_group(
+                requester["groupId"],
                 title=f"Event {action}ed {'🔴' if action == 'start' else '🏁'}",
                 body=(
                     f"{activity['proposedBy']} started {activity['text']}"
@@ -489,7 +600,7 @@ def create_app() -> Flask:
         except Exception:  # noqa: BLE001 - transition must remain successful
             app.logger.exception("Failed to send event %s notification", action)
 
-        return jsonify(activities.list_recent(consistent=True))
+        return jsonify(activities.list_recent(requester["groupId"], consistent=True))
 
     @app.post("/api/activities/<activity_id>/start")
     def start_activity(activity_id: str):
@@ -512,9 +623,14 @@ def create_app() -> Flask:
         if schedule_error:
             return jsonify({"error": schedule_error}), 400
 
+        requester = db.get_group_member(requester_id) if requester_id else None
+        if requester is None:
+            return jsonify({"error": "A valid requester is required."}), 400
+
         result = activities.update_schedule_owned(
             activity_id,
             requester_id,
+            requester["groupId"],
             start_at,
             end_at,
         )
@@ -524,7 +640,7 @@ def create_app() -> Flask:
             return jsonify({"error": "Only the event creator can edit its schedule."}), 403
         if result == activities.SCHEDULE_CONFLICT:
             return jsonify({"error": "Only pending events can be rescheduled."}), 409
-        return jsonify(activities.list_recent(consistent=True))
+        return jsonify(activities.list_recent(requester["groupId"], consistent=True))
 
     @app.post("/api/activities/<activity_id>/archive")
     def archive_activity(activity_id: str):
@@ -534,13 +650,16 @@ def create_app() -> Flask:
         if not requester_id:
             return jsonify({"error": "A requester id is required."}), 400
 
-        activity = activities.get(activity_id, consistent=True)
-        result = activities.archive(activity_id, requester_id)
+        requester = db.get_group_member(requester_id) if requester_id else None
+        if requester is None:
+            return jsonify({"error": "A valid requester is required."}), 400
+
+        activity = activities.get(activity_id, requester["groupId"], consistent=True)
+        result = activities.archive(activity_id, requester_id, requester["groupId"])
         if result == activities.ARCHIVE_NOT_FOUND:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
 
-        requester = db.get_group_member(requester_id)
-        actor_name = requester["name"] if requester else requester_id
+        actor_name = requester["name"]
         try:
             push.notify_users(
                 user_ids=set(activity["memberIds"]),
@@ -552,7 +671,7 @@ def create_app() -> Flask:
         except Exception:  # noqa: BLE001 - archiving must remain successful
             app.logger.exception("Failed to send activity archive notification")
 
-        return jsonify(activities.list_recent(consistent=True))
+        return jsonify(activities.list_recent(requester["groupId"], consistent=True))
 
     @app.delete("/api/activities/<activity_id>")
     def delete_activity(activity_id: str):
@@ -562,8 +681,12 @@ def create_app() -> Flask:
         if not requester_id:
             return jsonify({"error": "A requester id is required."}), 400
 
-        activity = activities.get(activity_id, consistent=True)
-        result = activities.delete_owned(activity_id, requester_id)
+        requester = db.get_group_member(requester_id) if requester_id else None
+        if requester is None:
+            return jsonify({"error": "A valid requester is required."}), 400
+
+        activity = activities.get(activity_id, requester["groupId"], consistent=True)
+        result = activities.delete_owned(activity_id, requester_id, requester["groupId"])
         if result == activities.DELETE_NOT_FOUND:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
         if result == activities.DELETE_FORBIDDEN:
@@ -582,7 +705,7 @@ def create_app() -> Flask:
         except Exception:  # noqa: BLE001 - deletion must remain successful
             app.logger.exception("Failed to send activity deletion notification")
 
-        return jsonify(activities.list_recent(consistent=True))
+        return jsonify(activities.list_recent(requester["groupId"], consistent=True))
 
     @app.post("/api/activities/<activity_id>/join")
     def join_activity(activity_id: str):
@@ -592,7 +715,7 @@ def create_app() -> Flask:
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
             return jsonify({"error": "A valid roommate is required."}), 400
-        activity = activities.join(activity_id, roommate["id"], roommate["name"])
+        activity = activities.join(activity_id, roommate["id"], roommate["name"], roommate["groupId"])
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
         if activity == activities.MUTATION_EXPIRED:
@@ -612,7 +735,7 @@ def create_app() -> Flask:
             app.logger.exception("Failed to send join notification")
 
         # Consistent read so the updated member list is reflected immediately.
-        return jsonify(activities.list_recent(consistent=True))
+        return jsonify(activities.list_recent(roommate["groupId"], consistent=True))
 
     @app.post("/api/activities/<activity_id>/leave")
     def leave_activity(activity_id: str):
@@ -622,13 +745,13 @@ def create_app() -> Flask:
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
             return jsonify({"error": "A valid roommate is required."}), 400
-        result = activities.leave(activity_id, roommate["id"], roommate["name"])
+        result = activities.leave(activity_id, roommate["id"], roommate["name"], roommate["groupId"])
         if result is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
         if result == activities.MUTATION_EXPIRED:
             return jsonify({"error": "Expired activities are read-only."}), 409
         # Consistent read so the updated member list is reflected immediately.
-        return jsonify(activities.list_recent(consistent=True))
+        return jsonify(activities.list_recent(roommate["groupId"], consistent=True))
 
     @app.post("/api/activities/<activity_id>/comments")
     def comment_on_activity(activity_id: str):
@@ -643,12 +766,13 @@ def create_app() -> Flask:
             return jsonify({"error": "A comment is required."}), 400
         if len(text) > MAX_COMMENT_LEN:
             return jsonify({"error": f"Keep it under {MAX_COMMENT_LEN} characters."}), 400
-        mentions = resolve_mentions(text, db.get_all(), author["id"])
+        mentions = resolve_mentions(text, db.get_all(author["groupId"]), author["id"])
         mentions_everyone = mentions_all(text)
         activity = activities.add_comment(
             activity_id,
             author["name"],
             text,
+            author["groupId"],
             mentions,
             mentions_everyone,
             author["id"],
@@ -682,7 +806,8 @@ def create_app() -> Flask:
 
         if mentions_everyone:
             try:
-                result = push.notify_all(
+                result = notify_group(
+                    author["groupId"],
                     title=f"{author['name']} mentioned everyone",
                     body=f"On “{activity['text']}”: {text}",
                     url="/",
@@ -705,7 +830,7 @@ def create_app() -> Flask:
             )
 
         # Consistent read so the new comment is reflected immediately.
-        return jsonify(activities.list_recent(consistent=True))
+        return jsonify(activities.list_recent(author["groupId"], consistent=True))
 
     @app.route(
         "/api/activities/<activity_id>/comments/<comment_id>/likes",
@@ -724,6 +849,7 @@ def create_app() -> Flask:
             comment_id,
             roommate["id"],
             roommate["name"],
+            roommate["groupId"],
             request.method == "PUT",
         )
         if result == activities.LIKE_NOT_FOUND:
@@ -732,13 +858,16 @@ def create_app() -> Flask:
             return jsonify({"error": "You cannot like your own comment."}), 403
         if result == activities.MUTATION_EXPIRED:
             return jsonify({"error": "Expired activities are read-only."}), 409
-        return jsonify(activities.list_recent(consistent=True))
+        return jsonify(activities.list_recent(roommate["groupId"], consistent=True))
 
     # --- Requests -----------------------------------------------------------
     @app.get("/api/requests")
     def get_requests():
         """Return recent household requests, newest first."""
-        return jsonify(household_requests.list_recent())
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify(household_requests.list_recent(viewer["groupId"]))
 
     @app.post("/api/requests")
     def create_request():
@@ -765,7 +894,7 @@ def create_app() -> Flask:
 
         requested_roommates = []
         for user_id in sorted(requested_ids):
-            roommate = db.get_group_member(user_id)
+            roommate = db.get_group_member(user_id, requester["groupId"])
             if roommate is None:
                 return jsonify({"error": "Every requested roommate must be valid."}), 400
             requested_roommates.append(roommate)
@@ -774,6 +903,7 @@ def create_app() -> Flask:
             text,
             requester["id"],
             requester["name"],
+            requester["groupId"],
             requested_roommates,
         )
         request_url = f"/?request={created['id']}"
@@ -787,7 +917,7 @@ def create_app() -> Flask:
             )
         except Exception:  # noqa: BLE001 - never let push break request creation
             app.logger.exception("Failed to send request notification")
-        return jsonify(household_requests.list_recent(consistent=True))
+        return jsonify(household_requests.list_recent(requester["groupId"], consistent=True))
 
     @app.post("/api/requests/<request_id>/responses")
     def respond_to_request(request_id: str):
@@ -801,7 +931,12 @@ def create_app() -> Flask:
         if response not in household_requests.VALID_RESPONSES:
             return jsonify({"error": "Response must be accepted or denied."}), 400
 
-        updated = household_requests.set_response(request_id, roommate["id"], response)
+        updated = household_requests.set_response(
+            request_id,
+            roommate["id"],
+            roommate["groupId"],
+            response,
+        )
         if updated is None:
             return jsonify({"error": "Unknown request or roommate."}), 404
 
@@ -817,7 +952,7 @@ def create_app() -> Flask:
             )
         except Exception:  # noqa: BLE001 - response must remain successful
             app.logger.exception("Failed to send request response notification")
-        return jsonify(household_requests.list_recent(consistent=True))
+        return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
 
     @app.post("/api/requests/<request_id>/complete")
     def complete_request(request_id: str):
@@ -828,7 +963,12 @@ def create_app() -> Flask:
         if roommate is None:
             return jsonify({"error": "A valid roommate is required."}), 400
 
-        updated = household_requests.complete(request_id, roommate["id"], roommate["name"])
+        updated = household_requests.complete(
+            request_id,
+            roommate["id"],
+            roommate["name"],
+            roommate["groupId"],
+        )
         if updated is None:
             return jsonify({"error": f"Unknown request: {request_id}"}), 404
 
@@ -844,7 +984,7 @@ def create_app() -> Flask:
             )
         except Exception:  # noqa: BLE001 - completion must remain successful
             app.logger.exception("Failed to send request completion notification")
-        return jsonify(household_requests.list_recent(consistent=True))
+        return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
 
     @app.post("/api/requests/<request_id>/reopen")
     def reopen_request(request_id: str):
@@ -855,7 +995,12 @@ def create_app() -> Flask:
         if roommate is None:
             return jsonify({"error": "A valid roommate is required."}), 400
 
-        updated = household_requests.reopen(request_id, roommate["id"], roommate["name"])
+        updated = household_requests.reopen(
+            request_id,
+            roommate["id"],
+            roommate["name"],
+            roommate["groupId"],
+        )
         if updated is None:
             return jsonify({"error": f"Unknown request: {request_id}"}), 404
 
@@ -871,7 +1016,7 @@ def create_app() -> Flask:
             )
         except Exception:  # noqa: BLE001 - reopen must remain successful
             app.logger.exception("Failed to send request reopen notification")
-        return jsonify(household_requests.list_recent(consistent=True))
+        return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
 
     @app.delete("/api/requests/<request_id>")
     def delete_request(request_id: str):
@@ -881,8 +1026,12 @@ def create_app() -> Flask:
         if not requester_id:
             return jsonify({"error": "A requester id is required."}), 400
 
-        request_item = household_requests.get(request_id, consistent=True)
-        result = household_requests.delete_owned(request_id, requester_id)
+        requester = db.get_group_member(requester_id) if requester_id else None
+        if requester is None:
+            return jsonify({"error": "A valid requester is required."}), 400
+
+        request_item = household_requests.get(request_id, requester["groupId"], consistent=True)
+        result = household_requests.delete_owned(request_id, requester_id, requester["groupId"])
         if result == household_requests.DELETE_NOT_FOUND:
             return jsonify({"error": f"Unknown request: {request_id}"}), 404
         if result == household_requests.DELETE_FORBIDDEN:
@@ -899,7 +1048,7 @@ def create_app() -> Flask:
             )
         except Exception:  # noqa: BLE001 - deletion must remain successful
             app.logger.exception("Failed to send request deletion notification")
-        return jsonify(household_requests.list_recent(consistent=True))
+        return jsonify(household_requests.list_recent(requester["groupId"], consistent=True))
 
     @app.post("/api/requests/<request_id>/comments")
     def comment_on_request(request_id: str):
@@ -915,12 +1064,13 @@ def create_app() -> Flask:
         if len(text) > MAX_COMMENT_LEN:
             return jsonify({"error": f"Keep it under {MAX_COMMENT_LEN} characters."}), 400
 
-        mentions = resolve_mentions(text, db.get_all(), author["id"])
+        mentions = resolve_mentions(text, db.get_all(author["groupId"]), author["id"])
         mentions_everyone = mentions_all(text)
         updated = household_requests.add_comment(
             request_id,
             author["name"],
             text,
+            author["groupId"],
             mentions,
             mentions_everyone,
             author["id"],
@@ -949,7 +1099,8 @@ def create_app() -> Flask:
 
         if mentions_everyone:
             try:
-                push.notify_all(
+                notify_group(
+                    author["groupId"],
                     title=f"{author['name']} mentioned everyone",
                     body=f"On request “{updated['text']}”: {text}",
                     url=f"/?request={updated['id']}",
@@ -970,7 +1121,7 @@ def create_app() -> Flask:
                 "New request comment",
                 f"{author['name']} on “{updated['text']}”: {text}",
             )
-        return jsonify(household_requests.list_recent(consistent=True))
+        return jsonify(household_requests.list_recent(author["groupId"], consistent=True))
 
     @app.route(
         "/api/requests/<request_id>/comments/<comment_id>/likes",
@@ -989,19 +1140,23 @@ def create_app() -> Flask:
             comment_id,
             roommate["id"],
             roommate["name"],
+            roommate["groupId"],
             request.method == "PUT",
         )
         if result == household_requests.LIKE_NOT_FOUND:
             return jsonify({"error": "Unknown request or comment."}), 404
         if result == household_requests.LIKE_SELF_FORBIDDEN:
             return jsonify({"error": "You cannot like your own comment."}), 403
-        return jsonify(household_requests.list_recent(consistent=True))
+        return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
 
     # --- Checklists ---------------------------------------------------------
     @app.get("/api/checklists")
     def get_checklists():
         """Return recent active household checklists, newest first."""
-        return jsonify(household_checklists.list_recent())
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify(household_checklists.list_recent(viewer["groupId"]))
 
     @app.post("/api/checklists")
     def create_checklist():
@@ -1035,10 +1190,12 @@ def create_app() -> Flask:
             title,
             creator["id"],
             creator["name"],
+            creator["groupId"],
             cleaned_items,
         )
         try:
-            push.notify_all(
+            notify_group(
+                creator["groupId"],
                 title="New checklist",
                 body=f"{creator['name']} posted “{created['title']}”",
                 url=f"/?checklist={created['id']}",
@@ -1047,7 +1204,7 @@ def create_app() -> Flask:
             )
         except Exception:  # noqa: BLE001 - creation must remain successful
             app.logger.exception("Failed to send checklist notification")
-        return jsonify(household_checklists.list_recent(consistent=True))
+        return jsonify(household_checklists.list_recent(creator["groupId"], consistent=True))
 
     @app.post("/api/checklists/<checklist_id>/notify")
     def notify_checklist(checklist_id: str):
@@ -1055,15 +1212,16 @@ def create_app() -> Flask:
         body = request.get_json(silent=True) or {}
         requester_id = (body.get("requesterId") or "").strip()
         requester = db.get_group_member(requester_id) if requester_id else None
-        checklist = household_checklists.get(checklist_id, consistent=True)
         if requester is None:
             return jsonify({"error": "A valid roommate is required."}), 400
+        checklist = household_checklists.get(checklist_id, requester["groupId"], consistent=True)
         if checklist is None or checklist["isArchived"]:
             return jsonify({"error": f"Unknown checklist: {checklist_id}"}), 404
         if not push.is_configured():
             return jsonify({"error": "Push is not configured on the server."}), 503
 
-        result = push.notify_all(
+        result = notify_group(
+            requester["groupId"],
             title="Checklist reminder",
             body=f"{requester['name']} reminded everyone to update “{checklist['title']}”",
             url=f"/?checklist={checklist['id']}",
@@ -1086,10 +1244,10 @@ def create_app() -> Flask:
         if len(text) > MAX_ACTIVITY_LEN:
             return jsonify({"error": f"Keep it under {MAX_ACTIVITY_LEN} characters."}), 400
 
-        updated = household_checklists.add_item(checklist_id, text)
+        updated = household_checklists.add_item(checklist_id, roommate["groupId"], text)
         if updated is None:
             return jsonify({"error": f"Unknown checklist: {checklist_id}"}), 404
-        return jsonify(household_checklists.list_recent(consistent=True))
+        return jsonify(household_checklists.list_recent(roommate["groupId"], consistent=True))
 
     @app.post("/api/checklists/<checklist_id>/items/<item_id>/toggle")
     def toggle_checklist_item(checklist_id: str, item_id: str):
@@ -1105,10 +1263,11 @@ def create_app() -> Flask:
             item_id,
             roommate["id"],
             roommate["name"],
+            roommate["groupId"],
         )
         if updated is None:
             return jsonify({"error": "Unknown checklist or item."}), 404
-        return jsonify(household_checklists.list_recent(consistent=True))
+        return jsonify(household_checklists.list_recent(roommate["groupId"], consistent=True))
 
     @app.patch("/api/checklists/<checklist_id>/items/<item_id>")
     def update_checklist_item(checklist_id: str, item_id: str):
@@ -1124,10 +1283,10 @@ def create_app() -> Flask:
         if len(text) > MAX_ACTIVITY_LEN:
             return jsonify({"error": f"Keep it under {MAX_ACTIVITY_LEN} characters."}), 400
 
-        updated = household_checklists.update_item(checklist_id, item_id, text)
+        updated = household_checklists.update_item(checklist_id, item_id, text, roommate["groupId"])
         if updated is None:
             return jsonify({"error": "Unknown checklist or item."}), 404
-        return jsonify(household_checklists.list_recent(consistent=True))
+        return jsonify(household_checklists.list_recent(roommate["groupId"], consistent=True))
 
     @app.delete("/api/checklists/<checklist_id>/items/<item_id>")
     def delete_checklist_item(checklist_id: str, item_id: str):
@@ -1138,10 +1297,10 @@ def create_app() -> Flask:
         if roommate is None:
             return jsonify({"error": "A valid roommate is required."}), 400
 
-        updated = household_checklists.delete_item(checklist_id, item_id)
+        updated = household_checklists.delete_item(checklist_id, item_id, roommate["groupId"])
         if updated is None:
             return jsonify({"error": "Unknown checklist or item."}), 404
-        return jsonify(household_checklists.list_recent(consistent=True))
+        return jsonify(household_checklists.list_recent(roommate["groupId"], consistent=True))
 
     @app.post("/api/checklists/<checklist_id>/archive")
     def archive_checklist(checklist_id: str):
@@ -1152,11 +1311,17 @@ def create_app() -> Flask:
         if roommate is None:
             return jsonify({"error": "A valid roommate is required."}), 400
 
-        updated = household_checklists.archive(checklist_id, roommate["id"], roommate["name"])
+        updated = household_checklists.archive(
+            checklist_id,
+            roommate["id"],
+            roommate["name"],
+            roommate["groupId"],
+        )
         if updated is None:
             return jsonify({"error": f"Unknown checklist: {checklist_id}"}), 404
         try:
-            push.notify_all(
+            notify_group(
+                roommate["groupId"],
                 title="Checklist archived",
                 body=f"{roommate['name']} archived “{updated['title']}”",
                 url="/",
@@ -1165,25 +1330,29 @@ def create_app() -> Flask:
             )
         except Exception:  # noqa: BLE001 - archive must remain successful
             app.logger.exception("Failed to send checklist archive notification")
-        return jsonify(household_checklists.list_recent(consistent=True))
+        return jsonify(household_checklists.list_recent(roommate["groupId"], consistent=True))
 
     # --- Shows --------------------------------------------------------------
-    def shows_response(result):
+    def shows_response(result, group_id):
         """Map a household_shows watcher-mutation result to a JSON response.
 
-        None -> unknown show or watcher (404); MUTATION_COMPLETED -> the show is
-        completed and read-only (409); otherwise the refreshed show list.
+        None -> unknown show or watcher, or one in another group (404);
+        MUTATION_COMPLETED -> the show is completed and read-only (409);
+        otherwise the group's refreshed show list.
         """
         if result is None:
             return jsonify({"error": "Unknown show or watcher."}), 404
         if result == household_shows.MUTATION_COMPLETED:
             return jsonify({"error": "Completed shows are read-only."}), 409
-        return jsonify(household_shows.list_recent(consistent=True))
+        return jsonify(household_shows.list_recent(group_id, consistent=True))
 
     @app.get("/api/shows")
     def get_shows():
-        """Return recent shows, newest first."""
-        return jsonify(household_shows.list_recent())
+        """Return the caller's group's recent shows, newest first."""
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify(household_shows.list_recent(viewer["groupId"]))
 
     @app.post("/api/shows")
     def create_show():
@@ -1199,8 +1368,8 @@ def create_app() -> Flask:
         if creator is None:
             return jsonify({"error": "A valid creator is required."}), 400
 
-        household_shows.add_show(title, creator["id"], creator["name"])
-        return jsonify(household_shows.list_recent(consistent=True))
+        household_shows.add_show(title, creator["id"], creator["name"], creator["groupId"])
+        return jsonify(household_shows.list_recent(creator["groupId"], consistent=True))
 
     @app.post("/api/shows/<show_id>/join")
     def join_show(show_id: str):
@@ -1211,7 +1380,8 @@ def create_app() -> Flask:
         if roommate is None:
             return jsonify({"error": "A valid roommate is required."}), 400
         return shows_response(
-            household_shows.join(show_id, roommate["id"], roommate["name"])
+            household_shows.join(show_id, roommate["id"], roommate["name"], roommate["groupId"]),
+            roommate["groupId"],
         )
 
     @app.post("/api/shows/<show_id>/leave")
@@ -1222,23 +1392,33 @@ def create_app() -> Flask:
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
             return jsonify({"error": "A valid roommate is required."}), 400
-        return shows_response(household_shows.leave(show_id, roommate["id"]))
+        return shows_response(
+            household_shows.leave(show_id, roommate["id"], roommate["groupId"]),
+            roommate["groupId"],
+        )
 
     @app.patch("/api/shows/<show_id>/watchers/<member_id>/<field>")
     def adjust_show_progress(show_id: str, member_id: str, field: str):
         """Nudge one watcher's season or episode by an integer delta (+1 / -1).
 
-        Episode edits are intentionally open to every roommate (matching the
-        feature's loose ownership), so no per-caller check gates this route.
+        Episode edits are open to every roommate in the show's group (matching
+        the feature's loose ownership), so the caller need only be a valid
+        roommate — their group scopes which show they can touch.
         """
         if field not in household_shows.PROGRESS_FIELDS:
             return jsonify({"error": "Progress field must be season or episode."}), 400
         body = request.get_json(silent=True) or {}
+        roommate = db.get_group_member((body.get("userId") or "").strip())
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
         delta = body.get("delta")
         if not isinstance(delta, int) or isinstance(delta, bool):
             return jsonify({"error": "A whole-number delta is required."}), 400
         return shows_response(
-            household_shows.adjust_progress(show_id, member_id, field, delta)
+            household_shows.adjust_progress(
+                show_id, member_id, field, delta, roommate["groupId"]
+            ),
+            roommate["groupId"],
         )
 
     @app.put("/api/shows/<show_id>/watchers/<member_id>/<field>")
@@ -1247,11 +1427,17 @@ def create_app() -> Flask:
         if field not in household_shows.PROGRESS_FIELDS:
             return jsonify({"error": "Progress field must be season or episode."}), 400
         body = request.get_json(silent=True) or {}
+        roommate = db.get_group_member((body.get("userId") or "").strip())
+        if roommate is None:
+            return jsonify({"error": "A valid roommate is required."}), 400
         value = body.get("value")
         if not isinstance(value, int) or isinstance(value, bool):
             return jsonify({"error": "A whole-number value is required."}), 400
         return shows_response(
-            household_shows.set_progress(show_id, member_id, field, value)
+            household_shows.set_progress(
+                show_id, member_id, field, value, roommate["groupId"]
+            ),
+            roommate["groupId"],
         )
 
     @app.post("/api/shows/<show_id>/complete")
@@ -1270,12 +1456,12 @@ def create_app() -> Flask:
         requester = db.get_group_member(requester_id) if requester_id else None
         if requester is None:
             return jsonify({"error": "A valid roommate is required."}), 400
-        result = action(show_id, requester["id"])
+        result = action(show_id, requester["id"], requester["groupId"])
         if result is None:
             return jsonify({"error": f"Unknown show: {show_id}"}), 404
         if result == household_shows.COMPLETE_FORBIDDEN:
             return jsonify({"error": f"Only the show's creator can {verb} it."}), 403
-        return jsonify(household_shows.list_recent(consistent=True))
+        return jsonify(household_shows.list_recent(requester["groupId"], consistent=True))
 
     @app.post("/api/activities/<activity_id>/notify")
     def emphasize_activity(activity_id: str):
@@ -1291,7 +1477,7 @@ def create_app() -> Flask:
         if emphasized_by is None:
             return jsonify({"error": "A valid roommate is required."}), 400
 
-        activity = activities.get(activity_id)
+        activity = activities.get(activity_id, emphasized_by["groupId"])
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
         if activity["isExpired"]:

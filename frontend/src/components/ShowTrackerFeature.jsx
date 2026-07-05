@@ -245,7 +245,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange }) {
     markMemberBusy(member.id);
     setError("");
     try {
-      onShowsChange(await adjustProgress(show.id, member.id, field, delta));
+      onShowsChange(await adjustProgress(show.id, member.id, field, delta, user.id));
     } catch (err) {
       setError(err.message || `Could not update the ${field}. Try again.`);
     } finally {
@@ -258,7 +258,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange }) {
     markMemberBusy(member.id);
     setError("");
     try {
-      onShowsChange(await setProgress(show.id, member.id, field, value));
+      onShowsChange(await setProgress(show.id, member.id, field, value, user.id));
     } catch (err) {
       setError(err.message || `Could not update the ${field}. Try again.`);
     } finally {

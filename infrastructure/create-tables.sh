@@ -37,4 +37,25 @@ create_table "$ROOMMATE_TABLE" id
 create_table "$ROOMMATE_TABLE-activities" id
 create_table "$ROOMMATE_TABLE-shows" id
 create_table "$ROOMMATE_TABLE-pushsubs" id
-create_table "$ROOMMATE_TABLE-groups" groupId
+if aws dynamodb describe-table \
+    --table-name "$ROOMMATE_TABLE-groups" \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then
+  echo "  table '$ROOMMATE_TABLE-groups' already exists — leaving as-is"
+else
+  aws dynamodb create-table \
+    --table-name "$ROOMMATE_TABLE-groups" \
+    --attribute-definitions \
+      AttributeName=groupId,AttributeType=S \
+      AttributeName=joinCode,AttributeType=S \
+    --key-schema AttributeName=groupId,KeyType=HASH \
+    --global-secondary-indexes '[
+      {
+        "IndexName":"JoinCodeIndex",
+        "KeySchema":[{"AttributeName":"joinCode","KeyType":"HASH"}],
+        "Projection":{"ProjectionType":"ALL"}
+      }
+    ]' \
+    --billing-mode PAY_PER_REQUEST \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null
+  echo "  created table '$ROOMMATE_TABLE-groups'"
+fi

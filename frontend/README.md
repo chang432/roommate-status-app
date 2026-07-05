@@ -8,9 +8,10 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Login** with a username and password on `/login`, or create a new account
   on `/signup`.
 - **Pending accounts** can sign in but cannot use household features until a
-  future group-join flow assigns them to a group.
+  group code assigns them to a household.
 - **Profile settings** keep account actions in one place, including sign out,
-  account deletion, and a light/dark/system appearance preference.
+  account deletion, a light/dark/system appearance preference, and the current
+  household invite code for grouped users.
 - **View** the whole household's current statuses at a glance.
 - **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.
@@ -66,10 +67,14 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `login`                         | `POST /api/login`                                          |
 | `createAccount`                 | `POST /api/accounts`                                       |
 | `deleteAccount`                 | `DELETE /api/accounts/:id`                                 |
-| `getRoommates`                  | `GET /api/roommates`                                       |
+| `joinGroup`                     | `POST /api/groups/join`                                    |
+| `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
+| `getRoommates`                  | `GET /api/roommates?userId=:id`                            |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
 | `pokeRoommate`                  | `POST /api/roommates/:id/poke`                             |
+| `getJam`                        | `GET /api/jam?userId=:id`                                  |
+| `getActivities`                 | `GET /api/activities?userId=:id`                           |
 | `proposeActivity`               | `POST /api/activities`                                     |
 | `archiveActivity`               | `POST /api/activities/:id/archive`                         |
 | `deleteActivity`                | `DELETE /api/activities/:id`                               |
@@ -77,7 +82,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `endActivity`                   | `POST /api/activities/:id/end`                             |
 | `updateActivitySchedule`        | `PATCH /api/activities/:id/schedule`                       |
 | `setCommentLiked`               | `PUT/DELETE /api/activities/:id/comments/:commentId/likes` |
-| `getRequests`                   | `GET /api/requests`                                        |
+| `getRequests`                   | `GET /api/requests?userId=:id`                             |
 | `createRequest`                 | `POST /api/requests`                                       |
 | `respondToRequest`              | `POST /api/requests/:id/responses`                         |
 | `completeRequest`               | `POST /api/requests/:id/complete`                          |
@@ -85,7 +90,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `deleteRequest`                 | `DELETE /api/requests/:id`                                 |
 | `commentOnRequest`              | `POST /api/requests/:id/comments`                          |
 | `setRequestCommentLiked`        | `PUT/DELETE /api/requests/:id/comments/:commentId/likes`   |
-| `getChecklists`                 | `GET /api/checklists`                                      |
+| `getChecklists`                 | `GET /api/checklists?userId=:id`                           |
 | `createChecklist`               | `POST /api/checklists`                                     |
 | `notifyChecklist`               | `POST /api/checklists/:id/notify`                          |
 | `addChecklistItem`              | `POST /api/checklists/:id/items`                           |

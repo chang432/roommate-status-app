@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback } from 'react'
 import {
   createAccount as apiCreateAccount,
   deleteAccount as apiDeleteAccount,
+  joinGroup as apiJoinGroup,
   login as apiLogin,
 } from '../api/client.js'
 
@@ -53,8 +54,22 @@ export function AuthProvider({ children }) {
     logout()
   }, [logout, user])
 
+  const joinGroup = useCallback(async (code) => {
+    if (!user) return null
+    const { user: joined } = await apiJoinGroup(user.id, code)
+    return persistUser(joined)
+  }, [persistUser, user])
+
   return (
-    <AuthContext.Provider value={{ user, login, createAccount, deleteAccount, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      login,
+      createAccount,
+      joinGroup,
+      deleteAccount,
+      logout,
+    }}
+    >
       {children}
     </AuthContext.Provider>
   )

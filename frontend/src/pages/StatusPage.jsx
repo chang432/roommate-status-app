@@ -79,57 +79,57 @@ export default function StatusPage() {
   // Fetch the shire; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
     try {
-      setRoommates(await getRoommates());
+      setRoommates(await getRoommates(user.id));
       setError("");
     } catch {
       setError("Could not load roommate statuses.");
     }
-  }, []);
+  }, [user.id]);
 
   const loadActivities = useCallback(async () => {
     try {
-      setActivities(await getActivities());
+      setActivities(await getActivities(user.id));
       setLiveError("");
     } catch {
       setLiveError("Could not load household events.");
     }
-  }, []);
+  }, [user.id]);
 
   const loadRequests = useCallback(async () => {
     try {
-      setRequests(await getRequests());
+      setRequests(await getRequests(user.id));
       setLiveError("");
     } catch {
       setLiveError("Could not load household requests.");
     }
-  }, []);
+  }, [user.id]);
 
   const loadChecklists = useCallback(async () => {
     try {
-      setChecklists(await getChecklists());
+      setChecklists(await getChecklists(user.id));
       setLiveError("");
     } catch {
       setLiveError("Could not load household checklists.");
     }
-  }, []);
+  }, [user.id]);
 
   const loadJam = useCallback(async () => {
     try {
-      setJam(await getJam());
+      setJam(await getJam(user.id));
       setLiveError("");
     } catch {
       setLiveError("Could not load the Spotify Jam.");
     }
-  }, []);
+  }, [user.id]);
 
   const loadShows = useCallback(async () => {
     try {
-      setShows(await getShows());
+      setShows(await getShows(user.id));
       setLiveError("");
     } catch {
       setLiveError("Could not load the show tracker.");
     }
-  }, []);
+  }, [user.id]);
 
   // Load page-level data sets so household, activities, and requests share one
   // source of truth from the first render onward.

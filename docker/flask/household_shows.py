@@ -20,6 +20,8 @@ import uuid
 
 from botocore.exceptions import ClientError
 
+import db
+
 # Reuse db's resource builder so every table signs requests the same way and
 # shares the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
 from db import resource
@@ -40,6 +42,20 @@ TABLE_NAME = os.environ.get("SHOWS_TABLE") or (
 
 _table = None
 _table_lock = threading.Lock()
+
+
+def backfill_default_group_records() -> None:
+    """Assign the seeded group to legacy shows that predate group isolation."""
+    table = _get_table()
+    for item in _scan_all(consistent=True):
+        if item.get("groupId"):
+            continue
+        table.update_item(
+            Key={"id": item["id"]},
+            UpdateExpression="SET groupId = :groupId",
+            ExpressionAttributeValues={":groupId": db.DEFAULT_GROUP_ID},
+            ConditionExpression="attribute_exists(id) AND attribute_not_exists(groupId)",
+        )
 
 
 def _get_table():
@@ -88,6 +104,7 @@ def _project(item: dict) -> dict:
         "title": item.get("title", ""),
         "createdBy": item.get("createdBy", "Someone"),
         "createdById": item.get("createdById"),
+        "groupId": item.get("groupId"),
         "createdAt": int(item["createdAt"]),
         "completedAt": int(completed_at) if completed_at is not None else None,
         "completed": completed_at is not None,
@@ -95,13 +112,18 @@ def _project(item: dict) -> dict:
     }
 
 
-def add_show(title: str, created_by_id: str, created_by: str) -> dict:
+def _in_group(item: dict | None, group_id: str | None) -> bool:
+    return item is not None and item.get("groupId") == group_id
+
+
+def add_show(title: str, created_by_id: str, created_by: str, group_id: str) -> dict:
     """Create a show, auto-joining the creator as the first watcher at S1 E1."""
     item = {
         "id": uuid.uuid4().hex,
         "title": title,
         "createdBy": created_by,
         "createdById": created_by_id,
+        "groupId": group_id,
         "createdAt": int(time.time() * 1000),
         "members": [
             {"id": created_by_id, "name": created_by, "season": 1, "episode": 1}
@@ -111,32 +133,40 @@ def add_show(title: str, created_by_id: str, created_by: str) -> dict:
     return _project(item)
 
 
-def get(show_id: str, consistent: bool = False) -> dict | None:
+def get(show_id: str, group_id: str, consistent: bool = False) -> dict | None:
     item = _get_table().get_item(
         Key={"id": show_id}, ConsistentRead=consistent
     ).get("Item")
-    return _project(item) if item else None
+    return _project(item) if _in_group(item, group_id) else None
 
 
-def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
-    """Return recent shows, newest first. Active/completed split and per-watcher
-    ordering are done in the frontend, so this stays a plain recency sort."""
-    shows = [item for item in _scan_all(consistent=consistent) if "createdAt" in item]
+def list_recent(
+    group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False
+) -> list[dict]:
+    """Return the group's recent shows, newest first. Active/completed split and
+    per-watcher ordering are done in the frontend, so this stays a recency
+    sort scoped to the caller's group."""
+    shows = [
+        item
+        for item in _scan_all(consistent=consistent)
+        if "createdAt" in item and item.get("groupId") == group_id
+    ]
     shows.sort(key=lambda item: int(item["createdAt"]), reverse=True)
     return [_project(item) for item in shows[:limit]]
 
 
-def _mutate_members(show_id: str, mutate):
+def _mutate_members(show_id: str, group_id: str, mutate):
     """Load a show, run `mutate(members)`, and persist with an optimistic write.
 
     `mutate` edits the members list in place; returning False means "no change"
-    (e.g. member not found) so the caller gets None. Completed shows are
-    read-only and yield MUTATION_COMPLETED. The conditional update guards against
-    a concurrent completion between the read and the write.
+    (e.g. member not found) so the caller gets None. A show in another group is
+    invisible here (returns None). Completed shows are read-only and yield
+    MUTATION_COMPLETED. The conditional update also re-checks the group and the
+    completed flag to guard against a concurrent change between read and write.
     """
     table = _get_table()
     item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
-    if item is None:
+    if not _in_group(item, group_id):
         return None
     if item.get("completedAt") is not None:
         return MUTATION_COMPLETED
@@ -150,9 +180,10 @@ def _mutate_members(show_id: str, mutate):
             Key={"id": show_id},
             UpdateExpression="SET #members = :members",
             ExpressionAttributeNames={"#members": "members"},
-            ExpressionAttributeValues={":members": members},
+            ExpressionAttributeValues={":members": members, ":groupId": group_id},
             ConditionExpression=(
-                "attribute_exists(id) AND attribute_not_exists(completedAt)"
+                "attribute_exists(id) AND groupId = :groupId AND "
+                "attribute_not_exists(completedAt)"
             ),
             ReturnValues="ALL_NEW",
         )
@@ -163,7 +194,7 @@ def _mutate_members(show_id: str, mutate):
     return _project(resp["Attributes"])
 
 
-def join(show_id: str, user_id: str, name: str):
+def join(show_id: str, user_id: str, name: str, group_id: str):
     """Add a watcher if not already present (idempotent); returns the snapshot."""
 
     def mutate(members: list[dict]):
@@ -173,17 +204,17 @@ def join(show_id: str, user_id: str, name: str):
         # still resolves with the current show rather than a 404.
         return None
 
-    return _mutate_members(show_id, mutate)
+    return _mutate_members(show_id, group_id, mutate)
 
 
-def leave(show_id: str, user_id: str):
+def leave(show_id: str, user_id: str, group_id: str):
     """Remove a watcher; returns the snapshot whether or not they were present."""
 
     def mutate(members: list[dict]):
         members[:] = [member for member in members if member.get("id") != user_id]
         return None
 
-    return _mutate_members(show_id, mutate)
+    return _mutate_members(show_id, group_id, mutate)
 
 
 def _write_progress(member: dict, field: str, value) -> None:
@@ -194,7 +225,7 @@ def _write_progress(member: dict, field: str, value) -> None:
         member["episode"] = 1
 
 
-def set_progress(show_id: str, member_id: str, field: str, value):
+def set_progress(show_id: str, member_id: str, field: str, value, group_id: str):
     """Set one watcher's season or episode to an absolute value."""
     if field not in PROGRESS_FIELDS:
         return None
@@ -206,10 +237,10 @@ def set_progress(show_id: str, member_id: str, field: str, value):
                 return None
         return False
 
-    return _mutate_members(show_id, mutate)
+    return _mutate_members(show_id, group_id, mutate)
 
 
-def adjust_progress(show_id: str, member_id: str, field: str, delta: int):
+def adjust_progress(show_id: str, member_id: str, field: str, delta: int, group_id: str):
     """Nudge one watcher's season or episode by delta (+1 / -1)."""
     if field not in PROGRESS_FIELDS:
         return None
@@ -221,14 +252,15 @@ def adjust_progress(show_id: str, member_id: str, field: str, delta: int):
                 return None
         return False
 
-    return _mutate_members(show_id, mutate)
+    return _mutate_members(show_id, group_id, mutate)
 
 
-def _set_completed(show_id: str, requester_id: str, completed: bool):
-    """Creator-only lifecycle toggle backing complete()/reopen()."""
+def _set_completed(show_id: str, requester_id: str, group_id: str, completed: bool):
+    """Creator-only lifecycle toggle backing complete()/reopen(). A show in
+    another group is invisible (returns None)."""
     table = _get_table()
     item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
-    if item is None:
+    if not _in_group(item, group_id):
         return None
     if item.get("createdById") != requester_id:
         return COMPLETE_FORBIDDEN
@@ -238,15 +270,18 @@ def _set_completed(show_id: str, requester_id: str, completed: bool):
     if completed:
         update = dict(
             UpdateExpression="SET completedAt = :ts",
-            ExpressionAttributeValues={":ts": int(time.time() * 1000)},
+            ExpressionAttributeValues={":ts": int(time.time() * 1000), ":groupId": group_id},
         )
     else:
-        update = dict(UpdateExpression="REMOVE completedAt")
+        update = dict(
+            UpdateExpression="REMOVE completedAt",
+            ExpressionAttributeValues={":groupId": group_id},
+        )
 
     try:
         resp = table.update_item(
             Key={"id": show_id},
-            ConditionExpression="attribute_exists(id)",
+            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
             ReturnValues="ALL_NEW",
             **update,
         )
@@ -257,11 +292,11 @@ def _set_completed(show_id: str, requester_id: str, completed: bool):
     return _project(resp["Attributes"])
 
 
-def complete(show_id: str, requester_id: str):
+def complete(show_id: str, requester_id: str, group_id: str):
     """Mark a show completed so it drops out of the active list (creator-only)."""
-    return _set_completed(show_id, requester_id, completed=True)
+    return _set_completed(show_id, requester_id, group_id, completed=True)
 
 
-def reopen(show_id: str, requester_id: str):
+def reopen(show_id: str, requester_id: str, group_id: str):
     """Move a completed show back to the active list (creator-only)."""
-    return _set_completed(show_id, requester_id, completed=False)
+    return _set_completed(show_id, requester_id, group_id, completed=False)

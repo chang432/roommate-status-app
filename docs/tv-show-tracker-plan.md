@@ -35,35 +35,45 @@ derived `completed` boolean and omits the attribute when active, so
 Modeled on `activities.py` (own-table setup) + `household_checklists.py`
 (embedded-list mutations via an optimistic `update_item`):
 
-- `add_show(title, created_by_id, created_by)` — put a new item, auto-joining the
-  creator as the first watcher at season 1, episode 1.
-- `get` / `list_recent(limit, consistent)` — scan, newest first. The active vs.
-  completed split and per-watcher ordering are done in the frontend.
-- `join(show_id, user_id, name)` / `leave(show_id, user_id)` — append/remove a
-  watcher; both idempotent, rejected on completed shows.
-- `adjust_progress` / `set_progress(show_id, member_id, field, value)` — `field`
-  is `season` or `episode`, clamped at 1. **Writing a season resets that
+- `add_show(title, created_by_id, created_by, group_id)` — put a new item,
+  auto-joining the creator as the first watcher at season 1, episode 1.
+- `get` / `list_recent(group_id, ...)` — scan, newest first, **scoped to the
+  caller's group**. The active vs. completed split and per-watcher ordering are
+  done in the frontend.
+- `join` / `leave(show_id, user_id, ..., group_id)` — append/remove a watcher;
+  both idempotent, rejected on completed shows.
+- `adjust_progress` / `set_progress(show_id, member_id, field, value, group_id)` —
+  `field` is `season` or `episode`, clamped at 1. **Writing a season resets that
   watcher's episode to 1** (a new season starts from episode 1).
-- `complete` / `reopen(show_id, requester_id)` — creator-only lifecycle toggle;
-  non-creators get a `COMPLETE_FORBIDDEN` sentinel the route maps to 403.
+- `complete` / `reopen(show_id, requester_id, group_id)` — creator-only lifecycle
+  toggle; non-creators get a `COMPLETE_FORBIDDEN` sentinel the route maps to 403.
+
+**Group scoping.** Like every other feed, shows are isolated per group: each item
+stores a `groupId`, reads filter by it, and mutations carry a
+`groupId = :groupId` condition so one group can never see or touch another's
+shows. `backfill_default_group_records()` assigns the seeded group to any
+legacy show that predates isolation (run from `seed.py` and lazily on first
+request).
 
 ## Routes: `docker/flask/app.py`
 
 | Method & path | Handler |
 |---|---|
-| `GET  /api/shows` | `list_recent()` |
+| `GET  /api/shows?userId=` | viewer's group → `list_recent(group_id)` |
 | `POST /api/shows` | validate title (≤ `MAX_ACTIVITY_LEN`) + creator → `add_show` |
 | `POST /api/shows/<id>/join` | validate roommate → `join` |
 | `POST /api/shows/<id>/leave` | validate roommate → `leave` |
-| `PATCH /api/shows/<id>/watchers/<member_id>/<field>` | integer `delta` → `adjust_progress` |
-| `PUT   /api/shows/<id>/watchers/<member_id>/<field>` | integer `value` → `set_progress` |
+| `PATCH /api/shows/<id>/watchers/<member_id>/<field>` | roommate + integer `delta` → `adjust_progress` |
+| `PUT   /api/shows/<id>/watchers/<member_id>/<field>` | roommate + integer `value` → `set_progress` |
 | `POST /api/shows/<id>/complete` | validate requester → `complete` (creator-only) |
 | `POST /api/shows/<id>/reopen` | validate requester → `reopen` (creator-only) |
 
-Progress edits are intentionally open to every roommate (matching the feature's
-loose ownership), so they take no per-caller check. The frontend `client.js`
-show functions call these endpoints directly; the in-memory mock has been
-removed.
+Every route resolves the caller's group (`userId` on the GET query / in the
+mutation body) and passes it down, so a request can only touch shows in the
+caller's own group. Progress edits stay open to *any* roommate in that group
+(matching the feature's loose ownership) — the `userId` only scopes the group,
+it isn't an ownership check. The frontend `client.js` show functions call these
+endpoints directly; the in-memory mock has been removed.
 
 ## Real-time + notifications (not implemented)
 

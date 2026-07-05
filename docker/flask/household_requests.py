@@ -109,6 +109,7 @@ def add_request(
     text: str,
     requester_id: str,
     requester_name: str,
+    group_id: str,
     requested_roommates: list[dict],
 ) -> dict:
     names_by_id = {roommate["id"]: roommate["name"] for roommate in requested_roommates}
@@ -118,6 +119,7 @@ def add_request(
         "text": text,
         "requester": requester_name,
         "requesterId": requester_id,
+        "groupId": group_id,
         "createdAt": int(time.time() * 1000),
         "requestedIds": set(names_by_id),
         "requestedNamesById": names_by_id,
@@ -128,12 +130,12 @@ def add_request(
     return _project(item)
 
 
-def get(request_id: str, consistent: bool = False) -> dict | None:
+def get(request_id: str, group_id: str, consistent: bool = False) -> dict | None:
     item = _get_table().get_item(
         Key={"id": request_id},
         ConsistentRead=consistent,
     ).get("Item")
-    if not item or item.get("itemType") != REQUEST_TYPE:
+    if not item or item.get("itemType") != REQUEST_TYPE or item.get("groupId") != group_id:
         return None
     return _project(item)
 
@@ -142,6 +144,7 @@ def add_comment(
     request_id: str,
     author: str,
     text: str,
+    group_id: str,
     mentions: list[dict] | None = None,
     mentions_all: bool = False,
     author_id: str | None = None,
@@ -163,8 +166,9 @@ def add_comment(
                 ":request": REQUEST_TYPE,
                 ":c": [comment],
                 ":empty": [],
+                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND itemType = :request",
+            ConditionExpression="attribute_exists(id) AND itemType = :request AND groupId = :groupId",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -174,7 +178,7 @@ def add_comment(
     return _project(resp["Attributes"])
 
 
-def set_response(request_id: str, user_id: str, response: str) -> dict | None:
+def set_response(request_id: str, user_id: str, group_id: str, response: str) -> dict | None:
     try:
         resp = _get_table().update_item(
             Key={"id": request_id},
@@ -184,9 +188,11 @@ def set_response(request_id: str, user_id: str, response: str) -> dict | None:
                 ":request": REQUEST_TYPE,
                 ":user_id": user_id,
                 ":response": response,
+                ":groupId": group_id,
             },
             ConditionExpression=(
                 "attribute_exists(id) AND itemType = :request AND "
+                "groupId = :groupId AND "
                 "contains(requestedIds, :user_id)"
             ),
             ReturnValues="ALL_NEW",
@@ -198,7 +204,7 @@ def set_response(request_id: str, user_id: str, response: str) -> dict | None:
     return _project(resp["Attributes"])
 
 
-def complete(request_id: str, user_id: str, name: str) -> dict | None:
+def complete(request_id: str, user_id: str, name: str, group_id: str) -> dict | None:
     completed_at = int(time.time() * 1000)
     try:
         resp = _get_table().update_item(
@@ -213,8 +219,9 @@ def complete(request_id: str, user_id: str, name: str) -> dict | None:
                 ":completed_at": completed_at,
                 ":user_id": user_id,
                 ":name": name,
+                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND itemType = :request",
+            ConditionExpression="attribute_exists(id) AND itemType = :request AND groupId = :groupId",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -224,7 +231,7 @@ def complete(request_id: str, user_id: str, name: str) -> dict | None:
     return _project(resp["Attributes"])
 
 
-def reopen(request_id: str, user_id: str, name: str) -> dict | None:
+def reopen(request_id: str, user_id: str, name: str, group_id: str) -> dict | None:
     try:
         resp = _get_table().update_item(
             Key={"id": request_id},
@@ -237,8 +244,9 @@ def reopen(request_id: str, user_id: str, name: str) -> dict | None:
                 ":false": False,
                 ":user_id": user_id,
                 ":name": name,
+                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND itemType = :request",
+            ConditionExpression="attribute_exists(id) AND itemType = :request AND groupId = :groupId",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -248,10 +256,10 @@ def reopen(request_id: str, user_id: str, name: str) -> dict | None:
     return _project(resp["Attributes"])
 
 
-def delete_owned(request_id: str, requester_id: str) -> str:
+def delete_owned(request_id: str, requester_id: str, group_id: str) -> str:
     table = _get_table()
     item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") != REQUEST_TYPE:
+    if item is None or item.get("itemType") != REQUEST_TYPE or item.get("groupId") != group_id:
         return DELETE_NOT_FOUND
     if item.get("requesterId") != requester_id:
         return DELETE_FORBIDDEN
@@ -259,23 +267,25 @@ def delete_owned(request_id: str, requester_id: str) -> str:
     try:
         table.delete_item(
             Key={"id": request_id},
-            ConditionExpression="requesterId = :requester AND itemType = :request",
+            ConditionExpression="requesterId = :requester AND itemType = :request AND groupId = :groupId",
             ExpressionAttributeValues={
                 ":requester": requester_id,
                 ":request": REQUEST_TYPE,
+                ":groupId": group_id,
             },
         )
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         current = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType") != REQUEST_TYPE:
+        if current is None or current.get("itemType") != REQUEST_TYPE or current.get("groupId") != group_id:
             return DELETE_NOT_FOUND
         return DELETE_FORBIDDEN
 
     for reaction in _scan_all(consistent=True):
         if (
             reaction.get("itemType") == REQUEST_COMMENT_LIKE_TYPE
+            and reaction.get("groupId") == group_id
             and reaction.get("requestId") == request_id
         ):
             table.delete_item(Key={"id": reaction["id"]})
@@ -291,11 +301,12 @@ def set_comment_like(
     comment_id: str,
     user_id: str,
     user_name: str,
+    group_id: str,
     liked: bool,
 ) -> str:
     table = _get_table()
     item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") != REQUEST_TYPE:
+    if item is None or item.get("itemType") != REQUEST_TYPE or item.get("groupId") != group_id:
         return LIKE_NOT_FOUND
 
     comment = next(
@@ -318,6 +329,7 @@ def set_comment_like(
                 "itemType": REQUEST_COMMENT_LIKE_TYPE,
                 "requestId": request_id,
                 "commentId": comment_id,
+                "groupId": group_id,
                 "userId": user_id,
             }
         )
@@ -326,11 +338,11 @@ def set_comment_like(
     return LIKE_OK
 
 
-def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
+def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
     items = _scan_all(consistent=consistent)
     likes_by_request: dict[str, dict[str, set[str]]] = {}
     for item in items:
-        if item.get("itemType") != REQUEST_COMMENT_LIKE_TYPE:
+        if item.get("itemType") != REQUEST_COMMENT_LIKE_TYPE or item.get("groupId") != group_id:
             continue
         likes_by_request.setdefault(item["requestId"], {}).setdefault(
             item["commentId"], set()
@@ -339,7 +351,7 @@ def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dic
     requests = [
         item
         for item in items
-        if item.get("itemType") == REQUEST_TYPE and "createdAt" in item
+        if item.get("itemType") == REQUEST_TYPE and "createdAt" in item and item.get("groupId") == group_id
     ]
     requests.sort(key=lambda item: int(item["createdAt"]), reverse=True)
     return [
