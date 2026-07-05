@@ -5,7 +5,8 @@ availability to hang out. Built from the mockups in `../mockups`.
 
 ## Features
 
-- **Login** with a username and password, or create a new account.
+- **Login** with a username and password on `/login`, or create a new account
+  on `/signup`.
 - **Pending accounts** can sign in but cannot use household features until a
   future group-join flow assigns them to a group.
 - **View** the whole household's current statuses at a glance.
@@ -36,7 +37,8 @@ availability to hang out. Built from the mockups in `../mockups`.
 - [Vite](https://vitejs.dev/) + React 18
 - [Tailwind CSS](https://tailwindcss.com/) (cozy theme tokens in
   `tailwind.config.js`)
-- [React Router](https://reactrouter.com/) for `/login` and `/`
+- [React Router](https://reactrouter.com/) for `/login`, `/signup`, `/pending`,
+  and `/`
 
 ## Getting started
 
