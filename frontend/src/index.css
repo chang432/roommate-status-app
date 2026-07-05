@@ -3,6 +3,136 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+    --color-bg-top: 35 64% 92%;
+    --color-bg-bottom: 34 53% 86%;
+    --color-bg-highlight: 35 100% 96%;
+    --color-card: 40 71% 98%;
+    --color-ink: 32 19% 20%;
+    --color-ink-soft: 35 12% 48%;
+    --color-line: 35 34% 85%;
+    --color-accent: 17 50% 57%;
+    --color-accent-deep: 19 48% 47%;
+    --color-accent-soft: 21 55% 90%;
+    --color-sage: 88 14% 54%;
+    --color-surface-hover: 36 52% 96%;
+    --color-surface-muted: 36 34% 94%;
+    --color-surface-disabled: 36 41% 95%;
+    --color-surface-completed: 60 6% 93%;
+    --color-surface-expired-border: 34 19% 82%;
+    --color-placeholder-muted: 36 19% 65%;
+    --color-warm-text-muted: 35 14% 40%;
+    --color-border-hover: 35 31% 78%;
+    --color-border-warm: 28 38% 81%;
+    --color-danger-soft: 11 71% 94%;
+    --color-danger-soft-border: 8 42% 83%;
+    --color-danger-soft-hover: 9 57% 90%;
+    --color-success-soft: 130 55% 84%;
+    --color-success-soft-border: 130 52% 72%;
+    --color-success-panel: 82 33% 93%;
+    --color-success-panel-end: 83 34% 90%;
+    --color-success-panel-strong: 128 31% 88%;
+    --color-success-panel-hover: 130 37% 84%;
+    --color-success-panel-border: 80 28% 83%;
+    --color-success-panel-text: 81 21% 31%;
+    --color-jam-panel: 130 56% 96%;
+    --color-jam-border: 132 48% 82%;
+    --color-jam-border-muted: 132 29% 78%;
+    --color-jam-action: 132 39% 93%;
+    --color-jam-action-hover: 132 33% 88%;
+    --color-jam-action-text: 130 24% 39%;
+    --color-check-surface: 43 22% 94%;
+    --color-check-border: 60 5% 73%;
+    --color-neutral-action: 60 6% 84%;
+    --color-response-pending: 0 0% 66%;
+    --color-response-pending-text: 60 3% 45%;
+    --color-completed-pill: 60 7% 87%;
+    --color-live-border: 10 56% 80%;
+    --color-live-bg-start: 13 100% 96%;
+    --color-live-bg-end: 12 78% 92%;
+    --color-live-bg-strong: 10 56% 74%;
+    --color-live-text: 10 38% 32%;
+    --color-you-border: 22 65% 82%;
+    --color-you-action-border: 22 58% 79%;
+    --color-you-hover: 22 100% 96%;
+    --color-status-green: 132 32% 50%;
+    --color-status-hover-green: 96 42% 34%;
+    --color-status-red: 6 54% 59%;
+    --color-status-purple: 274 31% 60%;
+    --color-status-blue: 220 35% 57%;
+    --color-status-amber: 34 60% 57%;
+    --color-status-hover-red: 5 46% 43%;
+    --color-status-grey: 0 0% 46%;
+    --shadow-soft: 0 6px 18px -8px rgba(94, 66, 41, 0.3);
+    --shadow-card: 0 18px 50px -18px rgba(94, 66, 41, 0.35);
+  }
+
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --color-bg-top: 28 31% 13%;
+    --color-bg-bottom: 28 38% 8%;
+    --color-bg-highlight: 20 46% 24%;
+    --color-card: 31 30% 15%;
+    --color-ink: 38 44% 91%;
+    --color-ink-soft: 35 17% 66%;
+    --color-line: 30 20% 27%;
+    --color-accent: 18 62% 63%;
+    --color-accent-deep: 20 78% 71%;
+    --color-accent-soft: 22 35% 24%;
+    --color-sage: 92 18% 61%;
+    --color-surface-hover: 30 26% 20%;
+    --color-surface-muted: 31 24% 18%;
+    --color-surface-disabled: 30 18% 22%;
+    --color-surface-completed: 32 15% 20%;
+    --color-surface-expired-border: 30 15% 31%;
+    --color-placeholder-muted: 32 13% 50%;
+    --color-warm-text-muted: 35 19% 70%;
+    --color-border-hover: 28 29% 40%;
+    --color-border-warm: 25 28% 37%;
+    --color-danger-soft: 5 34% 22%;
+    --color-danger-soft-border: 5 35% 37%;
+    --color-danger-soft-hover: 5 38% 28%;
+    --color-success-soft: 129 25% 27%;
+    --color-success-soft-border: 130 31% 42%;
+    --color-success-panel: 86 22% 20%;
+    --color-success-panel-end: 88 25% 16%;
+    --color-success-panel-strong: 131 23% 25%;
+    --color-success-panel-hover: 131 25% 31%;
+    --color-success-panel-border: 88 22% 33%;
+    --color-success-panel-text: 91 33% 78%;
+    --color-jam-panel: 132 24% 18%;
+    --color-jam-border: 132 29% 37%;
+    --color-jam-border-muted: 132 21% 34%;
+    --color-jam-action: 132 24% 23%;
+    --color-jam-action-hover: 132 26% 29%;
+    --color-jam-action-text: 130 42% 75%;
+    --color-check-surface: 40 16% 22%;
+    --color-check-border: 40 11% 43%;
+    --color-neutral-action: 45 9% 28%;
+    --color-response-pending: 0 0% 45%;
+    --color-response-pending-text: 45 11% 72%;
+    --color-completed-pill: 45 9% 25%;
+    --color-live-border: 10 45% 42%;
+    --color-live-bg-start: 11 37% 23%;
+    --color-live-bg-end: 11 36% 18%;
+    --color-live-bg-strong: 10 42% 36%;
+    --color-live-text: 13 62% 84%;
+    --color-you-border: 22 42% 43%;
+    --color-you-action-border: 22 43% 45%;
+    --color-you-hover: 22 37% 23%;
+    --color-status-green: 133 41% 62%;
+    --color-status-hover-green: 105 39% 62%;
+    --color-status-red: 5 64% 68%;
+    --color-status-purple: 274 37% 70%;
+    --color-status-blue: 220 43% 70%;
+    --color-status-amber: 36 70% 66%;
+    --color-status-hover-red: 5 62% 73%;
+    --color-status-grey: 0 0% 62%;
+    --shadow-soft: 0 8px 24px -12px rgba(0, 0, 0, 0.65);
+    --shadow-card: 0 24px 70px -24px rgba(0, 0, 0, 0.75);
+  }
+
   html,
   body {
     margin: 0;
@@ -13,9 +143,10 @@
     @apply font-sans text-ink antialiased;
     /* Warm radial highlight over a soft diagonal gradient — the "homey" backdrop */
     background:
-      radial-gradient(1200px 600px at 80% -10%, theme('colors.bg-highlight') 0%, transparent 60%),
-      linear-gradient(160deg, theme('colors.bg-top'), theme('colors.bg-bottom'));
+      radial-gradient(1200px 600px at 80% -10%, hsl(var(--color-bg-highlight) / 1) 0%, transparent 60%),
+      linear-gradient(160deg, hsl(var(--color-bg-top) / 1), hsl(var(--color-bg-bottom) / 1));
     min-height: 100vh;
+    transition: background 180ms ease, color 180ms ease;
   }
 
   /* Hide scrollbar on the horizontal roommate picker */

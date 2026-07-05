@@ -9,6 +9,7 @@ import EnableNotifications from "../components/EnableNotifications.jsx";
 import FeatureTabs from "../components/FeatureTabs.jsx";
 import JamWidget, { JamShareForm } from "../components/JamWidget.jsx";
 import ModalShell from "../components/ModalShell.jsx";
+import ProfileSettings from "../components/ProfileSettings.jsx";
 import ChecklistCreateForm from "../components/ChecklistCreateForm.jsx";
 import ChecklistFeature from "../components/ChecklistFeature.jsx";
 import ProposeActivity from "../components/ProposeActivity.jsx";
@@ -69,6 +70,7 @@ export default function StatusPage() {
   const [activeBoardTab, setActiveBoardTab] = useState("activities");
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [jamModalOpen, setJamModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Fetch the shire; shared by the initial load and pull-to-refresh.
   const loadRoommates = useCallback(async () => {
@@ -295,17 +297,6 @@ export default function StatusPage() {
     await pokeRoommate(roommateId, user.id);
   }
 
-  async function handleDeleteAccount() {
-    const password = window.prompt("Enter your password to delete this account.");
-    if (!password) return;
-    if (!window.confirm("Delete your account? This cannot be undone.")) return;
-    try {
-      await deleteAccount(password);
-    } catch (err) {
-      setError(err.message || "Could not delete your account.");
-    }
-  }
-
   function handleLiveBannerClick(activityId) {
     setActiveBoardTab("activities");
     setActivityFocusRequest((current) => ({
@@ -349,18 +340,17 @@ export default function StatusPage() {
             <h1 className={styles.title}>Yorkshire Roomie Status</h1>
             <p className={styles.subtitle}>{whenLabel()}</p>
           </div>
-          <div className={styles.accountActions}>
-            <button type="button" onClick={logout} className={styles.signOut}>
-              Sign out
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteAccount}
-              className={styles.deleteAccount}
-            >
-              Delete
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Open profile settings"
+            className={styles.profileButton}
+          >
+            <span className={styles.profileInitial} aria-hidden="true">
+              {(user.name || user.username || "?").slice(0, 1).toUpperCase()}
+            </span>
+            <span className={styles.profileLabel}>Settings</span>
+          </button>
         </header>
 
         {error && (
@@ -556,6 +546,19 @@ export default function StatusPage() {
               </ModalShell>
             )}
           </>
+        )}
+        {settingsOpen && (
+          <ModalShell
+            title="Profile settings"
+            onClose={() => setSettingsOpen(false)}
+            widthClassName={styles.settingsModal}
+          >
+            <ProfileSettings
+              user={user}
+              onSignOut={logout}
+              onDeleteAccount={deleteAccount}
+            />
+          </ModalShell>
         )}
       </div>
     </>

@@ -9,6 +9,8 @@ availability to hang out. Built from the mockups in `../mockups`.
   on `/signup`.
 - **Pending accounts** can sign in but cannot use household features until a
   future group-join flow assigns them to a group.
+- **Profile settings** keep account actions in one place, including sign out,
+  account deletion, and a light/dark/system appearance preference.
 - **View** the whole household's current statuses at a glance.
 - **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.

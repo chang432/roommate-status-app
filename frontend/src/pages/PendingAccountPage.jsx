@@ -1,27 +1,17 @@
 import { Navigate } from "react-router-dom";
 import { useState } from "react";
 import Brandmark from "../components/Brandmark.jsx";
+import ModalShell from "../components/ModalShell.jsx";
+import ProfileSettings from "../components/ProfileSettings.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { cx } from "../utils/classNames.js";
 import styles from "./PendingAccountPage.module.css";
 
 export default function PendingAccountPage() {
   const { user, logout, deleteAccount } = useAuth();
-  const [error, setError] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (user?.hasGroup) return <Navigate to="/" replace />;
-
-  async function handleDeleteAccount() {
-    const password = window.prompt("Enter your password to delete this account.");
-    if (!password) return;
-    if (!window.confirm("Delete this account? This cannot be undone.")) return;
-    try {
-      setError("");
-      await deleteAccount(password);
-    } catch (err) {
-      setError(err.message || "Could not delete this account.");
-    }
-  }
 
   return (
     <main className={styles.page}>
@@ -39,19 +29,26 @@ export default function PendingAccountPage() {
           <span>Signed in as</span>
           <strong>@{user?.username || user?.id}</strong>
         </div>
-        {error && <p className={cx("ui-errorBox", styles.error)}>{error}</p>}
-        <div className={styles.actions}>
-          <button type="button" onClick={logout} className="ui-primaryButton">
-            Sign out
-          </button>
-          <button
-            type="button"
-            onClick={handleDeleteAccount}
-            className={styles.deleteButton}
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          className={cx("ui-primaryButton", styles.settingsButton)}
+        >
+          Open profile settings
+        </button>
+        {settingsOpen && (
+          <ModalShell
+            title="Profile settings"
+            onClose={() => setSettingsOpen(false)}
+            widthClassName={styles.settingsModal}
           >
-            Delete account
-          </button>
-        </div>
+            <ProfileSettings
+              user={user}
+              onSignOut={logout}
+              onDeleteAccount={deleteAccount}
+            />
+          </ModalShell>
+        )}
       </section>
     </main>
   );
