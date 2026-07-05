@@ -5,6 +5,10 @@
 // server's REST endpoints under /api (proxied in dev via vite.config.js to the
 // VITE_API_TARGET, default http://localhost:8000).
 
+// The TV show tracker currently runs against an in-memory mock instead of the
+// Flask server (see the show functions at the bottom of this file).
+import * as mockShows from './mockShows.js'
+
 const API_BASE = '/api'
 
 // Thin wrapper around fetch that throws on non-2xx and parses JSON.
@@ -314,4 +318,38 @@ export async function archiveChecklist(id, userId) {
     method: 'POST',
     body: JSON.stringify({ userId }),
   })
+}
+
+// --- TV show tracker (MOCK backend) --------------------------------------
+// These delegate to an in-memory mock (src/api/mockShows.js) instead of the
+// Flask server, so the Shows tab works without a running backend. The exported
+// signatures already match what real /api/shows endpoints would return (the
+// full, refreshed show list), so replacing these bodies with `request(...)`
+// calls later needs no changes in the components. See the swap-over plan in
+// docs/tv-show-tracker-plan.md.
+
+// GET /api/shows — every show with its watchers and their episode numbers.
+export async function getShows() {
+  return mockShows.getShows()
+}
+
+// POST /api/shows — create a show; the creator is auto-added as a watcher.
+export async function createShow(title, createdById, createdByName) {
+  return mockShows.createShow(title, createdById, createdByName)
+}
+
+// POST /api/shows/:id/join — add a roommate to a show's watcher list.
+export async function joinShow(id, userId, userName) {
+  return mockShows.joinShow(id, userId, userName)
+}
+
+// POST /api/shows/:id/leave — remove a roommate from a show's watcher list.
+export async function leaveShow(id, userId) {
+  return mockShows.leaveShow(id, userId)
+}
+
+// PATCH /api/shows/:id/watchers/:memberId/episode — bump one watcher's episode
+// by delta (+1 / -1). Any roommate may edit any watcher's number.
+export async function adjustEpisode(id, memberId, delta) {
+  return mockShows.adjustEpisode(id, memberId, delta)
 }

@@ -14,8 +14,10 @@ import ChecklistFeature from "../components/ChecklistFeature.jsx";
 import ProposeActivity from "../components/ProposeActivity.jsx";
 import PullToRefreshIndicator from "../components/PullToRefreshIndicator.jsx";
 import RequestFeature from "../components/RequestFeature.jsx";
+import ShowTrackerFeature from "../components/ShowTrackerFeature.jsx";
 import ActivityCreateForm from "../components/ActivityCreateForm.jsx";
 import RequestCreateForm from "../components/RequestCreateForm.jsx";
+import ShowCreateForm from "../components/ShowCreateForm.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   endActivity,
@@ -24,6 +26,7 @@ import {
   getJam,
   getRequests,
   getRoommates,
+  getShows,
   notifyRoommatesToUpdateStatus,
   pokeRoommate,
   startActivity,
@@ -56,6 +59,7 @@ export default function StatusPage() {
   const [jam, setJam] = useState(null);
   const [requests, setRequests] = useState([]);
   const [checklists, setChecklists] = useState([]);
+  const [shows, setShows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
@@ -116,6 +120,15 @@ export default function StatusPage() {
     }
   }, []);
 
+  const loadShows = useCallback(async () => {
+    try {
+      setShows(await getShows());
+      setLiveError("");
+    } catch {
+      setLiveError("Could not load the show tracker.");
+    }
+  }, []);
+
   // Load page-level data sets so household, activities, and requests share one
   // source of truth from the first render onward.
   useEffect(() => {
@@ -125,8 +138,16 @@ export default function StatusPage() {
       loadRequests(),
       loadChecklists(),
       loadJam(),
+      loadShows(),
     ]).finally(() => setLoading(false));
-  }, [loadActivities, loadChecklists, loadJam, loadRequests, loadRoommates]);
+  }, [
+    loadActivities,
+    loadChecklists,
+    loadJam,
+    loadRequests,
+    loadRoommates,
+    loadShows,
+  ]);
 
   // Keep live-event state current across household devices. Push-enabled open
   // apps refresh immediately from the service worker; visible-page polling and
@@ -188,8 +209,16 @@ export default function StatusPage() {
       loadRequests(),
       loadChecklists(),
       loadJam(),
+      loadShows(),
     ]);
-  }, [loadActivities, loadChecklists, loadJam, loadRequests, loadRoommates]);
+  }, [
+    loadActivities,
+    loadChecklists,
+    loadJam,
+    loadRequests,
+    loadRoommates,
+    loadShows,
+  ]);
 
   const { pull, refreshing, threshold } = usePullToRefresh(handleRefresh);
 
@@ -308,7 +337,9 @@ export default function StatusPage() {
       ? "New request"
       : activeBoardTab === "checklists"
         ? "New checklist"
-        : "New activity";
+        : activeBoardTab === "shows"
+          ? "New show"
+          : "New activity";
 
   return (
     <>
@@ -486,6 +517,17 @@ export default function StatusPage() {
                     />
                   ),
                 },
+                {
+                  id: "shows",
+                  label: "Shows",
+                  content: (
+                    <ShowTrackerFeature
+                      shows={shows}
+                      onShowsChange={setShows}
+                      roommates={roommates}
+                    />
+                  ),
+                },
               ]}
             />
             {createModalOpen && (
@@ -495,7 +537,9 @@ export default function StatusPage() {
                     ? "Create a request"
                     : activeBoardTab === "checklists"
                       ? "Create a checklist"
-                      : "Create an activity"
+                      : activeBoardTab === "shows"
+                        ? "Add a show"
+                        : "Create an activity"
                 }
                 onClose={() => setCreateModalOpen(false)}
                 widthClassName={styles.createModal}
@@ -510,6 +554,12 @@ export default function StatusPage() {
                 ) : activeBoardTab === "checklists" ? (
                   <ChecklistCreateForm
                     onChecklistsChange={setChecklists}
+                    onSuccess={() => setCreateModalOpen(false)}
+                    onCancel={() => setCreateModalOpen(false)}
+                  />
+                ) : activeBoardTab === "shows" ? (
+                  <ShowCreateForm
+                    onShowsChange={setShows}
                     onSuccess={() => setCreateModalOpen(false)}
                     onCancel={() => setCreateModalOpen(false)}
                   />

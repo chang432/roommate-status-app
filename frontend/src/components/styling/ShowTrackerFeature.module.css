@@ -1,0 +1,125 @@
+.wrap {
+  @apply min-w-0;
+}
+
+.error {
+  @apply mb-[14px];
+}
+
+.list {
+  @apply space-y-[10px];
+}
+
+.empty {
+  @apply text-[13.5px] text-ink-soft;
+}
+
+.card {
+  @apply cursor-pointer rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft;
+}
+
+.summary {
+  @apply flex items-center gap-[10px];
+}
+
+.summaryText {
+  @apply min-w-0 flex-1;
+}
+
+.title {
+  @apply truncate text-[14px] font-semibold text-ink;
+}
+
+.meta {
+  @apply mt-[2px] text-[12px] text-ink-soft;
+}
+
+.joinButton {
+  @apply flex-none px-[13px] py-[7px] text-[12.5px];
+}
+
+.expandedRegion {
+  @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none;
+}
+
+.expanded {
+  grid-template-rows: 1fr;
+}
+
+.collapsed {
+  grid-template-rows: 0fr;
+}
+
+.expandedInner {
+  @apply min-h-0 overflow-hidden;
+}
+
+.panel {
+  @apply mt-[12px] border-t border-line pt-[12px];
+}
+
+/* Roommate picker revealed by the Join button. */
+.picker {
+  @apply mb-[12px] rounded-sm border border-line bg-white px-[11px] py-[10px];
+}
+
+.pickerLabel {
+  @apply mb-[8px] text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
+}
+
+.pickerEmpty {
+  @apply text-[13px] text-ink-soft;
+}
+
+.pickerChips {
+  @apply flex flex-wrap gap-2;
+}
+
+.pickerChip {
+  @apply rounded-full border border-accent-soft bg-white px-[12px] py-[6px] text-[12.5px] font-medium text-accent-deep transition hover:bg-surface-hover disabled:opacity-60;
+}
+
+.watchersEmpty {
+  @apply text-[13px] text-ink-soft;
+}
+
+.watchers {
+  @apply space-y-2;
+}
+
+.watcher {
+  @apply flex min-h-[44px] items-center gap-[10px] rounded-sm border border-line bg-white px-[10px] py-[7px];
+}
+
+.watcherAvatar {
+  @apply grid h-[30px] w-[30px] flex-none place-items-center rounded-full bg-status-grey text-[12px] font-bold uppercase text-white;
+}
+
+.watcherText {
+  @apply min-w-0 flex-1;
+}
+
+.watcherName {
+  @apply truncate text-[14px] font-medium text-ink;
+}
+
+.watcherEpisode {
+  @apply mt-[1px] text-[12px] text-ink-soft;
+}
+
+/* The -/value/+ episode pill. */
+.pill {
+  @apply flex flex-none items-center gap-[2px] rounded-full border border-line bg-surface-hover p-[3px];
+}
+
+.pillButton {
+  @apply grid h-[28px] w-[28px] place-items-center rounded-full bg-white text-[17px] font-bold leading-none text-ink transition hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-ink;
+}
+
+.pillValue {
+  @apply min-w-[26px] text-center text-[14px] font-semibold tabular-nums text-ink;
+}
+
+.watcherRemove {
+  @apply grid h-[26px] w-[26px] flex-none place-items-center rounded-full text-[18px] leading-none text-ink-soft transition hover:bg-surface-hover hover:text-status-red disabled:opacity-60;
+}
