@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
 import { adjustEpisode, joinShow, leaveShow } from "../api/client.js";
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
@@ -56,23 +57,17 @@ function WatcherRow({ member, busy, onAdjust, onRemove }) {
   );
 }
 
-export default function ShowTrackerFeature({
-  shows,
-  onShowsChange,
-  roommates,
-}) {
+export default function ShowTrackerFeature({ shows, onShowsChange }) {
+  const { user } = useAuth();
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
-  // Show id whose "add watcher" roommate picker is currently open.
-  const [pickerShowId, setPickerShowId] = useState(null);
   // Per-member ids with an in-flight episode/leave request, to disable controls.
   const [busyMemberIds, setBusyMemberIds] = useState([]);
-  // Per-roommate ids being added via the picker, to disable their chip.
-  const [joiningIds, setJoiningIds] = useState([]);
+  // Show id with an in-flight self-join request, to disable its Join button.
+  const [joiningShowId, setJoiningShowId] = useState(null);
 
   function toggleExpanded(id) {
     setExpandedId((current) => (current === id ? null : id));
-    setPickerShowId(null);
   }
 
   function markMemberBusy(id) {
@@ -83,22 +78,19 @@ export default function ShowTrackerFeature({
     setBusyMemberIds((current) => current.filter((busyId) => busyId !== id));
   }
 
-  // Open the roommate picker for a show, expanding the row so it's visible.
-  function openPicker(show) {
-    setExpandedId(show.id);
-    setPickerShowId((current) => (current === show.id ? null : show.id));
-  }
-
-  async function handleJoin(show, roommate) {
-    if (joiningIds.includes(roommate.id)) return;
-    setJoiningIds((current) => [...current, roommate.id]);
+  // Add the current user to the show. Mirrors the proposed-activity Join flow:
+  // the button is only shown to non-watchers, so clicking always joins the
+  // person who clicked — no roommate picker.
+  async function handleJoin(show) {
+    if (joiningShowId) return;
+    setJoiningShowId(show.id);
     setError("");
     try {
-      onShowsChange(await joinShow(show.id, roommate.id, roommate.name));
+      onShowsChange(await joinShow(show.id, user.id, user.name));
     } catch (err) {
       setError(err.message || "Could not join the show. Try again.");
     } finally {
-      setJoiningIds((current) => current.filter((id) => id !== roommate.id));
+      setJoiningShowId(null);
     }
   }
 
@@ -138,10 +130,10 @@ export default function ShowTrackerFeature({
         ) : (
           shows.map((show) => {
             const expanded = expandedId === show.id;
-            const memberIds = new Set(show.members.map((member) => member.id));
-            // Roommates not yet watching this show are the picker's candidates.
-            const available = roommates.filter((r) => !memberIds.has(r.id));
-            const pickerOpen = pickerShowId === show.id;
+            // Only non-watchers see the Join button; clicking it adds them.
+            const isMember = show.members.some(
+              (member) => member.id === user.id,
+            );
             return (
               <div
                 key={show.id}
@@ -166,19 +158,22 @@ export default function ShowTrackerFeature({
                       added {relativeTime(show.createdAt)}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openPicker(show);
-                    }}
-                    className={cx(
-                      "ui-pillButton ui-pillSecondary",
-                      styles.joinButton,
-                    )}
-                  >
-                    Join
-                  </button>
+                  {!isMember && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleJoin(show);
+                      }}
+                      disabled={joiningShowId === show.id}
+                      className={cx(
+                        "ui-pillButton ui-pillPrimary",
+                        styles.joinButton,
+                      )}
+                    >
+                      {joiningShowId === show.id ? "Joining…" : "Join"}
+                    </button>
+                  )}
                 </div>
 
                 <div
@@ -196,37 +191,10 @@ export default function ShowTrackerFeature({
                       onClick={(event) => event.stopPropagation()}
                       onKeyDown={(event) => event.stopPropagation()}
                     >
-                      {pickerOpen && (
-                        <div className={styles.picker}>
-                          <p className={styles.pickerLabel}>
-                            Add a roommate to this show
-                          </p>
-                          {available.length === 0 ? (
-                            <p className={styles.pickerEmpty}>
-                              Everyone&apos;s already watching.
-                            </p>
-                          ) : (
-                            <div className={styles.pickerChips}>
-                              {available.map((roommate) => (
-                                <button
-                                  key={roommate.id}
-                                  type="button"
-                                  disabled={joiningIds.includes(roommate.id)}
-                                  onClick={() => handleJoin(show, roommate)}
-                                  className={styles.pickerChip}
-                                >
-                                  {roommate.name}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
                       {show.members.length === 0 ? (
                         <p className={styles.watchersEmpty}>
-                          No one&apos;s watching yet — tap Join to add a
-                          roommate.
+                          No one&apos;s watching yet — tap Join to start
+                          tracking.
                         </p>
                       ) : (
                         <ul className={styles.watchers}>

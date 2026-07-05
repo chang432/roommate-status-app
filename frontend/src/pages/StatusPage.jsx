@@ -524,7 +524,6 @@ export default function StatusPage() {
                     <ShowTrackerFeature
                       shows={shows}
                       onShowsChange={setShows}
-                      roommates={roommates}
                     />
                   ),
                 },
