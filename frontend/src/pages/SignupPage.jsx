@@ -46,7 +46,7 @@ export default function SignupPage() {
           your account
         </h1>
         <p className={styles.subtitle}>
-          Account access starts here. Group joining will come later.
+          Account access starts here. Join your household with a group code after signup.
         </p>
 
         <div className={styles.field}>
@@ -123,7 +123,7 @@ export default function SignupPage() {
           Already have an account? <Link to="/login">Sign in</Link>
         </p>
 
-        <p className={styles.footer}>New accounts wait here until group joining is available.</p>
+        <p className={styles.footer}>New accounts land on the join screen until they enter a valid group code.</p>
       </form>
     </main>
   );

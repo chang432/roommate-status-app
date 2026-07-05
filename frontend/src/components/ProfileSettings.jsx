@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getCurrentGroup } from '../api/client.js'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { cx } from '../utils/classNames.js'
 import styles from './styling/ProfileSettings.module.css'
@@ -16,6 +17,36 @@ export default function ProfileSettings({
 }) {
   const { theme, resolvedTheme, setTheme } = useTheme()
   const [error, setError] = useState('')
+  const [group, setGroup] = useState(null)
+  const [groupError, setGroupError] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!user?.hasGroup) {
+      setGroup(null)
+      setGroupError('')
+      return () => {
+        cancelled = true
+      }
+    }
+
+    getCurrentGroup(user.id)
+      .then(({ group: currentGroup }) => {
+        if (cancelled) return
+        setGroup(currentGroup)
+        setGroupError('')
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setGroup(null)
+        setGroupError(err.message || 'Could not load group details.')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [user?.hasGroup, user?.id])
 
   async function handleDeleteAccount() {
     const password = window.prompt('Enter your password to delete this account.')
@@ -29,6 +60,13 @@ export default function ProfileSettings({
     }
   }
 
+  async function handleCopyCode() {
+    if (!group?.joinCode) return
+    await navigator.clipboard.writeText(group.joinCode)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+  }
+
   return (
     <div className={styles.panel}>
       <section className={styles.identityCard}>
@@ -40,6 +78,30 @@ export default function ProfileSettings({
           <p className={styles.username}>@{user?.username || user?.id}</p>
         </div>
       </section>
+
+      {user?.hasGroup && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h3>Group</h3>
+            <p>Share this code so new roommates can join your household.</p>
+          </div>
+          {groupError && <p className={cx('ui-errorBox', styles.error)}>{groupError}</p>}
+          {group && (
+            <div className={styles.groupCard}>
+              <div>
+                <p className={styles.groupName}>{group.name}</p>
+                <p className={styles.groupCodeLabel}>Invite code</p>
+              </div>
+              <div className={styles.groupCodeRow}>
+                <code className={styles.groupCode}>{group.joinCode}</code>
+                <button type="button" onClick={handleCopyCode} className={styles.copyButton}>
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}>

@@ -39,6 +39,7 @@ DEMO_PASSWORD = "roomie"
 # Existing users belong to the initial household. Newly-created users start
 # without a group until the future join-group flow assigns one.
 DEFAULT_GROUP_ID = "yorkshire"
+DEFAULT_GROUP_NAME = "Yorkshire"
 
 USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{2,31}$")
 
@@ -181,14 +182,20 @@ def validate_username(username: str) -> bool:
     return bool(USERNAME_RE.match(username))
 
 
-def get_all(consistent: bool = False) -> list[dict]:
-    """Return every roommate and their current status, sorted by name.
+def get_all(group_id: str, consistent: bool = False) -> list[dict]:
+    """Return one group's roommates and their current status, sorted by name.
 
     Sorting gives the frontend a stable order (DynamoDB scans are unordered).
     The table is tiny (one household), so a scan is the right tool here. Pass
     consistent=True immediately after a write so the response includes it.
     """
-    items = [item for item in _scan_items(consistent=consistent) if item.get("groupId")]
+    if not group_id:
+        return []
+    items = [
+        item
+        for item in _scan_items(consistent=consistent)
+        if item.get("groupId") == group_id
+    ]
     return sorted((_to_roommate(i) for i in items), key=lambda r: r["name"].lower())
 
 
@@ -200,14 +207,27 @@ def get_account_by_id(user_id: str) -> dict | None:
     return _to_account_user(item) if item else None
 
 
-def get_group_member(user_id: str) -> dict | None:
-    """Return a grouped roommate, or None for missing/no-group accounts."""
+def get_group_member(user_id: str, expected_group_id: str | None = None) -> dict | None:
+    """Return a grouped account, or None for missing/no-group/wrong-group ids."""
     if not user_id:
         return None
     item = _get_table().get_item(Key={"id": user_id}, ConsistentRead=True).get("Item")
     if not item or not item.get("groupId"):
         return None
-    return _to_roommate(item)
+    if expected_group_id is not None and item.get("groupId") != expected_group_id:
+        return None
+    return _to_account_user(item)
+
+
+def get_group_user_ids(group_id: str, consistent: bool = False) -> list[str]:
+    """Return every account id that belongs to the given group."""
+    if not group_id:
+        return []
+    return sorted(
+        item["id"]
+        for item in _scan_items(consistent=consistent)
+        if item.get("groupId") == group_id
+    )
 
 
 def authenticate(username: str, password: str) -> dict | None:
@@ -271,7 +291,12 @@ def delete_account(user_id: str, password: str) -> bool:
     return True
 
 
-def update_status(roommate_id: str, status: str, status_text: str = "") -> list[dict] | None:
+def update_status(
+    roommate_id: str,
+    group_id: str,
+    status: str,
+    status_text: str = "",
+) -> list[dict] | None:
     """Update one roommate's status and return the full updated household.
 
     Any status may carry a supplemental note (`status_text`); it is stored as-is
@@ -291,20 +316,20 @@ def update_status(roommate_id: str, status: str, status_text: str = "") -> list[
                 ":s": status,
                 ":t": status_text,
                 ":u": updated_at,
-                ":groupType": "S",
+                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND attribute_type(groupId, :groupType)",
+            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             return None  # Unknown roommate id.
         raise
-    return get_all(consistent=True)
+    return get_all(group_id, consistent=True)
 
 
-def available_count(roommates: list[dict] | None = None) -> int:
+def available_count(group_id: str, roommates: list[dict] | None = None) -> int:
     """Count how many roommates are currently available to hang."""
-    source = roommates if roommates is not None else get_all()
+    source = roommates if roommates is not None else get_all(group_id)
     return sum(1 for r in source if r["status"] == "available")
 
 

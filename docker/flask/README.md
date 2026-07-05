@@ -11,10 +11,13 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/login`                                            | `{ username, password }`                   | `{ user: { id, name, username, groupId, hasGroup } }`   |
 | `POST /api/accounts`                                         | `{ username, name, password }`             | new no-group `{ user }`                                 |
 | `DELETE /api/accounts/<id>`                                  | `{ password }`                             | `{ ok: true }` after password verification              |
-| `GET  /api/roommates`                                        | —                                          | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
+| `POST /api/groups/join`                                      | `{ userId, code }`                         | `{ user, group }`                                       |
+| `GET  /api/groups/current`                                   | `?userId=<id>`                             | `{ group: { groupId, name, joinCode, createdAt } }`     |
+| `GET  /api/roommates`                                        | `?userId=<id>`                             | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
 | `POST /api/roommates/<id>/poke`                              | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
+| `GET /api/activities`                                        | `?userId=<id>`                             | current + expired activity history                      |
 | `POST /api/activities`                                       | `{ text, proposedById, startAt?, endAt? }` | full updated activity list                              |
 | `PATCH /api/activities/<id>/schedule`                        | `{ requesterId, startAt?, endAt? }`        | full updated activity list                              |
 | `POST /api/activities/<id>/archive`                          | `{ requesterId }`                          | full updated activity list                              |
@@ -22,7 +25,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/activities/<id>/start`                            | `{ requesterId }`                          | full updated activity list                              |
 | `POST /api/activities/<id>/end`                              | `{ requesterId }`                          | full updated activity list                              |
 | `PUT/DELETE /api/activities/<id>/comments/<commentId>/likes` | `{ userId }`                               | full updated activity list                              |
-| `GET /api/requests`                                          | —                                          | full request list                                       |
+| `GET /api/requests`                                          | `?userId=<id>`                             | full request list                                       |
 | `POST /api/requests`                                         | `{ text, requesterId, requestedIds }`      | full updated request list                               |
 | `POST /api/requests/<id>/responses`                          | `{ userId, response }`                     | full updated request list                               |
 | `POST /api/requests/<id>/complete`                           | `{ userId }`                               | full updated request list                               |
@@ -30,7 +33,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `DELETE /api/requests/<id>`                                  | `{ requesterId }`                          | full updated request list                               |
 | `POST /api/requests/<id>/comments`                           | `{ authorId, text }`                       | full updated request list                               |
 | `PUT/DELETE /api/requests/<id>/comments/<commentId>/likes`   | `{ userId }`                               | full updated request list                               |
-| `GET /api/checklists`                                        | —                                          | full active checklist list                              |
+| `GET /api/checklists`                                        | `?userId=<id>`                             | full active checklist list                              |
 | `POST /api/checklists`                                       | `{ title, createdById, items }`            | full updated checklist list                             |
 | `POST /api/checklists/<id>/notify`                           | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
 | `POST /api/checklists/<id>/items`                            | `{ userId, text }`                         | full updated checklist list                             |
@@ -38,7 +41,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `PATCH /api/checklists/<id>/items/<itemId>`                  | `{ userId, text }`                         | full updated checklist list                             |
 | `DELETE /api/checklists/<id>/items/<itemId>`                 | `{ userId }`                               | full updated checklist list                             |
 | `POST /api/checklists/<id>/archive`                          | `{ userId }`                               | full updated checklist list                             |
-| `GET /api/jam`                                               | —                                          | active Spotify Jam or `null`                            |
+| `GET /api/jam`                                               | `?userId=<id>`                             | active Spotify Jam or `null`                            |
 | `POST /api/jam`                                              | `{ hostId, link }`                         | active Spotify Jam, replacing prior Jam                 |
 | `DELETE /api/jam`                                            | `{ hostId }`                               | `null` after host ends active Jam                       |
 | `POST /api/push/subscribe`                                   | `{ subscription, userId }`                 | `{ ok: true }`                                          |
@@ -53,8 +56,8 @@ roommate item as `passwordHash`; plaintext passwords are never stored or
 returned. The seeded Yorkshire roommates are backfilled with username equal to
 their stable id (for example `andre`) and demo password **`roomie`**. Newly
 created accounts are valid sign-in accounts but have `groupId = null`, so they
-cannot see or use household features until a future group-join flow assigns
-them to a group. The current seeded household uses `groupId = "yorkshire"`.
+cannot see or use household features until they join a group with a reusable
+invite code. The current seeded household uses `groupId = "yorkshire"`.
 New activities store both the creator's stable roommate id (`proposedById`) and
 canonical display name (`proposedBy`). Any roommate can archive an activity,
 which sets its `endedAt` timestamp so it moves into expired history. Only the
@@ -67,9 +70,9 @@ clears the old end. Lifecycle is
 derived from server time, so visible apps pick up automatic changes through
 their five-second activity polling without scheduler infrastructure.
 Push subscriptions and activity participants are associated with stable
-roommate ids. User-triggered notifications always exclude the actor. New
-activity proposals and gather notifications go household-wide; event comments,
-joins, deletion, and emphasis go only to that event's participants.
+roommate ids. User-triggered notifications always exclude the actor. Every
+household feature is scoped by `groupId`, including roster reads, activities,
+requests, checklists, mentions, Jam state, and push fanout.
 Roommate pokes target one roommate and open that recipient's status editor when
 the notification is selected.
 Event start/end notifications go household-wide.
@@ -108,8 +111,10 @@ Backed by a per-deployment DynamoDB table — `RoommateStatus-dev` or
 `RoommateStatus-main` (see `infrastructure/dynamodb-table-dev.yaml` and
 `dynamodb-table-main.yaml`) — one item per roommate, keyed by `id`.
 For accounts, `id` is the normalized username. Grouped users are included in
-the household roster; no-group users remain hidden from household reads and are
-rejected by mutating household routes.
+their household roster; no-group users remain hidden from household reads and
+are rejected by mutating household routes. Groups live in a companion
+`<ROOMMATE_TABLE>-groups` table keyed by `groupId`, with a reusable `joinCode`
+GSI used by `/api/groups/join`.
 Configuration:
 
 | Env var             | Default               | Purpose                                                             |

@@ -28,6 +28,16 @@ async function request(path, options = {}) {
   return data
 }
 
+function withQuery(path, params) {
+  const url = new URL(`${API_BASE}${path}`, window.location.origin)
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, value)
+    }
+  })
+  return `${url.pathname}${url.search}`
+}
+
 // POST /api/login — exchange a username + password for the signed-in account.
 export async function login(username, password) {
   return request('/login', {
@@ -52,9 +62,22 @@ export async function deleteAccount(id, password) {
   })
 }
 
+// POST /api/groups/join — assign a pending account to a household by code.
+export async function joinGroup(userId, code) {
+  return request('/groups/join', {
+    method: 'POST',
+    body: JSON.stringify({ userId, code }),
+  })
+}
+
+// GET /api/groups/current — fetch the signed-in user's group metadata.
+export async function getCurrentGroup(userId) {
+  return request(withQuery('/groups/current', { userId }))
+}
+
 // GET /api/roommates — the whole household with their current statuses.
-export async function getRoommates() {
-  return request('/roommates')
+export async function getRoommates(userId) {
+  return request(withQuery('/roommates', { userId }))
 }
 
 // PUT /api/roommates/:id/status — update one roommate's status.
@@ -98,8 +121,8 @@ export async function savePushSubscription(subscription, userId) {
 }
 
 // GET /api/jam — the one active household Spotify Jam, if any.
-export async function getJam() {
-  return request('/jam')
+export async function getJam(userId) {
+  return request(withQuery('/jam', { userId }))
 }
 
 // POST /api/jam — replace the active household Jam link.
@@ -119,8 +142,8 @@ export async function endJam(hostId) {
 }
 
 // GET /api/activities — current activities followed by expired history.
-export async function getActivities() {
-  return request('/activities')
+export async function getActivities(userId) {
+  return request(withQuery('/activities', { userId }))
 }
 
 // POST /api/activities — propose an activity (also pushes it to everyone).
@@ -211,8 +234,8 @@ export async function setCommentLiked(id, commentId, userId, liked) {
 }
 
 // GET /api/requests — recent household requests, newest first.
-export async function getRequests() {
-  return request('/requests')
+export async function getRequests(userId) {
+  return request(withQuery('/requests', { userId }))
 }
 
 // POST /api/requests — create a targeted request for specific roommates.
@@ -275,8 +298,8 @@ export async function setRequestCommentLiked(id, commentId, userId, liked) {
 }
 
 // GET /api/checklists — recent active household checklists.
-export async function getChecklists() {
-  return request('/checklists')
+export async function getChecklists(userId) {
+  return request(withQuery('/checklists', { userId }))
 }
 
 // POST /api/checklists — create a checklist with an initial set of items.

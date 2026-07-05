@@ -30,8 +30,28 @@
   @apply ml-2 text-ink;
 }
 
+.form {
+  @apply text-left;
+}
+
+.formLabel {
+  @apply mb-2 block;
+}
+
+.codeInput {
+  @apply px-[14px] py-[12px] text-[15px] uppercase tracking-[0.12em];
+}
+
+.error {
+  @apply mt-3;
+}
+
+.joinButton {
+  @apply mt-4 w-full px-4 py-[13px] text-[14px];
+}
+
 .settingsButton {
-  @apply w-full px-4 py-[13px] text-[14px];
+  @apply mt-3 w-full rounded-sm border border-line bg-card px-4 py-[13px] text-[14px] font-black text-ink-soft transition hover:bg-surface-hover;
 }
 
 .settingsModal {
