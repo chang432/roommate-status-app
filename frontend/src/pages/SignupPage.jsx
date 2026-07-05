@@ -1,31 +1,33 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate, Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import Brandmark from "../components/Brandmark.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { cx } from "../utils/classNames.js";
 import styles from "./LoginPage.module.css";
 
-export default function LoginPage() {
-  const { user, login } = useAuth();
-  const location = useLocation();
+export default function SignupPage() {
+  const { user, createAccount } = useAuth();
   const navigate = useNavigate();
-  const returnTo = location.state?.returnTo || "/";
 
+  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Already signed in? Skip the login screen.
-  if (user) return <Navigate to={user.hasGroup ? returnTo : "/pending"} replace />;
+  if (user) return <Navigate to={user.hasGroup ? "/" : "/pending"} replace />;
 
   async function handleSubmit(e) {
     e.preventDefault();
     setSubmitting(true);
     setError("");
     try {
-      const signedIn = await login(username, password);
-      navigate(signedIn.hasGroup ? returnTo : "/pending", { replace: true });
+      if (password !== confirmPassword) {
+        throw new Error("Passwords do not match.");
+      }
+      const signedIn = await createAccount(username, name, password);
+      navigate(signedIn.hasGroup ? "/" : "/pending", { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -39,13 +41,28 @@ export default function LoginPage() {
         <Brandmark className={styles.brandmark} />
 
         <h1 className={styles.title}>
-          Yorkshire
+          Create
           <br />
-          Roomie Status
+          your account
         </h1>
         <p className={styles.subtitle}>
-          Welcome home — sign in with your username.
+          Account access starts here. Group joining will come later.
         </p>
+
+        <div className={styles.field}>
+          <label htmlFor="name" className="ui-formLabel">
+            Display name
+          </label>
+          <input
+            id="name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="What should roommates call you?"
+            className={cx("ui-textInput", styles.textInput)}
+            autoComplete="name"
+          />
+        </div>
 
         <div className={styles.field}>
           <label htmlFor="username" className="ui-formLabel">
@@ -71,9 +88,24 @@ export default function LoginPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter your password"
+            placeholder="Create a password"
             className={cx("ui-textInput", styles.textInput)}
-            autoComplete="current-password"
+            autoComplete="new-password"
+          />
+        </div>
+
+        <div className={styles.passwordField}>
+          <label htmlFor="confirmPassword" className="ui-formLabel">
+            Confirm password
+          </label>
+          <input
+            id="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Re-enter your password"
+            className={cx("ui-textInput", styles.textInput)}
+            autoComplete="new-password"
           />
         </div>
 
@@ -84,14 +116,14 @@ export default function LoginPage() {
           disabled={submitting}
           className={cx("ui-primaryButton", styles.submit)}
         >
-          {submitting ? "Signing in…" : "Sign in"}
+          {submitting ? "Creating…" : "Create account"}
         </button>
 
         <p className={styles.authLink}>
-          New here? <Link to="/signup">Create an account</Link>
+          Already have an account? <Link to="/login">Sign in</Link>
         </p>
 
-        <p className={styles.footer}>Seeded roommates use their lowercase name and password roomie.</p>
+        <p className={styles.footer}>New accounts wait here until group joining is available.</p>
       </form>
     </main>
   );

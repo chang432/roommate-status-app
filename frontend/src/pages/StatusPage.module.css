@@ -26,8 +26,16 @@
   @apply mt-[2px] text-[13.5px] text-ink-soft;
 }
 
-.signOut {
-  @apply flex-none rounded-full border border-line bg-white px-[14px] py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-surface-hover;
+.profileButton {
+  @apply flex flex-none items-center gap-2 rounded-full border border-line bg-card px-2 py-2 text-ink-soft shadow-soft transition hover:border-accent hover:bg-surface-hover hover:text-ink;
+}
+
+.profileInitial {
+  @apply grid h-8 w-8 place-items-center rounded-full bg-accent text-[14px] font-black text-white;
+}
+
+.profileLabel {
+  @apply hidden pr-2 text-[13px] font-black sm:inline;
 }
 
 .pageError {
@@ -84,4 +92,8 @@
 
 .jamModal {
   @apply max-w-[520px];
+}
+
+.settingsModal {
+  @apply max-w-[560px];
 }

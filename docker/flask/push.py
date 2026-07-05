@@ -100,6 +100,25 @@ def _delete_by_id(item_id: str) -> None:
     _get_table().delete_item(Key={"id": item_id})
 
 
+def delete_user_subscriptions(user_id: str) -> int:
+    """Remove all stored browser subscriptions owned by a deleted account."""
+    if not user_id:
+        return 0
+    table = _get_table()
+    resp = table.scan()
+    items = resp.get("Items", [])
+    while "LastEvaluatedKey" in resp:
+        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
+        items.extend(resp.get("Items", []))
+
+    deleted = 0
+    for item in items:
+        if item.get("userId") == user_id:
+            table.delete_item(Key={"id": item["id"]})
+            deleted += 1
+    return deleted
+
+
 def list_subscriptions() -> list[dict]:
     """Return every stored PushSubscription as a dict."""
     table = _get_table()

@@ -1,0 +1,39 @@
+.page {
+  @apply grid min-h-screen place-items-center px-5 py-8;
+}
+
+.card {
+  @apply w-full max-w-[460px] rounded-lg border border-line bg-card px-[34px] py-10 text-center shadow-card;
+}
+
+.brandmark {
+  @apply mx-auto mb-5 h-[54px] w-[54px];
+}
+
+.eyebrow {
+  @apply mb-3 justify-center;
+}
+
+.title {
+  @apply font-display text-[30px] font-semibold leading-[1.05] -tracking-[0.02em];
+}
+
+.copy {
+  @apply mx-auto mt-4 max-w-[330px] text-[15px] leading-6 text-ink-soft;
+}
+
+.identity {
+  @apply my-7 rounded-md border border-line bg-surface-muted px-4 py-3 text-[13px] text-ink-soft;
+}
+
+.identity strong {
+  @apply ml-2 text-ink;
+}
+
+.settingsButton {
+  @apply w-full px-4 py-[13px] text-[14px];
+}
+
+.settingsModal {
+  @apply max-w-[560px];
+}

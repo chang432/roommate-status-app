@@ -28,11 +28,27 @@ async function request(path, options = {}) {
   return data
 }
 
-// POST /api/login — exchange a name + password for the signed-in roommate.
-export async function login(name, password) {
+// POST /api/login — exchange a username + password for the signed-in account.
+export async function login(username, password) {
   return request('/login', {
     method: 'POST',
-    body: JSON.stringify({ name, password }),
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+// POST /api/accounts — create a no-group account and sign in as it.
+export async function createAccount(username, name, password) {
+  return request('/accounts', {
+    method: 'POST',
+    body: JSON.stringify({ username, name, password }),
+  })
+}
+
+// DELETE /api/accounts/:id — delete the signed-in account after password check.
+export async function deleteAccount(id, password) {
+  return request(`/accounts/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
   })
 }
 

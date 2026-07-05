@@ -5,7 +5,12 @@ availability to hang out. Built from the mockups in `../mockups`.
 
 ## Features
 
-- **Login** by picking your name and entering a password.
+- **Login** with a username and password on `/login`, or create a new account
+  on `/signup`.
+- **Pending accounts** can sign in but cannot use household features until a
+  future group-join flow assigns them to a group.
+- **Profile settings** keep account actions in one place, including sign out,
+  account deletion, and a light/dark/system appearance preference.
 - **View** the whole household's current statuses at a glance.
 - **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.
@@ -34,7 +39,8 @@ availability to hang out. Built from the mockups in `../mockups`.
 - [Vite](https://vitejs.dev/) + React 18
 - [Tailwind CSS](https://tailwindcss.com/) (cozy theme tokens in
   `tailwind.config.js`)
-- [React Router](https://reactrouter.com/) for `/login` and `/`
+- [React Router](https://reactrouter.com/) for `/login`, `/signup`, `/pending`,
+  and `/`
 
 ## Getting started
 
@@ -47,8 +53,8 @@ npm install
 npm run dev
 ```
 
-Open the printed local URL. Sign in as any roommate (Andre, Jordan, Maya, Sam,
-Priya, Leo) with the demo password **`roomie`**.
+Open the printed local URL. Sign in as any seeded roommate using their lowercase
+name as username (for example `andre`) with the demo password **`roomie`**.
 
 ## Backend / API
 
@@ -58,6 +64,8 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | Function                        | Method & path                                              |
 | ------------------------------- | ---------------------------------------------------------- |
 | `login`                         | `POST /api/login`                                          |
+| `createAccount`                 | `POST /api/accounts`                                       |
+| `deleteAccount`                 | `DELETE /api/accounts/:id`                                 |
 | `getRoommates`                  | `GET /api/roommates`                                       |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
