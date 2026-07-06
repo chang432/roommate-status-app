@@ -35,14 +35,18 @@ async function request(path, options = {}) {
   return data
 }
 
+// Append non-empty params to a path. Returns a path WITHOUT the /api prefix —
+// request() adds API_BASE exactly once (returning it prefixed here used to
+// double it into /api/api/..., 404ing every list fetch).
 function withQuery(path, params) {
-  const url = new URL(`${API_BASE}${path}`, window.location.origin)
+  const search = new URLSearchParams()
   Object.entries(params || {}).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
-      url.searchParams.set(key, value)
+      search.set(key, value)
     }
   })
-  return `${url.pathname}${url.search}`
+  const query = search.toString()
+  return query ? `${path}?${query}` : path
 }
 
 // POST /api/login — exchange a username + password for the signed-in account.
