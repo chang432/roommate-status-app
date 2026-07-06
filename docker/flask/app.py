@@ -5,6 +5,7 @@ Implements the endpoints the frontend calls (see frontend/src/api/client.js):
     POST /api/login                    -> { "user": { "id", "name", "username",
                                              "groupId", "hasGroup" } }
     POST /api/accounts                 -> create a no-group account
+    GET  /api/accounts/<id>            -> re-validate a stored session's account
     DELETE /api/accounts/<id>          -> delete an account after password check
     GET  /api/roommates                -> [ { "id", "name", "status", "statusText",
                                              "statusUpdatedAt" }, ... ]
@@ -173,12 +174,21 @@ def ensure_group_features_ready() -> None:
         _group_setup_done = True
 
 
+def invalid_user_response() -> tuple:
+    """400 for a userId that doesn't resolve to a grouped account.
+
+    The machine-readable `code` lets the frontend distinguish a dead session
+    (e.g. the local in-memory DB was wiped) from other 400s and auto-logout.
+    """
+    return jsonify({"error": "A valid roommate is required.", "code": "invalid_user"}), 400
+
+
 def group_member_from_query() -> tuple[dict | None, tuple | None]:
     ensure_group_features_ready()
     user_id = (request.args.get("userId") or "").strip()
     member = db.get_group_member(user_id) if user_id else None
     if member is None:
-        return None, (jsonify({"error": "A valid roommate is required."}), 400)
+        return None, invalid_user_response()
     return member, None
 
 
@@ -266,6 +276,15 @@ def create_app() -> Flask:
             return jsonify({"error": "That username is already taken."}), 409
         return jsonify({"user": user}), 201
 
+    @app.get("/api/accounts/<user_id>")
+    def get_account(user_id: str):
+        """Return one account (grouped or not) so the frontend can re-validate
+        a stored session — e.g. after the local in-memory DB was reseeded."""
+        account = db.get_account_by_id(db.normalize_username(user_id))
+        if account is None:
+            return jsonify({"error": "That account no longer exists.", "code": "invalid_user"}), 404
+        return jsonify({"user": account})
+
     @app.delete("/api/accounts/<user_id>")
     def delete_account(user_id: str):
         """Delete an account and its browser push subscriptions."""
@@ -299,7 +318,7 @@ def create_app() -> Flask:
         user_id = (request.args.get("userId") or "").strip()
         user = db.get_group_member(user_id) if user_id else None
         if user is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         group = groups.get_group_by_id(user["groupId"])
         if group is None:
             return jsonify({"error": "That group no longer exists."}), 404
@@ -360,7 +379,7 @@ def create_app() -> Flask:
         requester_id = (body.get("requesterId") or "").strip()
         requester = db.get_group_member(requester_id) if requester_id else None
         if requester is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         if not push.is_configured():
             return jsonify({"error": "Push is not configured on the server."}), 503
 
@@ -424,7 +443,7 @@ def create_app() -> Flask:
         if not subscription.get("endpoint"):
             return jsonify({"error": "Invalid subscription (no endpoint)."}), 400
         if db.get_group_member(user_id) is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         push.save_subscription(subscription, user_id)
         return jsonify({"ok": True})
 
@@ -461,7 +480,7 @@ def create_app() -> Flask:
         link = (body.get("link") or "").strip()
         host = db.get_group_member(host_id) if host_id else None
         if host is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         if not jam.valid_spotify_link(link):
             return jsonify({"error": "Paste a valid Spotify Jam link."}), 400
 
@@ -486,7 +505,7 @@ def create_app() -> Flask:
         host_id = (body.get("hostId") or "").strip()
         host = db.get_group_member(host_id) if host_id else None
         if host is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         result = jam.end(host["id"], host["groupId"])
         if result == jam.END_NOT_FOUND:
             return jsonify({"error": "No active Jam to end."}), 404
@@ -714,7 +733,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         activity = activities.join(activity_id, roommate["id"], roommate["name"], roommate["groupId"])
         if activity is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
@@ -744,7 +763,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         result = activities.leave(activity_id, roommate["id"], roommate["name"], roommate["groupId"])
         if result is None:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
@@ -842,7 +861,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
 
         result = activities.set_comment_like(
             activity_id,
@@ -927,7 +946,7 @@ def create_app() -> Flask:
         response = (body.get("response") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         if response not in household_requests.VALID_RESPONSES:
             return jsonify({"error": "Response must be accepted or denied."}), 400
 
@@ -961,7 +980,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
 
         updated = household_requests.complete(
             request_id,
@@ -993,7 +1012,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
 
         updated = household_requests.reopen(
             request_id,
@@ -1133,7 +1152,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
 
         result = household_requests.set_comment_like(
             request_id,
@@ -1213,7 +1232,7 @@ def create_app() -> Flask:
         requester_id = (body.get("requesterId") or "").strip()
         requester = db.get_group_member(requester_id) if requester_id else None
         if requester is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         checklist = household_checklists.get(checklist_id, requester["groupId"], consistent=True)
         if checklist is None or checklist["isArchived"]:
             return jsonify({"error": f"Unknown checklist: {checklist_id}"}), 404
@@ -1238,7 +1257,7 @@ def create_app() -> Flask:
         text = (body.get("text") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         if not text:
             return jsonify({"error": "A checklist item is required."}), 400
         if len(text) > MAX_ACTIVITY_LEN:
@@ -1256,7 +1275,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
 
         updated = household_checklists.toggle_item(
             checklist_id,
@@ -1277,7 +1296,7 @@ def create_app() -> Flask:
         text = (body.get("text") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         if not text:
             return jsonify({"error": "A checklist item is required."}), 400
         if len(text) > MAX_ACTIVITY_LEN:
@@ -1295,7 +1314,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
 
         updated = household_checklists.delete_item(checklist_id, item_id, roommate["groupId"])
         if updated is None:
@@ -1309,7 +1328,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
 
         updated = household_checklists.archive(
             checklist_id,
@@ -1378,7 +1397,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         return shows_response(
             household_shows.join(show_id, roommate["id"], roommate["name"], roommate["groupId"]),
             roommate["groupId"],
@@ -1391,7 +1410,7 @@ def create_app() -> Flask:
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         return shows_response(
             household_shows.leave(show_id, roommate["id"], roommate["groupId"]),
             roommate["groupId"],
@@ -1410,7 +1429,7 @@ def create_app() -> Flask:
         body = request.get_json(silent=True) or {}
         roommate = db.get_group_member((body.get("userId") or "").strip())
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         delta = body.get("delta")
         if not isinstance(delta, int) or isinstance(delta, bool):
             return jsonify({"error": "A whole-number delta is required."}), 400
@@ -1429,7 +1448,7 @@ def create_app() -> Flask:
         body = request.get_json(silent=True) or {}
         roommate = db.get_group_member((body.get("userId") or "").strip())
         if roommate is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         value = body.get("value")
         if not isinstance(value, int) or isinstance(value, bool):
             return jsonify({"error": "A whole-number value is required."}), 400
@@ -1455,7 +1474,7 @@ def create_app() -> Flask:
         requester_id = (body.get("requesterId") or "").strip()
         requester = db.get_group_member(requester_id) if requester_id else None
         if requester is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
         result = action(show_id, requester["id"], requester["groupId"])
         if result is None:
             return jsonify({"error": f"Unknown show: {show_id}"}), 404
@@ -1475,7 +1494,7 @@ def create_app() -> Flask:
         emphasized_by_id = (body.get("emphasizedById") or "").strip()
         emphasized_by = db.get_group_member(emphasized_by_id) if emphasized_by_id else None
         if emphasized_by is None:
-            return jsonify({"error": "A valid roommate is required."}), 400
+            return invalid_user_response()
 
         activity = activities.get(activity_id, emphasized_by["groupId"])
         if activity is None:

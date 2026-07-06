@@ -1,9 +1,11 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import {
   createAccount as apiCreateAccount,
   deleteAccount as apiDeleteAccount,
+  getAccount as apiGetAccount,
   joinGroup as apiJoinGroup,
   login as apiLogin,
+  setInvalidUserHandler,
 } from '../api/client.js'
 
 // Holds the signed-in roommate and exposes login/logout. The session is kept in
@@ -47,6 +49,26 @@ export function AuthProvider({ children }) {
     setUser(null)
     localStorage.removeItem(SESSION_KEY)
   }, [])
+
+  // Any API response flagged `invalid_user` means the stored session points at
+  // an account the backend no longer knows (locally the in-memory DB is wiped
+  // on every restart) — clear it so the app returns to the login page.
+  useEffect(() => {
+    setInvalidUserHandler(logout)
+    return () => setInvalidUserHandler(null)
+  }, [logout])
+
+  // Re-validate the stored session once on load: refresh it with server truth
+  // (groupId/hasGroup may have changed) or, if the account is gone, the
+  // invalid_user handler above logs out. Network failures keep the session —
+  // a briefly unreachable backend shouldn't sign anyone out.
+  useEffect(() => {
+    const stored = readSession()
+    if (!stored) return
+    apiGetAccount(stored.id)
+      .then(({ user: fresh }) => persistUser(fresh))
+      .catch(() => {})
+  }, [persistUser])
 
   const deleteAccount = useCallback(async (password) => {
     if (!user) return

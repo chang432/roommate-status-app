@@ -181,6 +181,44 @@ def test_no_group_account_cannot_use_household_features(client):
     assert request.status_code == 400
 
 
+def test_get_account_validates_stored_session(client):
+    res = client.get("/api/accounts/andre")
+    assert res.status_code == 200
+    assert res.get_json()["user"] == {
+        "id": "andre",
+        "name": "Andre",
+        "username": "andre",
+        "groupId": db.DEFAULT_GROUP_ID,
+        "hasGroup": True,
+    }
+
+
+def test_get_account_includes_pending_no_group_accounts(client):
+    # Unlike /api/groups/current, session validation must accept accounts that
+    # haven't joined a group yet, or a fresh signup would be logged out on load.
+    client.post(
+        "/api/accounts",
+        json={"username": "pending", "name": "Pending User", "password": "secret123"},
+    )
+    res = client.get("/api/accounts/pending")
+    assert res.status_code == 200
+    assert res.get_json()["user"]["hasGroup"] is False
+
+
+def test_get_account_unknown_user_flags_invalid_user(client):
+    res = client.get("/api/accounts/ghost")
+    assert res.status_code == 404
+    assert res.get_json()["code"] == "invalid_user"
+
+
+def test_stale_session_reads_carry_invalid_user_code(client):
+    # The frontend auto-logs-out on this code (frontend/src/api/client.js).
+    for path in ("/api/roommates", "/api/activities"):
+        res = client.get(grouped_path(path, user_id="ghost"))
+        assert res.status_code == 400
+        assert res.get_json()["code"] == "invalid_user"
+
+
 def test_delete_account_removes_roommate_and_push_subscriptions(client):
     push._get_table().put_item(
         Item={

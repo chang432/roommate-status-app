@@ -7,6 +7,16 @@
 
 const API_BASE = '/api'
 
+// Called when the backend reports the stored session's user no longer exists
+// (error code "invalid_user") — e.g. the local in-memory DB was reseeded.
+// AuthContext registers logout here so a dead session bounces to the login
+// page instead of leaving every fetch failing.
+let onInvalidUser = null
+
+export function setInvalidUserHandler(handler) {
+  onInvalidUser = handler
+}
+
 // Thin wrapper around fetch that throws on non-2xx and parses JSON.
 // Error responses carry a JSON `{ error }` body (see the Flask backend), which
 // we surface as the thrown Error's message for display in the UI.
@@ -18,6 +28,7 @@ async function request(path, options = {}) {
 
   const data = await res.json().catch(() => null)
   if (!res.ok) {
+    if (data?.code === 'invalid_user') onInvalidUser?.()
     const message = data?.error || `Request failed: ${res.status}`
     throw new Error(message)
   }
@@ -48,6 +59,11 @@ export async function createAccount(username, name, password) {
     method: 'POST',
     body: JSON.stringify({ username, name, password }),
   })
+}
+
+// GET /api/accounts/:id — re-fetch an account to validate a stored session.
+export async function getAccount(id) {
+  return request(`/accounts/${id}`)
 }
 
 // DELETE /api/accounts/:id — delete the signed-in account after password check.
