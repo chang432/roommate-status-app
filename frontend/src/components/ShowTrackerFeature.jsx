@@ -16,24 +16,26 @@ import styles from "./styling/ShowTrackerFeature.module.css";
 // How long the counter must be held before it flips into manual-edit mode.
 const LONG_PRESS_MS = 500;
 
-// A single labeled counter: shows a value with a + button that advances it, and
-// long-pressing the number opens a text field to type an exact value. Season
-// and episode each render one of these, so the long-press logic lives here once.
-function CounterPill({ label, name, noun, value, busy, onIncrement, onSet }) {
+// A single progress chip: tapping increments immediately, while a long press
+// opens inline numeric editing for an exact season/episode jump.
+function CounterChip({ label, name, noun, value, busy, readOnly, onIncrement, onSet }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const pressTimer = useRef(null);
   // Guards against onBlur double-firing after Enter/Escape already finished.
   const finished = useRef(false);
+  // A long press should open the editor without also triggering the tap bump.
+  const suppressClick = useRef(false);
 
   function beginEdit() {
     finished.current = false;
+    suppressClick.current = true;
     setDraft(String(value));
     setEditing(true);
   }
 
   function startPress() {
-    if (busy) return;
+    if (busy || readOnly) return;
     cancelPress();
     pressTimer.current = setTimeout(beginEdit, LONG_PRESS_MS);
   }
@@ -59,7 +61,7 @@ function CounterPill({ label, name, noun, value, busy, onIncrement, onSet }) {
   return (
     <div className={styles.counter}>
       <span className={styles.counterLabel}>{label}</span>
-      <div className={styles.pill}>
+      <div className={styles.counterValue}>
         {editing ? (
           <input
             type="number"
@@ -79,33 +81,33 @@ function CounterPill({ label, name, noun, value, busy, onIncrement, onSet }) {
                 finishEdit(false);
               }
             }}
-            className={styles.pillInput}
+            className={styles.counterInput}
             aria-label={`Set ${name}'s ${noun}`}
           />
         ) : (
-          <span
-            role="button"
-            tabIndex={0}
-            className={styles.pillValue}
-            title={`Long-press to edit ${noun}`}
+          <button
+            type="button"
+            disabled={busy || readOnly}
+            className={readOnly ? styles.counterStatic : styles.counterChip}
+            title={readOnly ? `${label} ${value}` : `Tap to advance ${noun}; long-press to edit`}
             onPointerDown={startPress}
             onPointerUp={cancelPress}
             onPointerLeave={cancelPress}
             onPointerCancel={cancelPress}
+            onClick={(event) => {
+              event.stopPropagation();
+              cancelPress();
+              if (suppressClick.current) {
+                suppressClick.current = false;
+                return;
+              }
+              if (!readOnly) onIncrement();
+            }}
           >
-            {value}
-          </span>
+            <span className={styles.counterChipLabel}>{label}</span>
+            <span className={styles.counterChipValue}>{value}</span>
+          </button>
         )}
-        <button
-          type="button"
-          disabled={busy || editing}
-          onClick={onIncrement}
-          className={styles.pillButton}
-          aria-label={`Increase ${name}'s ${noun}`}
-          title={`Forward one ${noun}`}
-        >
-          +
-        </button>
       </div>
     </div>
   );
@@ -114,7 +116,7 @@ function CounterPill({ label, name, noun, value, busy, onIncrement, onSet }) {
 // Watcher sub-entry: roommate name plus independent season and episode counters.
 // Edits are open to everyone, so no ownership check gates the controls. A
 // completed show renders read-only, so its watchers show progress without the
-// +/edit/remove controls.
+// increment/edit/remove controls.
 function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove }) {
   return (
     <li className={styles.watcher}>
@@ -122,11 +124,28 @@ function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove 
         <span className={styles.watcherAvatar} title={member.name}>
           {initialOf(member.name)}
         </span>
-        <div className={styles.watcherText}>
-          <p className={styles.watcherName}>{member.name}</p>
-          <p className={styles.watcherEpisode}>
-            Season {member.season} · Episode {member.episode}
-          </p>
+        <p className={styles.watcherName}>{member.name}</p>
+        <div className={styles.counters}>
+          <CounterChip
+            label="Season"
+            noun="season"
+            name={member.name}
+            value={member.season}
+            busy={busy}
+            readOnly={readOnly}
+            onIncrement={() => onAdjust(member, "season", 1)}
+            onSet={(value) => onSetProgress(member, "season", value)}
+          />
+          <CounterChip
+            label="Episode"
+            noun="episode"
+            name={member.name}
+            value={member.episode}
+            busy={busy}
+            readOnly={readOnly}
+            onIncrement={() => onAdjust(member, "episode", 1)}
+            onSet={(value) => onSetProgress(member, "episode", value)}
+          />
         </div>
         {!readOnly && (
           <button
@@ -141,27 +160,9 @@ function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove 
           </button>
         )}
       </div>
-
-      {!readOnly && (
-        <div className={styles.counters}>
-          <CounterPill
-            label="Season"
-            noun="season"
-            name={member.name}
-            value={member.season}
-            busy={busy}
-            onIncrement={() => onAdjust(member, "season", 1)}
-            onSet={(value) => onSetProgress(member, "season", value)}
-          />
-          <CounterPill
-            label="Episode"
-            noun="episode"
-            name={member.name}
-            value={member.episode}
-            busy={busy}
-            onIncrement={() => onAdjust(member, "episode", 1)}
-            onSet={(value) => onSetProgress(member, "episode", value)}
-          />
+      {readOnly && (
+        <div className={styles.watcherMeta}>
+          <span className={styles.watcherMetaText}>Read-only</span>
         </div>
       )}
     </li>

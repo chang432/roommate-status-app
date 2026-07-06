@@ -80,65 +80,69 @@
 }
 
 .watcher {
-  @apply flex flex-col gap-[8px] rounded-sm border border-line bg-white px-[10px] py-[9px];
+  @apply rounded-sm border border-line bg-card px-[10px] py-[8px];
 }
 
-/* Top line of a watcher: avatar, name/progress, and remove button. */
+/* Flat watcher row: avatar, name, chips, then the optional remove action. */
 .watcherHead {
-  @apply flex min-h-[30px] items-center gap-[10px];
+  @apply flex min-h-[32px] flex-wrap items-center gap-[8px];
 }
 
 .watcherAvatar {
   @apply grid h-[30px] w-[30px] flex-none place-items-center rounded-full bg-status-grey text-[12px] font-bold uppercase text-white;
 }
 
-.watcherText {
-  @apply min-w-0 flex-1;
-}
-
 .watcherName {
-  @apply truncate text-[14px] font-medium text-ink;
+  @apply min-w-0 flex-1 truncate text-[14px] font-medium text-ink;
 }
 
-.watcherEpisode {
-  @apply mt-[1px] text-[12px] text-ink-soft;
+.watcherMeta {
+  @apply mt-[6px] pl-[38px];
 }
 
-/* Season + episode counters, aligned under the name (past the avatar). */
-.counters {
-  @apply flex flex-wrap items-center gap-x-[16px] gap-y-[8px] pl-[40px];
-}
-
-/* One labeled counter: the label sits left of its value/+ pill. */
-.counter {
-  @apply flex items-center gap-[6px];
-}
-
-.counterLabel {
+.watcherMetaText {
   @apply text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-soft;
 }
 
-/* The value/+ pill. Long-pressing the value swaps it for an input. */
-.pill {
-  @apply flex flex-none items-center gap-[2px] rounded-full border border-line bg-surface-hover p-[3px];
+.counters {
+  @apply flex flex-wrap items-center gap-[6px] max-[560px]:basis-full max-[560px]:pl-[38px];
 }
 
-.pillButton {
-  @apply grid h-[28px] w-[28px] place-items-center rounded-full bg-white text-[17px] font-bold leading-none text-ink transition hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-ink;
+.counter {
+  @apply flex items-center gap-[4px];
 }
 
-.pillValue {
-  @apply min-w-[26px] cursor-pointer select-none text-center text-[14px] font-semibold tabular-nums text-ink;
+.counterLabel {
+  @apply sr-only;
 }
 
-/* Manual episode editor shown while long-press editing. Sized to match the
-   value it replaces so the pill doesn't jump. */
-.pillInput {
-  @apply h-[28px] w-[44px] rounded-full border border-accent-soft bg-white text-center text-[14px] font-semibold tabular-nums text-ink outline-none focus:border-accent;
+.counterValue {
+  @apply min-w-0;
+}
+
+.counterChip {
+  @apply inline-flex h-[30px] items-center gap-[7px] rounded-full border border-line bg-surface-hover px-[10px] text-left text-ink transition hover:border-accent-soft hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft disabled:cursor-not-allowed disabled:border-line disabled:bg-surface-muted disabled:text-ink-soft disabled:opacity-70;
+}
+
+.counterStatic {
+  @apply inline-flex h-[30px] items-center gap-[7px] rounded-full border border-line bg-surface-muted px-[10px] text-left text-ink;
+}
+
+.counterChipLabel {
+  @apply text-[10px] font-bold uppercase tracking-[0.06em] text-ink-soft;
+}
+
+.counterChipValue {
+  @apply min-w-[14px] text-[13px] font-semibold tabular-nums text-ink;
+}
+
+/* Manual numeric editor swaps directly into the chip footprint. */
+.counterInput {
+  @apply h-[30px] w-[74px] rounded-full border border-accent-soft bg-card px-[10px] text-left text-[13px] font-semibold tabular-nums text-ink outline-none focus:border-accent;
 }
 
 .watcherRemove {
-  @apply grid h-[26px] w-[26px] flex-none place-items-center rounded-full text-[18px] leading-none text-ink-soft transition hover:bg-surface-hover hover:text-status-red disabled:opacity-60;
+  @apply grid h-[28px] w-[28px] flex-none place-items-center rounded-full border border-transparent bg-transparent text-[18px] leading-none text-ink-soft transition hover:border-line hover:bg-surface-hover hover:text-status-red disabled:opacity-60;
 }
 
 /* Collapsible section that hides completed shows, mirroring the activities'
