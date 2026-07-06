@@ -18,7 +18,17 @@ const LONG_PRESS_MS = 500;
 
 // A single progress chip: tapping increments immediately, while a long press
 // opens inline numeric editing for an exact season/episode jump.
-function CounterChip({ label, name, noun, value, busy, readOnly, onIncrement, onSet }) {
+function CounterChip({
+  label,
+  shortLabel,
+  name,
+  noun,
+  value,
+  busy,
+  readOnly,
+  onIncrement,
+  onSet,
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const pressTimer = useRef(null);
@@ -104,7 +114,7 @@ function CounterChip({ label, name, noun, value, busy, readOnly, onIncrement, on
               if (!readOnly) onIncrement();
             }}
           >
-            <span className={styles.counterChipLabel}>{label}</span>
+            <span className={styles.counterChipLabel}>{shortLabel}</span>
             <span className={styles.counterChipValue}>{value}</span>
           </button>
         )}
@@ -128,6 +138,7 @@ function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove 
         <div className={styles.counters}>
           <CounterChip
             label="Season"
+            shortLabel="S"
             noun="season"
             name={member.name}
             value={member.season}
@@ -138,6 +149,7 @@ function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove 
           />
           <CounterChip
             label="Episode"
+            shortLabel="E"
             noun="episode"
             name={member.name}
             value={member.episode}
@@ -160,11 +172,6 @@ function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove 
           </button>
         )}
       </div>
-      {readOnly && (
-        <div className={styles.watcherMeta}>
-          <span className={styles.watcherMetaText}>Read-only</span>
-        </div>
-      )}
     </li>
   );
 }
