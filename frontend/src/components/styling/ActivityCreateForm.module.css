@@ -19,7 +19,7 @@
 }
 
 .timeFields {
-  @apply grid grid-cols-2 gap-3 max-[520px]:grid-cols-1;
+  @apply w-[calc(100%-26px)] grid grid-cols-2 gap-3 max-[520px]:grid-cols-1;
 }
 
 .timeField {
