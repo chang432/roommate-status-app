@@ -34,7 +34,11 @@ import {
   updateStatus,
 } from "../api/client.js";
 import { usePullToRefresh } from "../utils/usePullToRefresh.js";
-import { availableCount, AVAILABLE_THRESHOLD } from "../utils/status.js";
+import {
+  AVAILABLE_THRESHOLD,
+  availableCount,
+  decorateRoommatesWithActivityStatus,
+} from "../utils/status.js";
 import { avatarColor } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
 import styles from "./StatusPage.module.css";
@@ -224,18 +228,23 @@ export default function StatusPage() {
 
   const { pull, refreshing, threshold } = usePullToRefresh(handleRefresh);
 
+  const displayedRoommates = useMemo(
+    () => decorateRoommatesWithActivityStatus(roommates, activities),
+    [activities, roommates],
+  );
+
   // Split the list into "you" and everyone else, preserving the original index
   // so avatar colors stay stable.
   const { me, meIndex, others } = useMemo(() => {
-    const idx = roommates.findIndex((r) => r.id === user.id);
+    const idx = displayedRoommates.findIndex((r) => r.id === user.id);
     return {
-      me: roommates[idx] ?? null,
+      me: displayedRoommates[idx] ?? null,
       meIndex: idx,
-      others: roommates.filter((r) => r.id !== user.id),
+      others: displayedRoommates.filter((r) => r.id !== user.id),
     };
-  }, [roommates, user.id]);
+  }, [displayedRoommates, user.id]);
 
-  const freeCount = availableCount(roommates);
+  const freeCount = availableCount(displayedRoommates);
   const showBanner = freeCount >= AVAILABLE_THRESHOLD;
   const liveEvents = activities.filter((activity) => activity.isLive);
 

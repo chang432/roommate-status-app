@@ -286,7 +286,15 @@ def test_update_status_sets_server_timestamp(client, monkeypatch):
 
 
 def test_update_status_refreshes_timestamp_on_every_save(client, monkeypatch):
-    times = iter([1_750_000_000.123, 1_750_000_060.456])
+    # Status saves now also read the activities feed to suppress gather pushes
+    # for live/just-finished participants, so each request consumes one time
+    # value for the save and one for the activity overlay projection.
+    times = iter([
+        1_750_000_000.123,
+        1_750_000_000.123,
+        1_750_000_060.456,
+        1_750_000_060.456,
+    ])
     monkeypatch.setattr(db.time, "time", lambda: next(times))
 
     first = client.put(
@@ -321,6 +329,60 @@ def test_update_status_invalid(client):
 def test_update_status_unknown_roommate(client):
     res = client.put("/api/roommates/ghost/status", json={"status": "busy"})
     assert res.status_code == 404
+
+
+def test_gather_push_ignores_live_activity_participants(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+    client.put("/api/roommates/sheryl/status", json={"status": "available", "statusText": ""})
+    client.put("/api/roommates/kayla/status", json={"status": "available", "statusText": ""})
+
+    created = _propose(client, "Dinner").get_json()[0]
+    client.post(f"/api/activities/{created['id']}/start", json={"requesterId": "andre"})
+    calls.clear()
+
+    updated = client.put(
+        "/api/roommates/andre/status",
+        json={"status": "available", "statusText": ""},
+    )
+
+    assert updated.status_code == 200
+    assert calls == []
+
+
+def test_gather_push_waits_until_ended_activity_participant_saves_again(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+    client.put("/api/roommates/andre/status", json={"status": "available", "statusText": ""})
+    client.put("/api/roommates/kayla/status", json={"status": "available", "statusText": ""})
+    client.put("/api/roommates/ting/status", json={"status": "available", "statusText": ""})
+
+    created = _propose(client, "Dinner").get_json()[0]
+    client.post(f"/api/activities/{created['id']}/start", json={"requesterId": "andre"})
+    client.post(f"/api/activities/{created['id']}/end", json={"requesterId": "andre"})
+    calls.clear()
+
+    suppressed = client.put(
+        "/api/roommates/kayla/status",
+        json={"status": "available", "statusText": "Still free"},
+    )
+    assert suppressed.status_code == 200
+    assert calls == []
+
+    resumed = client.put(
+        "/api/roommates/andre/status",
+        json={"status": "available", "statusText": "Done now"},
+    )
+    assert resumed.status_code == 200
+    assert calls == [
+        (
+            "all",
+            {
+                "title": "Roomies are free!",
+                "body": "3 roomies are free! LETS HANG 🎉!",
+                "url": "/",
+                "exclude_user_ids": {"andre"},
+            },
+        )
+    ]
 
 
 def test_health(client):

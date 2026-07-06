@@ -215,6 +215,53 @@ def notify_group(
     )
 
 
+def _activity_status_overrides(group_id: str, consistent: bool = False) -> dict[str, dict]:
+    """Return the latest live/ended activity-driven status per participant.
+
+    Live activities always win over ended ones. Ended activities persist only
+    until that roommate manually saves a newer normal status.
+    """
+    overrides: dict[str, dict] = {}
+    for activity in activities.list_recent(group_id, consistent=consistent):
+        member_ids = activity.get("memberIds") or []
+        if activity.get("isLive"):
+            timestamp = activity.get("liveStartedAt") or activity.get("startAt") or 0
+            for user_id in member_ids:
+                current = overrides.get(user_id)
+                if current is None or current["kind"] != "live" or timestamp > current["timestamp"]:
+                    overrides[user_id] = {"kind": "live", "timestamp": timestamp}
+            continue
+
+        timestamp = activity.get("endedAt") or activity.get("endAt")
+        if timestamp is None:
+            continue
+        for user_id in member_ids:
+            current = overrides.get(user_id)
+            if current and current["kind"] == "live":
+                continue
+            if current is None or timestamp > current["timestamp"]:
+                overrides[user_id] = {"kind": "ended", "timestamp": timestamp}
+    return overrides
+
+
+def effective_available_count(group_id: str, roommates: list[dict]) -> int:
+    """Count available roommates after applying activity-driven status overlays."""
+    overrides = _activity_status_overrides(group_id, consistent=True)
+    available = 0
+    for roommate in roommates:
+        if roommate["status"] != "available":
+            continue
+        override = overrides.get(roommate["id"])
+        if override is None:
+            available += 1
+            continue
+        if override["kind"] == "ended":
+            updated_at = roommate.get("statusUpdatedAt")
+            if updated_at is not None and updated_at >= override["timestamp"]:
+                available += 1
+    return available
+
+
 def create_app() -> Flask:
     """Application factory so tests can build isolated app instances."""
     app = Flask(__name__)
@@ -356,7 +403,7 @@ def create_app() -> Flask:
         # When enough roommates are free, push a "gather!" notification to every
         # subscribed device. Sending is best-effort: a push failure must not
         # fail the status update the user just made.
-        free = db.available_count(roommate["groupId"], roommates)
+        free = effective_available_count(roommate["groupId"], roommates)
         if free >= PUSH_THRESHOLD:
             app.logger.info("Notification: %d roommates are available — time to gather!", free)
             try:

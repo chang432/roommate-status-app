@@ -22,6 +22,14 @@
   @apply bg-status-amber;
 }
 
+.activityLive {
+  @apply bg-status-purple;
+}
+
+.activityEnded {
+  @apply bg-sage;
+}
+
 .unknown {
   @apply bg-ink-soft;
 }

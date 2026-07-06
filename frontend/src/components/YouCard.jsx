@@ -18,16 +18,18 @@ export default function YouCard({
   onCancel,
 }) {
   const note = statusNote(roommate)
-  const [status, setStatus] = useState(roommate.status)
-  const [draftNote, setDraftNote] = useState(roommate.statusText || '')
+  const editableStatus = roommate.baseStatus ?? roommate.status
+  const editableNote = roommate.baseStatusText ?? roommate.statusText ?? ''
+  const [status, setStatus] = useState(editableStatus)
+  const [draftNote, setDraftNote] = useState(editableNote)
   const [statusMenuOpen, setStatusMenuOpen] = useState(false)
 
   useEffect(() => {
     if (!editing) return
-    setStatus(roommate.status)
-    setDraftNote(roommate.statusText || '')
+    setStatus(editableStatus)
+    setDraftNote(editableNote)
     setStatusMenuOpen(false)
-  }, [editing, roommate.status, roommate.statusText])
+  }, [editableNote, editableStatus, editing])
 
   function handleSubmit(event) {
     event.preventDefault()
@@ -148,6 +150,11 @@ export default function YouCard({
               Cancel
             </button>
           </div>
+          {roommate.isActivityStatus && (
+            <p className={styles.editorHint}>
+              This card is currently showing an activity-based status.
+            </p>
+          )}
         </form>
       )}
     </div>
