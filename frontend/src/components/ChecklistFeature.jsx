@@ -60,6 +60,7 @@ export default function ChecklistFeature({
   checklists,
   onChecklistsChange,
   checklistFocusRequest,
+  moduleTag,
 }) {
   const { user } = useAuth();
   const checklistRefs = useRef(new Map());
@@ -246,7 +247,10 @@ export default function ChecklistFeature({
               >
                 <div className={styles.summary}>
                   <div className={styles.summaryText}>
-                    <p className={styles.title}>{checklist.title}</p>
+                    <div className={styles.titleRow}>
+                      <p className={styles.title}>{checklist.title}</p>
+                      {moduleTag}
+                    </div>
                     <p className={styles.meta}>
                       {checklist.createdBy} ·{" "}
                       {relativeTime(checklist.createdAt)}

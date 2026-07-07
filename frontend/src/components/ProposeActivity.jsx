@@ -26,6 +26,7 @@ export default function ProposeActivity({
   onLiveTransition,
   roommates,
   activityFocusRequest,
+  moduleTag,
 }) {
   const { user } = useAuth();
   const activityRefs = useRef(new Map());
@@ -244,6 +245,7 @@ export default function ProposeActivity({
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
               <p className={styles.activityText}>{activity.text}</p>
+              {moduleTag}
               {activity.isLive && <span className={styles.liveChip}>Live</span>}
               {activity.isExpired && (
                 <span className={styles.expiredChip}>Expired</span>

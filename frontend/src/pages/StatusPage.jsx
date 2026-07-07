@@ -42,7 +42,6 @@ import {
 } from "../utils/status.js";
 import { avatarColor } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
-import { relativeTime } from "../utils/time.js";
 import styles from "./StatusPage.module.css";
 
 const ACTIVITY_POLL_INTERVAL_MS = 5000;
@@ -118,19 +117,14 @@ function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
   );
 }
 
-function ModuleFeedCard({ module, children }) {
+function ModuleTag({ module }) {
+  return <span className={styles.moduleType}>{module.typeLabel}</span>;
+}
+
+function ModuleFeedItem({ children }) {
   return (
-    <article className={styles.moduleCard}>
-      <header className={styles.moduleCardHeader}>
-        <div className={styles.moduleHeading}>
-          <h2 className={styles.moduleTitle}>{module.title}</h2>
-          <span className={styles.moduleType}>{module.typeLabel}</span>
-        </div>
-        <p className={styles.moduleMeta}>
-          {module.actor} · {relativeTime(module.sortAt)}
-        </p>
-      </header>
-      <div className={styles.moduleBody}>{children}</div>
+    <article className={styles.moduleItem}>
+      {children}
     </article>
   );
 }
@@ -564,6 +558,7 @@ export default function StatusPage() {
   }
 
   function renderModule(module) {
+    const moduleTag = <ModuleTag module={module} />;
     if (module.type === "events") {
       return (
         <ProposeActivity
@@ -573,6 +568,7 @@ export default function StatusPage() {
           onLiveTransition={handleLiveTransition}
           roommates={roommates}
           activityFocusRequest={activityFocusRequest}
+          moduleTag={moduleTag}
         />
       );
     }
@@ -583,6 +579,7 @@ export default function StatusPage() {
           onRequestsChange={handleRequestsChange}
           roommates={roommates}
           requestFocusRequest={requestFocusRequest}
+          moduleTag={moduleTag}
         />
       );
     }
@@ -592,6 +589,7 @@ export default function StatusPage() {
           checklists={[module.payload]}
           onChecklistsChange={handleChecklistsChange}
           checklistFocusRequest={checklistFocusRequest}
+          moduleTag={moduleTag}
         />
       );
     }
@@ -600,6 +598,7 @@ export default function StatusPage() {
         <ShowTrackerFeature
           shows={[module.payload]}
           onShowsChange={handleShowsChange}
+          moduleTag={moduleTag}
         />
       );
     }
@@ -609,6 +608,7 @@ export default function StatusPage() {
           jam={module.payload}
           onJamChange={handleJamChange}
           onReplace={() => setJamModalOpen(true)}
+          moduleTag={moduleTag}
         />
       );
     }
@@ -766,9 +766,9 @@ export default function StatusPage() {
                     <p className={styles.emptyFeed}>No active modules here yet.</p>
                   ) : (
                     visibleModules.map((module) => (
-                      <ModuleFeedCard key={`${module.type}:${module.id}`} module={module}>
+                      <ModuleFeedItem key={`${module.type}:${module.id}`}>
                         {renderModule(module)}
-                      </ModuleFeedCard>
+                      </ModuleFeedItem>
                     ))
                   )}
                   <div ref={feedEndRef} />

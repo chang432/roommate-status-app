@@ -176,7 +176,7 @@ function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove 
   );
 }
 
-export default function ShowTrackerFeature({ shows, onShowsChange }) {
+export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) {
   const { user } = useAuth();
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
@@ -318,6 +318,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange }) {
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
               <p className={styles.title}>{show.title}</p>
+              {moduleTag}
               {completed && (
                 <span className={styles.completedChip}>Completed</span>
               )}

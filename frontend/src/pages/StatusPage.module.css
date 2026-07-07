@@ -154,32 +154,12 @@
   @apply flex flex-col gap-3;
 }
 
-.moduleCard {
-  @apply rounded-sm border border-line bg-card px-3 py-2 shadow-soft;
-}
-
-.moduleCardHeader {
-  @apply mb-2 flex items-center justify-between gap-3;
-}
-
-.moduleHeading {
-  @apply flex min-w-0 flex-wrap items-center gap-2;
+.moduleItem {
+  @apply min-w-0;
 }
 
 .moduleType {
   @apply rounded-full border border-accent-soft bg-accent-soft px-2 py-[2px] text-[10px] font-black uppercase tracking-[0.07em] text-accent-deep;
-}
-
-.moduleTitle {
-  @apply min-w-0 font-display text-[17px] font-semibold leading-tight text-ink;
-}
-
-.moduleMeta {
-  @apply flex-none text-right text-[11.5px] font-bold text-ink-soft;
-}
-
-.moduleBody {
-  @apply min-w-0;
 }
 
 .emptyFeed {
