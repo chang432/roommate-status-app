@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import LoginPage from './pages/LoginPage.jsx'
+import GroupFeedPage from './pages/GroupFeedPage.jsx'
 import PendingAccountPage from './pages/PendingAccountPage.jsx'
 import SignupPage from './pages/SignupPage.jsx'
 import StatusPage from './pages/StatusPage.jsx'
@@ -53,6 +54,14 @@ export default function App() {
         element={
           <RequireGroup>
             <StatusPage />
+          </RequireGroup>
+        }
+      />
+      <Route
+        path="/feed"
+        element={
+          <RequireGroup>
+            <GroupFeedPage />
           </RequireGroup>
         }
       />

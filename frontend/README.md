@@ -28,9 +28,10 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Comment likes**: roommates can like or unlike other people’s comments and
   see their own reaction state, the total like count, and a popover listing
   who liked each comment.
-- **Module feed**: events, requests, checklists, TV shows, and the active
-  Spotify Jam share one chronological group feed. Material updates bump the
-  module instance to the bottom, and the side drawer/rail filters by module type.
+- **Module feed**: `/feed` contains events, requests, checklists, TV shows, and
+  the active Spotify Jam in one chronological group feed. Material updates bump
+  the module instance to the bottom, and the side drawer/rail filters by module
+  type. The status page can open it with the Feed button or a right-edge swipe.
 - **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, mark requests complete, and open
   request notifications directly to the expanded request card.
@@ -44,7 +45,7 @@ availability to hang out. Built from the mockups in `../mockups`.
 - [Tailwind CSS](https://tailwindcss.com/) (cozy theme tokens in
   `tailwind.config.js`)
 - [React Router](https://reactrouter.com/) for `/login`, `/signup`, `/pending`,
-  and `/`
+  `/feed`, and `/`
 
 ## Getting started
 
