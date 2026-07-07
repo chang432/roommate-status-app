@@ -141,6 +141,11 @@ export async function getJam(userId) {
   return request(withQuery('/jam', { userId }))
 }
 
+// GET /api/feed — normalized active module instances in feed order.
+export async function getFeed(userId, type = 'all') {
+  return request(withQuery('/feed', { userId, type }))
+}
+
 // POST /api/jam — replace the active household Jam link.
 export async function shareJam(link, hostId) {
   return request('/jam', {

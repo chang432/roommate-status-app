@@ -200,6 +200,7 @@ def _project(
         "proposedBy": item.get("proposedBy", "Someone"),
         "proposedById": proposer_id,
         "createdAt": int(item["createdAt"]),
+        "updatedAt": int(item.get("updatedAt", item["createdAt"])),
         "members": members,
         "memberIds": sorted(member_ids),
         "comments": comments,
@@ -225,6 +226,7 @@ def add_activity(
     end_at: int | None = None,
 ) -> dict:
     """Store a new proposal and return it. Caller is responsible for validation."""
+    now_ms = int(time.time() * 1000)
     item = {
         "id": uuid.uuid4().hex,
         "text": text,
@@ -232,7 +234,8 @@ def add_activity(
         "proposedById": proposed_by_id,
         "groupId": group_id,
         # Epoch millis drives newest-first ordering in list_recent().
-        "createdAt": int(time.time() * 1000),
+        "createdAt": now_ms,
+        "updatedAt": now_ms,
         # The proposer joins automatically, so the count starts at 1.
         "members": {proposed_by},
         "memberIds": {proposed_by_id},
@@ -267,7 +270,7 @@ def _set_membership(
     try:
         resp = table.update_item(
             Key={"id": activity_id},
-            UpdateExpression=f"{op} members :m, memberIds :i",
+            UpdateExpression=f"SET updatedAt = :now {op} members :m, memberIds :i",
             ExpressionAttributeValues={
                 ":m": {name},
                 ":i": {user_id},
@@ -342,7 +345,10 @@ def add_comment(
     try:
         resp = table.update_item(
             Key={"id": activity_id},
-            UpdateExpression="SET comments = list_append(if_not_exists(comments, :empty), :c)",
+            UpdateExpression=(
+                "SET comments = list_append(if_not_exists(comments, :empty), :c), "
+                "updatedAt = :now"
+            ),
             ExpressionAttributeValues={
                 ":c": [comment],
                 ":empty": [],
@@ -469,7 +475,7 @@ def start_owned(activity_id: str, requester_id: str, group_id: str) -> str:
             values[":expected_start"] = lifecycle["startAt"]
         table.update_item(
             Key={"id": activity_id},
-            UpdateExpression=f"SET startAt = :started{remove_fields}",
+            UpdateExpression=f"SET startAt = :started, updatedAt = :started{remove_fields}",
             ConditionExpression=condition,
             ExpressionAttributeValues=values,
         )
@@ -500,7 +506,7 @@ def end_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     try:
         table.update_item(
             Key={"id": activity_id},
-            UpdateExpression="SET endedAt = :ended REMOVE isLive, liveStartedAt",
+            UpdateExpression="SET endedAt = :ended, updatedAt = :ended REMOVE isLive, liveStartedAt",
             ConditionExpression=(
                 "proposedById = :requester AND attribute_not_exists(itemType) AND "
                 "startAt = :expected_start AND attribute_not_exists(endedAt)"
@@ -542,14 +548,14 @@ def update_schedule_owned(
         return SCHEDULE_CONFLICT
 
     if start_at is None:
-        expression = "REMOVE startAt, endAt, endedAt, isLive, liveStartedAt"
+        expression = "SET updatedAt = :now REMOVE startAt, endAt, endedAt, isLive, liveStartedAt"
         values = {":requester": requester_id}
     elif end_at is None:
-        expression = "SET startAt = :start REMOVE endAt, endedAt, isLive, liveStartedAt"
+        expression = "SET startAt = :start, updatedAt = :now REMOVE endAt, endedAt, isLive, liveStartedAt"
         values = {":requester": requester_id, ":start": start_at}
     else:
         expression = (
-            "SET startAt = :start, endAt = :end "
+            "SET startAt = :start, endAt = :end, updatedAt = :now "
             "REMOVE endedAt, isLive, liveStartedAt"
         )
         values = {
@@ -598,7 +604,7 @@ def archive(activity_id: str, _requester_id: str, group_id: str) -> str:
     try:
         table.update_item(
             Key={"id": activity_id},
-            UpdateExpression="SET endedAt = :ended REMOVE isLive, liveStartedAt",
+            UpdateExpression="SET endedAt = :ended, updatedAt = :ended REMOVE isLive, liveStartedAt",
             ConditionExpression=(
                 "attribute_not_exists(itemType) AND attribute_not_exists(endedAt)"
             ),

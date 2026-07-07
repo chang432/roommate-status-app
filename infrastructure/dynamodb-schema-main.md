@@ -17,7 +17,7 @@ the two are identical apart from the `-main` / `-dev` table-name prefix.
 |---|---|---|---|---|
 | `RoommateStatus-main` | `id` (S) | — | `db.py` | Accounts / roommate status |
 | `RoommateStatus-main-pushsubs` | `id` (S) | — | `push.py` | Web Push subscriptions |
-| `RoommateStatus-main-activities` | `id` (S) | — | `activities.py`, `household_checklists.py`, `household_requests.py` | Activities, checklists, requests + their comment likes (multi-type) |
+| `RoommateStatus-main-activities` | `id` (S) | — | `activities.py`, `household_checklists.py`, `household_requests.py`, `jam.py` | Activities, checklists, requests, Spotify Jam + comment likes (multi-type) |
 | `RoommateStatus-main-shows` | `id` (S) | — | `household_shows.py` | TV show tracker |
 | `RoommateStatus-main-groups` | `groupId` (S) | `JoinCodeIndex` (HASH `joinCode`) | `groups.py` | Households / join-by-code groups |
 
@@ -109,10 +109,11 @@ Every content item carries a `groupId` so feeds stay isolated per household.
 | `itemType` | Meaning |
 |---|---|
 | *(absent)* | Proposed activity |
-| `commentLike` | A like on an activity comment (separate item) |
 | `checklist` | Household checklist |
-| `request` | Household request |
+| `commentLike` | A like on an activity comment (separate item) |
 | `requestCommentLike` | A like on a request comment (separate item) |
+| `request` | Household request |
+| `spotifyJam` | The group's singleton active Spotify Jam |
 
 ### Activity — no `itemType`
 
@@ -123,6 +124,7 @@ Every content item carries a `groupId` so feeds stay isolated per household.
 | `text` | S | The proposal text. |
 | `proposedBy` / `proposedById` | S | Creator display name / account id. |
 | `createdAt` | N | Epoch millis. |
+| `updatedAt` | N | Epoch millis of the most recent material update; absent legacy rows fall back to `createdAt` in API projections. |
 | `members` | SS | Display names of everyone who joined. |
 | `memberIds` | SS | Account ids of everyone who joined. |
 | `startAt` / `endAt` | N | Optional schedule (epoch millis). |
@@ -137,6 +139,7 @@ Every content item carries a `groupId` so feeds stay isolated per household.
   "proposedBy": "Sheryl",
   "proposedById": "sheryl",
   "createdAt": 1720200000000,
+  "updatedAt": 1720201000000,
   "members": ["Sheryl", "Andre"],
   "memberIds": ["sheryl", "andre"],
   "startAt": 1720230000000,
@@ -165,6 +168,7 @@ Every content item carries a `groupId` so feeds stay isolated per household.
 | `createdBy` / `createdById` | S | Creator display name / account id. |
 | `groupId` | S | Owning household. |
 | `createdAt` | N | Epoch millis. |
+| `updatedAt` | N | Epoch millis of the most recent material checklist update. |
 | `items` | L of M | Each `{ id, text, checkedByIds[], checkedNamesById{} }`. |
 | `isArchived` | BOOL | Hidden from the active feed when `true`. |
 
@@ -177,6 +181,7 @@ Every content item carries a `groupId` so feeds stay isolated per household.
   "createdById": "andre",
   "groupId": "yorkshire",
   "createdAt": 1720200000000,
+  "updatedAt": 1720201000000,
   "items": [
     { "id": "c1…", "text": "Take out trash", "checkedByIds": ["sheryl"], "checkedNamesById": { "sheryl": "Sheryl" } },
     { "id": "c2…", "text": "Vacuum lounge", "checkedByIds": [], "checkedNamesById": {} }
@@ -195,6 +200,7 @@ Every content item carries a `groupId` so feeds stay isolated per household.
 | `requester` / `requesterId` | S | Requester display name / account id. |
 | `groupId` | S | Owning household. |
 | `createdAt` | N | Epoch millis. |
+| `updatedAt` | N | Epoch millis of the most recent material request update. |
 | `requestedIds` | SS | Account ids the request targets. |
 | `requestedNamesById` | M | `id → display name` for the targets. |
 | `responses` | M | `id → response` (e.g. `yes` / `no` / `maybe`). |
@@ -209,6 +215,7 @@ Every content item carries a `groupId` so feeds stay isolated per household.
   "requesterId": "sheryl",
   "groupId": "yorkshire",
   "createdAt": 1720200000000,
+  "updatedAt": 1720201000000,
   "requestedIds": ["andre", "kayla"],
   "requestedNamesById": { "andre": "Andre", "kayla": "Kayla" },
   "responses": { "andre": "yes" },
@@ -241,6 +248,34 @@ is a single conditional write) rather than embedded in the parent.
 }
 ```
 
+### Spotify Jam — `itemType: "spotifyJam"`
+
+One singleton item per group stores the active Spotify Jam. Ending the Jam
+deletes the item, so absent means no active Spotify module.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `id` | S | **Partition key.** Deterministic `activeJam#<groupId>`. |
+| `itemType` | S | `spotifyJam`. |
+| `groupId` | S | Owning household. |
+| `link` | S | Spotify Jam URL. |
+| `hostId` / `hostName` | S | Host account id / display name. |
+| `createdAt` | N | Epoch millis when the current Jam link was shared. |
+| `updatedAt` | N | Same as `createdAt` for the active singleton replacement. |
+
+```json
+{
+  "id": "activeJam#yorkshire",
+  "itemType": "spotifyJam",
+  "groupId": "yorkshire",
+  "link": "https://spotify.link/example",
+  "hostId": "sheryl",
+  "hostName": "Sheryl",
+  "createdAt": 1720200000000,
+  "updatedAt": 1720200000000
+}
+```
+
 ---
 
 ## `RoommateStatus-main-shows` — TV show tracker
@@ -255,6 +290,7 @@ One item per tracked show, with watchers embedded. Scoped per household by
 | `createdBy` / `createdById` | S | Creator display name / account id. |
 | `groupId` | S | Owning household. |
 | `createdAt` | N | Epoch millis. |
+| `updatedAt` | N | Epoch millis of the most recent material show update. |
 | `completedAt` | N | Epoch millis when completed. **Absent while active** (its absence is what "active" means). |
 | `members` | L of M | Watchers; each `{ id, name, season, episode }` (season & episode are 1-based). |
 
@@ -268,6 +304,7 @@ One item per tracked show, with watchers embedded. Scoped per household by
   "createdById": "sheryl",
   "groupId": "yorkshire",
   "createdAt": 1720200000000,
+  "updatedAt": 1720201000000,
   "members": [
     { "id": "sheryl", "name": "Sheryl", "season": 2, "episode": 5 },
     { "id": "andre", "name": "Andre", "season": 1, "episode": 3 }

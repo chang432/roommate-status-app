@@ -95,6 +95,7 @@ def _project(item: dict, likes_by_comment: dict[str, set[str]] | None = None) ->
         "requester": item.get("requester", "Someone"),
         "requesterId": item.get("requesterId"),
         "createdAt": int(item["createdAt"]),
+        "updatedAt": int(item.get("updatedAt", item["createdAt"])),
         "requested": _requested_people(item),
         "requestedIds": sorted(set(item.get("requestedIds") or set())),
         "comments": comments,
@@ -112,6 +113,7 @@ def add_request(
     group_id: str,
     requested_roommates: list[dict],
 ) -> dict:
+    now_ms = int(time.time() * 1000)
     names_by_id = {roommate["id"]: roommate["name"] for roommate in requested_roommates}
     item = {
         "id": uuid.uuid4().hex,
@@ -120,7 +122,8 @@ def add_request(
         "requester": requester_name,
         "requesterId": requester_id,
         "groupId": group_id,
-        "createdAt": int(time.time() * 1000),
+        "createdAt": now_ms,
+        "updatedAt": now_ms,
         "requestedIds": set(names_by_id),
         "requestedNamesById": names_by_id,
         "responses": {},
@@ -161,11 +164,15 @@ def add_comment(
     try:
         resp = _get_table().update_item(
             Key={"id": request_id},
-            UpdateExpression="SET comments = list_append(if_not_exists(comments, :empty), :c)",
+            UpdateExpression=(
+                "SET comments = list_append(if_not_exists(comments, :empty), :c), "
+                "updatedAt = :updated_at"
+            ),
             ExpressionAttributeValues={
                 ":request": REQUEST_TYPE,
                 ":c": [comment],
                 ":empty": [],
+                ":updated_at": comment["createdAt"],
                 ":groupId": group_id,
             },
             ConditionExpression="attribute_exists(id) AND itemType = :request AND groupId = :groupId",
@@ -182,12 +189,13 @@ def set_response(request_id: str, user_id: str, group_id: str, response: str) ->
     try:
         resp = _get_table().update_item(
             Key={"id": request_id},
-            UpdateExpression="SET responses.#user = :response",
+            UpdateExpression="SET responses.#user = :response, updatedAt = :updated_at",
             ExpressionAttributeNames={"#user": user_id},
             ExpressionAttributeValues={
                 ":request": REQUEST_TYPE,
                 ":user_id": user_id,
                 ":response": response,
+                ":updated_at": int(time.time() * 1000),
                 ":groupId": group_id,
             },
             ConditionExpression=(
@@ -211,7 +219,7 @@ def complete(request_id: str, user_id: str, name: str, group_id: str) -> dict | 
             Key={"id": request_id},
             UpdateExpression=(
                 "SET isCompleted = :true, completedAt = :completed_at, "
-                "completedById = :user_id, completedBy = :name"
+                "completedById = :user_id, completedBy = :name, updatedAt = :completed_at"
             ),
             ExpressionAttributeValues={
                 ":request": REQUEST_TYPE,
@@ -237,13 +245,15 @@ def reopen(request_id: str, user_id: str, name: str, group_id: str) -> dict | No
             Key={"id": request_id},
             UpdateExpression=(
                 "SET isCompleted = :false, reopenedById = :user_id, "
-                "reopenedBy = :name REMOVE completedAt, completedById, completedBy"
+                "reopenedBy = :name, updatedAt = :updated_at "
+                "REMOVE completedAt, completedById, completedBy"
             ),
             ExpressionAttributeValues={
                 ":request": REQUEST_TYPE,
                 ":false": False,
                 ":user_id": user_id,
                 ":name": name,
+                ":updated_at": int(time.time() * 1000),
                 ":groupId": group_id,
             },
             ConditionExpression="attribute_exists(id) AND itemType = :request AND groupId = :groupId",
@@ -353,7 +363,7 @@ def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = Fal
         for item in items
         if item.get("itemType") == REQUEST_TYPE and "createdAt" in item and item.get("groupId") == group_id
     ]
-    requests.sort(key=lambda item: int(item["createdAt"]), reverse=True)
+    requests.sort(key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True)
     return [
         _project(item, likes_by_request.get(item["id"]))
         for item in requests[:limit]

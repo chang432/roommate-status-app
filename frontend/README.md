@@ -18,7 +18,7 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Gather banner**: when 3+ roommates are available, a notification banner
   invites everyone to hang out (PROJECT.md threshold).
 - **Scheduled and live events**: activities can have optional start/end times,
-  automatically become live, overlap, and expire into collapsible history.
+  automatically become live, overlap, and leave active feeds when ended.
   Open apps refresh from activity push messages, focus changes, or visible-page
   polling.
 - **Comment mentions**: typing `@` suggests household members or `@all`,
@@ -28,7 +28,10 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Comment likes**: roommates can like or unlike other people’s comments and
   see their own reaction state, the total like count, and a popover listing
   who liked each comment.
-- **Requests**: a tabbed household board lets users ask specific roommates for
+- **Module feed**: events, requests, checklists, TV shows, and the active
+  Spotify Jam share one chronological group feed. Material updates bump the
+  module instance to the bottom, and the side drawer/rail filters by module type.
+- **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, mark requests complete, and open
   request notifications directly to the expanded request card.
 - **Checklists**: the shire board includes shared checklists that can be
@@ -73,6 +76,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
 | `pokeRoommate`                  | `POST /api/roommates/:id/poke`                             |
+| `getFeed`                       | `GET /api/feed?userId=:id&type=:type`                      |
 | `getJam`                        | `GET /api/jam?userId=:id`                                  |
 | `getActivities`                 | `GET /api/activities?userId=:id`                           |
 | `proposeActivity`               | `POST /api/activities`                                     |

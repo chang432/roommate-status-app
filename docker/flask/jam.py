@@ -59,6 +59,7 @@ def get_active(group_id: str) -> dict | None:
 
 
 def share(link: str, host_id: str, host_name: str, group_id: str) -> dict:
+    now_ms = _now_ms()
     item = {
         "id": _active_jam_id(group_id),
         "itemType": JAM_TYPE,
@@ -66,7 +67,8 @@ def share(link: str, host_id: str, host_name: str, group_id: str) -> dict:
         "link": link,
         "hostId": host_id,
         "hostName": host_name,
-        "createdAt": _now_ms(),
+        "createdAt": now_ms,
+        "updatedAt": now_ms,
     }
     _get_table().put_item(Item=item)
     return _project(item)

@@ -1,9 +1,13 @@
 .page {
-  @apply mx-auto max-w-[100vw] px-[22px] pb-16 pt-10;
+  @apply mx-auto max-w-[1180px] px-[18px] pb-16 pt-8;
 }
 
 .header {
-  @apply mb-2 flex items-center gap-[14px];
+  @apply mb-2 flex items-center gap-[12px];
+}
+
+.moduleMenuButton {
+  @apply rounded-full border border-line bg-card px-3 py-2 text-[12px] font-black uppercase tracking-[0.04em] text-ink-soft shadow-soft transition hover:border-accent hover:text-ink lg:hidden;
 }
 
 .brandmark {
@@ -50,6 +54,54 @@
   @apply mt-10 text-center text-[14px] text-ink-soft;
 }
 
+.shell {
+  @apply lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-7;
+}
+
+.drawerBackdrop {
+  @apply fixed inset-0 z-40 bg-ink/25 lg:hidden;
+}
+
+.moduleNav {
+  @apply fixed left-0 top-0 z-50 h-full w-[260px] -translate-x-full border-r border-line bg-card px-4 py-5 shadow-card transition-transform duration-200 lg:sticky lg:top-6 lg:z-auto lg:h-[calc(100vh-3rem)] lg:w-auto lg:translate-x-0 lg:rounded-sm lg:border lg:shadow-soft;
+}
+
+.moduleNavOpen {
+  @apply translate-x-0;
+}
+
+.moduleNavHeader {
+  @apply mb-4 flex items-center justify-between;
+}
+
+.moduleNavEyebrow {
+  @apply text-[12px] font-black uppercase tracking-[0.08em] text-ink-soft;
+}
+
+.moduleNavClose {
+  @apply rounded-full border border-line px-3 py-1 text-[12px] font-bold text-ink-soft lg:hidden;
+}
+
+.moduleNavList {
+  @apply space-y-2;
+}
+
+.moduleNavItem {
+  @apply flex w-full items-center justify-between rounded-sm border border-transparent px-3 py-3 text-left text-[14px] font-black text-ink-soft transition hover:border-line hover:bg-surface-hover hover:text-ink;
+}
+
+.moduleNavItemActive {
+  @apply border-accent bg-accent-soft text-ink;
+}
+
+.moduleNavCount {
+  @apply rounded-full bg-surface-muted px-2 py-1 text-[11px] text-ink-soft;
+}
+
+.feedColumn {
+  @apply min-w-0;
+}
+
 .ownCard {
   @apply mb-[26px] mt-[22px];
 }
@@ -82,8 +134,64 @@
   @apply grid grid-cols-2 gap-[14px];
 }
 
+.feedSection {
+  @apply mt-7;
+}
+
+.feedHeader {
+  @apply mb-4 flex items-center justify-between gap-3;
+}
+
+.feedEyebrow {
+  @apply text-[12px] font-black uppercase tracking-[0.08em] text-ink-soft;
+}
+
+.feedTitle {
+  @apply mt-1 font-display text-[28px] font-semibold leading-none text-ink;
+}
+
+.feedList {
+  @apply flex flex-col gap-4;
+}
+
+.moduleCard {
+  @apply rounded-sm border border-line bg-card p-3 shadow-card;
+}
+
+.moduleCardHeader {
+  @apply mb-3 flex items-start justify-between gap-3 border-b border-line pb-3;
+}
+
+.moduleType {
+  @apply text-[11px] font-black uppercase tracking-[0.08em] text-accent-deep;
+}
+
+.moduleTitle {
+  @apply mt-1 font-display text-[20px] font-semibold leading-tight text-ink;
+}
+
+.moduleMeta {
+  @apply flex-none pt-1 text-right text-[12px] font-bold text-ink-soft;
+}
+
+.moduleBody {
+  @apply min-w-0;
+}
+
+.emptyFeed {
+  @apply rounded-sm border border-dashed border-line bg-card px-4 py-8 text-center text-[14px] font-semibold text-ink-soft;
+}
+
 .createButton {
-  @apply w-full px-[18px] py-[12px] text-[14px];
+  @apply flex-none px-[18px] py-[12px] text-[14px];
+}
+
+.createPicker {
+  @apply grid gap-3 sm:grid-cols-2;
+}
+
+.createPickerButton {
+  @apply rounded-sm border border-line bg-card px-4 py-5 text-left text-[15px] font-black text-ink shadow-soft transition hover:border-accent hover:bg-surface-hover;
 }
 
 .createModal {

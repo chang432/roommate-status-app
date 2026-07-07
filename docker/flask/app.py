@@ -86,6 +86,7 @@ import household_checklists
 import household_requests
 import household_shows
 import jam
+import module_models
 import push
 
 # Cap proposal/request/checklist text so a notification body stays sane.
@@ -570,6 +571,17 @@ def create_app() -> Flask:
         except Exception:  # noqa: BLE001 - ending the Jam must remain successful
             app.logger.exception("Failed to send Jam ended notification")
         return jsonify(jam.get_active(host["groupId"]))
+
+    @app.get("/api/feed")
+    def get_feed():
+        """Return active household module instances in chronological feed order."""
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        module_type = (request.args.get("type") or "all").strip()
+        if module_type != "all" and module_type not in module_models.MODULE_TYPES:
+            return jsonify({"error": "Unknown module type."}), 400
+        return jsonify(module_models.list_feed(viewer["groupId"], module_type))
 
     # --- Proposed activities ------------------------------------------------
     @app.get("/api/activities")

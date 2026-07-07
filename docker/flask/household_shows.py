@@ -106,6 +106,7 @@ def _project(item: dict) -> dict:
         "createdById": item.get("createdById"),
         "groupId": item.get("groupId"),
         "createdAt": int(item["createdAt"]),
+        "updatedAt": int(item.get("updatedAt", item["createdAt"])),
         "completedAt": int(completed_at) if completed_at is not None else None,
         "completed": completed_at is not None,
         "members": [_project_member(raw) for raw in item.get("members") or []],
@@ -118,13 +119,15 @@ def _in_group(item: dict | None, group_id: str | None) -> bool:
 
 def add_show(title: str, created_by_id: str, created_by: str, group_id: str) -> dict:
     """Create a show, auto-joining the creator as the first watcher at S1 E1."""
+    now_ms = int(time.time() * 1000)
     item = {
         "id": uuid.uuid4().hex,
         "title": title,
         "createdBy": created_by,
         "createdById": created_by_id,
         "groupId": group_id,
-        "createdAt": int(time.time() * 1000),
+        "createdAt": now_ms,
+        "updatedAt": now_ms,
         "members": [
             {"id": created_by_id, "name": created_by, "season": 1, "episode": 1}
         ],
@@ -149,9 +152,12 @@ def list_recent(
     shows = [
         item
         for item in _scan_all(consistent=consistent)
-        if "createdAt" in item and item.get("groupId") == group_id
+        if (
+            "createdAt" in item
+            and item.get("groupId") == group_id
+        )
     ]
-    shows.sort(key=lambda item: int(item["createdAt"]), reverse=True)
+    shows.sort(key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True)
     return [_project(item) for item in shows[:limit]]
 
 
@@ -178,9 +184,13 @@ def _mutate_members(show_id: str, group_id: str, mutate):
     try:
         resp = table.update_item(
             Key={"id": show_id},
-            UpdateExpression="SET #members = :members",
+            UpdateExpression="SET #members = :members, updatedAt = :updated_at",
             ExpressionAttributeNames={"#members": "members"},
-            ExpressionAttributeValues={":members": members, ":groupId": group_id},
+            ExpressionAttributeValues={
+                ":members": members,
+                ":updated_at": int(time.time() * 1000),
+                ":groupId": group_id,
+            },
             ConditionExpression=(
                 "attribute_exists(id) AND groupId = :groupId AND "
                 "attribute_not_exists(completedAt)"
@@ -269,13 +279,13 @@ def _set_completed(show_id: str, requester_id: str, group_id: str, completed: bo
     # `attribute_not_exists(completedAt)` cleanly means "active".
     if completed:
         update = dict(
-            UpdateExpression="SET completedAt = :ts",
+            UpdateExpression="SET completedAt = :ts, updatedAt = :ts",
             ExpressionAttributeValues={":ts": int(time.time() * 1000), ":groupId": group_id},
         )
     else:
         update = dict(
-            UpdateExpression="REMOVE completedAt",
-            ExpressionAttributeValues={":groupId": group_id},
+            UpdateExpression="SET updatedAt = :ts REMOVE completedAt",
+            ExpressionAttributeValues={":ts": int(time.time() * 1000), ":groupId": group_id},
         )
 
     try:

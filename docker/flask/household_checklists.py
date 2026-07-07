@@ -56,6 +56,7 @@ def _project(item: dict) -> dict:
         "createdBy": item.get("createdBy", "Someone"),
         "createdById": item.get("createdById"),
         "createdAt": int(item["createdAt"]),
+        "updatedAt": int(item.get("updatedAt", item["createdAt"])),
         "items": [_project_item(raw) for raw in item.get("items") or []],
         "isArchived": bool(item.get("isArchived", False)),
         "archivedAt": int(archived_at) if archived_at is not None else None,
@@ -71,6 +72,7 @@ def add_checklist(
     group_id: str,
     item_texts: list[str],
 ) -> dict:
+    now_ms = int(time.time() * 1000)
     item = {
         "id": uuid.uuid4().hex,
         "itemType": CHECKLIST_TYPE,
@@ -78,7 +80,8 @@ def add_checklist(
         "createdBy": created_by,
         "createdById": created_by_id,
         "groupId": group_id,
-        "createdAt": int(time.time() * 1000),
+        "createdAt": now_ms,
+        "updatedAt": now_ms,
         "items": [
             {
                 "id": uuid.uuid4().hex,
@@ -119,12 +122,13 @@ def _mutate_items(checklist_id: str, group_id: str, mutate) -> dict | None:
     try:
         resp = table.update_item(
             Key={"id": checklist_id},
-            UpdateExpression="SET #items = :items",
+            UpdateExpression="SET #items = :items, updatedAt = :updated_at",
             ExpressionAttributeNames={"#items": "items"},
             ExpressionAttributeValues={
                 ":checklist": CHECKLIST_TYPE,
                 ":false": False,
                 ":items": items,
+                ":updated_at": int(time.time() * 1000),
                 ":groupId": group_id,
             },
             ConditionExpression=(
@@ -212,7 +216,7 @@ def archive(checklist_id: str, user_id: str, name: str, group_id: str) -> dict |
             Key={"id": checklist_id},
             UpdateExpression=(
                 "SET isArchived = :true, archivedAt = :archived_at, "
-                "archivedById = :user_id, archivedBy = :name"
+                "archivedById = :user_id, archivedBy = :name, updatedAt = :archived_at"
             ),
             ExpressionAttributeValues={
                 ":checklist": CHECKLIST_TYPE,
@@ -243,5 +247,5 @@ def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = Fal
             and not item.get("isArchived", False)
         )
     ]
-    checklists.sort(key=lambda item: int(item["createdAt"]), reverse=True)
+    checklists.sort(key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True)
     return [_project(item) for item in checklists[:limit]]

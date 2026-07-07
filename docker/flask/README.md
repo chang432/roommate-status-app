@@ -17,7 +17,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
 | `POST /api/roommates/<id>/poke`                              | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
-| `GET /api/activities`                                        | `?userId=<id>`                             | current + expired activity history                      |
+| `GET /api/feed`                                              | `?userId=<id>&type=<type>`                 | active module instances in chronological feed order     |
+| `GET /api/activities`                                        | `?userId=<id>`                             | active activity list                                    |
 | `POST /api/activities`                                       | `{ text, proposedById, startAt?, endAt? }` | full updated activity list                              |
 | `PATCH /api/activities/<id>/schedule`                        | `{ requesterId, startAt?, endAt? }`        | full updated activity list                              |
 | `POST /api/activities/<id>/archive`                          | `{ requesterId }`                          | full updated activity list                              |
@@ -58,9 +59,13 @@ their stable id (for example `andre`) and demo password **`roomie`**. Newly
 created accounts are valid sign-in accounts but have `groupId = null`, so they
 cannot see or use household features until they join a group with a reusable
 invite code. The current seeded household uses `groupId = "yorkshire"`.
-New activities store both the creator's stable roommate id (`proposedById`) and
+The module feed (`/api/feed`) normalizes active events, requests, checklists,
+TV shows, and the singleton Spotify Jam into `{ id, type, createdAt, updatedAt,
+sortAt, title, subtitle, actor, payload }` records sorted oldest-to-newest by
+`updatedAt` (falling back to `createdAt` for legacy rows). New activities store
+both the creator's stable roommate id (`proposedById`) and
 canonical display name (`proposedBy`). Any roommate can archive an activity,
-which sets its `endedAt` timestamp so it moves into expired history. Only the
+which sets its `endedAt` timestamp so it leaves the active module feed. Only the
 creator can permanently delete the activity, edit its schedule, start it early,
 end it, or restart it after expiration. Legacy activities without
 `proposedById` remain visible but cannot be deleted. Activities may overlap. A
@@ -88,9 +93,9 @@ Requests are stored as typed records in the activities table, targeted to
 specific roommate ids, and support comments and comment likes. Requested
 roommates can accept or deny, any roommate can complete a request, and request
 notifications target the requested users or the requester as appropriate.
-Completed requests can be reopened by any roommate; only the requester can
-delete a request. Request notifications include a request deep link so tapping
-one opens the Requests tab with that request expanded.
+Completed requests leave active module views; only the requester can delete a
+request. Request notifications include a request deep link so tapping one opens
+the Requests module filter with that request expanded.
 Checklists are stored as typed records in the activities table. Active
 checklists can be expanded from the Checklists tab, added to by any roommate,
 checked off by multiple roommates per item, edited or pruned item-by-item, and

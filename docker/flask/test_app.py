@@ -2485,6 +2485,40 @@ def test_shows_are_scoped_by_group(client):
     assert "andre" in [m["id"] for m in joined["members"]]
 
 
+def test_module_feed_sorts_active_instances_and_hides_ended_modules(client, monkeypatch):
+    monkeypatch.setattr(activities.time, "time", lambda: 1_000)
+    event = _propose(client, "Dinner").get_json()[0]
+    monkeypatch.setattr(household_requests.time, "time", lambda: 1_001)
+    request_item = _make_request(client, text="Grab oat milk").get_json()[0]
+    monkeypatch.setattr(household_checklists.time, "time", lambda: 1_002)
+    checklist = _make_checklist(client, title="Kitchen reset").get_json()[0]
+    monkeypatch.setattr(household_shows.time, "time", lambda: 1_003)
+    show = _make_show(client, title="Severance", creator="sheryl")
+    monkeypatch.setattr(jam.time, "time", lambda: 1_004)
+    client.post("/api/jam", json={"hostId": "andre", "link": "https://spotify.link/feed"})
+
+    feed = client.get(grouped_path("/api/feed")).get_json()
+    assert [item["type"] for item in feed] == [
+        "events",
+        "requests",
+        "checklists",
+        "tv",
+        "spotify",
+    ]
+    assert [item["sortAt"] for item in feed] == sorted(item["sortAt"] for item in feed)
+    assert feed[0]["payload"]["id"] == event["id"]
+    assert client.get(grouped_path("/api/feed?type=tv")).get_json()[0]["id"] == show["id"]
+    assert client.get(grouped_path("/api/feed?type=ghost")).status_code == 400
+
+    client.post(f"/api/activities/{event['id']}/archive", json={"requesterId": "andre"})
+    client.post(f"/api/requests/{request_item['id']}/complete", json={"userId": "andre"})
+    client.post(f"/api/checklists/{checklist['id']}/archive", json={"userId": "andre"})
+    client.post(f"/api/shows/{show['id']}/complete", json={"requesterId": "sheryl"})
+    client.delete("/api/jam", json={"hostId": "andre"})
+
+    assert client.get(grouped_path("/api/feed")).get_json() == []
+
+
 if __name__ == "__main__":
     import sys
 
