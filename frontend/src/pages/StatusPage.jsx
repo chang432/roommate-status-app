@@ -641,8 +641,13 @@ export default function StatusPage() {
             type="button"
             onClick={() => setDrawerOpen(true)}
             className={styles.moduleMenuButton}
+            aria-label="Open module list"
           >
-            Modules
+            <span className={styles.moduleMenuIcon} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
           </button>
           <Brandmark
             className={styles.brandmark}
