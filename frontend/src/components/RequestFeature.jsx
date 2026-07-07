@@ -215,8 +215,8 @@ export default function RequestFeature({
                 <div className={styles.summary}>
                   <div className={styles.summaryText}>
                     <div className={styles.titleRow}>
-                      <p className={styles.requestText}>{requestItem.text}</p>
                       {moduleTag}
+                      <p className={styles.requestText}>{requestItem.text}</p>
                     </div>
                     <p className={styles.meta}>
                       {requestItem.requester} ·{" "}

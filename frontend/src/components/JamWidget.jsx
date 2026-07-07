@@ -158,8 +158,8 @@ export default function JamWidget({ jam, onJamChange, onReplace, moduleTag }) {
           <Waveform />
           <div className={styles.titleText}>
             <div className={styles.titleRow}>
-              <p className={styles.eyebrow}>Spotify Jam</p>
               {moduleTag}
+              <p className={styles.eyebrow}>Spotify Jam</p>
             </div>
             <h2 className={styles.title}>{jam.hostName}&apos;s Jam is live</h2>
             <p className={styles.meta}>Shared {relativeTime(jam.createdAt)}</p>

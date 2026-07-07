@@ -317,8 +317,8 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
         <div className={styles.summary}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
-              <p className={styles.title}>{show.title}</p>
               {moduleTag}
+              <p className={styles.title}>{show.title}</p>
               {completed && (
                 <span className={styles.completedChip}>Completed</span>
               )}

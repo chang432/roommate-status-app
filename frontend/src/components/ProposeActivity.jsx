@@ -244,8 +244,8 @@ export default function ProposeActivity({
         <div className={styles.summary}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
-              <p className={styles.activityText}>{activity.text}</p>
               {moduleTag}
+              <p className={styles.activityText}>{activity.text}</p>
               {activity.isLive && <span className={styles.liveChip}>Live</span>}
               {activity.isExpired && (
                 <span className={styles.expiredChip}>Expired</span>
