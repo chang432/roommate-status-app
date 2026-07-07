@@ -31,7 +31,8 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Module feed**: `/feed` contains events, requests, checklists, TV shows, and
   the active Spotify Jam in one chronological group feed. Material updates bump
   the module instance to the bottom, and the side drawer/rail filters by module
-  type. The status page can open it with the Feed button or a right-edge swipe.
+  type. Horizontal swipes alternate between the status page and feed, the feed
+  hamburger opens module filters, and the floating `+` creates modules.
 - **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, mark requests complete, and open
   request notifications directly to the expanded request card.

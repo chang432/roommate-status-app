@@ -44,7 +44,7 @@ export default function StatusPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const ownCardRef = useRef(null);
-  const touchStartX = useRef(null);
+  const touchStart = useRef(null);
 
   const [roommates, setRoommates] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -215,16 +215,25 @@ export default function StatusPage() {
   }
 
   function handleTouchStart(event) {
+    if (settingsOpen) {
+      touchStart.current = null;
+      return;
+    }
     const touch = event.touches[0];
-    const rightEdge = window.innerWidth - 32;
-    touchStartX.current = touch?.clientX > rightEdge ? touch.clientX : null;
+    touchStart.current = touch
+      ? { x: touch.clientX, y: touch.clientY }
+      : null;
   }
 
   function handleTouchEnd(event) {
-    if (touchStartX.current === null) return;
+    if (touchStart.current === null) return;
     const touch = event.changedTouches[0];
-    if (touch && touchStartX.current - touch.clientX > 72) navigate("/feed");
-    touchStartX.current = null;
+    if (touch) {
+      const deltaX = touch.clientX - touchStart.current.x;
+      const deltaY = Math.abs(touch.clientY - touchStart.current.y);
+      if (deltaX < -72 && deltaY < 50) navigate("/feed");
+    }
+    touchStart.current = null;
   }
 
   return (
@@ -255,13 +264,6 @@ export default function StatusPage() {
           </div>
           <button
             type="button"
-            onClick={() => navigate("/feed")}
-            className={styles.feedRouteButton}
-          >
-            Feed
-          </button>
-          <button
-            type="button"
             onClick={() => setSettingsOpen(true)}
             aria-label="Open profile settings"
             className={styles.profileButton}
@@ -272,8 +274,6 @@ export default function StatusPage() {
             <span className={styles.profileLabel}>Settings</span>
           </button>
         </header>
-
-        <p className={styles.swipeHint}>Swipe in from the right edge for group feed.</p>
 
         {error && (
           <p className={cx("ui-errorBox", styles.pageError)}>{error}</p>

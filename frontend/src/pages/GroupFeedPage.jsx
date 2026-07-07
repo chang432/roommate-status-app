@@ -118,7 +118,7 @@ export default function GroupFeedPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const feedEndRef = useRef(null);
-  const touchStartX = useRef(null);
+  const touchStart = useRef(null);
 
   const [roommates, setRoommates] = useState([]);
   const [, setActivities] = useState([]);
@@ -395,15 +395,25 @@ export default function GroupFeedPage() {
   }
 
   function handleTouchStart(event) {
+    if (drawerOpen || createModalOpen || jamModalOpen || settingsOpen) {
+      touchStart.current = null;
+      return;
+    }
     const touch = event.touches[0];
-    touchStartX.current = touch?.clientX < 32 ? touch.clientX : null;
+    touchStart.current = touch
+      ? { x: touch.clientX, y: touch.clientY }
+      : null;
   }
 
   function handleTouchEnd(event) {
-    if (touchStartX.current === null) return;
+    if (touchStart.current === null) return;
     const touch = event.changedTouches[0];
-    if (touch && touch.clientX - touchStartX.current > 72) setDrawerOpen(true);
-    touchStartX.current = null;
+    if (touch) {
+      const deltaX = touch.clientX - touchStart.current.x;
+      const deltaY = Math.abs(touch.clientY - touchStart.current.y);
+      if (deltaX > 72 && deltaY < 50) navigate("/");
+    }
+    touchStart.current = null;
   }
 
   function renderCreateContent() {
@@ -574,13 +584,6 @@ export default function GroupFeedPage() {
           </div>
           <button
             type="button"
-            onClick={() => navigate("/")}
-            className={styles.statusRouteButton}
-          >
-            Status
-          </button>
-          <button
-            type="button"
             onClick={() => setSettingsOpen(true)}
             aria-label="Open profile settings"
             className={styles.profileButton}
@@ -615,15 +618,6 @@ export default function GroupFeedPage() {
                     <p className={styles.feedEyebrow}>Group feed</p>
                     <h2 className={styles.feedTitle}>{activeTypeLabel}</h2>
                   </div>
-                  <button
-                    type="button"
-                    onClick={openCreateModal}
-                    className={cx("ui-primaryButton", styles.createButton)}
-                  >
-                    {activeType === "all"
-                      ? "New module"
-                      : CREATE_LABEL_BY_TYPE[activeType]}
-                  </button>
                 </div>
 
                 <div className={styles.feedList}>
@@ -641,6 +635,26 @@ export default function GroupFeedPage() {
               </section>
             </main>
           </div>
+        )}
+
+        {!loading && (
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className={styles.createFloatingButton}
+            aria-label={
+              activeType === "all"
+                ? "Create a module"
+                : CREATE_LABEL_BY_TYPE[activeType]
+            }
+            title={
+              activeType === "all"
+                ? "Create a module"
+                : CREATE_LABEL_BY_TYPE[activeType]
+            }
+          >
+            +
+          </button>
         )}
 
         {createModalOpen && (

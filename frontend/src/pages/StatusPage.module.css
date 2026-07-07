@@ -50,15 +50,6 @@
   @apply hidden pr-2 text-[13px] font-black sm:inline;
 }
 
-.feedRouteButton,
-.statusRouteButton {
-  @apply rounded-full border border-line bg-card px-3 py-2 text-[12px] font-black uppercase tracking-[0.04em] text-ink-soft shadow-soft transition hover:border-accent hover:text-ink;
-}
-
-.swipeHint {
-  @apply mb-4 text-right text-[12px] font-bold text-ink-soft;
-}
-
 .pageError {
   @apply mt-4;
 }
@@ -116,7 +107,7 @@
 }
 
 .feedColumn {
-  @apply min-w-0;
+  @apply min-w-0 pb-24;
 }
 
 .ownCard {
@@ -183,8 +174,8 @@
   @apply rounded-sm border border-dashed border-line bg-card px-4 py-8 text-center text-[14px] font-semibold text-ink-soft;
 }
 
-.createButton {
-  @apply flex-none px-[18px] py-[12px] text-[14px];
+.createFloatingButton {
+  @apply fixed bottom-6 right-6 z-30 grid h-14 w-14 place-items-center rounded-full bg-accent text-[32px] font-black leading-none text-white shadow-card transition hover:scale-105 hover:bg-accent-deep focus:outline-none focus:ring-4 focus:ring-accent-soft;
 }
 
 .createPicker {
