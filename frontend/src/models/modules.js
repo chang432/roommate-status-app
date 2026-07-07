@@ -76,5 +76,8 @@ export function createModules(feedItems) {
   return feedItems
     .map(createModule)
     .filter((module) => !module.isHidden)
-    .sort((a, b) => a.sortAt - b.sortAt || a.createdAt - b.createdAt)
+    // Most recently edited first (top), least recent last (bottom). `sortAt`
+    // tracks the last material update, so a freshly-edited module rises to the
+    // top of the feed.
+    .sort((a, b) => b.sortAt - a.sortAt || b.createdAt - a.createdAt)
 }
