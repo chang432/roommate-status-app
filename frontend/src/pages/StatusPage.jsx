@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import Brandmark from "../components/Brandmark.jsx";
 import EnableNotifications from "../components/EnableNotifications.jsx";
+import GroupFeed from "../components/GroupFeed.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
 import ModalShell from "../components/ModalShell.jsx";
 import NotificationBanner from "../components/NotificationBanner.jsx";
@@ -41,10 +42,9 @@ function whenLabel() {
 
 export default function StatusPage() {
   const { user, logout, deleteAccount } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const ownCardRef = useRef(null);
-  const touchStart = useRef(null);
+  const feedRef = useRef(null);
 
   const [roommates, setRoommates] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -148,13 +148,6 @@ export default function StatusPage() {
   const liveEvents = activities.filter((activity) => activity.isLive);
 
   useEffect(() => {
-    const feedParams = new URLSearchParams(searchParams);
-    feedParams.delete("updateStatus");
-    if (!feedParams.toString()) return;
-    navigate(`/feed?${feedParams.toString()}`, { replace: true });
-  }, [navigate, searchParams]);
-
-  useEffect(() => {
     if (!me || searchParams.get("updateStatus") !== "1") return;
     setEditing(true);
     const nextParams = new URLSearchParams(searchParams);
@@ -214,26 +207,8 @@ export default function StatusPage() {
     await pokeRoommate(roommateId, user.id);
   }
 
-  function handleTouchStart(event) {
-    if (settingsOpen) {
-      touchStart.current = null;
-      return;
-    }
-    const touch = event.touches[0];
-    touchStart.current = touch
-      ? { x: touch.clientX, y: touch.clientY }
-      : null;
-  }
-
-  function handleTouchEnd(event) {
-    if (touchStart.current === null) return;
-    const touch = event.changedTouches[0];
-    if (touch) {
-      const deltaX = touch.clientX - touchStart.current.x;
-      const deltaY = Math.abs(touch.clientY - touchStart.current.y);
-      if (deltaX < -72 && deltaY < 50) navigate("/feed");
-    }
-    touchStart.current = null;
+  function scrollToFeed() {
+    feedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   return (
@@ -246,8 +221,6 @@ export default function StatusPage() {
 
       <div
         className={styles.page}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
         style={{
           transform: pull ? `translateY(${pull}px)` : undefined,
           transition: pull > 0 && !refreshing ? "none" : "transform 260ms ease",
@@ -297,7 +270,7 @@ export default function StatusPage() {
                     ending={transitioningId === liveEvent.id}
                     onEnd={() => handleLiveTransition(liveEvent, "end")}
                     user={user}
-                    onBannerClick={() => navigate("/feed")}
+                    onBannerClick={scrollToFeed}
                   />
                 ))}
               </div>
@@ -345,6 +318,12 @@ export default function StatusPage() {
               ))}
             </div>
           </main>
+        )}
+
+        {!loading && (
+          <div ref={feedRef}>
+            <GroupFeed roommates={displayedRoommates} />
+          </div>
         )}
 
         {settingsOpen && (

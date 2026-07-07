@@ -248,8 +248,8 @@ export default function ChecklistFeature({
                 <div className={styles.summary}>
                   <div className={styles.summaryText}>
                     <div className={styles.titleRow}>
-                      <p className={styles.title}>{checklist.title}</p>
                       {moduleTag}
+                      <p className={styles.title}>{checklist.title}</p>
                     </div>
                     <p className={styles.meta}>
                       {checklist.createdBy} ·{" "}

@@ -6,18 +6,6 @@
   @apply mb-2 flex items-center gap-[12px];
 }
 
-.moduleMenuButton {
-  @apply grid h-10 w-10 flex-none place-items-center rounded-full border border-line bg-card text-ink-soft shadow-soft transition hover:border-accent hover:text-ink lg:hidden;
-}
-
-.moduleMenuIcon {
-  @apply flex flex-col gap-[4px];
-}
-
-.moduleMenuIcon span {
-  @apply block h-[2px] w-[18px] rounded-full bg-current;
-}
-
 .brandmark {
   @apply h-[46px] w-[46px];
 }
@@ -174,8 +162,18 @@
   @apply rounded-sm border border-dashed border-line bg-card px-4 py-8 text-center text-[14px] font-semibold text-ink-soft;
 }
 
-.createFloatingButton {
-  @apply fixed bottom-6 right-6 z-30 grid h-14 w-14 place-items-center rounded-full bg-accent text-[32px] font-black leading-none text-white shadow-card transition hover:scale-105 hover:bg-accent-deep focus:outline-none focus:ring-4 focus:ring-accent-soft;
+/* Feed-header actions: the filter (mobile only) and create buttons sit at the
+   right of the feed title. */
+.feedHeaderActions {
+  @apply flex flex-none items-center gap-2;
+}
+
+.feedFilterButton {
+  @apply rounded-full border border-line px-3 py-2 text-[12px] font-black uppercase tracking-[0.04em] text-ink-soft transition hover:border-accent hover:text-ink lg:hidden;
+}
+
+.createInlineButton {
+  @apply grid h-11 w-11 flex-none place-items-center rounded-full bg-accent text-[26px] font-black leading-none text-white shadow-soft transition hover:scale-105 hover:bg-accent-deep focus:outline-none focus:ring-4 focus:ring-accent-soft;
 }
 
 .createPicker {
