@@ -39,6 +39,7 @@ export default function RequestFeature({
   onRequestsChange,
   roommates,
   requestFocusRequest,
+  moduleTag,
 }) {
   const { user } = useAuth();
   const requestRefs = useRef(new Map());
@@ -213,7 +214,10 @@ export default function RequestFeature({
               >
                 <div className={styles.summary}>
                   <div className={styles.summaryText}>
-                    <p className={styles.requestText}>{requestItem.text}</p>
+                    <div className={styles.titleRow}>
+                      <p className={styles.requestText}>{requestItem.text}</p>
+                      {moduleTag}
+                    </div>
                     <p className={styles.meta}>
                       {requestItem.requester} ·{" "}
                       {relativeTime(requestItem.createdAt)}

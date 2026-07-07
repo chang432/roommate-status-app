@@ -7,7 +7,7 @@
 }
 
 .ui-textInput {
-  @apply w-full rounded-sm border border-line bg-white text-ink outline-none transition placeholder:text-placeholder-muted focus:border-accent;
+  @apply w-full rounded-sm border border-line bg-card text-ink outline-none transition placeholder:text-placeholder-muted focus:border-accent;
 }
 
 .ui-errorBox {
@@ -23,7 +23,7 @@
 }
 
 .ui-secondaryButton {
-  @apply rounded-sm border-[1.5px] border-line bg-white font-bold text-ink-soft transition hover:bg-surface-hover disabled:opacity-60;
+  @apply rounded-sm border-[1.5px] border-line bg-card font-bold text-ink-soft transition hover:bg-surface-hover disabled:opacity-60;
 }
 
 .ui-pillButton {
@@ -35,7 +35,7 @@
 }
 
 .ui-pillSecondary {
-  @apply border-line bg-white text-ink-soft hover:bg-surface-hover;
+  @apply border-line bg-card text-ink-soft hover:bg-surface-hover;
 }
 
 .ui-pillDanger {

@@ -130,7 +130,7 @@ export function JamShareForm({ currentJam, onJamChange, onSuccess }) {
   )
 }
 
-export default function JamWidget({ jam, onJamChange, onReplace }) {
+export default function JamWidget({ jam, onJamChange, onReplace, moduleTag }) {
   const { user } = useAuth()
   const [ending, setEnding] = useState(false)
   const [error, setError] = useState('')
@@ -157,7 +157,10 @@ export default function JamWidget({ jam, onJamChange, onReplace }) {
         <div className={styles.titleBlock}>
           <Waveform />
           <div className={styles.titleText}>
-            <p className={styles.eyebrow}>Spotify Jam</p>
+            <div className={styles.titleRow}>
+              <p className={styles.eyebrow}>Spotify Jam</p>
+              {moduleTag}
+            </div>
             <h2 className={styles.title}>{jam.hostName}&apos;s Jam is live</h2>
             <p className={styles.meta}>Shared {relativeTime(jam.createdAt)}</p>
           </div>

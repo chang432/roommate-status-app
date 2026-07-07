@@ -46,9 +46,9 @@ export default function StatusModal({ roommate, pokeCount, onPoke, onClose }) {
           <p className={styles.note}>
             {note}
           </p>
-        ) : (
+        ) : !roommate.isActivityStatus ? (
           <p className={styles.emptyNote}>No extra note.</p>
-        )}
+        ) : null}
         <StatusTimestamp
           timestamp={roommate.statusUpdatedAt}
           className={styles.timestamp}

@@ -37,3 +37,9 @@ If any requested feature doesn't make sense in terms of the existing code struct
 - If a design doc researches, recommends, or depends on any external paid service, include a cost estimate section.
 - If the proposed solution depends on external console setup, secret management, approvals, account access, or other manual actions the agent cannot complete, include a `Manual Setup Required From Owner` section.
 - That section should list the concrete owner tasks still needed, such as cloud/OAuth console configuration, domain/redirect setup, secret provisioning, account verification/publishing steps, policy decisions, or real-browser consent/testing.
+
+## Database Schema Docs
+- The DynamoDB schema docs `infrastructure/dynamodb-schema-dev.md` and `infrastructure/dynamodb-schema-main.md` are the source of truth for the tables and must stay in sync with the code.
+- Whenever you change the data model, update **both** schema docs in the same change. This includes: adding/removing a table or index, changing a partition/sort key, adding/removing/renaming an item attribute, adding a new `itemType` to the shared activities table, or changing an embedded shape (e.g. a show's `members`, a checklist's `items`).
+- Treat both the CloudFormation templates (`dynamodb-table-{dev,main}.yaml`) and the Flask modules that write items (`docker/flask/*.py`) as inputs — the docs describe keys/indexes from the templates and effective attributes from the code.
+- Keep the two docs parallel (they differ only by the `-dev` / `-main` table-name prefix) and refresh the affected attribute tables and example rows so they match reality.

@@ -8,6 +8,7 @@ Description: >-
       a hash of the push endpoint (see docker/flask/push.py).
     - RoommateStatus-dev-activities: one item per proposed activity, keyed by a
       generated id (see docker/flask/activities.py).
+    - RoommateStatus-dev-groups: one item per group, keyed by groupId.
 
   This is the "-dev" half of the dev/main split (see dynamodb-table-main.yaml
   for the production tables). Table names are fixed per template so the two
@@ -95,6 +96,65 @@ Resources:
         - Key: Environment
           Value: dev
 
+  # TV shows for the dev deployment. Separate table; one item per show, keyed by
+  # a generated id, with watchers embedded (see docker/flask/household_shows.py).
+  ShowsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-shows
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
+  # Groups for the dev deployment. Group attributes remain schemaless beyond
+  # the stable groupId partition key.
+  GroupsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-groups
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: joinCode
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: JoinCodeIndex
+          KeySchema:
+            - AttributeName: joinCode
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
 Outputs:
   TableName:
     Description: Name of the roommate-status DynamoDB table.
@@ -131,3 +191,27 @@ Outputs:
     Value: !GetAtt ActivitiesTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ActivitiesTableArn"
+
+  ShowsTableName:
+    Description: Name of the TV shows DynamoDB table.
+    Value: !Ref ShowsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ShowsTableName"
+
+  ShowsTableArn:
+    Description: ARN of the TV shows DynamoDB table.
+    Value: !GetAtt ShowsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ShowsTableArn"
+
+  GroupsTableName:
+    Description: Name of the groups DynamoDB table.
+    Value: !Ref GroupsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-GroupsTableName"
+
+  GroupsTableArn:
+    Description: ARN of the groups DynamoDB table.
+    Value: !GetAtt GroupsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-GroupsTableArn"

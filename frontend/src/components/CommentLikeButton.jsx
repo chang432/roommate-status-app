@@ -110,7 +110,7 @@ export default function CommentLikeButton({
           top: popoverPosition?.top ?? VIEWPORT_MARGIN,
           visibility: popoverPosition ? 'visible' : 'hidden',
         }}
-        className="fixed z-50 max-h-[240px] w-max min-w-[170px] max-w-[min(260px,calc(100vw-24px))] overflow-y-auto rounded-sm border border-line bg-white p-2 shadow-card outline-none"
+        className="fixed z-50 max-h-[240px] w-max min-w-[170px] max-w-[min(260px,calc(100vw-24px))] overflow-y-auto rounded-sm border border-line bg-card p-2 shadow-card outline-none"
       >
         <span className="mb-1 block px-1 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-soft">
           Liked by
@@ -150,7 +150,7 @@ export default function CommentLikeButton({
           aria-pressed={liked}
           aria-label={liked ? 'Unlike comment' : 'Like comment'}
           title={ownComment ? 'You cannot like your own comment' : undefined}
-          className="px-2 py-1 transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-60"
+          className="px-2 py-1 transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span aria-hidden="true">{liked ? '♥' : '♡'}</span>
         </button>
@@ -162,7 +162,7 @@ export default function CommentLikeButton({
           aria-expanded={open}
           aria-controls={count > 0 ? popoverId : undefined}
           aria-label={`View ${count} ${count === 1 ? 'person' : 'people'} who liked this comment`}
-          className="border-l border-black/10 px-2 py-1 transition hover:bg-black/5 disabled:cursor-default disabled:opacity-60"
+          className="border-l border-line px-2 py-1 transition hover:bg-surface-hover disabled:cursor-default disabled:opacity-60"
         >
           {count}
         </button>

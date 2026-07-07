@@ -56,6 +56,7 @@ def _project(item: dict) -> dict:
         "createdBy": item.get("createdBy", "Someone"),
         "createdById": item.get("createdById"),
         "createdAt": int(item["createdAt"]),
+        "updatedAt": int(item.get("updatedAt", item["createdAt"])),
         "items": [_project_item(raw) for raw in item.get("items") or []],
         "isArchived": bool(item.get("isArchived", False)),
         "archivedAt": int(archived_at) if archived_at is not None else None,
@@ -64,14 +65,23 @@ def _project(item: dict) -> dict:
     }
 
 
-def add_checklist(title: str, created_by_id: str, created_by: str, item_texts: list[str]) -> dict:
+def add_checklist(
+    title: str,
+    created_by_id: str,
+    created_by: str,
+    group_id: str,
+    item_texts: list[str],
+) -> dict:
+    now_ms = int(time.time() * 1000)
     item = {
         "id": uuid.uuid4().hex,
         "itemType": CHECKLIST_TYPE,
         "title": title,
         "createdBy": created_by,
         "createdById": created_by_id,
-        "createdAt": int(time.time() * 1000),
+        "groupId": group_id,
+        "createdAt": now_ms,
+        "updatedAt": now_ms,
         "items": [
             {
                 "id": uuid.uuid4().hex,
@@ -87,20 +97,20 @@ def add_checklist(title: str, created_by_id: str, created_by: str, item_texts: l
     return _project(item)
 
 
-def get(checklist_id: str, consistent: bool = False) -> dict | None:
+def get(checklist_id: str, group_id: str, consistent: bool = False) -> dict | None:
     item = _get_table().get_item(
         Key={"id": checklist_id},
         ConsistentRead=consistent,
     ).get("Item")
-    if not item or item.get("itemType") != CHECKLIST_TYPE:
+    if not item or item.get("itemType") != CHECKLIST_TYPE or item.get("groupId") != group_id:
         return None
     return _project(item)
 
 
-def _mutate_items(checklist_id: str, mutate) -> dict | None:
+def _mutate_items(checklist_id: str, group_id: str, mutate) -> dict | None:
     table = _get_table()
     item = table.get_item(Key={"id": checklist_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") != CHECKLIST_TYPE:
+    if item is None or item.get("itemType") != CHECKLIST_TYPE or item.get("groupId") != group_id:
         return None
     if item.get("isArchived"):
         return None
@@ -112,15 +122,17 @@ def _mutate_items(checklist_id: str, mutate) -> dict | None:
     try:
         resp = table.update_item(
             Key={"id": checklist_id},
-            UpdateExpression="SET #items = :items",
+            UpdateExpression="SET #items = :items, updatedAt = :updated_at",
             ExpressionAttributeNames={"#items": "items"},
             ExpressionAttributeValues={
                 ":checklist": CHECKLIST_TYPE,
                 ":false": False,
                 ":items": items,
+                ":updated_at": int(time.time() * 1000),
+                ":groupId": group_id,
             },
             ConditionExpression=(
-                "attribute_exists(id) AND itemType = :checklist AND "
+                "attribute_exists(id) AND itemType = :checklist AND groupId = :groupId AND "
                 "(attribute_not_exists(isArchived) OR isArchived = :false)"
             ),
             ReturnValues="ALL_NEW",
@@ -132,7 +144,7 @@ def _mutate_items(checklist_id: str, mutate) -> dict | None:
     return _project(resp["Attributes"])
 
 
-def add_item(checklist_id: str, text: str) -> dict | None:
+def add_item(checklist_id: str, group_id: str, text: str) -> dict | None:
     trimmed = (text or "").strip()
     if not trimmed:
         return None
@@ -147,10 +159,10 @@ def add_item(checklist_id: str, text: str) -> dict | None:
             }
         )
 
-    return _mutate_items(checklist_id, mutate)
+    return _mutate_items(checklist_id, group_id, mutate)
 
 
-def toggle_item(checklist_id: str, item_id: str, user_id: str, name: str) -> dict | None:
+def toggle_item(checklist_id: str, item_id: str, user_id: str, name: str, group_id: str) -> dict | None:
     def mutate(items: list[dict]):
         for item in items:
             if item.get("id") != item_id:
@@ -168,10 +180,10 @@ def toggle_item(checklist_id: str, item_id: str, user_id: str, name: str) -> dic
             return None
         return False
 
-    return _mutate_items(checklist_id, mutate)
+    return _mutate_items(checklist_id, group_id, mutate)
 
 
-def update_item(checklist_id: str, item_id: str, text: str) -> dict | None:
+def update_item(checklist_id: str, item_id: str, text: str, group_id: str) -> dict | None:
     trimmed = (text or "").strip()
     if not trimmed:
         return None
@@ -183,10 +195,10 @@ def update_item(checklist_id: str, item_id: str, text: str) -> dict | None:
                 return None
         return False
 
-    return _mutate_items(checklist_id, mutate)
+    return _mutate_items(checklist_id, group_id, mutate)
 
 
-def delete_item(checklist_id: str, item_id: str) -> dict | None:
+def delete_item(checklist_id: str, item_id: str, group_id: str) -> dict | None:
     def mutate(items: list[dict]):
         next_items = [item for item in items if item.get("id") != item_id]
         if len(next_items) == len(items):
@@ -194,17 +206,17 @@ def delete_item(checklist_id: str, item_id: str) -> dict | None:
         items[:] = next_items
         return None
 
-    return _mutate_items(checklist_id, mutate)
+    return _mutate_items(checklist_id, group_id, mutate)
 
 
-def archive(checklist_id: str, user_id: str, name: str) -> dict | None:
+def archive(checklist_id: str, user_id: str, name: str, group_id: str) -> dict | None:
     archived_at = int(time.time() * 1000)
     try:
         resp = _get_table().update_item(
             Key={"id": checklist_id},
             UpdateExpression=(
                 "SET isArchived = :true, archivedAt = :archived_at, "
-                "archivedById = :user_id, archivedBy = :name"
+                "archivedById = :user_id, archivedBy = :name, updatedAt = :archived_at"
             ),
             ExpressionAttributeValues={
                 ":checklist": CHECKLIST_TYPE,
@@ -212,8 +224,9 @@ def archive(checklist_id: str, user_id: str, name: str) -> dict | None:
                 ":archived_at": archived_at,
                 ":user_id": user_id,
                 ":name": name,
+                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND itemType = :checklist",
+            ConditionExpression="attribute_exists(id) AND itemType = :checklist AND groupId = :groupId",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -223,15 +236,16 @@ def archive(checklist_id: str, user_id: str, name: str) -> dict | None:
     return _project(resp["Attributes"])
 
 
-def list_recent(limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
+def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
     checklists = [
         item
         for item in _scan_all(consistent=consistent)
         if (
             item.get("itemType") == CHECKLIST_TYPE
+            and item.get("groupId") == group_id
             and "createdAt" in item
             and not item.get("isArchived", False)
         )
     ]
-    checklists.sort(key=lambda item: int(item["createdAt"]), reverse=True)
+    checklists.sort(key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True)
     return [_project(item) for item in checklists[:limit]]

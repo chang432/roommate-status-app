@@ -1,5 +1,12 @@
-import { createContext, useContext, useState, useCallback } from 'react'
-import { login as apiLogin } from '../api/client.js'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import {
+  createAccount as apiCreateAccount,
+  deleteAccount as apiDeleteAccount,
+  getAccount as apiGetAccount,
+  joinGroup as apiJoinGroup,
+  login as apiLogin,
+  setInvalidUserHandler,
+} from '../api/client.js'
 
 // Holds the signed-in roommate and exposes login/logout. The session is kept in
 // localStorage so a refresh doesn't bounce the user back to the login page.
@@ -10,7 +17,10 @@ const SESSION_KEY = 'roomie-session'
 function readSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY)
-    return raw ? JSON.parse(raw) : null
+    if (!raw) return null
+    const user = JSON.parse(raw)
+    const hasGroup = user.hasGroup ?? (user.groupId ? true : user.groupId === undefined)
+    return { ...user, hasGroup }
   } catch {
     return null
   }
@@ -19,20 +29,69 @@ function readSession() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(readSession)
 
-  const login = useCallback(async (name, password) => {
-    const { user: signedIn } = await apiLogin(name, password)
+  const persistUser = useCallback((signedIn) => {
     setUser(signedIn)
     localStorage.setItem(SESSION_KEY, JSON.stringify(signedIn))
     return signedIn
   }, [])
+
+  const login = useCallback(async (username, password) => {
+    const { user: signedIn } = await apiLogin(username, password)
+    return persistUser(signedIn)
+  }, [persistUser])
+
+  const createAccount = useCallback(async (username, name, password) => {
+    const { user: signedIn } = await apiCreateAccount(username, name, password)
+    return persistUser(signedIn)
+  }, [persistUser])
 
   const logout = useCallback(() => {
     setUser(null)
     localStorage.removeItem(SESSION_KEY)
   }, [])
 
+  // Any API response flagged `invalid_user` means the stored session points at
+  // an account the backend no longer knows (locally the in-memory DB is wiped
+  // on every restart) — clear it so the app returns to the login page.
+  useEffect(() => {
+    setInvalidUserHandler(logout)
+    return () => setInvalidUserHandler(null)
+  }, [logout])
+
+  // Re-validate the stored session once on load: refresh it with server truth
+  // (groupId/hasGroup may have changed) or, if the account is gone, the
+  // invalid_user handler above logs out. Network failures keep the session —
+  // a briefly unreachable backend shouldn't sign anyone out.
+  useEffect(() => {
+    const stored = readSession()
+    if (!stored) return
+    apiGetAccount(stored.id)
+      .then(({ user: fresh }) => persistUser(fresh))
+      .catch(() => {})
+  }, [persistUser])
+
+  const deleteAccount = useCallback(async (password) => {
+    if (!user) return
+    await apiDeleteAccount(user.id, password)
+    logout()
+  }, [logout, user])
+
+  const joinGroup = useCallback(async (code) => {
+    if (!user) return null
+    const { user: joined } = await apiJoinGroup(user.id, code)
+    return persistUser(joined)
+  }, [persistUser, user])
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      login,
+      createAccount,
+      joinGroup,
+      deleteAccount,
+      logout,
+    }}
+    >
       {children}
     </AuthContext.Provider>
   )

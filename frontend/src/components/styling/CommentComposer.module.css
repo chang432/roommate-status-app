@@ -11,7 +11,7 @@
 }
 
 .suggestions {
-  @apply absolute bottom-full left-0 z-20 mb-1 max-h-[180px] w-full overflow-y-auto rounded-sm border border-line bg-white py-1 shadow-soft;
+  @apply absolute bottom-full left-0 z-20 mb-1 max-h-[180px] w-full overflow-y-auto rounded-sm border border-line bg-card py-1 shadow-soft;
 }
 
 .suggestion {

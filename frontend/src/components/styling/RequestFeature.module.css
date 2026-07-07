@@ -30,6 +30,10 @@
   @apply min-w-0 flex-1;
 }
 
+.titleRow {
+  @apply flex min-w-0 flex-wrap items-center gap-2;
+}
+
 .requestText {
   @apply text-[14px] text-ink;
 }

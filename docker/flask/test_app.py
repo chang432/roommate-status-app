@@ -23,11 +23,21 @@ from moto import mock_aws
 
 import activities
 import db
+import groups
 import household_checklists
 import household_requests
+import household_shows
 import jam
 import push
 from app import create_app, mentions_all, resolve_mentions
+
+TEST_GROUP_ID = db.DEFAULT_GROUP_ID
+TEST_USER_ID = "andre"
+
+
+def grouped_path(path: str, user_id: str = TEST_USER_ID) -> str:
+    separator = "&" if "?" in path else "?"
+    return f"{path}{separator}userId={user_id}"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -41,13 +51,34 @@ def _dynamodb():
     """
     with mock_aws():
         ddb = boto3.resource("dynamodb")
-        for table_name in (db.TABLE_NAME, push.TABLE_NAME, activities.TABLE_NAME):
+        for table_name in (
+            db.TABLE_NAME,
+            push.TABLE_NAME,
+            activities.TABLE_NAME,
+            household_shows.TABLE_NAME,
+        ):
             ddb.create_table(
                 TableName=table_name,
                 KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
                 AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
                 BillingMode="PAY_PER_REQUEST",
             )
+        ddb.create_table(
+            TableName=groups.GROUPS_TABLE,
+            KeySchema=[{"AttributeName": "groupId", "KeyType": "HASH"}],
+            AttributeDefinitions=[
+                {"AttributeName": "groupId", "AttributeType": "S"},
+                {"AttributeName": "joinCode", "AttributeType": "S"},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    "IndexName": groups.JOIN_CODE_INDEX,
+                    "KeySchema": [{"AttributeName": "joinCode", "KeyType": "HASH"}],
+                    "Projection": {"ProjectionType": "ALL"},
+                }
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
         yield
 
 
@@ -55,7 +86,7 @@ def _dynamodb():
 def client():
     db.reset()  # Isolate each test from prior status mutations.
     # Clear mutable tables so each test starts with no activities/subscriptions.
-    for table in (activities._get_table(), push._get_table()):
+    for table in (activities._get_table(), push._get_table(), household_shows._get_table()):
         for item in table.scan().get("Items", []):
             table.delete_item(Key={"id": item["id"]})
     app = create_app()
@@ -64,30 +95,152 @@ def client():
 
 
 def test_login_success(client):
-    res = client.post("/api/login", json={"name": "Sheryl", "password": "roomie"})
+    res = client.post("/api/login", json={"username": "sheryl", "password": "roomie"})
     assert res.status_code == 200
-    assert res.get_json() == {"user": {"id": "sheryl", "name": "Sheryl"}}
+    assert res.get_json() == {
+        "user": {
+            "id": "sheryl",
+            "name": "Sheryl",
+            "username": "sheryl",
+            "groupId": db.DEFAULT_GROUP_ID,
+            "hasGroup": True,
+        }
+    }
 
 
-def test_login_is_case_insensitive(client):
-    res = client.post("/api/login", json={"name": "  sHeRyL ", "password": "roomie"})
+def test_login_normalizes_username(client):
+    res = client.post("/api/login", json={"username": "  sHeRyL ", "password": "roomie"})
     assert res.status_code == 200
     assert res.get_json()["user"]["id"] == "sheryl"
 
 
 def test_login_bad_password(client):
-    res = client.post("/api/login", json={"name": "Sheryl", "password": "nope"})
+    res = client.post("/api/login", json={"username": "sheryl", "password": "nope"})
     assert res.status_code == 401
     assert "error" in res.get_json()
 
 
-def test_login_unknown_name(client):
-    res = client.post("/api/login", json={"name": "Ghost", "password": "roomie"})
+def test_login_unknown_username(client):
+    res = client.post("/api/login", json={"username": "ghost", "password": "roomie"})
     assert res.status_code == 401
 
 
+def test_create_account_stores_password_hash_and_waits_for_group(client):
+    res = client.post(
+        "/api/accounts",
+        json={"username": " New_User ", "name": "New User", "password": "secret123"},
+    )
+    assert res.status_code == 201
+    assert res.get_json() == {
+        "user": {
+            "id": "new_user",
+            "name": "New User",
+            "username": "new_user",
+            "groupId": None,
+            "hasGroup": False,
+        }
+    }
+
+    raw = db._get_table().get_item(Key={"id": "new_user"}, ConsistentRead=True)["Item"]
+    assert raw["passwordHash"] != "secret123"
+    assert "passwordHash" not in res.get_json()["user"]
+
+    roommates = client.get(grouped_path("/api/roommates")).get_json()
+    assert all(roommate["id"] != "new_user" for roommate in roommates)
+
+
+def test_create_account_rejects_duplicate_username(client):
+    res = client.post(
+        "/api/accounts",
+        json={"username": "Andre", "name": "Other Andre", "password": "secret123"},
+    )
+    assert res.status_code == 409
+
+
+def test_no_group_account_cannot_use_household_features(client):
+    client.post(
+        "/api/accounts",
+        json={"username": "pending", "name": "Pending User", "password": "secret123"},
+    )
+
+    status = client.put(
+        "/api/roommates/pending/status",
+        json={"status": "available", "statusText": ""},
+    )
+    activity = client.post(
+        "/api/activities",
+        json={"text": "Sneak in", "proposedById": "pending"},
+    )
+    request = client.post(
+        "/api/requests",
+        json={"text": "Help", "requesterId": "pending", "requestedIds": ["andre"]},
+    )
+
+    assert status.status_code == 404
+    assert activity.status_code == 400
+    assert request.status_code == 400
+
+
+def test_get_account_validates_stored_session(client):
+    res = client.get("/api/accounts/andre")
+    assert res.status_code == 200
+    assert res.get_json()["user"] == {
+        "id": "andre",
+        "name": "Andre",
+        "username": "andre",
+        "groupId": db.DEFAULT_GROUP_ID,
+        "hasGroup": True,
+    }
+
+
+def test_get_account_includes_pending_no_group_accounts(client):
+    # Unlike /api/groups/current, session validation must accept accounts that
+    # haven't joined a group yet, or a fresh signup would be logged out on load.
+    client.post(
+        "/api/accounts",
+        json={"username": "pending", "name": "Pending User", "password": "secret123"},
+    )
+    res = client.get("/api/accounts/pending")
+    assert res.status_code == 200
+    assert res.get_json()["user"]["hasGroup"] is False
+
+
+def test_get_account_unknown_user_flags_invalid_user(client):
+    res = client.get("/api/accounts/ghost")
+    assert res.status_code == 404
+    assert res.get_json()["code"] == "invalid_user"
+
+
+def test_stale_session_reads_carry_invalid_user_code(client):
+    # The frontend auto-logs-out on this code (frontend/src/api/client.js).
+    for path in ("/api/roommates", "/api/activities"):
+        res = client.get(grouped_path(path, user_id="ghost"))
+        assert res.status_code == 400
+        assert res.get_json()["code"] == "invalid_user"
+
+
+def test_delete_account_removes_roommate_and_push_subscriptions(client):
+    push._get_table().put_item(
+        Item={
+            "id": "sub-delete-me",
+            "endpoint": "https://example.test/delete-me",
+            "userId": "andre",
+            "subscription": json.dumps({"endpoint": "https://example.test/delete-me"}),
+        }
+    )
+
+    denied = client.delete("/api/accounts/andre", json={"password": "nope"})
+    deleted = client.delete("/api/accounts/andre", json={"password": "roomie"})
+
+    assert denied.status_code == 401
+    assert deleted.status_code == 200
+    assert deleted.get_json() == {"ok": True}
+    assert db.get_account_by_id("andre") is None
+    assert push._get_table().get_item(Key={"id": "sub-delete-me"}).get("Item") is None
+
+
 def test_get_roommates(client):
-    res = client.get("/api/roommates")
+    res = client.get(grouped_path("/api/roommates"))
     assert res.status_code == 200
     data = res.get_json()
     assert len(data) == 5
@@ -133,7 +286,15 @@ def test_update_status_sets_server_timestamp(client, monkeypatch):
 
 
 def test_update_status_refreshes_timestamp_on_every_save(client, monkeypatch):
-    times = iter([1_750_000_000.123, 1_750_000_060.456])
+    # Status saves now also read the activities feed to suppress gather pushes
+    # for live/just-finished participants, so each request consumes one time
+    # value for the save and one for the activity overlay projection.
+    times = iter([
+        1_750_000_000.123,
+        1_750_000_000.123,
+        1_750_000_060.456,
+        1_750_000_060.456,
+    ])
     monkeypatch.setattr(db.time, "time", lambda: next(times))
 
     first = client.put(
@@ -168,6 +329,60 @@ def test_update_status_invalid(client):
 def test_update_status_unknown_roommate(client):
     res = client.put("/api/roommates/ghost/status", json={"status": "busy"})
     assert res.status_code == 404
+
+
+def test_gather_push_ignores_live_activity_participants(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+    client.put("/api/roommates/sheryl/status", json={"status": "available", "statusText": ""})
+    client.put("/api/roommates/kayla/status", json={"status": "available", "statusText": ""})
+
+    created = _propose(client, "Dinner").get_json()[0]
+    client.post(f"/api/activities/{created['id']}/start", json={"requesterId": "andre"})
+    calls.clear()
+
+    updated = client.put(
+        "/api/roommates/andre/status",
+        json={"status": "available", "statusText": ""},
+    )
+
+    assert updated.status_code == 200
+    assert calls == []
+
+
+def test_gather_push_waits_until_ended_activity_participant_saves_again(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+    client.put("/api/roommates/andre/status", json={"status": "available", "statusText": ""})
+    client.put("/api/roommates/kayla/status", json={"status": "available", "statusText": ""})
+    client.put("/api/roommates/ting/status", json={"status": "available", "statusText": ""})
+
+    created = _propose(client, "Dinner").get_json()[0]
+    client.post(f"/api/activities/{created['id']}/start", json={"requesterId": "andre"})
+    client.post(f"/api/activities/{created['id']}/end", json={"requesterId": "andre"})
+    calls.clear()
+
+    suppressed = client.put(
+        "/api/roommates/kayla/status",
+        json={"status": "available", "statusText": "Still free"},
+    )
+    assert suppressed.status_code == 200
+    assert calls == []
+
+    resumed = client.put(
+        "/api/roommates/andre/status",
+        json={"status": "available", "statusText": "Done now"},
+    )
+    assert resumed.status_code == 200
+    assert calls == [
+        (
+            "all",
+            {
+                "title": "Roomies are free!",
+                "body": "3 roomies are free! LETS HANG 🎉!",
+                "url": "/",
+                "exclude_user_ids": {"andre"},
+            },
+        )
+    ]
 
 
 def test_health(client):
@@ -390,7 +605,7 @@ def test_user_triggered_broadcast_skips_actor_and_unowned_legacy_subscription(
 
 
 def test_push_test_unconfigured(client):
-    res = client.post("/api/push/test")
+    res = client.post(grouped_path("/api/push/test"))
     assert res.status_code == 503
 
 
@@ -410,14 +625,15 @@ def test_share_jam_replaces_active_link_and_notifies(client, monkeypatch):
     assert second.status_code == 200
     data = second.get_json()
     assert data == {
-        "id": jam.ACTIVE_JAM_ID,
+        "id": jam._active_jam_id(TEST_GROUP_ID),
+        "groupId": TEST_GROUP_ID,
         "link": "https://spotify.link/second",
         "hostId": "kayla",
         "hostName": "Kayla",
         "createdAt": data["createdAt"],
     }
-    assert client.get("/api/jam").get_json()["link"] == "https://spotify.link/second"
-    stored = activities._get_table().get_item(Key={"id": jam.ACTIVE_JAM_ID})["Item"]
+    assert client.get(grouped_path("/api/jam")).get_json()["link"] == "https://spotify.link/second"
+    stored = activities._get_table().get_item(Key={"id": jam._active_jam_id(TEST_GROUP_ID)})["Item"]
     assert stored["hostId"] == "kayla"
     assert calls[-1] == (
         "all",
@@ -577,7 +793,7 @@ def test_create_request_targets_roommates_and_notifies_them(client, monkeypatch)
     ]
     assert request_item["isCompleted"] is False
     assert request_item["completedAt"] is None
-    assert client.get("/api/activities").get_json() == []
+    assert client.get(grouped_path("/api/activities")).get_json() == []
     request_url = f"/?request={request_item['id']}"
     assert calls == [
         (
@@ -734,7 +950,7 @@ def test_requester_can_delete_request_and_comment_likes(client, monkeypatch):
 
     assert deleted.status_code == 200
     assert deleted.get_json() == []
-    assert household_requests.get(request_item["id"], consistent=True) is None
+    assert household_requests.get(request_item["id"], TEST_GROUP_ID, consistent=True) is None
     assert not [
         item
         for item in household_requests._scan_all(consistent=True)
@@ -764,7 +980,7 @@ def test_only_requester_can_delete_request(client):
     )
 
     assert denied.status_code == 403
-    assert household_requests.get(request_item["id"], consistent=True) is not None
+    assert household_requests.get(request_item["id"], TEST_GROUP_ID, consistent=True) is not None
 
 
 def test_request_comments_and_likes_match_activity_shape(client, monkeypatch):
@@ -840,8 +1056,8 @@ def test_create_checklist_returns_active_list_and_notifies_household(client, mon
     assert [item["text"] for item in checklist["items"]] == ["Counters", "Trash"]
     assert checklist["items"][0]["checkedBy"] == []
     assert checklist["isArchived"] is False
-    assert client.get("/api/activities").get_json() == []
-    assert client.get("/api/requests").get_json() == []
+    assert client.get(grouped_path("/api/activities")).get_json() == []
+    assert client.get(grouped_path("/api/requests")).get_json() == []
     assert calls == [
         (
             "all",
@@ -957,7 +1173,7 @@ def test_archive_checklist_removes_it_from_active_feed(client, monkeypatch):
 
     assert archived.status_code == 200
     assert archived.get_json() == []
-    stored = household_checklists.get(checklist["id"], consistent=True)
+    stored = household_checklists.get(checklist["id"], TEST_GROUP_ID, consistent=True)
     assert stored["isArchived"] is True
     assert stored["archivedBy"] == "Ting"
     assert calls == [
@@ -1010,10 +1226,16 @@ def test_legacy_activity_without_members_keeps_proposer(client):
     # must not drop them.
     table = activities._get_table()
     table.put_item(
-        Item={"id": "legacy", "text": "Old plan", "proposedBy": "Isabella", "createdAt": 1}
+        Item={
+            "id": "legacy",
+            "groupId": TEST_GROUP_ID,
+            "text": "Old plan",
+            "proposedBy": "Isabella",
+            "createdAt": 1,
+        }
     )
 
-    feed = client.get("/api/activities").get_json()
+    feed = client.get(grouped_path("/api/activities")).get_json()
     assert feed[0]["members"] == ["Isabella"]
 
     joined = client.post("/api/activities/legacy/join", json={"userId": "kayla"})
@@ -1069,9 +1291,9 @@ def test_comments_return_latest_100_without_capping_storage(client):
     activity_id = created[0]["id"]
 
     for i in range(105):
-        activities.add_comment(activity_id, "Andre", f"msg {i}")
+        activities.add_comment(activity_id, "Andre", f"msg {i}", TEST_GROUP_ID)
 
-    feed = client.get("/api/activities").get_json()
+    feed = client.get(grouped_path("/api/activities")).get_json()
     comments = feed[0]["comments"]
     assert [c["text"] for c in comments] == [f"msg {i}" for i in range(5, 105)]
 
@@ -1124,6 +1346,7 @@ def test_comment_likes_support_multiple_users(client):
                     comment_id,
                     user_id,
                     user_id.title(),
+                    TEST_GROUP_ID,
                     True,
                 ),
                 ("andre", "sheryl", "ting"),
@@ -1131,7 +1354,7 @@ def test_comment_likes_support_multiple_users(client):
         )
 
     assert results == [activities.LIKE_OK] * 3
-    comment = client.get("/api/activities").get_json()[0]["comments"][0]
+    comment = client.get(grouped_path("/api/activities")).get_json()[0]["comments"][0]
     assert comment["likeCount"] == 3
     assert comment["likedByIds"] == ["andre", "sheryl", "ting"]
 
@@ -1162,6 +1385,7 @@ def test_legacy_comment_has_stable_id_and_can_be_liked(client):
     activities._get_table().put_item(
         Item={
             "id": "legacy-like",
+            "groupId": TEST_GROUP_ID,
             "text": "Old event",
             "proposedBy": "Andre",
             "proposedById": "andre",
@@ -1170,15 +1394,15 @@ def test_legacy_comment_has_stable_id_and_can_be_liked(client):
         }
     )
 
-    first = client.get("/api/activities").get_json()[0]["comments"][0]
-    second = client.get("/api/activities").get_json()[0]["comments"][0]
+    first = client.get(grouped_path("/api/activities")).get_json()[0]["comments"][0]
+    second = client.get(grouped_path("/api/activities")).get_json()[0]["comments"][0]
     assert first["id"] == second["id"]
     assert first["authorId"] is None
 
     url = f"/api/activities/legacy-like/comments/{first['id']}/likes"
     assert client.put(url, json={"userId": "andre"}).status_code == 200
     assert client.put(url, json={"userId": "kayla"}).status_code == 403
-    liked = client.get("/api/activities").get_json()[0]["comments"][0]
+    liked = client.get(grouped_path("/api/activities")).get_json()[0]["comments"][0]
     assert liked["likeCount"] == 1
     assert liked["likedByIds"] == ["andre"]
 
@@ -1221,7 +1445,15 @@ def _capture_notifications(monkeypatch):
         return {"sent": 0, "pruned": 0, "failed": 0}
 
     def fake_notify_users(**kwargs):
-        calls.append(("users", kwargs))
+        all_group_users = set(db.get_group_user_ids(TEST_GROUP_ID, consistent=True))
+        if kwargs.get("user_ids") == all_group_users:
+            normalized = dict(kwargs)
+            normalized.pop("user_ids", None)
+            if normalized.get("event_type") is None:
+                normalized.pop("event_type", None)
+            calls.append(("all", normalized))
+        else:
+            calls.append(("users", kwargs))
         return {"sent": 0, "pruned": 0, "failed": 0}
 
     monkeypatch.setattr(push, "notify_all", fake_notify_all)
@@ -1403,13 +1635,13 @@ def test_concurrent_starts_allow_multiple_live_events(client):
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(
             pool.map(
-                lambda args: activities.start_owned(*args),
+                lambda args: activities.start_owned(*args, TEST_GROUP_ID),
                 [(first["id"], "andre"), (second["id"], "kayla")],
             )
         )
 
     assert results == [activities.LIVE_OK, activities.LIVE_OK]
-    feed = activities.list_recent(consistent=True)
+    feed = activities.list_recent(TEST_GROUP_ID, consistent=True)
     assert sum(item["isLive"] for item in feed) == 2
 
 
@@ -1425,7 +1657,7 @@ def test_live_event_cannot_be_deleted(client):
         json={"requesterId": "andre"},
     )
     assert deleted.status_code == 409
-    assert activities.get(created["id"])["isLive"] is True
+    assert activities.get(created["id"], TEST_GROUP_ID)["isLive"] is True
 
 
 def test_live_transition_survives_push_failure(client, monkeypatch):
@@ -1441,7 +1673,7 @@ def test_live_transition_survives_push_failure(client, monkeypatch):
     )
 
     assert started.status_code == 200
-    assert activities.get(created["id"], consistent=True)["isLive"] is True
+    assert activities.get(created["id"], TEST_GROUP_ID, consistent=True)["isLive"] is True
 
 
 def test_activity_feed_is_not_capped(client):
@@ -1450,6 +1682,7 @@ def test_activity_feed_is_not_capped(client):
         table.put_item(
             Item={
                 "id": f"owned-{i}",
+                "groupId": TEST_GROUP_ID,
                 "text": f"activity {i}",
                 "proposedBy": "Andre",
                 "proposedById": "andre",
@@ -1457,8 +1690,8 @@ def test_activity_feed_is_not_capped(client):
             }
         )
 
-    assert activities.start_owned("owned-0", "andre") == activities.LIVE_OK
-    feed = activities.list_recent(consistent=True)
+    assert activities.start_owned("owned-0", "andre", TEST_GROUP_ID) == activities.LIVE_OK
+    feed = activities.list_recent(TEST_GROUP_ID, consistent=True)
     assert len(feed) == 6
     assert any(item["id"] == "owned-0" and item["isLive"] for item in feed)
 
@@ -1475,12 +1708,12 @@ def test_scheduled_activity_automatically_starts_and_expires(client, monkeypatch
     assert created["isExpired"] is False
 
     monkeypatch.setattr(activities.time, "time", lambda: 1_001.5)
-    live = activities.get(created["id"], consistent=True)
+    live = activities.get(created["id"], TEST_GROUP_ID, consistent=True)
     assert live["isLive"] is True
     assert live["liveStartedAt"] == 1_001_000
 
     monkeypatch.setattr(activities.time, "time", lambda: 1_002)
-    expired = activities.get(created["id"], consistent=True)
+    expired = activities.get(created["id"], TEST_GROUP_ID, consistent=True)
     assert expired["isLive"] is False
     assert expired["isExpired"] is True
 
@@ -1573,7 +1806,7 @@ def test_expired_activity_is_read_only_but_owner_can_restart_or_delete(
         f"/api/activities/{created['id']}/end",
         json={"requesterId": "andre"},
     )
-    comment_id = activities.get(created["id"])["comments"][0]["id"]
+    comment_id = activities.get(created["id"], TEST_GROUP_ID)["comments"][0]["id"]
 
     assert client.post(
         f"/api/activities/{created['id']}/join",
@@ -1618,10 +1851,11 @@ def test_activity_sorting_and_typed_request_isolation(client, monkeypatch):
     monkeypatch.setattr(activities.time, "time", lambda: 10)
     table = activities._get_table()
     for item in (
-        {"id": "unscheduled-old", "text": "U1", "proposedBy": "A", "createdAt": 1},
-        {"id": "unscheduled-new", "text": "U2", "proposedBy": "A", "createdAt": 2},
+        {"id": "unscheduled-old", "groupId": TEST_GROUP_ID, "text": "U1", "proposedBy": "A", "createdAt": 1},
+        {"id": "unscheduled-new", "groupId": TEST_GROUP_ID, "text": "U2", "proposedBy": "A", "createdAt": 2},
         {
             "id": "scheduled-later",
+            "groupId": TEST_GROUP_ID,
             "text": "S2",
             "proposedBy": "A",
             "createdAt": 4,
@@ -1629,6 +1863,7 @@ def test_activity_sorting_and_typed_request_isolation(client, monkeypatch):
         },
         {
             "id": "scheduled-sooner",
+            "groupId": TEST_GROUP_ID,
             "text": "S1",
             "proposedBy": "A",
             "createdAt": 3,
@@ -1636,6 +1871,7 @@ def test_activity_sorting_and_typed_request_isolation(client, monkeypatch):
         },
         {
             "id": "expired-old",
+            "groupId": TEST_GROUP_ID,
             "text": "E1",
             "proposedBy": "A",
             "createdAt": 5,
@@ -1644,6 +1880,7 @@ def test_activity_sorting_and_typed_request_isolation(client, monkeypatch):
         },
         {
             "id": "expired-new",
+            "groupId": TEST_GROUP_ID,
             "text": "E2",
             "proposedBy": "A",
             "createdAt": 6,
@@ -1653,13 +1890,14 @@ def test_activity_sorting_and_typed_request_isolation(client, monkeypatch):
         {
             "id": "request-record",
             "itemType": household_requests.REQUEST_TYPE,
+            "groupId": TEST_GROUP_ID,
             "text": "Not an activity",
             "createdAt": 7,
         },
     ):
         table.put_item(Item=item)
 
-    assert [item["id"] for item in activities.list_recent(consistent=True)] == [
+    assert [item["id"] for item in activities.list_recent(TEST_GROUP_ID, consistent=True)] == [
         "unscheduled-new",
         "unscheduled-old",
         "scheduled-sooner",
@@ -1897,6 +2135,7 @@ def test_legacy_comment_projects_empty_mentions(client):
     activities._get_table().put_item(
         Item={
             "id": "legacy-comment",
+            "groupId": TEST_GROUP_ID,
             "text": "Old event",
             "proposedBy": "Andre",
             "proposedById": "andre",
@@ -1905,7 +2144,7 @@ def test_legacy_comment_projects_empty_mentions(client):
         }
     )
 
-    comment = client.get("/api/activities").get_json()[0]["comments"][0]
+    comment = client.get(grouped_path("/api/activities")).get_json()[0]["comments"][0]
     assert comment["mentions"] == []
     assert comment["mentionsAll"] is False
 
@@ -1951,7 +2190,7 @@ def test_creator_can_delete_activity_and_all_embedded_data(client, monkeypatch):
         f"/api/activities/{activity_id}/comments",
         json={"authorId": "kayla", "text": "I'm in"},
     )
-    comment_id = client.get("/api/activities").get_json()[0]["comments"][0]["id"]
+    comment_id = client.get(grouped_path("/api/activities")).get_json()[0]["comments"][0]["id"]
     client.put(
         f"/api/activities/{activity_id}/comments/{comment_id}/likes",
         json={"userId": "andre"},
@@ -2032,7 +2271,7 @@ def test_archive_activity_requires_requester(client):
     res = client.post(f"/api/activities/{activity_id}/archive", json={})
 
     assert res.status_code == 400
-    assert activities.get(activity_id)["isExpired"] is False
+    assert activities.get(activity_id, TEST_GROUP_ID)["isExpired"] is False
 
 
 def test_archive_unknown_activity_404(client):
@@ -2050,13 +2289,14 @@ def test_non_creator_cannot_delete_activity(client):
     )
 
     assert denied.status_code == 403
-    assert activities.get(activity_id) is not None
+    assert activities.get(activity_id, TEST_GROUP_ID) is not None
 
 
 def test_legacy_activity_cannot_be_deleted(client):
     activities._get_table().put_item(
         Item={
             "id": "legacy-delete",
+            "groupId": TEST_GROUP_ID,
             "text": "Old plan",
             "proposedBy": "Andre",
             "createdAt": 1,
@@ -2069,7 +2309,7 @@ def test_legacy_activity_cannot_be_deleted(client):
     )
 
     assert denied.status_code == 403
-    assert activities.get("legacy-delete") is not None
+    assert activities.get("legacy-delete", TEST_GROUP_ID) is not None
 
 
 def test_delete_activity_requires_requester(client):
@@ -2079,7 +2319,7 @@ def test_delete_activity_requires_requester(client):
     res = client.delete(f"/api/activities/{activity_id}", json={})
 
     assert res.status_code == 400
-    assert activities.get(activity_id) is not None
+    assert activities.get(activity_id, TEST_GROUP_ID) is not None
 
 
 def test_delete_unknown_activity_404(client):
@@ -2097,13 +2337,186 @@ def test_activities_unscheduled_newest_first_without_cap(client):
     table = activities._get_table()
     for i in range(6):
         table.put_item(
-            Item={"id": f"a{i}", "text": f"activity {i}", "proposedBy": "x", "createdAt": 1000 + i}
+            Item={
+                "id": f"a{i}",
+                "groupId": TEST_GROUP_ID,
+                "text": f"activity {i}",
+                "proposedBy": "x",
+                "createdAt": 1000 + i,
+            }
         )
-    res = client.get("/api/activities")
+    res = client.get(grouped_path("/api/activities"))
     assert res.status_code == 200
     data = res.get_json()
     assert len(data) == 6
     assert [d["text"] for d in data] == [f"activity {i}" for i in (5, 4, 3, 2, 1, 0)]
+
+
+# --- Shows ------------------------------------------------------------------
+
+
+def _make_show(client, title="Severance", creator="sheryl"):
+    """Create a show and return its projected dict (newest, so first in list)."""
+    res = client.post("/api/shows", json={"title": title, "createdById": creator})
+    assert res.status_code == 200
+    return res.get_json()[0]
+
+
+def test_create_show_auto_joins_creator_at_s1e1(client):
+    show = _make_show(client)
+    assert show["title"] == "Severance"
+    assert show["createdById"] == "sheryl"
+    assert show["completed"] is False
+    assert show["members"] == [
+        {"id": "sheryl", "name": "Sheryl", "season": 1, "episode": 1}
+    ]
+
+
+def test_create_show_requires_title_and_valid_creator(client):
+    assert client.post("/api/shows", json={"createdById": "sheryl"}).status_code == 400
+    assert client.post("/api/shows", json={"title": "X", "createdById": "ghost"}).status_code == 400
+
+
+def test_join_is_idempotent_then_leave_removes(client):
+    show = _make_show(client)
+    show_id = show["id"]
+
+    client.post(f"/api/shows/{show_id}/join", json={"userId": "andre"})
+    res = client.post(f"/api/shows/{show_id}/join", json={"userId": "andre"})
+    assert res.status_code == 200
+    members = res.get_json()[0]["members"]
+    assert [m["id"] for m in members].count("andre") == 1
+
+    res = client.post(f"/api/shows/{show_id}/leave", json={"userId": "andre"})
+    assert "andre" not in [m["id"] for m in res.get_json()[0]["members"]]
+
+
+def test_set_season_resets_episode_to_one(client):
+    show = _make_show(client)
+    show_id = show["id"]
+
+    # Advance the creator's episode a few times, then jump the season.
+    client.patch(
+        f"/api/shows/{show_id}/watchers/sheryl/episode", json={"delta": 1, "userId": "sheryl"}
+    )
+    client.put(
+        f"/api/shows/{show_id}/watchers/sheryl/episode", json={"value": 8, "userId": "sheryl"}
+    )
+    res = client.put(
+        f"/api/shows/{show_id}/watchers/sheryl/season", json={"value": 3, "userId": "sheryl"}
+    )
+    member = res.get_json()[0]["members"][0]
+    assert member["season"] == 3
+    assert member["episode"] == 1
+
+
+def test_progress_clamps_at_one_and_validates_input(client):
+    show = _make_show(client)
+    show_id = show["id"]
+
+    res = client.put(
+        f"/api/shows/{show_id}/watchers/sheryl/episode", json={"value": 0, "userId": "sheryl"}
+    )
+    assert res.get_json()[0]["members"][0]["episode"] == 1
+
+    assert client.put(
+        f"/api/shows/{show_id}/watchers/sheryl/episode", json={"value": "x", "userId": "sheryl"}
+    ).status_code == 400
+    assert client.patch(
+        f"/api/shows/{show_id}/watchers/sheryl/rating", json={"delta": 1, "userId": "sheryl"}
+    ).status_code == 400
+
+
+def test_only_creator_can_complete_and_reopen(client):
+    show = _make_show(client, creator="sheryl")
+    show_id = show["id"]
+
+    # A non-creator is refused.
+    assert client.post(
+        f"/api/shows/{show_id}/complete", json={"requesterId": "andre"}
+    ).status_code == 403
+
+    res = client.post(f"/api/shows/{show_id}/complete", json={"requesterId": "sheryl"})
+    assert res.get_json()[0]["completed"] is True
+
+    res = client.post(f"/api/shows/{show_id}/reopen", json={"requesterId": "sheryl"})
+    assert res.get_json()[0]["completed"] is False
+
+
+def test_completed_show_is_read_only(client):
+    show = _make_show(client)
+    show_id = show["id"]
+    client.post(f"/api/shows/{show_id}/complete", json={"requesterId": "sheryl"})
+
+    assert client.post(
+        f"/api/shows/{show_id}/join", json={"userId": "andre"}
+    ).status_code == 409
+    assert client.patch(
+        f"/api/shows/{show_id}/watchers/sheryl/episode", json={"delta": 1, "userId": "sheryl"}
+    ).status_code == 409
+
+
+def test_show_and_watcher_mutations_404(client):
+    assert client.post("/api/shows/ghost/join", json={"userId": "andre"}).status_code == 404
+    show = _make_show(client)
+    # Unknown watcher on a real show is also a 404.
+    assert client.put(
+        f"/api/shows/{show['id']}/watchers/nobody/episode", json={"value": 2, "userId": "sheryl"}
+    ).status_code == 404
+
+
+def test_shows_are_scoped_by_group(client):
+    """household_shows isolates every read and mutation by group id."""
+    show_a = household_shows.add_show("Group A show", "sheryl", "Sheryl", "group-a")
+    household_shows.add_show("Group B show", "andre", "Andre", "group-b")
+
+    # Each group's feed sees only its own shows.
+    assert [s["title"] for s in household_shows.list_recent("group-a")] == ["Group A show"]
+    assert [s["title"] for s in household_shows.list_recent("group-b")] == ["Group B show"]
+
+    # A cross-group read and every cross-group mutation see nothing.
+    assert household_shows.get(show_a["id"], "group-b") is None
+    assert household_shows.join(show_a["id"], "andre", "Andre", "group-b") is None
+    assert household_shows.set_progress(show_a["id"], "sheryl", "episode", 5, "group-b") is None
+    assert household_shows.complete(show_a["id"], "sheryl", "group-b") is None
+
+    # Same-group access still works.
+    joined = household_shows.join(show_a["id"], "andre", "Andre", "group-a")
+    assert "andre" in [m["id"] for m in joined["members"]]
+
+
+def test_module_feed_sorts_active_instances_and_hides_ended_modules(client, monkeypatch):
+    monkeypatch.setattr(activities.time, "time", lambda: 1_000)
+    event = _propose(client, "Dinner").get_json()[0]
+    monkeypatch.setattr(household_requests.time, "time", lambda: 1_001)
+    request_item = _make_request(client, text="Grab oat milk").get_json()[0]
+    monkeypatch.setattr(household_checklists.time, "time", lambda: 1_002)
+    checklist = _make_checklist(client, title="Kitchen reset").get_json()[0]
+    monkeypatch.setattr(household_shows.time, "time", lambda: 1_003)
+    show = _make_show(client, title="Severance", creator="sheryl")
+    monkeypatch.setattr(jam.time, "time", lambda: 1_004)
+    client.post("/api/jam", json={"hostId": "andre", "link": "https://spotify.link/feed"})
+
+    feed = client.get(grouped_path("/api/feed")).get_json()
+    assert [item["type"] for item in feed] == [
+        "events",
+        "requests",
+        "checklists",
+        "tv",
+        "spotify",
+    ]
+    assert [item["sortAt"] for item in feed] == sorted(item["sortAt"] for item in feed)
+    assert feed[0]["payload"]["id"] == event["id"]
+    assert client.get(grouped_path("/api/feed?type=tv")).get_json()[0]["id"] == show["id"]
+    assert client.get(grouped_path("/api/feed?type=ghost")).status_code == 400
+
+    client.post(f"/api/activities/{event['id']}/archive", json={"requesterId": "andre"})
+    client.post(f"/api/requests/{request_item['id']}/complete", json={"userId": "andre"})
+    client.post(f"/api/checklists/{checklist['id']}/archive", json={"userId": "andre"})
+    client.post(f"/api/shows/{show['id']}/complete", json={"requesterId": "sheryl"})
+    client.delete("/api/jam", json={"hostId": "andre"})
+
+    assert client.get(grouped_path("/api/feed")).get_json() == []
 
 
 if __name__ == "__main__":

@@ -5,14 +5,20 @@ availability to hang out. Built from the mockups in `../mockups`.
 
 ## Features
 
-- **Login** by picking your name and entering a password.
+- **Login** with a username and password on `/login`, or create a new account
+  on `/signup`.
+- **Pending accounts** can sign in but cannot use household features until a
+  group code assigns them to a household.
+- **Profile settings** keep account actions in one place, including sign out,
+  account deletion, a light/dark/system appearance preference, and the current
+  household invite code for grouped users.
 - **View** the whole household's current statuses at a glance.
 - **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.
 - **Gather banner**: when 3+ roommates are available, a notification banner
   invites everyone to hang out (PROJECT.md threshold).
 - **Scheduled and live events**: activities can have optional start/end times,
-  automatically become live, overlap, and expire into collapsible history.
+  automatically become live, overlap, and leave active feeds when ended.
   Open apps refresh from activity push messages, focus changes, or visible-page
   polling.
 - **Comment mentions**: typing `@` suggests household members or `@all`,
@@ -22,7 +28,12 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Comment likes**: roommates can like or unlike other people’s comments and
   see their own reaction state, the total like count, and a popover listing
   who liked each comment.
-- **Requests**: a tabbed household board lets users ask specific roommates for
+- **Module feed**: `/feed` contains events, requests, checklists, TV shows, and
+  the active Spotify Jam in one chronological group feed. Material updates bump
+  the module instance to the bottom, and the side drawer/rail filters by module
+  type. Horizontal swipes alternate between the status page and feed, the feed
+  hamburger opens module filters, and the floating `+` creates modules.
+- **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, mark requests complete, and open
   request notifications directly to the expanded request card.
 - **Checklists**: the shire board includes shared checklists that can be
@@ -34,7 +45,8 @@ availability to hang out. Built from the mockups in `../mockups`.
 - [Vite](https://vitejs.dev/) + React 18
 - [Tailwind CSS](https://tailwindcss.com/) (cozy theme tokens in
   `tailwind.config.js`)
-- [React Router](https://reactrouter.com/) for `/login` and `/`
+- [React Router](https://reactrouter.com/) for `/login`, `/signup`, `/pending`,
+  `/feed`, and `/`
 
 ## Getting started
 
@@ -47,8 +59,8 @@ npm install
 npm run dev
 ```
 
-Open the printed local URL. Sign in as any roommate (Andre, Jordan, Maya, Sam,
-Priya, Leo) with the demo password **`roomie`**.
+Open the printed local URL. Sign in as any seeded roommate using their lowercase
+name as username (for example `andre`) with the demo password **`roomie`**.
 
 ## Backend / API
 
@@ -58,10 +70,17 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | Function                        | Method & path                                              |
 | ------------------------------- | ---------------------------------------------------------- |
 | `login`                         | `POST /api/login`                                          |
-| `getRoommates`                  | `GET /api/roommates`                                       |
+| `createAccount`                 | `POST /api/accounts`                                       |
+| `deleteAccount`                 | `DELETE /api/accounts/:id`                                 |
+| `joinGroup`                     | `POST /api/groups/join`                                    |
+| `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
+| `getRoommates`                  | `GET /api/roommates?userId=:id`                            |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
 | `pokeRoommate`                  | `POST /api/roommates/:id/poke`                             |
+| `getFeed`                       | `GET /api/feed?userId=:id&type=:type`                      |
+| `getJam`                        | `GET /api/jam?userId=:id`                                  |
+| `getActivities`                 | `GET /api/activities?userId=:id`                           |
 | `proposeActivity`               | `POST /api/activities`                                     |
 | `archiveActivity`               | `POST /api/activities/:id/archive`                         |
 | `deleteActivity`                | `DELETE /api/activities/:id`                               |
@@ -69,7 +88,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `endActivity`                   | `POST /api/activities/:id/end`                             |
 | `updateActivitySchedule`        | `PATCH /api/activities/:id/schedule`                       |
 | `setCommentLiked`               | `PUT/DELETE /api/activities/:id/comments/:commentId/likes` |
-| `getRequests`                   | `GET /api/requests`                                        |
+| `getRequests`                   | `GET /api/requests?userId=:id`                             |
 | `createRequest`                 | `POST /api/requests`                                       |
 | `respondToRequest`              | `POST /api/requests/:id/responses`                         |
 | `completeRequest`               | `POST /api/requests/:id/complete`                          |
@@ -77,7 +96,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `deleteRequest`                 | `DELETE /api/requests/:id`                                 |
 | `commentOnRequest`              | `POST /api/requests/:id/comments`                          |
 | `setRequestCommentLiked`        | `PUT/DELETE /api/requests/:id/comments/:commentId/likes`   |
-| `getChecklists`                 | `GET /api/checklists`                                      |
+| `getChecklists`                 | `GET /api/checklists?userId=:id`                           |
 | `createChecklist`               | `POST /api/checklists`                                     |
 | `notifyChecklist`               | `POST /api/checklists/:id/notify`                          |
 | `addChecklistItem`              | `POST /api/checklists/:id/items`                           |

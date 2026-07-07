@@ -1,9 +1,21 @@
 .page {
-  @apply mx-auto max-w-[100vw] px-[22px] pb-16 pt-10;
+  @apply mx-auto max-w-[1180px] px-[18px] pb-16 pt-8;
 }
 
 .header {
-  @apply mb-2 flex items-center gap-[14px];
+  @apply mb-2 flex items-center gap-[12px];
+}
+
+.moduleMenuButton {
+  @apply grid h-10 w-10 flex-none place-items-center rounded-full border border-line bg-card text-ink-soft shadow-soft transition hover:border-accent hover:text-ink lg:hidden;
+}
+
+.moduleMenuIcon {
+  @apply flex flex-col gap-[4px];
+}
+
+.moduleMenuIcon span {
+  @apply block h-[2px] w-[18px] rounded-full bg-current;
 }
 
 .brandmark {
@@ -26,8 +38,16 @@
   @apply mt-[2px] text-[13.5px] text-ink-soft;
 }
 
-.signOut {
-  @apply flex-none rounded-full border border-line bg-white px-[14px] py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-surface-hover;
+.profileButton {
+  @apply flex flex-none items-center gap-2 rounded-full border border-line bg-card px-2 py-2 text-ink-soft shadow-soft transition hover:border-accent hover:bg-surface-hover hover:text-ink;
+}
+
+.profileInitial {
+  @apply grid h-8 w-8 place-items-center rounded-full bg-accent text-[14px] font-black text-white;
+}
+
+.profileLabel {
+  @apply hidden pr-2 text-[13px] font-black sm:inline;
 }
 
 .pageError {
@@ -40,6 +60,54 @@
 
 .loading {
   @apply mt-10 text-center text-[14px] text-ink-soft;
+}
+
+.shell {
+  @apply lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-7;
+}
+
+.drawerBackdrop {
+  @apply fixed inset-0 z-40 bg-ink/25 lg:hidden;
+}
+
+.moduleNav {
+  @apply fixed left-0 top-0 z-50 h-full w-[260px] -translate-x-full border-r border-line bg-card px-4 py-5 shadow-card transition-transform duration-200 lg:sticky lg:top-6 lg:z-auto lg:h-[calc(100vh-3rem)] lg:w-auto lg:translate-x-0 lg:rounded-sm lg:border lg:shadow-soft;
+}
+
+.moduleNavOpen {
+  @apply translate-x-0;
+}
+
+.moduleNavHeader {
+  @apply mb-4 flex items-center justify-between;
+}
+
+.moduleNavEyebrow {
+  @apply text-[12px] font-black uppercase tracking-[0.08em] text-ink-soft;
+}
+
+.moduleNavClose {
+  @apply rounded-full border border-line px-3 py-1 text-[12px] font-bold text-ink-soft lg:hidden;
+}
+
+.moduleNavList {
+  @apply space-y-2;
+}
+
+.moduleNavItem {
+  @apply flex w-full items-center justify-between rounded-sm border border-transparent px-3 py-3 text-left text-[14px] font-black text-ink-soft transition hover:border-line hover:bg-surface-hover hover:text-ink;
+}
+
+.moduleNavItemActive {
+  @apply border-accent bg-accent-soft text-ink;
+}
+
+.moduleNavCount {
+  @apply rounded-full bg-surface-muted px-2 py-1 text-[11px] text-ink-soft;
+}
+
+.feedColumn {
+  @apply min-w-0 pb-24;
 }
 
 .ownCard {
@@ -74,8 +142,48 @@
   @apply grid grid-cols-2 gap-[14px];
 }
 
-.createButton {
-  @apply w-full px-[18px] py-[12px] text-[14px];
+.feedSection {
+  @apply mt-7;
+}
+
+.feedHeader {
+  @apply mb-4 flex items-center justify-between gap-3;
+}
+
+.feedEyebrow {
+  @apply text-[12px] font-black uppercase tracking-[0.08em] text-ink-soft;
+}
+
+.feedTitle {
+  @apply mt-1 font-display text-[28px] font-semibold leading-none text-ink;
+}
+
+.feedList {
+  @apply flex flex-col gap-3;
+}
+
+.moduleItem {
+  @apply min-w-0;
+}
+
+.moduleType {
+  @apply rounded-full border border-accent-soft bg-accent-soft px-2 py-[2px] text-[10px] font-black uppercase tracking-[0.07em] text-accent-deep;
+}
+
+.emptyFeed {
+  @apply rounded-sm border border-dashed border-line bg-card px-4 py-8 text-center text-[14px] font-semibold text-ink-soft;
+}
+
+.createFloatingButton {
+  @apply fixed bottom-6 right-6 z-30 grid h-14 w-14 place-items-center rounded-full bg-accent text-[32px] font-black leading-none text-white shadow-card transition hover:scale-105 hover:bg-accent-deep focus:outline-none focus:ring-4 focus:ring-accent-soft;
+}
+
+.createPicker {
+  @apply grid gap-3 sm:grid-cols-2;
+}
+
+.createPickerButton {
+  @apply rounded-sm border border-line bg-card px-4 py-5 text-left text-[15px] font-black text-ink shadow-soft transition hover:border-accent hover:bg-surface-hover;
 }
 
 .createModal {
@@ -84,4 +192,8 @@
 
 .jamModal {
   @apply max-w-[520px];
+}
+
+.settingsModal {
+  @apply max-w-[560px];
 }

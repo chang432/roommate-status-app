@@ -1,0 +1,148 @@
+.wrap {
+  @apply min-w-0;
+}
+
+.error {
+  @apply mb-[14px];
+}
+
+.list {
+  @apply space-y-[10px];
+}
+
+.empty {
+  @apply text-[13.5px] text-ink-soft;
+}
+
+.card {
+  @apply cursor-pointer rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft;
+}
+
+/* A completed show, shown read-only in the collapsible section. */
+.completedCard {
+  @apply border-surface-expired-border bg-surface-muted opacity-90;
+}
+
+.summary {
+  @apply flex items-center gap-[10px];
+}
+
+.summaryText {
+  @apply min-w-0 flex-1;
+}
+
+.titleRow {
+  @apply flex flex-wrap items-center gap-[7px];
+}
+
+.title {
+  @apply truncate text-[14px] font-semibold text-ink;
+}
+
+.completedChip {
+  @apply rounded-full bg-ink-soft px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white;
+}
+
+.meta {
+  @apply mt-[2px] text-[12px] text-ink-soft;
+}
+
+.joinButton {
+  @apply flex-none px-[13px] py-[7px] text-[12.5px];
+}
+
+.expandedRegion {
+  @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none;
+}
+
+.expanded {
+  grid-template-rows: 1fr;
+}
+
+.collapsed {
+  grid-template-rows: 0fr;
+}
+
+.expandedInner {
+  @apply min-h-0 overflow-hidden;
+}
+
+.panel {
+  @apply mt-[12px] border-t border-line pt-[12px];
+}
+
+.watchersEmpty {
+  @apply text-[13px] text-ink-soft;
+}
+
+.watchers {
+  @apply space-y-2;
+}
+
+.watcher {
+  @apply rounded-sm border border-line bg-card px-[10px] py-[8px];
+}
+
+/* Flat watcher row: avatar, name, chips, then the optional remove action. */
+.watcherHead {
+  @apply flex min-h-[32px] flex-nowrap items-center gap-[8px];
+}
+
+.watcherAvatar {
+  @apply grid h-[28px] w-[28px] flex-none place-items-center rounded-full bg-status-grey text-[11px] font-bold uppercase text-white;
+}
+
+.watcherName {
+  @apply min-w-0 flex-1 truncate text-[13px] font-medium text-ink;
+}
+
+.counters {
+  @apply flex shrink-0 flex-nowrap items-center gap-[4px];
+}
+
+.counter {
+  @apply flex shrink-0 items-center gap-[4px];
+}
+
+.counterLabel {
+  @apply sr-only;
+}
+
+.counterValue {
+  @apply min-w-0;
+}
+
+.counterChip {
+  @apply inline-flex h-[28px] items-center gap-[5px] rounded-full border border-line bg-surface-hover px-[8px] text-left text-ink transition hover:border-accent-soft hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft disabled:cursor-not-allowed disabled:border-line disabled:bg-surface-muted disabled:text-ink-soft disabled:opacity-70;
+}
+
+.counterStatic {
+  @apply inline-flex h-[28px] items-center gap-[5px] rounded-full border border-line bg-surface-muted px-[8px] text-left text-ink;
+}
+
+.counterChipLabel {
+  @apply text-[10px] font-bold uppercase tracking-[0.04em] text-ink-soft;
+}
+
+.counterChipValue {
+  @apply min-w-[12px] text-[12px] font-semibold tabular-nums text-ink;
+}
+
+/* Manual numeric editor swaps directly into the chip footprint. */
+.counterInput {
+  @apply h-[28px] w-[56px] rounded-full border border-accent-soft bg-card px-[8px] text-left text-[12px] font-semibold tabular-nums text-ink outline-none focus:border-accent;
+}
+
+.watcherRemove {
+  @apply grid h-[24px] w-[24px] flex-none place-items-center rounded-full border border-transparent bg-transparent text-[16px] leading-none text-ink-soft transition hover:border-line hover:bg-surface-hover hover:text-status-red disabled:opacity-60;
+}
+
+/* Collapsible section that hides completed shows, mirroring the activities'
+   expired history. */
+.completedSection {
+  @apply mt-5 border-t border-line pt-4;
+}
+
+.completedToggle {
+  @apply flex w-full items-center justify-between rounded-sm px-1 py-2 text-left text-[13px] font-bold text-ink-soft transition hover:text-ink;
+}

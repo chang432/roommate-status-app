@@ -14,6 +14,10 @@
   @apply min-w-0;
 }
 
+.titleRow {
+  @apply flex min-w-0 flex-wrap items-center gap-2;
+}
+
 .eyebrow {
   @apply text-[10.5px] font-bold uppercase tracking-[0.08em] text-status-green;
 }

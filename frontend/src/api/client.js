@@ -7,6 +7,16 @@
 
 const API_BASE = '/api'
 
+// Called when the backend reports the stored session's user no longer exists
+// (error code "invalid_user") — e.g. the local in-memory DB was reseeded.
+// AuthContext registers logout here so a dead session bounces to the login
+// page instead of leaving every fetch failing.
+let onInvalidUser = null
+
+export function setInvalidUserHandler(handler) {
+  onInvalidUser = handler
+}
+
 // Thin wrapper around fetch that throws on non-2xx and parses JSON.
 // Error responses carry a JSON `{ error }` body (see the Flask backend), which
 // we surface as the thrown Error's message for display in the UI.
@@ -18,23 +28,72 @@ async function request(path, options = {}) {
 
   const data = await res.json().catch(() => null)
   if (!res.ok) {
+    if (data?.code === 'invalid_user') onInvalidUser?.()
     const message = data?.error || `Request failed: ${res.status}`
     throw new Error(message)
   }
   return data
 }
 
-// POST /api/login — exchange a name + password for the signed-in roommate.
-export async function login(name, password) {
+// Append non-empty params to a path. Returns a path WITHOUT the /api prefix —
+// request() adds API_BASE exactly once (returning it prefixed here used to
+// double it into /api/api/..., 404ing every list fetch).
+function withQuery(path, params) {
+  const search = new URLSearchParams()
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      search.set(key, value)
+    }
+  })
+  const query = search.toString()
+  return query ? `${path}?${query}` : path
+}
+
+// POST /api/login — exchange a username + password for the signed-in account.
+export async function login(username, password) {
   return request('/login', {
     method: 'POST',
-    body: JSON.stringify({ name, password }),
+    body: JSON.stringify({ username, password }),
   })
 }
 
+// POST /api/accounts — create a no-group account and sign in as it.
+export async function createAccount(username, name, password) {
+  return request('/accounts', {
+    method: 'POST',
+    body: JSON.stringify({ username, name, password }),
+  })
+}
+
+// GET /api/accounts/:id — re-fetch an account to validate a stored session.
+export async function getAccount(id) {
+  return request(`/accounts/${id}`)
+}
+
+// DELETE /api/accounts/:id — delete the signed-in account after password check.
+export async function deleteAccount(id, password) {
+  return request(`/accounts/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
+  })
+}
+
+// POST /api/groups/join — assign a pending account to a household by code.
+export async function joinGroup(userId, code) {
+  return request('/groups/join', {
+    method: 'POST',
+    body: JSON.stringify({ userId, code }),
+  })
+}
+
+// GET /api/groups/current — fetch the signed-in user's group metadata.
+export async function getCurrentGroup(userId) {
+  return request(withQuery('/groups/current', { userId }))
+}
+
 // GET /api/roommates — the whole household with their current statuses.
-export async function getRoommates() {
-  return request('/roommates')
+export async function getRoommates(userId) {
+  return request(withQuery('/roommates', { userId }))
 }
 
 // PUT /api/roommates/:id/status — update one roommate's status.
@@ -78,8 +137,13 @@ export async function savePushSubscription(subscription, userId) {
 }
 
 // GET /api/jam — the one active household Spotify Jam, if any.
-export async function getJam() {
-  return request('/jam')
+export async function getJam(userId) {
+  return request(withQuery('/jam', { userId }))
+}
+
+// GET /api/feed — normalized active module instances in feed order.
+export async function getFeed(userId, type = 'all') {
+  return request(withQuery('/feed', { userId, type }))
 }
 
 // POST /api/jam — replace the active household Jam link.
@@ -99,8 +163,8 @@ export async function endJam(hostId) {
 }
 
 // GET /api/activities — current activities followed by expired history.
-export async function getActivities() {
-  return request('/activities')
+export async function getActivities(userId) {
+  return request(withQuery('/activities', { userId }))
 }
 
 // POST /api/activities — propose an activity (also pushes it to everyone).
@@ -191,8 +255,8 @@ export async function setCommentLiked(id, commentId, userId, liked) {
 }
 
 // GET /api/requests — recent household requests, newest first.
-export async function getRequests() {
-  return request('/requests')
+export async function getRequests(userId) {
+  return request(withQuery('/requests', { userId }))
 }
 
 // POST /api/requests — create a targeted request for specific roommates.
@@ -255,8 +319,8 @@ export async function setRequestCommentLiked(id, commentId, userId, liked) {
 }
 
 // GET /api/checklists — recent active household checklists.
-export async function getChecklists() {
-  return request('/checklists')
+export async function getChecklists(userId) {
+  return request(withQuery('/checklists', { userId }))
 }
 
 // POST /api/checklists — create a checklist with an initial set of items.
@@ -313,5 +377,78 @@ export async function archiveChecklist(id, userId) {
   return request(`/checklists/${id}/archive`, {
     method: 'POST',
     body: JSON.stringify({ userId }),
+  })
+}
+
+// --- TV show tracker -----------------------------------------------------
+// Backed by the Flask server's /api/shows endpoints (docker/flask/
+// household_shows.py), which persist to a dedicated DynamoDB table. Every
+// mutation returns the full, refreshed show list so the UI can recompute in one
+// pass. The display name on join/create is resolved server-side from the
+// roommate's account; it is sent here only so callers keep a stable signature.
+
+// GET /api/shows — the caller's group's shows with watchers and season/episode.
+export async function getShows(userId) {
+  return request(withQuery('/shows', { userId }))
+}
+
+// POST /api/shows — create a show; the creator is auto-added as a watcher.
+export async function createShow(title, createdById, createdByName) {
+  return request('/shows', {
+    method: 'POST',
+    body: JSON.stringify({ title, createdById, createdByName }),
+  })
+}
+
+// POST /api/shows/:id/join — add a roommate to a show's watcher list.
+export async function joinShow(id, userId, userName) {
+  return request(`/shows/${id}/join`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, userName }),
+  })
+}
+
+// POST /api/shows/:id/leave — remove a roommate from a show's watcher list.
+export async function leaveShow(id, userId) {
+  return request(`/shows/${id}/leave`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}
+
+// POST /api/shows/:id/complete — creator-only: mark a show completed so it
+// leaves the active list. Returns the refreshed show list.
+export async function completeShow(id, requesterId) {
+  return request(`/shows/${id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
+// POST /api/shows/:id/reopen — creator-only: move a completed show back to the
+// active list. Returns the refreshed show list.
+export async function reopenShow(id, requesterId) {
+  return request(`/shows/${id}/reopen`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
+// PATCH /api/shows/:id/watchers/:memberId/:field — bump one watcher's season or
+// episode by delta (+1 / -1). Any roommate in the show's group may edit any
+// watcher's number; userId identifies the caller's group.
+export async function adjustProgress(id, memberId, field, delta, userId) {
+  return request(`/shows/${id}/watchers/${memberId}/${field}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ delta, userId }),
+  })
+}
+
+// PUT /api/shows/:id/watchers/:memberId/:field — set one watcher's season or
+// episode to an absolute value. Backs the long-press manual editor.
+export async function setProgress(id, memberId, field, value, userId) {
+  return request(`/shows/${id}/watchers/${memberId}/${field}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value, userId }),
   })
 }

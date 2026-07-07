@@ -26,6 +26,10 @@
   @apply min-w-0 flex-1;
 }
 
+.titleRow {
+  @apply flex min-w-0 flex-wrap items-center gap-2;
+}
+
 .title {
   @apply truncate text-[14px] font-semibold text-ink;
 }
@@ -67,7 +71,7 @@
 }
 
 .item {
-  @apply flex min-h-[40px] items-center gap-[8px] rounded-sm border border-line bg-white px-[9px] py-[7px] transition-colors;
+  @apply flex min-h-[40px] items-center gap-[8px] rounded-sm border border-line bg-card px-[9px] py-[7px] transition-colors;
 }
 
 .itemCovered {

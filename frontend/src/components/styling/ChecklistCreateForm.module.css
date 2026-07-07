@@ -27,7 +27,7 @@
 }
 
 .removeItem {
-  @apply grid h-[36px] w-[36px] flex-none place-items-center rounded-full border border-line bg-white text-[20px] font-bold leading-none text-ink-soft transition hover:bg-surface-hover disabled:opacity-60;
+  @apply grid h-[36px] w-[36px] flex-none place-items-center rounded-full border border-line bg-card text-[20px] font-bold leading-none text-ink-soft transition hover:bg-surface-hover disabled:opacity-60;
 }
 
 .addItem {

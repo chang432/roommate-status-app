@@ -1,10 +1,12 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import LoginPage from './pages/LoginPage.jsx'
+import GroupFeedPage from './pages/GroupFeedPage.jsx'
+import PendingAccountPage from './pages/PendingAccountPage.jsx'
+import SignupPage from './pages/SignupPage.jsx'
 import StatusPage from './pages/StatusPage.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 
-// Gate the status page behind authentication; bounce guests to /login.
-function RequireAuth({ children }) {
+function RequireAccount({ children }) {
   const { user } = useAuth()
   const location = useLocation()
   return user ? (
@@ -18,16 +20,49 @@ function RequireAuth({ children }) {
   )
 }
 
+// Household features stay locked until a future group-join flow assigns groupId.
+function RequireGroup({ children }) {
+  const { user } = useAuth()
+  const location = useLocation()
+  if (!user) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ returnTo: `${location.pathname}${location.search}` }}
+      />
+    )
+  }
+  return user.hasGroup ? children : <Navigate to="/pending" replace />
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+      <Route
+        path="/pending"
+        element={
+          <RequireAccount>
+            <PendingAccountPage />
+          </RequireAccount>
+        }
+      />
       <Route
         path="/"
         element={
-          <RequireAuth>
+          <RequireGroup>
             <StatusPage />
-          </RequireAuth>
+          </RequireGroup>
+        }
+      />
+      <Route
+        path="/feed"
+        element={
+          <RequireGroup>
+            <GroupFeedPage />
+          </RequireGroup>
         }
       />
       {/* Unknown paths fall back to the home route. */}
