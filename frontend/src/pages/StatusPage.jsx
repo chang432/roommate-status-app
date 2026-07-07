@@ -122,9 +122,9 @@ function ModuleFeedCard({ module, children }) {
   return (
     <article className={styles.moduleCard}>
       <header className={styles.moduleCardHeader}>
-        <div>
-          <p className={styles.moduleType}>{module.typeLabel}</p>
+        <div className={styles.moduleHeading}>
           <h2 className={styles.moduleTitle}>{module.title}</h2>
+          <span className={styles.moduleType}>{module.typeLabel}</span>
         </div>
         <p className={styles.moduleMeta}>
           {module.actor} · {relativeTime(module.sortAt)}
