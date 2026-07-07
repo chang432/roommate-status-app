@@ -12,7 +12,12 @@ import ShowCreateForm from "./ShowCreateForm.jsx";
 import ShowTrackerFeature from "./ShowTrackerFeature.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { endActivity, getFeed, startActivity } from "../api/client.js";
-import { MODULE_TYPES, createModules } from "../models/modules.js";
+import {
+  MODULE_TYPES,
+  createModules,
+  moduleTagStyle,
+  modulePanelStyle,
+} from "../models/modules.js";
 import { cx } from "../utils/classNames.js";
 // The feed shares the status page's stylesheet — it renders inline beneath the
 // status section on the same page.
@@ -81,7 +86,11 @@ function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
 }
 
 function ModuleTag({ module }) {
-  return <span className={styles.moduleType}>{module.typeLabel}</span>;
+  return (
+    <span className={styles.moduleType} style={moduleTagStyle(module.type)}>
+      {module.typeLabel}
+    </span>
+  );
 }
 
 function ModuleFeedItem({ children }) {
@@ -260,6 +269,7 @@ export default function GroupFeed({ roommates }) {
               type="button"
               onClick={() => setCreateType(type.id)}
               className={styles.createPickerButton}
+              style={modulePanelStyle(type.id)}
             >
               {CREATE_LABEL_BY_TYPE[type.id]}
             </button>

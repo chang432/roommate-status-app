@@ -7,6 +7,33 @@ export const MODULE_TYPES = [
   { id: 'spotify', label: 'Spotify', shortLabel: 'Spotify' },
 ]
 
+// One warm, distinct color per module type (mirrors the avatarColor palette
+// approach). `soft` tints tag/panel backgrounds; `text` is the readable label
+// tone; `solid` is the saturated accent for borders/emphasis.
+export const MODULE_COLORS = {
+  events: { solid: '#c97b5a', soft: '#f5e1d6', text: '#8a4a30' },
+  requests: { solid: '#6f8fb0', soft: '#dfe8f2', text: '#3f5a76' },
+  checklists: { solid: '#d6a35c', soft: '#f3e6cf', text: '#8a6420' },
+  tv: { solid: '#9d7b9c', soft: '#ece1ec', text: '#5f3f5e' },
+  spotify: { solid: '#5aa06f', soft: '#dcefe0', text: '#356b45' },
+}
+
+// Inline style for a module's color-coded feed tag: a soft tint with a readable
+// deep-tone label, keyed by module type.
+export function moduleTagStyle(type) {
+  const color = MODULE_COLORS[type]
+  if (!color) return undefined
+  return { backgroundColor: color.soft, color: color.text, borderColor: color.soft }
+}
+
+// Inline style for a color-coded create panel: same tint, but with the solid
+// accent as the border so each module option reads as its own color.
+export function modulePanelStyle(type) {
+  const color = MODULE_COLORS[type]
+  if (!color) return undefined
+  return { backgroundColor: color.soft, color: color.text, borderColor: color.solid }
+}
+
 const MODULE_CLASS_BY_TYPE = {}
 
 export class BaseModule {
