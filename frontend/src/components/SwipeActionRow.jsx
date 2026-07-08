@@ -86,6 +86,8 @@ export default function SwipeActionRow({
       open &&
       !containerRef.current?.querySelector(`.${styles.actionTray}`)?.contains(event.target)
     ) {
+      event.preventDefault();
+      event.stopPropagation();
       setOpen(false);
     }
   }
