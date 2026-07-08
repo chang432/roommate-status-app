@@ -34,15 +34,16 @@ from db import resource
 # remains unbounded; the frontend initially shows only the latest 10.
 COMMENTS_LIMIT = 100
 
-# Results returned by delete_owned(), kept explicit so the route can distinguish
-# missing activities from ownership failures without handling boto3 details.
+# Results returned by delete(), kept explicit so the route can distinguish
+# missing activities from lifecycle conflicts without handling boto3 details.
 DELETE_OK = "deleted"
 DELETE_NOT_FOUND = "not_found"
-DELETE_FORBIDDEN = "forbidden"
 DELETE_LIVE = "live"
 
 ARCHIVE_OK = "archived"
 ARCHIVE_NOT_FOUND = "not_found"
+RESTORE_OK = "restored"
+RESTORE_NOT_FOUND = "not_found"
 
 LIVE_OK = "ok"
 LIVE_NOT_FOUND = "not_found"
@@ -193,6 +194,7 @@ def _project(
         for comment_id, c in _comment_entries(item)[-COMMENTS_LIMIT:]
     ]
     lifecycle = _lifecycle(item, now_ms)
+    archived_at = _timestamp(item, "archivedAt")
     return {
         "id": item["id"],
         "groupId": item.get("groupId"),
@@ -210,6 +212,10 @@ def _project(
         "isLive": lifecycle["isLive"],
         "isExpired": lifecycle["isExpired"],
         "liveStartedAt": lifecycle["liveStartedAt"],
+        "isArchived": bool(item.get("isArchived", False)),
+        "archivedAt": archived_at,
+        "archivedBy": item.get("archivedBy"),
+        "archivedById": item.get("archivedById"),
     }
 
 
@@ -265,7 +271,7 @@ def _set_membership(
     existing = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
     if existing is None or existing.get("itemType") or not _in_group(existing, group_id):
         return None
-    if _lifecycle(existing)["isExpired"]:
+    if _lifecycle(existing)["isExpired"] or existing.get("isArchived", False):
         return MUTATION_EXPIRED
     try:
         resp = table.update_item(
@@ -274,12 +280,14 @@ def _set_membership(
             ExpressionAttributeValues={
                 ":m": {name},
                 ":i": {user_id},
+                ":false": False,
                 ":now": int(time.time() * 1000),
                 ":groupId": group_id,
             },
             ConditionExpression=(
                 "attribute_exists(id) AND attribute_not_exists(itemType) AND "
                 "groupId = :groupId AND "
+                "(attribute_not_exists(isArchived) OR isArchived = :false) AND "
                 "attribute_not_exists(endedAt) AND "
                 "(attribute_not_exists(endAt) OR endAt > :now)"
             ),
@@ -288,7 +296,12 @@ def _set_membership(
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-            if current and not current.get("itemType") and _in_group(current, group_id) and _lifecycle(current)["isExpired"]:
+            if (
+                current
+                and not current.get("itemType")
+                and _in_group(current, group_id)
+                and (_lifecycle(current)["isExpired"] or current.get("isArchived", False))
+            ):
                 return MUTATION_EXPIRED
             return None
         raise
@@ -326,7 +339,7 @@ def add_comment(
     existing = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
     if existing is None or existing.get("itemType") or not _in_group(existing, group_id):
         return None
-    if _lifecycle(existing)["isExpired"]:
+    if _lifecycle(existing)["isExpired"] or existing.get("isArchived", False):
         return MUTATION_EXPIRED
     comment = {
         "id": uuid.uuid4().hex,
@@ -352,12 +365,14 @@ def add_comment(
             ExpressionAttributeValues={
                 ":c": [comment],
                 ":empty": [],
+                ":false": False,
                 ":now": int(time.time() * 1000),
                 ":groupId": group_id,
             },
             ConditionExpression=(
                 "attribute_exists(id) AND attribute_not_exists(itemType) AND "
                 "groupId = :groupId AND "
+                "(attribute_not_exists(isArchived) OR isArchived = :false) AND "
                 "attribute_not_exists(endedAt) AND "
                 "(attribute_not_exists(endAt) OR endAt > :now)"
             ),
@@ -366,7 +381,12 @@ def add_comment(
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-            if current and not current.get("itemType") and _in_group(current, group_id) and _lifecycle(current)["isExpired"]:
+            if (
+                current
+                and not current.get("itemType")
+                and _in_group(current, group_id)
+                and (_lifecycle(current)["isExpired"] or current.get("isArchived", False))
+            ):
                 return MUTATION_EXPIRED
             return None
         raise
@@ -391,7 +411,7 @@ def set_comment_like(
     activity = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
     if activity is None or activity.get("itemType") or not _in_group(activity, group_id):
         return LIKE_NOT_FOUND
-    if _lifecycle(activity)["isExpired"]:
+    if _lifecycle(activity)["isExpired"] or activity.get("isArchived", False):
         return MUTATION_EXPIRED
 
     comment = next(
@@ -438,6 +458,8 @@ def start_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
     if item is None or item.get("itemType") or not _in_group(item, group_id):
         return LIVE_NOT_FOUND
+    if item.get("isArchived", False):
+        return LIVE_CONFLICT
     if item.get("proposedById") != requester_id:
         return LIVE_FORBIDDEN
     lifecycle = _lifecycle(item)
@@ -497,6 +519,8 @@ def end_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
     if item is None or item.get("itemType") or not _in_group(item, group_id):
         return LIVE_NOT_FOUND
+    if item.get("isArchived", False):
+        return LIVE_CONFLICT
     if item.get("proposedById") != requester_id:
         return LIVE_FORBIDDEN
     if not _lifecycle(item)["isLive"]:
@@ -541,6 +565,8 @@ def update_schedule_owned(
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
     if item is None or item.get("itemType") or not _in_group(item, group_id):
         return SCHEDULE_NOT_FOUND
+    if item.get("isArchived", False):
+        return SCHEDULE_CONFLICT
     if item.get("proposedById") != requester_id:
         return SCHEDULE_FORBIDDEN
     lifecycle = _lifecycle(item)
@@ -587,28 +613,33 @@ def update_schedule_owned(
     return SCHEDULE_OK
 
 
-def archive(activity_id: str, _requester_id: str, group_id: str) -> str:
-    """Move an activity into the expired section without deleting it.
-
-    Archiving is a shared-household action rather than an owner-only one. We
-    persist `endedAt` so the normal lifecycle projection treats the event as
-    expired everywhere without introducing a second archive-specific state.
-    """
+def archive(activity_id: str, requester_id: str, group_id: str, requester_name: str | None = None) -> str:
+    """Hide an activity from the active section without deleting it."""
     table = _get_table()
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
     if item is None or item.get("itemType") or not _in_group(item, group_id):
         return ARCHIVE_NOT_FOUND
-    if _lifecycle(item)["isExpired"]:
+    if item.get("isArchived", False):
         return ARCHIVE_OK
 
     try:
         table.update_item(
             Key={"id": activity_id},
-            UpdateExpression="SET endedAt = :ended, updatedAt = :ended REMOVE isLive, liveStartedAt",
-            ConditionExpression=(
-                "attribute_not_exists(itemType) AND attribute_not_exists(endedAt)"
+            UpdateExpression=(
+                "SET isArchived = :true, archivedAt = :archived, archivedById = :requester_id, "
+                "archivedBy = :requester_name, updatedAt = :archived"
             ),
-            ExpressionAttributeValues={":ended": int(time.time() * 1000)},
+            ConditionExpression=(
+                "attribute_not_exists(itemType) AND "
+                "(attribute_not_exists(isArchived) OR isArchived = :false)"
+            ),
+            ExpressionAttributeValues={
+                ":archived": int(time.time() * 1000),
+                ":false": False,
+                ":requester_id": requester_id,
+                ":requester_name": requester_name,
+                ":true": True,
+            },
         )
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
@@ -620,41 +651,57 @@ def archive(activity_id: str, _requester_id: str, group_id: str) -> str:
     return ARCHIVE_OK
 
 
-def delete_owned(activity_id: str, requester_id: str, group_id: str) -> str:
-    """Delete an activity only when requester_id is its stored creator.
+def restore(activity_id: str, group_id: str) -> str:
+    """Restore an archived or expired activity back into the active section."""
+    table = _get_table()
+    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("itemType") or not _in_group(item, group_id):
+        return RESTORE_NOT_FOUND
 
-    The initial consistent read gives the route a useful 404 vs. 403 result.
-    The conditional delete then enforces that same ownership at write time, so
-    a concurrent change cannot turn the check into an unauthorized deletion.
-    Legacy activities have no proposedById and are therefore always forbidden.
-    """
+    now_ms = int(time.time() * 1000)
+    lifecycle = _lifecycle(item)
+    if item.get("isArchived", False) and not lifecycle["isExpired"]:
+        update_expression = (
+            "SET isArchived = :false, updatedAt = :now REMOVE archivedAt, archivedBy, archivedById"
+        )
+        values = {":false": False, ":now": now_ms}
+    else:
+        update_expression = (
+            "SET startAt = :now, updatedAt = :now REMOVE isArchived, archivedAt, archivedBy, "
+            "archivedById, endedAt, endAt, isLive, liveStartedAt"
+        )
+        values = {":now": now_ms}
+
+    table.update_item(
+        Key={"id": activity_id},
+        UpdateExpression=update_expression,
+        ConditionExpression="attribute_exists(id) AND attribute_not_exists(itemType)",
+        ExpressionAttributeValues=values,
+    )
+    return RESTORE_OK
+
+
+def delete(activity_id: str, group_id: str) -> str:
+    """Delete an activity from the household feed."""
     table = _get_table()
     item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
     if item is None or not _in_group(item, group_id):
         return DELETE_NOT_FOUND
-    if item.get("proposedById") != requester_id:
-        return DELETE_FORBIDDEN
     if _lifecycle(item)["isLive"]:
         return DELETE_LIVE
 
     try:
         table.delete_item(
             Key={"id": activity_id},
-            ConditionExpression=(
-                "proposedById = :requester AND attribute_not_exists(itemType)"
-            ),
-            ExpressionAttributeValues={":requester": requester_id},
+            ConditionExpression="attribute_not_exists(itemType)",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
-        # Resolve the rare race into the same stable API outcomes.
         current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
         if current is None or not _in_group(current, group_id):
             return DELETE_NOT_FOUND
-        if current.get("proposedById") != requester_id:
-            return DELETE_FORBIDDEN
-        return DELETE_LIVE if _lifecycle(current)["isLive"] else DELETE_FORBIDDEN
+        return DELETE_LIVE if _lifecycle(current)["isLive"] else DELETE_NOT_FOUND
 
     # Likes are separate idempotent records so concurrent reactions cannot
     # clobber the embedded comment list. Remove them with their parent event.
@@ -695,7 +742,7 @@ def list_recent(group_id: str, limit: int | None = None, consistent: bool = Fals
     expired = []
     for item in items:
         lifecycle = _lifecycle(item, now_ms)
-        (expired if lifecycle["isExpired"] else active).append((item, lifecycle))
+        (expired if item.get("isArchived", False) or lifecycle["isExpired"] else active).append((item, lifecycle))
 
     # Unscheduled proposals stay at the top; scheduled entries follow by start.
     active.sort(

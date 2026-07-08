@@ -203,8 +203,10 @@ Every content item carries a `groupId` so feeds stay isolated per household.
 | `updatedAt` | N | Epoch millis of the most recent material request update. |
 | `requestedIds` | SS | Account ids the request targets. |
 | `requestedNamesById` | M | `id → display name` for the targets. |
-| `responses` | M | `id → response` (e.g. `yes` / `no` / `maybe`). |
-| `isCompleted` | BOOL | Marks the request done. |
+| `responses` | M | `id → response` (`accepted` / `denied`). |
+| `isArchived` | BOOL | Marks the request archived. |
+| `archivedAt` | N | Epoch millis when archived. **Absent while active**. |
+| `archivedBy` / `archivedById` | S | Archiver display name / account id. **Absent while active**. |
 
 ```json
 {
@@ -218,8 +220,8 @@ Every content item carries a `groupId` so feeds stay isolated per household.
   "updatedAt": 1720201000000,
   "requestedIds": ["andre", "kayla"],
   "requestedNamesById": { "andre": "Andre", "kayla": "Kayla" },
-  "responses": { "andre": "yes" },
-  "isCompleted": false
+  "responses": { "andre": "accepted" },
+  "isArchived": false
 }
 ```
 
@@ -291,7 +293,9 @@ One item per tracked show, with watchers embedded. Scoped per household by
 | `groupId` | S | Owning household. |
 | `createdAt` | N | Epoch millis. |
 | `updatedAt` | N | Epoch millis of the most recent material show update. |
-| `completedAt` | N | Epoch millis when completed. **Absent while active** (its absence is what "active" means). |
+| `isArchived` | BOOL | Marks the show archived. |
+| `archivedAt` | N | Epoch millis when archived. **Absent while active**. |
+| `archivedBy` / `archivedById` | S | Archiver display name / account id. **Absent while active**. |
 | `members` | L of M | Watchers; each `{ id, name, season, episode }` (season & episode are 1-based). |
 
 **Example rows**
@@ -320,7 +324,10 @@ One item per tracked show, with watchers embedded. Scoped per household by
   "createdById": "andre",
   "groupId": "yorkshire",
   "createdAt": 1720100000000,
-  "completedAt": 1720300000000,
+  "isArchived": true,
+  "archivedAt": 1720300000000,
+  "archivedBy": "Andre",
+  "archivedById": "andre",
   "members": [
     { "id": "andre", "name": "Andre", "season": 3, "episode": 10 }
   ]

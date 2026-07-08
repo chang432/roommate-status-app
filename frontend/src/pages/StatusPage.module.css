@@ -150,6 +150,14 @@
   @apply flex flex-col gap-3;
 }
 
+.feedArchiveSection {
+  @apply mt-5 border-t border-line pt-4;
+}
+
+.feedArchiveToggle {
+  @apply mb-3 flex w-full items-center justify-between rounded-sm px-1 py-2 text-left text-[13px] font-bold text-ink-soft transition hover:text-ink;
+}
+
 .moduleItem {
   @apply min-w-0;
 }

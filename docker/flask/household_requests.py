@@ -32,7 +32,9 @@ LIKE_SELF_FORBIDDEN = activities.LIKE_SELF_FORBIDDEN
 
 DELETE_OK = "deleted"
 DELETE_NOT_FOUND = "not_found"
-DELETE_FORBIDDEN = "forbidden"
+ARCHIVE_OK = "archived"
+ARCHIVE_NOT_FOUND = "not_found"
+MUTATION_ARCHIVED = "archived"
 
 
 def _get_table():
@@ -88,7 +90,6 @@ def _project(item: dict, likes_by_comment: dict[str, set[str]] | None = None) ->
         }
         for comment_id, c in _comment_entries(item)[-COMMENTS_LIMIT:]
     ]
-    completed_at = item.get("completedAt")
     return {
         "id": item["id"],
         "text": item["text"],
@@ -99,10 +100,10 @@ def _project(item: dict, likes_by_comment: dict[str, set[str]] | None = None) ->
         "requested": _requested_people(item),
         "requestedIds": sorted(set(item.get("requestedIds") or set())),
         "comments": comments,
-        "isCompleted": bool(item.get("isCompleted", False)),
-        "completedAt": int(completed_at) if completed_at is not None else None,
-        "completedBy": item.get("completedBy"),
-        "completedById": item.get("completedById"),
+        "isArchived": bool(item.get("isArchived", False)),
+        "archivedAt": int(item["archivedAt"]) if item.get("archivedAt") is not None else None,
+        "archivedBy": item.get("archivedBy"),
+        "archivedById": item.get("archivedById"),
     }
 
 
@@ -127,7 +128,7 @@ def add_request(
         "requestedIds": set(names_by_id),
         "requestedNamesById": names_by_id,
         "responses": {},
-        "isCompleted": False,
+        "isArchived": False,
     }
     _get_table().put_item(Item=item)
     return _project(item)
@@ -161,6 +162,11 @@ def add_comment(
         "mentionsAll": mentions_all,
         "createdAt": int(time.time() * 1000),
     }
+    if existing := _get_table().get_item(Key={"id": request_id}, ConsistentRead=True).get("Item"):
+        if existing.get("itemType") != REQUEST_TYPE or existing.get("groupId") != group_id:
+            return None
+        if existing.get("isArchived", False):
+            return MUTATION_ARCHIVED
     try:
         resp = _get_table().update_item(
             Key={"id": request_id},
@@ -186,6 +192,11 @@ def add_comment(
 
 
 def set_response(request_id: str, user_id: str, group_id: str, response: str) -> dict | None:
+    item = _get_table().get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("itemType") != REQUEST_TYPE or item.get("groupId") != group_id:
+        return None
+    if item.get("isArchived", False):
+        return MUTATION_ARCHIVED
     try:
         resp = _get_table().update_item(
             Key={"id": request_id},
@@ -212,19 +223,19 @@ def set_response(request_id: str, user_id: str, group_id: str, response: str) ->
     return _project(resp["Attributes"])
 
 
-def complete(request_id: str, user_id: str, name: str, group_id: str) -> dict | None:
-    completed_at = int(time.time() * 1000)
+def archive(request_id: str, user_id: str, name: str, group_id: str) -> dict | None:
+    archived_at = int(time.time() * 1000)
     try:
         resp = _get_table().update_item(
             Key={"id": request_id},
             UpdateExpression=(
-                "SET isCompleted = :true, completedAt = :completed_at, "
-                "completedById = :user_id, completedBy = :name, updatedAt = :completed_at"
+                "SET isArchived = :true, archivedAt = :archived_at, "
+                "archivedById = :user_id, archivedBy = :name, updatedAt = :archived_at"
             ),
             ExpressionAttributeValues={
                 ":request": REQUEST_TYPE,
                 ":true": True,
-                ":completed_at": completed_at,
+                ":archived_at": archived_at,
                 ":user_id": user_id,
                 ":name": name,
                 ":groupId": group_id,
@@ -239,14 +250,14 @@ def complete(request_id: str, user_id: str, name: str, group_id: str) -> dict | 
     return _project(resp["Attributes"])
 
 
-def reopen(request_id: str, user_id: str, name: str, group_id: str) -> dict | None:
+def restore(request_id: str, user_id: str, name: str, group_id: str) -> dict | None:
     try:
         resp = _get_table().update_item(
             Key={"id": request_id},
             UpdateExpression=(
-                "SET isCompleted = :false, reopenedById = :user_id, "
-                "reopenedBy = :name, updatedAt = :updated_at "
-                "REMOVE completedAt, completedById, completedBy"
+                "SET isArchived = :false, restoredById = :user_id, "
+                "restoredBy = :name, updatedAt = :updated_at "
+                "REMOVE archivedAt, archivedById, archivedBy"
             ),
             ExpressionAttributeValues={
                 ":request": REQUEST_TYPE,
@@ -266,20 +277,17 @@ def reopen(request_id: str, user_id: str, name: str, group_id: str) -> dict | No
     return _project(resp["Attributes"])
 
 
-def delete_owned(request_id: str, requester_id: str, group_id: str) -> str:
+def delete(request_id: str, group_id: str) -> str:
     table = _get_table()
     item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
     if item is None or item.get("itemType") != REQUEST_TYPE or item.get("groupId") != group_id:
         return DELETE_NOT_FOUND
-    if item.get("requesterId") != requester_id:
-        return DELETE_FORBIDDEN
 
     try:
         table.delete_item(
             Key={"id": request_id},
-            ConditionExpression="requesterId = :requester AND itemType = :request AND groupId = :groupId",
+            ConditionExpression="itemType = :request AND groupId = :groupId",
             ExpressionAttributeValues={
-                ":requester": requester_id,
                 ":request": REQUEST_TYPE,
                 ":groupId": group_id,
             },
@@ -290,7 +298,7 @@ def delete_owned(request_id: str, requester_id: str, group_id: str) -> str:
         current = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
         if current is None or current.get("itemType") != REQUEST_TYPE or current.get("groupId") != group_id:
             return DELETE_NOT_FOUND
-        return DELETE_FORBIDDEN
+        return DELETE_NOT_FOUND
 
     for reaction in _scan_all(consistent=True):
         if (
@@ -318,6 +326,8 @@ def set_comment_like(
     item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
     if item is None or item.get("itemType") != REQUEST_TYPE or item.get("groupId") != group_id:
         return LIKE_NOT_FOUND
+    if item.get("isArchived", False):
+        return MUTATION_ARCHIVED
 
     comment = next(
         (raw for candidate_id, raw in _comment_entries(item) if candidate_id == comment_id),

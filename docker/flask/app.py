@@ -25,6 +25,7 @@ And the proposed-activities feed:
     POST /api/activities               -> the updated activity list (and pushes it)
     PATCH /api/activities/<id>/schedule -> the updated activity list
     POST /api/activities/<id>/archive  -> the updated activity list
+    POST /api/activities/<id>/restore  -> the updated activity list
     DELETE /api/activities/<id>        -> the updated activity list
     POST /api/activities/<id>/start    -> the updated activity list (and pushes it)
     POST /api/activities/<id>/end      -> the updated activity list (and pushes it)
@@ -39,8 +40,8 @@ And the shire request feed:
     GET  /api/requests                 -> recent requests
     POST /api/requests                 -> the updated recent request list
     POST /api/requests/<id>/responses  -> the updated recent request list
-    POST /api/requests/<id>/complete   -> the updated recent request list
-    POST /api/requests/<id>/reopen     -> the updated recent request list
+    POST /api/requests/<id>/archive    -> the updated recent request list
+    POST /api/requests/<id>/restore    -> the updated recent request list
     DELETE /api/requests/<id>          -> the updated recent request list
     POST /api/requests/<id>/comments   -> the updated recent request list
     PUT/DELETE /api/requests/<id>/comments/<comment_id>/likes
@@ -57,12 +58,14 @@ And the shire checklist feed:
     PATCH/DELETE /api/checklists/<id>/items/<item_id>
                                        -> the updated recent checklist list
     POST /api/checklists/<id>/archive  -> the updated recent checklist list
+    POST /api/checklists/<id>/restore  -> the updated recent checklist list
+    DELETE /api/checklists/<id>        -> the updated recent checklist list
 
 And the shire Spotify Jam widget:
 
     GET  /api/jam                      -> active Jam link
     POST /api/jam                      -> active Jam link, replacing any prior one
-    DELETE /api/jam                    -> end the caller's active Jam
+    DELETE /api/jam                    -> remove the active Jam
 
 Roommate data is backed by DynamoDB via db.py; push subscriptions + sending are
 in push.py; proposals are in activities.py; requests are in household_requests.py;
@@ -548,7 +551,7 @@ def create_app() -> Flask:
 
     @app.delete("/api/jam")
     def end_jam():
-        """End the caller's active Jam link."""
+        """Remove the active Jam link."""
         body = request.get_json(silent=True) or {}
         host_id = (body.get("hostId") or "").strip()
         host = db.get_group_member(host_id) if host_id else None
@@ -556,14 +559,12 @@ def create_app() -> Flask:
             return invalid_user_response()
         result = jam.end(host["id"], host["groupId"])
         if result == jam.END_NOT_FOUND:
-            return jsonify({"error": "No active Jam to end."}), 404
-        if result == jam.END_FORBIDDEN:
-            return jsonify({"error": "Only the Jam host can end it."}), 403
+            return jsonify({"error": "No active Jam to remove."}), 404
         try:
             notify_group(
                 host["groupId"],
-                title="Spotify Jam ended",
-                body=f"{host['name']} ended the active Jam.",
+                title="Spotify Jam removed",
+                body=f"{host['name']} removed the active Jam.",
                 url="/",
                 event_type="jam-changed",
                 exclude_user_ids={host["id"]},
@@ -722,7 +723,7 @@ def create_app() -> Flask:
 
     @app.post("/api/activities/<activity_id>/archive")
     def archive_activity(activity_id: str):
-        """Archive an activity so it moves into the expired section."""
+        """Archive an activity so it moves out of the active section."""
         body = request.get_json(silent=True) or {}
         requester_id = (body.get("requesterId") or "").strip()
         if not requester_id:
@@ -733,7 +734,12 @@ def create_app() -> Flask:
             return jsonify({"error": "A valid requester is required."}), 400
 
         activity = activities.get(activity_id, requester["groupId"], consistent=True)
-        result = activities.archive(activity_id, requester_id, requester["groupId"])
+        result = activities.archive(
+            activity_id,
+            requester_id,
+            requester["groupId"],
+            requester["name"],
+        )
         if result == activities.ARCHIVE_NOT_FOUND:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
 
@@ -751,9 +757,26 @@ def create_app() -> Flask:
 
         return jsonify(activities.list_recent(requester["groupId"], consistent=True))
 
+    @app.post("/api/activities/<activity_id>/restore")
+    def restore_activity(activity_id: str):
+        """Restore an archived or expired activity to the active section."""
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        if not requester_id:
+            return jsonify({"error": "A requester id is required."}), 400
+
+        requester = db.get_group_member(requester_id) if requester_id else None
+        if requester is None:
+            return jsonify({"error": "A valid requester is required."}), 400
+
+        result = activities.restore(activity_id, requester["groupId"])
+        if result == activities.RESTORE_NOT_FOUND:
+            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
+        return jsonify(activities.list_recent(requester["groupId"], consistent=True))
+
     @app.delete("/api/activities/<activity_id>")
     def delete_activity(activity_id: str):
-        """Delete an activity only when requested by its stored creator."""
+        """Delete an activity from the household feed."""
         body = request.get_json(silent=True) or {}
         requester_id = (body.get("requesterId") or "").strip()
         if not requester_id:
@@ -764,11 +787,9 @@ def create_app() -> Flask:
             return jsonify({"error": "A valid requester is required."}), 400
 
         activity = activities.get(activity_id, requester["groupId"], consistent=True)
-        result = activities.delete_owned(activity_id, requester_id, requester["groupId"])
+        result = activities.delete(activity_id, requester["groupId"])
         if result == activities.DELETE_NOT_FOUND:
             return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
-        if result == activities.DELETE_FORBIDDEN:
-            return jsonify({"error": "Only the event creator can delete it."}), 403
         if result == activities.DELETE_LIVE:
             return jsonify({"error": "End the live event before deleting it."}), 409
 
@@ -1017,6 +1038,8 @@ def create_app() -> Flask:
         )
         if updated is None:
             return jsonify({"error": "Unknown request or roommate."}), 404
+        if updated == household_requests.MUTATION_ARCHIVED:
+            return jsonify({"error": "Archived requests are read-only."}), 409
 
         request_url = f"/?request={updated['id']}"
         try:
@@ -1032,48 +1055,16 @@ def create_app() -> Flask:
             app.logger.exception("Failed to send request response notification")
         return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
 
-    @app.post("/api/requests/<request_id>/complete")
-    def complete_request(request_id: str):
-        """Mark a request complete; any valid roommate may do this."""
+    @app.post("/api/requests/<request_id>/archive")
+    def archive_request(request_id: str):
+        """Archive a request so it leaves the active module list."""
         body = request.get_json(silent=True) or {}
         user_id = (body.get("userId") or "").strip()
         roommate = db.get_group_member(user_id) if user_id else None
         if roommate is None:
             return invalid_user_response()
 
-        updated = household_requests.complete(
-            request_id,
-            roommate["id"],
-            roommate["name"],
-            roommate["groupId"],
-        )
-        if updated is None:
-            return jsonify({"error": f"Unknown request: {request_id}"}), 404
-
-        request_url = f"/?request={updated['id']}"
-        try:
-            push.notify_users(
-                user_ids={updated["requesterId"]},
-                exclude_user_ids={roommate["id"]},
-                title="Request completed",
-                body=f"{roommate['name']} completed “{updated['text']}”",
-                url=request_url,
-                event_type="requests-changed",
-            )
-        except Exception:  # noqa: BLE001 - completion must remain successful
-            app.logger.exception("Failed to send request completion notification")
-        return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
-
-    @app.post("/api/requests/<request_id>/reopen")
-    def reopen_request(request_id: str):
-        """Reopen a completed request; any valid roommate may do this."""
-        body = request.get_json(silent=True) or {}
-        user_id = (body.get("userId") or "").strip()
-        roommate = db.get_group_member(user_id) if user_id else None
-        if roommate is None:
-            return invalid_user_response()
-
-        updated = household_requests.reopen(
+        updated = household_requests.archive(
             request_id,
             roommate["id"],
             roommate["name"],
@@ -1087,18 +1078,50 @@ def create_app() -> Flask:
             push.notify_users(
                 user_ids={updated["requesterId"], *updated["requestedIds"]},
                 exclude_user_ids={roommate["id"]},
-                title="Request reopened",
-                body=f"{roommate['name']} reopened “{updated['text']}”",
+                title="Request archived",
+                body=f"{roommate['name']} archived “{updated['text']}”",
                 url=request_url,
                 event_type="requests-changed",
             )
-        except Exception:  # noqa: BLE001 - reopen must remain successful
-            app.logger.exception("Failed to send request reopen notification")
+        except Exception:  # noqa: BLE001 - archive must remain successful
+            app.logger.exception("Failed to send request archive notification")
+        return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
+
+    @app.post("/api/requests/<request_id>/restore")
+    def restore_request(request_id: str):
+        """Restore an archived request back to the active module list."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_group_member(user_id) if user_id else None
+        if roommate is None:
+            return invalid_user_response()
+
+        updated = household_requests.restore(
+            request_id,
+            roommate["id"],
+            roommate["name"],
+            roommate["groupId"],
+        )
+        if updated is None:
+            return jsonify({"error": f"Unknown request: {request_id}"}), 404
+
+        request_url = f"/?request={updated['id']}"
+        try:
+            push.notify_users(
+                user_ids={updated["requesterId"], *updated["requestedIds"]},
+                exclude_user_ids={roommate["id"]},
+                title="Request restored",
+                body=f"{roommate['name']} restored “{updated['text']}”",
+                url=request_url,
+                event_type="requests-changed",
+            )
+        except Exception:  # noqa: BLE001 - restore must remain successful
+            app.logger.exception("Failed to send request restore notification")
         return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
 
     @app.delete("/api/requests/<request_id>")
     def delete_request(request_id: str):
-        """Delete a request only when requested by its creator."""
+        """Delete a request from the household feed."""
         body = request.get_json(silent=True) or {}
         requester_id = (body.get("requesterId") or "").strip()
         if not requester_id:
@@ -1109,11 +1132,9 @@ def create_app() -> Flask:
             return jsonify({"error": "A valid requester is required."}), 400
 
         request_item = household_requests.get(request_id, requester["groupId"], consistent=True)
-        result = household_requests.delete_owned(request_id, requester_id, requester["groupId"])
+        result = household_requests.delete(request_id, requester["groupId"])
         if result == household_requests.DELETE_NOT_FOUND:
             return jsonify({"error": f"Unknown request: {request_id}"}), 404
-        if result == household_requests.DELETE_FORBIDDEN:
-            return jsonify({"error": "Only the requester can delete it."}), 403
 
         try:
             push.notify_users(
@@ -1155,6 +1176,8 @@ def create_app() -> Flask:
         )
         if updated is None:
             return jsonify({"error": f"Unknown request: {request_id}"}), 404
+        if updated == household_requests.MUTATION_ARCHIVED:
+            return jsonify({"error": "Archived requests are read-only."}), 409
 
         mentioned_ids = {mention["id"] for mention in mentions}
         participant_ids = (
@@ -1225,6 +1248,8 @@ def create_app() -> Flask:
             return jsonify({"error": "Unknown request or comment."}), 404
         if result == household_requests.LIKE_SELF_FORBIDDEN:
             return jsonify({"error": "You cannot like your own comment."}), 403
+        if result == household_requests.MUTATION_ARCHIVED:
+            return jsonify({"error": "Archived requests are read-only."}), 409
         return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
 
     # --- Checklists ---------------------------------------------------------
@@ -1410,18 +1435,51 @@ def create_app() -> Flask:
             app.logger.exception("Failed to send checklist archive notification")
         return jsonify(household_checklists.list_recent(roommate["groupId"], consistent=True))
 
+    @app.post("/api/checklists/<checklist_id>/restore")
+    def restore_checklist(checklist_id: str):
+        """Restore an archived checklist to the active module list."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_group_member(user_id) if user_id else None
+        if roommate is None:
+            return invalid_user_response()
+
+        updated = household_checklists.restore(
+            checklist_id,
+            roommate["id"],
+            roommate["name"],
+            roommate["groupId"],
+        )
+        if updated is None:
+            return jsonify({"error": f"Unknown checklist: {checklist_id}"}), 404
+        return jsonify(household_checklists.list_recent(roommate["groupId"], consistent=True))
+
+    @app.delete("/api/checklists/<checklist_id>")
+    def delete_checklist(checklist_id: str):
+        """Delete a checklist from the household feed."""
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_group_member(user_id) if user_id else None
+        if roommate is None:
+            return invalid_user_response()
+
+        deleted = household_checklists.delete(checklist_id, roommate["groupId"])
+        if deleted is None:
+            return jsonify({"error": f"Unknown checklist: {checklist_id}"}), 404
+        return jsonify(household_checklists.list_recent(roommate["groupId"], consistent=True))
+
     # --- Shows --------------------------------------------------------------
     def shows_response(result, group_id):
         """Map a household_shows watcher-mutation result to a JSON response.
 
         None -> unknown show or watcher, or one in another group (404);
-        MUTATION_COMPLETED -> the show is completed and read-only (409);
+        MUTATION_ARCHIVED -> the show is archived and read-only (409);
         otherwise the group's refreshed show list.
         """
         if result is None:
             return jsonify({"error": "Unknown show or watcher."}), 404
-        if result == household_shows.MUTATION_COMPLETED:
-            return jsonify({"error": "Completed shows are read-only."}), 409
+        if result == household_shows.MUTATION_ARCHIVED:
+            return jsonify({"error": "Archived shows are read-only."}), 409
         return jsonify(household_shows.list_recent(group_id, consistent=True))
 
     @app.get("/api/shows")
@@ -1518,27 +1576,38 @@ def create_app() -> Flask:
             roommate["groupId"],
         )
 
-    @app.post("/api/shows/<show_id>/complete")
-    def complete_show(show_id: str):
-        """Creator-only: mark a show completed so it leaves the active list."""
-        return _toggle_show_completion(show_id, household_shows.complete, "complete")
+    @app.post("/api/shows/<show_id>/archive")
+    def archive_show(show_id: str):
+        """Archive a show so it leaves the active list."""
+        return _toggle_show_archive(show_id, household_shows.archive, "archive")
 
-    @app.post("/api/shows/<show_id>/reopen")
-    def reopen_show(show_id: str):
-        """Creator-only: move a completed show back to the active list."""
-        return _toggle_show_completion(show_id, household_shows.reopen, "reopen")
+    @app.post("/api/shows/<show_id>/restore")
+    def restore_show(show_id: str):
+        """Restore an archived show back to the active list."""
+        return _toggle_show_archive(show_id, household_shows.restore, "restore")
 
-    def _toggle_show_completion(show_id, action, verb):
+    @app.delete("/api/shows/<show_id>")
+    def delete_show(show_id: str):
+        """Delete a show from the household feed."""
         body = request.get_json(silent=True) or {}
         requester_id = (body.get("requesterId") or "").strip()
         requester = db.get_group_member(requester_id) if requester_id else None
         if requester is None:
             return invalid_user_response()
-        result = action(show_id, requester["id"], requester["groupId"])
+        result = household_shows.delete(show_id, requester["groupId"])
+        if result == household_shows.DELETE_NOT_FOUND:
+            return jsonify({"error": f"Unknown show: {show_id}"}), 404
+        return jsonify(household_shows.list_recent(requester["groupId"], consistent=True))
+
+    def _toggle_show_archive(show_id, action, verb):
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        requester = db.get_group_member(requester_id) if requester_id else None
+        if requester is None:
+            return invalid_user_response()
+        result = action(show_id, requester["id"], requester["name"], requester["groupId"])
         if result is None:
             return jsonify({"error": f"Unknown show: {show_id}"}), 404
-        if result == household_shows.COMPLETE_FORBIDDEN:
-            return jsonify({"error": f"Only the show's creator can {verb} it."}), 403
         return jsonify(household_shows.list_recent(requester["groupId"], consistent=True))
 
     @app.post("/api/activities/<activity_id>/notify")

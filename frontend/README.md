@@ -34,11 +34,11 @@ availability to hang out. Built from the mockups in `../mockups`.
   type. Horizontal swipes alternate between the status page and feed, the feed
   hamburger opens module filters, and the floating `+` creates modules.
 - **Requests**: the household board lets users ask specific roommates for
-  help, track accept/deny responses, comment, mark requests complete, and open
+  help, track accept/deny responses, comment, archive or restore requests, and open
   request notifications directly to the expanded request card.
 - **Checklists**: the shire board includes shared checklists that can be
-  posted, expanded, added to, checked off by multiple roommates, notified, and
-  archived.
+  posted, expanded, added to, checked off by multiple roommates, notified, archived,
+  restored, or deleted.
 
 ## Tech
 
@@ -83,6 +83,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `getActivities`                 | `GET /api/activities?userId=:id`                           |
 | `proposeActivity`               | `POST /api/activities`                                     |
 | `archiveActivity`               | `POST /api/activities/:id/archive`                         |
+| `restoreActivity`               | `POST /api/activities/:id/restore`                         |
 | `deleteActivity`                | `DELETE /api/activities/:id`                               |
 | `startActivity`                 | `POST /api/activities/:id/start`                           |
 | `endActivity`                   | `POST /api/activities/:id/end`                             |
@@ -91,8 +92,8 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `getRequests`                   | `GET /api/requests?userId=:id`                             |
 | `createRequest`                 | `POST /api/requests`                                       |
 | `respondToRequest`              | `POST /api/requests/:id/responses`                         |
-| `completeRequest`               | `POST /api/requests/:id/complete`                          |
-| `reopenRequest`                 | `POST /api/requests/:id/reopen`                            |
+| `archiveRequest`                | `POST /api/requests/:id/archive`                           |
+| `restoreRequest`                | `POST /api/requests/:id/restore`                           |
 | `deleteRequest`                 | `DELETE /api/requests/:id`                                 |
 | `commentOnRequest`              | `POST /api/requests/:id/comments`                          |
 | `setRequestCommentLiked`        | `PUT/DELETE /api/requests/:id/comments/:commentId/likes`   |
@@ -104,6 +105,8 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `updateChecklistItem`           | `PATCH /api/checklists/:id/items/:itemId`                  |
 | `deleteChecklistItem`           | `DELETE /api/checklists/:id/items/:itemId`                 |
 | `archiveChecklist`              | `POST /api/checklists/:id/archive`                         |
+| `restoreChecklist`              | `POST /api/checklists/:id/restore`                         |
+| `deleteChecklist`               | `DELETE /api/checklists/:id`                               |
 
 In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
 Point at a different server with `VITE_API_TARGET`:

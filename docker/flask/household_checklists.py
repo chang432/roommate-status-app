@@ -236,6 +236,41 @@ def archive(checklist_id: str, user_id: str, name: str, group_id: str) -> dict |
     return _project(resp["Attributes"])
 
 
+def restore(checklist_id: str, user_id: str, name: str, group_id: str) -> dict | None:
+    try:
+        resp = _get_table().update_item(
+            Key={"id": checklist_id},
+            UpdateExpression=(
+                "SET isArchived = :false, restoredById = :user_id, "
+                "restoredBy = :name, updatedAt = :updated_at "
+                "REMOVE archivedAt, archivedById, archivedBy"
+            ),
+            ExpressionAttributeValues={
+                ":checklist": CHECKLIST_TYPE,
+                ":false": False,
+                ":user_id": user_id,
+                ":name": name,
+                ":updated_at": int(time.time() * 1000),
+                ":groupId": group_id,
+            },
+            ConditionExpression="attribute_exists(id) AND itemType = :checklist AND groupId = :groupId",
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None
+        raise
+    return _project(resp["Attributes"])
+
+
+def delete(checklist_id: str, group_id: str) -> dict | None:
+    item = _get_table().get_item(Key={"id": checklist_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("itemType") != CHECKLIST_TYPE or item.get("groupId") != group_id:
+        return None
+    _get_table().delete_item(Key={"id": checklist_id})
+    return _project(item)
+
+
 def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
     checklists = [
         item
@@ -244,7 +279,6 @@ def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = Fal
             item.get("itemType") == CHECKLIST_TYPE
             and item.get("groupId") == group_id
             and "createdAt" in item
-            and not item.get("isArchived", False)
         )
     ]
     checklists.sort(key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True)

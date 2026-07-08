@@ -39,6 +39,10 @@ class BaseModule:
     def is_hidden(self) -> bool:
         return False
 
+    @property
+    def is_archived(self) -> bool:
+        return False
+
     def to_feed_item(self) -> dict[str, Any]:
         return {
             "id": self.id,
@@ -49,6 +53,7 @@ class BaseModule:
             "title": self.title,
             "subtitle": self.subtitle,
             "actor": self.actor,
+            "isArchived": self.is_archived,
             "payload": self.payload,
         }
 
@@ -68,8 +73,8 @@ class EventModule(BaseModule):
         )
 
     @property
-    def is_hidden(self) -> bool:
-        return bool(self.payload.get("isExpired"))
+    def is_archived(self) -> bool:
+        return bool(self.payload.get("isArchived") or self.payload.get("isExpired"))
 
 
 class RequestModule(BaseModule):
@@ -87,8 +92,8 @@ class RequestModule(BaseModule):
         )
 
     @property
-    def is_hidden(self) -> bool:
-        return bool(self.payload.get("isCompleted"))
+    def is_archived(self) -> bool:
+        return bool(self.payload.get("isArchived"))
 
 
 class ChecklistModule(BaseModule):
@@ -107,7 +112,7 @@ class ChecklistModule(BaseModule):
         )
 
     @property
-    def is_hidden(self) -> bool:
+    def is_archived(self) -> bool:
         return bool(self.payload.get("isArchived"))
 
 
@@ -127,8 +132,8 @@ class TvModule(BaseModule):
         )
 
     @property
-    def is_hidden(self) -> bool:
-        return bool(self.payload.get("completed"))
+    def is_archived(self) -> bool:
+        return bool(self.payload.get("isArchived"))
 
 
 class SpotifyModule(BaseModule):
@@ -177,6 +182,5 @@ def list_feed(group_id: str, module_type: str | None = None) -> list[dict[str, A
         if active_jam:
             modules.append(SpotifyModule.from_payload(active_jam))
 
-    visible = [module for module in modules if not module.is_hidden]
-    visible.sort(key=lambda module: (module.sort_at, module.created_at, module.type, module.id))
-    return [module.to_feed_item() for module in visible]
+    modules.sort(key=lambda module: (module.sort_at, module.created_at, module.type, module.id))
+    return [module.to_feed_item() for module in modules]
