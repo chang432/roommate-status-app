@@ -35,6 +35,7 @@ const CREATE_LABEL_BY_TYPE = {
 
 function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
   const counts = modules.reduce((acc, module) => {
+    if (module.isArchived) return acc;
     acc[module.type] = (acc[module.type] ?? 0) + 1;
     acc.all = (acc.all ?? 0) + 1;
     return acc;
