@@ -288,7 +288,7 @@ export default function ChecklistFeature({
                   },
                 ];
             return (
-              <SwipeActionRow key={checklist.id} actions={swipeActions}>
+              <SwipeActionRow key={checklist.id} actions={swipeActions} disabled={expanded}>
                 <div
                   ref={(node) => {
                     if (node) {

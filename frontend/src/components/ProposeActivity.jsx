@@ -251,7 +251,7 @@ export default function ProposeActivity({
           },
         ];
     return (
-      <SwipeActionRow key={activity.id} actions={swipeActions}>
+      <SwipeActionRow key={activity.id} actions={swipeActions} disabled={expanded}>
         <div
           ref={(node) => {
             if (node) activityRefs.current.set(activity.id, node);

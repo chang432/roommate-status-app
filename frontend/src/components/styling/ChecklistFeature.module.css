@@ -19,7 +19,7 @@
 }
 
 .archivedCard {
-  @apply border-surface-expired-border bg-surface-muted opacity-90;
+  @apply border-surface-expired-border bg-surface-muted;
 }
 
 .summary {

@@ -13,6 +13,7 @@ export default function SwipeActionRow({
   children,
 }) {
   const trayWidth = Math.max(actions.length, 1) * ACTION_WIDTH;
+  const containerRef = useRef(null);
   const rowRef = useRef(null);
   const pointerIdRef = useRef(null);
   const startXRef = useRef(0);
@@ -29,12 +30,16 @@ export default function SwipeActionRow({
 
   useEffect(() => {
     function handlePointerDown(event) {
-      if (!rowRef.current?.contains(event.target)) setOpen(false);
+      if (!containerRef.current?.contains(event.target)) setOpen(false);
     }
 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, []);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   function clampOffset(value) {
     return Math.max(0, Math.min(trayWidth, value));
@@ -74,13 +79,16 @@ export default function SwipeActionRow({
       event.stopPropagation();
       return;
     }
-    if (open && !rowRef.current?.querySelector(`.${styles.actionTray}`)?.contains(event.target)) {
+    if (
+      open &&
+      !containerRef.current?.querySelector(`.${styles.actionTray}`)?.contains(event.target)
+    ) {
       setOpen(false);
     }
   }
 
   return (
-    <div className={cx(styles.row, className)}>
+    <div ref={containerRef} className={cx(styles.row, className)}>
       <div className={styles.actionTray} style={{ width: `${trayWidth}px` }}>
         {actions.map((action) => (
           <button

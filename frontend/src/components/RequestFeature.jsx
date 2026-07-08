@@ -220,7 +220,7 @@ export default function RequestFeature({
                   },
                 ];
             return (
-              <SwipeActionRow key={requestItem.id} actions={swipeActions}>
+              <SwipeActionRow key={requestItem.id} actions={swipeActions} disabled={expanded}>
                 <div
                   ref={(node) => {
                     if (node) {

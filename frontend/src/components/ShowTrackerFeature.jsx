@@ -339,7 +339,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
           },
         ];
     return (
-      <SwipeActionRow key={show.id} actions={swipeActions}>
+      <SwipeActionRow key={show.id} actions={swipeActions} disabled={expanded}>
         <div
           role="button"
           tabIndex={0}
