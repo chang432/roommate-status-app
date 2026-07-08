@@ -391,6 +391,7 @@ export default function ProposeActivity({
                           <span>Start</span>
                           <input
                             type="datetime-local"
+                            step="60"
                             value={editStartTime}
                             onChange={(event) => {
                               setEditStartTime(event.target.value)
@@ -403,6 +404,7 @@ export default function ProposeActivity({
                           <span>End (optional)</span>
                           <input
                             type="datetime-local"
+                            step="60"
                             value={editEndTime}
                             onChange={(event) =>
                               setEditEndTime(event.target.value)

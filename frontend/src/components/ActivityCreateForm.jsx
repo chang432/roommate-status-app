@@ -75,6 +75,7 @@ export default function ActivityCreateForm({
             <span className={styles.fieldLabel}>Start (optional)</span>
             <input
               type="datetime-local"
+              step="60"
               value={startTime}
               onChange={(event) => {
                 setStartTime(event.target.value)
@@ -87,6 +88,7 @@ export default function ActivityCreateForm({
             <span className={styles.fieldLabel}>End (optional)</span>
             <input
               type="datetime-local"
+              step="60"
               value={endTime}
               onChange={(event) => setEndTime(event.target.value)}
               disabled={!startTime}

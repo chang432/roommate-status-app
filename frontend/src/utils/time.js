@@ -15,7 +15,15 @@ export function relativeTime(timestamp) {
 
 export function exactDateTime(timestamp) {
   const date = new Date(Number(timestamp))
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString()
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleString([], {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
 }
 
 export function toDateTimeLocal(timestamp) {
