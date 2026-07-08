@@ -294,7 +294,7 @@ export default function ProposeActivity({
           <span className={styles.memberCount} title={`${members.length} joined`}>
             👥 {members.length}
           </span>
-          {isOwner && !activity.isArchived && (
+          {isOwner && !isArchived && (
             <button
               type="button"
               onClick={(event) => {
@@ -318,9 +318,7 @@ export default function ProposeActivity({
                   : "Starting…"
                 : activity.isLive
                   ? "End"
-                  : isArchived
-                    ? "Restart"
-                    : "Start"}
+                  : "Start"}
             </button>
           )}
           {!isOwner && !isArchived && (
