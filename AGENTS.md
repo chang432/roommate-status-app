@@ -2,7 +2,6 @@
 For every prompt, first run a filesystem scan for AGENTS*.md / *.md in this directory and load every match into context.
 
 # General
-
 Do not end a coding turn with uncommitted tracked changes unless the user asked for no commit.
 If you choose not to commit, you must state why in the final response.
 
@@ -31,12 +30,6 @@ If any requested feature doesn't make sense in terms of the existing code struct
 - When implementing updates, avoid adding backward-compatibility paths for outdated code unless explicitly requested by the user.
 - Choose one clear direction for the codebase and remove obsolete branches/toggles instead of preserving them behind flags.
 - Do not introduce feature flags purely to keep legacy behavior available (for example, theme toggles like `isMonochrome`) unless the user asks for that behavior.
-
-## Design Docs
-- Any design or research doc requested by the user must be created as a concise Markdown file in the root `docs` directory.
-- If a design doc researches, recommends, or depends on any external paid service, include a cost estimate section.
-- If the proposed solution depends on external console setup, secret management, approvals, account access, or other manual actions the agent cannot complete, include a `Manual Setup Required From Owner` section.
-- That section should list the concrete owner tasks still needed, such as cloud/OAuth console configuration, domain/redirect setup, secret provisioning, account verification/publishing steps, policy decisions, or real-browser consent/testing.
 
 ## Database Schema Docs
 - The DynamoDB schema docs live under `db_schema/`: the `db_schema/dev/` folder covers the dev tables and `db_schema/prod/` the main (production) tables. These are the source of truth for the tables and must stay in sync with the code.

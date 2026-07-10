@@ -1,4 +1,0 @@
-TABLE RoommateStatus-dev-pushsubs - Web Push subscriptions (one item per browser/device; id is sha256(endpoint) so re-saving a device is idempotent)
-id (S),endpoint (S),userId (S),subscription (S)
-9f2c8b1ad3e47c6b5a09f8e2d1c4b7a6935e8f0c2d4a6b8e1f3c5a7d9b0e2c1e,https://web.push.apple.com/QFxk3mPz9Lr,sheryl,"{""endpoint"": ""https://web.push.apple.com/QFxk3mPz9Lr"",""keys"": {""p256dh"": ""BOr8xK1v"",""auth"": ""k9dQmT3z""}}"
-4b7e1c9d0a2f3e5b6c8d1a3f5e7b9c0d2e4f6a8b0c1d3e5f7a9b1c3d5e7f0a2b,https://fcm.googleapis.com/fcm/send/dQw4w9Wg,andre,"{""endpoint"": ""https://fcm.googleapis.com/fcm/send/dQw4w9Wg"",""keys"": {""p256dh"": ""BNc2yH7t"",""auth"": ""p4RvXs8w""}}"

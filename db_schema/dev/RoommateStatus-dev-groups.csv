@@ -1,4 +1,0 @@
-"TABLE RoommateStatus-dev-groups - households / groups (one item per household). The JoinCodeIndex GSI (partition key joinCode, ProjectionType ALL) powers join-by-code lookups. The seeded default group is yorkshire / YORKSHIRE."
-groupId (S),joinCode (S),name (S),createdAt (N)
-yorkshire,YORKSHIRE,Yorkshire,1720200000000
-cedar-house,CEDAR7X,Cedar House,1720260000000
