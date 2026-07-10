@@ -27,6 +27,7 @@ RoommateStatus-dev-pushsubs,RoommateStatus-dev-pushsubs.csv,id (S),,push.py,Web 
 RoommateStatus-dev-activities,RoommateStatus-dev-activities.csv,id (S),,"activities.py, household_checklists.py, household_requests.py, jam.py","Activities, checklists, requests, Spotify Jam + comment likes (multi-type)"
 RoommateStatus-dev-shows,RoommateStatus-dev-shows.csv,id (S),,household_shows.py,TV show tracker
 RoommateStatus-dev-groups,RoommateStatus-dev-groups.csv,groupId (S),"JoinCodeIndex (HASH joinCode, ProjectionType ALL)",groups.py,Households / join-by-code groups
+RoommateStatus-dev-migrations,RoommateStatus-dev-migrations.csv,id (S),,migrations/runner.py,In-place data-migration ledger + run lock
 
 "COMMON SETTINGS (every table, from the CloudFormation template)"
 Setting,Value

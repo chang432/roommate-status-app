@@ -155,6 +155,33 @@ Resources:
         - Key: Environment
           Value: dev
 
+  # In-place data-migration ledger for the dev deployment. One item per applied
+  # migration (id = migration folder name) plus a transient lock item; written
+  # by infrastructure/migrations/runner.py, not the app. It is the source of
+  # truth for whether a migration has run against these tables.
+  MigrationsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-migrations
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
 Outputs:
   TableName:
     Description: Name of the roommate-status DynamoDB table.
@@ -215,3 +242,15 @@ Outputs:
     Value: !GetAtt GroupsTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-GroupsTableArn"
+
+  MigrationsTableName:
+    Description: Name of the data-migration ledger DynamoDB table.
+    Value: !Ref MigrationsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-MigrationsTableName"
+
+  MigrationsTableArn:
+    Description: ARN of the data-migration ledger DynamoDB table.
+    Value: !GetAtt MigrationsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-MigrationsTableArn"

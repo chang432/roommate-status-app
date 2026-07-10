@@ -13,7 +13,30 @@ permissions:
   contents: read
 
 jobs:
+  # Apply any pending in-place DynamoDB data migrations BEFORE the app is
+  # redeployed. The deploy job `needs:` this, so a failed (and auto-reverted)
+  # migration blocks the deploy. Idempotent no-op when nothing is pending.
+  migrate-db:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install migration dependencies (boto3)
+        run: pip install -r infrastructure/requirements.txt
+      - name: Apply pending DynamoDB migrations (prod)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: python infrastructure/migrations/runner.py --env prod
+
   deploy-main-vps:
+    # Gate the redeploy on a successful migration run.
+    needs: migrate-db
     runs-on: ubuntu-latest
     steps:
       - name: Setup hcloud CLI

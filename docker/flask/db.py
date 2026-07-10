@@ -24,9 +24,14 @@ import re
 import threading
 import time
 
-import boto3
 from botocore.exceptions import ClientError
 from werkzeug.security import check_password_hash, generate_password_hash
+
+# The boto3 DynamoDB resource factory lives in aws.py so lighter callers (e.g.
+# the migration runner) can reuse it without importing the app's dependencies.
+# Re-exported here so existing `from db import resource` / `db.resource()`
+# callers (activities, push, groups, household_shows) keep working unchanged.
+from aws import resource
 
 # Allowed status values. Mirrors the frontend's STATUS enum (utils/status.js):
 # available, busy, sleeping, ooh (out of house). Any status may carry an
@@ -79,46 +84,6 @@ _SEED = [
 # lets tests activate their DynamoDB mock before the first real call.
 _table = None
 _table_lock = threading.Lock()
-
-# Region the DynamoDB table lives in. Falls back to us-east-1 when the standard
-# AWS region vars are unset/blank so a missing/empty AWS_REGION can't leave
-# boto3 with an empty signing region (which fails as InvalidSignatureException:
-# "Credential should be scoped to a valid region").
-DEFAULT_REGION = "us-east-1"
-
-# AWS region identifiers look like "us-east-1" / "eu-central-1". Anything that
-# doesn't match this shape (blank, accidental quotes, internal whitespace, a
-# typo) is treated as unset so we fall back to DEFAULT_REGION rather than sign
-# requests with a bad region — which AWS rejects as InvalidSignatureException:
-# "Credential should be scoped to a valid region".
-_REGION_RE = re.compile(r"^[a-z]{2}-[a-z]+-\d+$")
-
-
-def _region() -> str:
-    """Resolve the AWS region, defaulting to us-east-1 when none is valid."""
-    region = (os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "").strip()
-    return region if _REGION_RE.match(region) else DEFAULT_REGION
-
-
-def _endpoint() -> str | None:
-    """Optional DynamoDB endpoint override for local development.
-
-    When DYNAMODB_ENDPOINT is set (e.g. a DynamoDB Local container), boto3 talks
-    to it instead of real AWS — so local runs need no AWS account. Unset in
-    production, where None means "use the real DynamoDB endpoint" and behavior
-    is unchanged.
-    """
-    return os.environ.get("DYNAMODB_ENDPOINT") or None
-
-
-def resource():
-    """Build a DynamoDB resource honoring the region and local-endpoint override.
-
-    Shared by db, activities, and push so all three sign requests the same way
-    and pick up DYNAMODB_ENDPOINT together. endpoint_url=None is the boto3
-    default (real AWS), so production is unaffected.
-    """
-    return boto3.resource("dynamodb", region_name=_region(), endpoint_url=_endpoint())
 
 
 def _get_table():

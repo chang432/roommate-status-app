@@ -37,6 +37,8 @@ create_table "$ROOMMATE_TABLE" id
 create_table "$ROOMMATE_TABLE-activities" id
 create_table "$ROOMMATE_TABLE-shows" id
 create_table "$ROOMMATE_TABLE-pushsubs" id
+# Data-migration ledger, so the migration runner can be exercised locally.
+create_table "$ROOMMATE_TABLE-migrations" id
 if aws dynamodb describe-table \
     --table-name "$ROOMMATE_TABLE-groups" \
     --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then

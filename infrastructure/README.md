@@ -4,28 +4,31 @@ CloudFormation + a deploy script for the app's AWS resources.
 
 | File                       | Purpose                                                        |
 | -------------------------- | -------------------------------------------------------------- |
-| `dynamodb-table-dev.yaml`  | CloudFormation template: the **dev** tables (`RoommateStatus-dev` + `-pushsubs` + `-activities` + `-shows` + `-groups`)  |
-| `dynamodb-table-main.yaml` | CloudFormation template: the **main** tables (`RoommateStatus-main` + `-pushsubs` + `-activities` + `-shows` + `-groups`) |
+| `dynamodb-table-dev.yaml`  | CloudFormation template: the **dev** tables (`RoommateStatus-dev` + `-pushsubs` + `-activities` + `-shows` + `-groups` + `-migrations`)  |
+| `dynamodb-table-main.yaml` | CloudFormation template: the **main** tables (`RoommateStatus-main` + `-pushsubs` + `-activities` + `-shows` + `-groups` + `-migrations`) |
 | `deploy.py`                | Creates/updates a stack via boto3 and prints outputs           |
-| `requirements.txt`         | Python deps (`boto3`)                                          |
+| `requirements.txt`         | Python deps (`boto3`) — used by `deploy.py` and `migrations/runner.py` |
+| `migrations/`              | In-place DynamoDB **data** migrations + the runner (see `migrations/README.md`) |
+| `db_schema/`               | Human-readable per-table schema CSVs for the dev and prod tables |
 | `docker-compose.dynamodb-local.yml` | Local-dev only: in-memory DynamoDB Local + a one-off table-creator (the local stand-in for the CloudFormation tables) |
 | `create-tables.sh`         | Local-dev only: creates the tables in DynamoDB Local (run by the compose file above) |
 
 ## DynamoDB tables
 
 There are two independent deployments, each with its own template and stack so
-dev and main can never share data. Each stack provisions **five** tables — the
+dev and main can never share data. Each stack provisions **six** tables — the
 roommate table, a groups table, a Web Push subscriptions table, a
-proposed-activities table, and a TV-show tracker table:
+proposed-activities table, a TV-show tracker table, and a data-migration ledger
+(`-migrations`, written by `migrations/runner.py`, not the app):
 
-| Deployment | Stack                  | Roommate table        | Groups table              | Push subscriptions table       | Activities table                | Shows table                |
-| ---------- | ---------------------- | --------------------- | ------------------------- | ------------------------------ | ------------------------------- | -------------------------- |
-| `dev`      | `roomie-dynamodb-dev`  | `RoommateStatus-dev`  | `RoommateStatus-dev-groups`  | `RoommateStatus-dev-pushsubs`  | `RoommateStatus-dev-activities`  | `RoommateStatus-dev-shows`  |
-| `main`     | `roomie-dynamodb-main` | `RoommateStatus-main` | `RoommateStatus-main-groups` | `RoommateStatus-main-pushsubs` | `RoommateStatus-main-activities` | `RoommateStatus-main-shows` |
+| Deployment | Stack                  | Roommate table        | Groups table              | Push subscriptions table       | Activities table                | Shows table                | Migrations ledger              |
+| ---------- | ---------------------- | --------------------- | ------------------------- | ------------------------------ | ------------------------------- | -------------------------- | ------------------------------ |
+| `dev`      | `roomie-dynamodb-dev`  | `RoommateStatus-dev`  | `RoommateStatus-dev-groups`  | `RoommateStatus-dev-pushsubs`  | `RoommateStatus-dev-activities`  | `RoommateStatus-dev-shows`  | `RoommateStatus-dev-migrations`  |
+| `main`     | `roomie-dynamodb-main` | `RoommateStatus-main` | `RoommateStatus-main-groups` | `RoommateStatus-main-pushsubs` | `RoommateStatus-main-activities` | `RoommateStatus-main-shows` | `RoommateStatus-main-migrations` |
 
 Per-table keys, attributes, and example rows are documented under
-[`db_schema/`](../db_schema): [`db_schema/dev/`](../db_schema/dev) for the dev
-tables and [`db_schema/prod/`](../db_schema/prod) for the main tables. Each
+[`db_schema/`](./db_schema): [`db_schema/dev/`](./db_schema/dev) for the dev
+tables and [`db_schema/prod/`](./db_schema/prod) for the main tables. Each
 folder holds one CSV per table (named for the table) plus an `_overview.csv`
 with the legend, a tables-at-a-glance grid, and the common settings. Within a
 CSV, a grid is a title row, a header row of `attributeName (DynamoDBType)`, then
@@ -45,10 +48,23 @@ records plus typed checklist, household-request, and comment-like records, all
 discriminated by an `itemType` attribute and scoped per group by `groupId`. The
 shows table holds one item per tracked TV show, with watchers (and their season
 / episode) embedded on the item. Activity schedules and lifecycle timestamps are
-schemaless attributes; no secondary index, migration, or coordination record is
-required. All tables use on-demand billing, encryption
-at rest, and point-in-time recovery, and are retained on stack deletion
-(`DeletionPolicy: Retain`).
+schemaless attributes needing no secondary index or coordination record. The
+migrations ledger records which in-place data migrations have run per
+environment (see [Data migrations](#data-migrations) below). All tables use
+on-demand billing, encryption at rest, and point-in-time recovery, and are
+retained on stack deletion (`DeletionPolicy: Retain`).
+
+## Data migrations
+
+Table *structure* (keys, indexes) is provisioned by the CloudFormation templates
+above. Changes that need *in-place updates to existing rows* — backfilling a new
+attribute, reshaping an embedded field, splitting items — are handled separately
+by the migration system in [`migrations/`](./migrations). Author a dated
+migration folder (forward + reverse scripts) and the deploy pipeline applies any
+pending migrations against the environment's tables before redeploying the app,
+rolling back and blocking the deploy on failure. Whether a migration has run is
+tracked in the `-migrations` DynamoDB table, not a committed file. See
+[`migrations/README.md`](./migrations/README.md) for the full workflow.
 
 ## Deploy
 
