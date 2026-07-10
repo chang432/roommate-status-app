@@ -35,6 +35,7 @@ const CREATE_LABEL_BY_TYPE = {
 
 function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
   const counts = modules.reduce((acc, module) => {
+    if (module.isArchived) return acc;
     acc[module.type] = (acc[module.type] ?? 0) + 1;
     acc.all = (acc.all ?? 0) + 1;
     return acc;
@@ -116,6 +117,7 @@ export default function GroupFeed({ roommates }) {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createType, setCreateType] = useState(null);
   const [jamModalOpen, setJamModalOpen] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
 
   const loadFeed = useCallback(async () => {
     try {
@@ -181,6 +183,14 @@ export default function GroupFeed({ roommates }) {
         ? modules
         : modules.filter((module) => module.type === activeType),
     [activeType, modules],
+  );
+  const activeModules = useMemo(
+    () => visibleModules.filter((module) => !module.isArchived),
+    [visibleModules],
+  );
+  const archivedModules = useMemo(
+    () => visibleModules.filter((module) => module.isArchived),
+    [visibleModules],
   );
 
   // The active Spotify Jam (if any) rides along in the feed as its own module.
@@ -437,16 +447,39 @@ export default function GroupFeed({ roommates }) {
           </div>
 
           <div className={styles.feedList}>
-            {visibleModules.length === 0 ? (
+            {activeModules.length === 0 ? (
               <p className={styles.emptyFeed}>No active modules here yet.</p>
             ) : (
-              visibleModules.map((module) => (
+              activeModules.map((module) => (
                 <ModuleFeedItem key={`${module.type}:${module.id}`}>
                   {renderModule(module)}
                 </ModuleFeedItem>
               ))
             )}
           </div>
+
+          {archivedModules.length > 0 && (
+            <div className={styles.feedArchiveSection}>
+              <button
+                type="button"
+                onClick={() => setArchivedOpen((current) => !current)}
+                className={styles.feedArchiveToggle}
+                aria-expanded={archivedOpen}
+              >
+                <span>Archived ({archivedModules.length})</span>
+                <span aria-hidden="true">{archivedOpen ? "▴" : "▾"}</span>
+              </button>
+              {archivedOpen && (
+                <div className={styles.feedList}>
+                  {archivedModules.map((module) => (
+                    <ModuleFeedItem key={`${module.type}:${module.id}`}>
+                      {renderModule(module)}
+                    </ModuleFeedItem>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
 

@@ -46,15 +46,12 @@ export class BaseModule {
     this.title = feedItem.title || 'Module'
     this.subtitle = feedItem.subtitle || ''
     this.actor = feedItem.actor || 'Someone'
+    this.isArchived = Boolean(feedItem.isArchived)
     this.payload = feedItem.payload || {}
   }
 
   get typeLabel() {
     return MODULE_TYPES.find((type) => type.id === this.type)?.shortLabel ?? this.type
-  }
-
-  get isHidden() {
-    return false
   }
 }
 
@@ -62,29 +59,10 @@ export class EventModule extends BaseModule {
   get typeLabel() {
     return this.payload.isLive ? 'Live event' : 'Event'
   }
-
-  get isHidden() {
-    return Boolean(this.payload.isExpired)
-  }
 }
-
-export class RequestModule extends BaseModule {
-  get isHidden() {
-    return Boolean(this.payload.isCompleted)
-  }
-}
-
-export class ChecklistModule extends BaseModule {
-  get isHidden() {
-    return Boolean(this.payload.isArchived)
-  }
-}
-
-export class TvModule extends BaseModule {
-  get isHidden() {
-    return Boolean(this.payload.completed)
-  }
-}
+export class RequestModule extends BaseModule {}
+export class ChecklistModule extends BaseModule {}
+export class TvModule extends BaseModule {}
 
 export class SpotifyModule extends BaseModule {}
 
@@ -102,7 +80,6 @@ export function createModule(feedItem) {
 export function createModules(feedItems) {
   return feedItems
     .map(createModule)
-    .filter((module) => !module.isHidden)
     // Most recently edited first (top), least recent last (bottom). `sortAt`
     // tracks the last material update, so a freshly-edited module rises to the
     // top of the feed.

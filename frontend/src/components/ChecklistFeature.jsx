@@ -3,14 +3,17 @@ import { useAuth } from "../context/AuthContext.jsx";
 import {
   addChecklistItem,
   archiveChecklist,
+  deleteChecklist,
   deleteChecklistItem,
   notifyChecklist,
+  restoreChecklist,
   toggleChecklistItem,
   updateChecklistItem,
 } from "../api/client.js";
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
 import { relativeTime } from "../utils/time.js";
+import SwipeActionRow from "./SwipeActionRow.jsx";
 import styles from "./styling/ChecklistFeature.module.css";
 
 function ChecklistItemEditor({
@@ -73,6 +76,8 @@ export default function ChecklistFeature({
   const [addingId, setAddingId] = useState(null);
   const [notifyingId, setNotifyingId] = useState(null);
   const [archivingId, setArchivingId] = useState(null);
+  const [restoringId, setRestoringId] = useState(null);
+  const [deletingChecklistId, setDeletingChecklistId] = useState(null);
 
   const cancelAdding = useCallback(() => {
     setAddingChecklistId(null);
@@ -213,6 +218,33 @@ export default function ChecklistFeature({
     }
   }
 
+  async function handleRestore(checklist) {
+    if (restoringId) return;
+    setRestoringId(checklist.id);
+    setError("");
+    try {
+      onChecklistsChange(await restoreChecklist(checklist.id, user.id));
+    } catch (err) {
+      setError(err.message || "Could not restore the checklist. Try again.");
+    } finally {
+      setRestoringId(null);
+    }
+  }
+
+  async function handleDeleteChecklist(checklist) {
+    if (deletingChecklistId) return;
+    setDeletingChecklistId(checklist.id);
+    setError("");
+    try {
+      onChecklistsChange(await deleteChecklist(checklist.id, user.id));
+      setExpandedId((current) => (current === checklist.id ? null : current));
+    } catch (err) {
+      setError(err.message || "Could not delete the checklist. Try again.");
+    } finally {
+      setDeletingChecklistId(null);
+    }
+  }
+
   return (
     <div className={styles.wrap}>
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
@@ -223,205 +255,226 @@ export default function ChecklistFeature({
         ) : (
           checklists.map((checklist) => {
             const expanded = expandedId === checklist.id;
+            const isArchived = checklist.isArchived;
+            const swipeActions = isArchived
+              ? [
+                  {
+                    label: restoringId === checklist.id ? "Restoring…" : "Restore",
+                    pendingLabel: restoringId === checklist.id ? "Restoring…" : "Restore",
+                    disabled: Boolean(restoringId || deletingChecklistId),
+                    onClick: () => handleRestore(checklist),
+                  },
+                  {
+                    label: deletingChecklistId === checklist.id ? "Deleting…" : "Delete",
+                    pendingLabel: deletingChecklistId === checklist.id ? "Deleting…" : "Delete",
+                    tone: "danger",
+                    disabled: Boolean(restoringId || deletingChecklistId),
+                    onClick: () => handleDeleteChecklist(checklist),
+                  },
+                ]
+              : [
+                  {
+                    label: archivingId === checklist.id ? "Archiving…" : "Archive",
+                    pendingLabel: archivingId === checklist.id ? "Archiving…" : "Archive",
+                    disabled: Boolean(archivingId || deletingChecklistId),
+                    onClick: () => handleArchive(checklist),
+                  },
+                  {
+                    label: deletingChecklistId === checklist.id ? "Deleting…" : "Delete",
+                    pendingLabel: deletingChecklistId === checklist.id ? "Deleting…" : "Delete",
+                    tone: "danger",
+                    disabled: Boolean(archivingId || deletingChecklistId),
+                    onClick: () => handleDeleteChecklist(checklist),
+                  },
+                ];
             return (
-              <div
-                key={checklist.id}
-                ref={(node) => {
-                  if (node) {
-                    checklistRefs.current.set(checklist.id, node);
-                  } else {
-                    checklistRefs.current.delete(checklist.id);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-expanded={expanded}
-                onClick={() => toggleExpanded(checklist.id)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    toggleExpanded(checklist.id);
-                  }
-                }}
-                className={styles.card}
-              >
-                <div className={styles.summary}>
-                  <div className={styles.summaryText}>
-                    <div className={styles.titleRow}>
-                      {moduleTag}
-                      <p className={styles.title}>{checklist.title}</p>
-                    </div>
-                    <p className={styles.meta}>
-                      {checklist.createdBy} ·{" "}
-                      {relativeTime(checklist.createdAt)}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={notifyingId === checklist.id}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleNotify(checklist);
-                    }}
-                    className={styles.notifyButton}
-                    aria-label="Notify all about checklist"
-                    title="Notify all"
-                  >
-                    <img src="/bell.png" alt="" className={styles.notifyIcon} />
-                  </button>
-                </div>
-
+              <SwipeActionRow key={checklist.id} actions={swipeActions} disabled={expanded}>
                 <div
-                  className={cx(
-                    styles.expandedRegion,
-                    expanded ? styles.expanded : styles.collapsed,
-                  )}
+                  ref={(node) => {
+                    if (node) {
+                      checklistRefs.current.set(checklist.id, node);
+                    } else {
+                      checklistRefs.current.delete(checklist.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={expanded}
+                  onClick={() => toggleExpanded(checklist.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggleExpanded(checklist.id);
+                    }
+                  }}
+                  className={cx(styles.card, isArchived ? styles.archivedCard : "")}
                 >
+                  <div className={styles.summary}>
+                    <div className={styles.summaryText}>
+                      <div className={styles.titleRow}>
+                        {moduleTag}
+                        <p className={styles.title}>{checklist.title}</p>
+                      </div>
+                      <p className={styles.meta}>
+                        {checklist.createdBy} ·{" "}
+                        {relativeTime(checklist.createdAt)}
+                      </p>
+                    </div>
+                    {!isArchived && (
+                      <button
+                        type="button"
+                        disabled={notifyingId === checklist.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleNotify(checklist);
+                        }}
+                        className={styles.notifyButton}
+                        aria-label="Notify all about checklist"
+                        title="Notify all"
+                      >
+                        <img src="/bell.png" alt="" className={styles.notifyIcon} />
+                      </button>
+                    )}
+                  </div>
+
                   <div
-                    className={styles.expandedInner}
-                    {...(!expanded ? { inert: "" } : {})}
+                    className={cx(
+                      styles.expandedRegion,
+                      expanded ? styles.expanded : styles.collapsed,
+                    )}
                   >
                     <div
-                      className={styles.panel}
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
+                      className={styles.expandedInner}
+                      {...(!expanded ? { inert: "" } : {})}
                     >
-                      <ul className={styles.items}>
-                        {checklist.items.map((item) => {
-                          const checkedByCount = (item.checkedByIds ?? [])
-                            .length;
-                          const checkedByUser = (
-                            item.checkedByIds ?? []
-                          ).includes(user.id);
-                          const editing = editingItem?.id === item.id;
-                          return (
-                            <li
-                              key={item.id}
-                              className={cx(
-                                styles.item,
-                                checkedByCount > 0 ? styles.itemCovered : "",
-                              )}
-                            >
-                              {editing ? (
-                                <ChecklistItemEditor
-                                  value={editingItem.text}
-                                  onChange={(text) =>
-                                    setEditingItem({
-                                      ...editingItem,
-                                      text,
-                                    })
-                                  }
-                                  onSubmit={(event) =>
-                                    handleSaveItem(event, checklist)
-                                  }
-                                  onCancel={cancelEditing}
-                                  onDelete={() =>
-                                    handleDeleteItem(checklist, item)
-                                  }
-                                  busy={busyItemIds.includes(item.id)}
-                                  placeholder="Edit item"
-                                />
-                              ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    disabled={busyItemIds.includes(item.id)}
-                                    onClick={() =>
-                                      handleToggleItem(checklist, item)
-                                    }
-                                    className={cx(
-                                      styles.checkButton,
-                                      checkedByUser ? styles.checkButtonOn : "",
-                                    )}
-                                    aria-label={
-                                      checkedByUser
-                                        ? "Uncheck checklist item"
-                                        : "Check off checklist item"
-                                    }
-                                    title={
-                                      checkedByUser ? "Uncheck" : "Check off"
-                                    }
-                                  >
-                                    ✓
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
+                      <div
+                        className={styles.panel}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <ul className={styles.items}>
+                          {checklist.items.map((item) => {
+                            const checkedByCount = (item.checkedByIds ?? [])
+                              .length;
+                            const checkedByUser = (
+                              item.checkedByIds ?? []
+                            ).includes(user.id);
+                            const editing = editingItem?.id === item.id;
+                            return (
+                              <li
+                                key={item.id}
+                                className={cx(
+                                  styles.item,
+                                  checkedByCount > 0 ? styles.itemCovered : "",
+                                )}
+                              >
+                                {editing ? (
+                                  <ChecklistItemEditor
+                                    value={editingItem.text}
+                                    onChange={(text) =>
                                       setEditingItem({
-                                        id: item.id,
-                                        text: item.text,
+                                        ...editingItem,
+                                        text,
                                       })
                                     }
-                                    className={styles.itemText}
-                                  >
-                                    {item.text}
-                                  </button>
-                                  <div className={styles.checkedIcons}>
-                                    {(item.checkedBy ?? []).map((person) => (
-                                      <span
-                                        key={person.id}
-                                        className={styles.checkedIcon}
-                                        title={person.name}
-                                      >
-                                        {initialOf(person.name)}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </>
+                                    onSubmit={(event) =>
+                                      handleSaveItem(event, checklist)
+                                    }
+                                    onCancel={cancelEditing}
+                                    onDelete={() =>
+                                      handleDeleteItem(checklist, item)
+                                    }
+                                    busy={busyItemIds.includes(item.id)}
+                                    placeholder="Edit item"
+                                  />
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={isArchived || busyItemIds.includes(item.id)}
+                                      onClick={() =>
+                                        handleToggleItem(checklist, item)
+                                      }
+                                      className={cx(
+                                        styles.checkButton,
+                                        checkedByUser ? styles.checkButtonOn : "",
+                                      )}
+                                      aria-label={
+                                        checkedByUser
+                                          ? "Uncheck checklist item"
+                                          : "Check off checklist item"
+                                      }
+                                      title={
+                                        checkedByUser ? "Uncheck" : "Check off"
+                                      }
+                                    >
+                                      ✓
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isArchived}
+                                      onClick={() =>
+                                        setEditingItem({
+                                          id: item.id,
+                                          text: item.text,
+                                        })
+                                      }
+                                      className={styles.itemText}
+                                    >
+                                      {item.text}
+                                    </button>
+                                    <div className={styles.checkedIcons}>
+                                      {(item.checkedBy ?? []).map((person) => (
+                                        <span
+                                          key={person.id}
+                                          className={styles.checkedIcon}
+                                          title={person.name}
+                                        >
+                                          {initialOf(person.name)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+
+                        {!isArchived &&
+                          (addingChecklistId === checklist.id ? (
+                            <div className={styles.addEditor}>
+                              <ChecklistItemEditor
+                                value={newItemText}
+                                onChange={setNewItemText}
+                                onSubmit={(event) =>
+                                  handleAddItem(event, checklist)
+                                }
+                                onCancel={cancelAdding}
+                                busy={addingId === checklist.id}
+                                placeholder="Add an item"
+                              />
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingItem(null);
+                                setAddingChecklistId(checklist.id);
+                              }}
+                              className={cx(
+                                "ui-pillButton ui-pillSecondary",
+                                styles.addButton,
                               )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-
-                      {addingChecklistId === checklist.id ? (
-                        <div className={styles.addEditor}>
-                          <ChecklistItemEditor
-                            value={newItemText}
-                            onChange={setNewItemText}
-                            onSubmit={(event) =>
-                              handleAddItem(event, checklist)
-                            }
-                            onCancel={cancelAdding}
-                            busy={addingId === checklist.id}
-                            placeholder="Add an item"
-                          />
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingItem(null);
-                            setAddingChecklistId(checklist.id);
-                          }}
-                          className={cx(
-                            "ui-pillButton ui-pillSecondary",
-                            styles.addButton,
-                          )}
-                        >
-                          Add item
-                        </button>
-                      )}
-
-                      <div className={styles.actions}>
-                        <button
-                          type="button"
-                          disabled={archivingId === checklist.id}
-                          onClick={() => handleArchive(checklist)}
-                          className={cx(
-                            "ui-pillButton ui-pillSecondary",
-                            styles.archiveButton,
-                          )}
-                        >
-                          {archivingId === checklist.id
-                            ? "Archiving…"
-                            : "Archive"}
-                        </button>
+                            >
+                              Add item
+                            </button>
+                          ))}
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </SwipeActionRow>
             );
           })
         )}

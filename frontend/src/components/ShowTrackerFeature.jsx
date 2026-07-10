@@ -1,16 +1,18 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   adjustProgress,
-  completeShow,
+  archiveShow,
+  deleteShow,
   joinShow,
   leaveShow,
-  reopenShow,
+  restoreShow,
   setProgress,
 } from "../api/client.js";
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
 import { relativeTime } from "../utils/time.js";
+import SwipeActionRow from "./SwipeActionRow.jsx";
 import styles from "./styling/ShowTrackerFeature.module.css";
 
 // How long the counter must be held before it flips into manual-edit mode.
@@ -184,20 +186,9 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
   const [busyMemberIds, setBusyMemberIds] = useState([]);
   // Show id with an in-flight self-join request, to disable its Join button.
   const [joiningShowId, setJoiningShowId] = useState(null);
-  // Show id with an in-flight complete/reopen request, to disable that button.
-  const [completingShowId, setCompletingShowId] = useState(null);
-  // Whether the collapsed "Completed" section is expanded.
-  const [showCompleted, setShowCompleted] = useState(false);
-
-  // Split shows the way activities split current vs. expired: completed ones
-  // drop out of the main list into a collapsible section.
-  const { activeShows, completedShows } = useMemo(
-    () => ({
-      activeShows: shows.filter((show) => !show.completed),
-      completedShows: shows.filter((show) => show.completed),
-    }),
-    [shows],
-  );
+  const [archivingShowId, setArchivingShowId] = useState(null);
+  const [restoringShowId, setRestoringShowId] = useState(null);
+  const [deletingShowId, setDeletingShowId] = useState(null);
 
   function toggleExpanded(id) {
     setExpandedId((current) => (current === id ? null : id));
@@ -227,24 +218,43 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
     }
   }
 
-  // Creator-only: flip a show between completed and active. The same button
-  // completes an active show and reopens a completed one.
-  async function handleToggleComplete(show) {
-    if (completingShowId) return;
-    setCompletingShowId(show.id);
+  async function handleArchive(show) {
+    if (archivingShowId) return;
+    setArchivingShowId(show.id);
     setError("");
     try {
-      const updated = show.completed
-        ? await reopenShow(show.id, user.id)
-        : await completeShow(show.id, user.id);
-      onShowsChange(updated);
+      onShowsChange(await archiveShow(show.id, user.id));
     } catch (err) {
-      setError(
-        err.message ||
-          `Could not ${show.completed ? "reopen" : "complete"} the show. Try again.`,
-      );
+      setError(err.message || "Could not archive the show. Try again.");
     } finally {
-      setCompletingShowId(null);
+      setArchivingShowId(null);
+    }
+  }
+
+  async function handleRestore(show) {
+    if (restoringShowId) return;
+    setRestoringShowId(show.id);
+    setError("");
+    try {
+      onShowsChange(await restoreShow(show.id, user.id));
+    } catch (err) {
+      setError(err.message || "Could not restore the show. Try again.");
+    } finally {
+      setRestoringShowId(null);
+    }
+  }
+
+  async function handleDelete(show) {
+    if (deletingShowId) return;
+    setDeletingShowId(show.id);
+    setError("");
+    try {
+      onShowsChange(await deleteShow(show.id, user.id));
+      setExpandedId((current) => (current === show.id ? null : current));
+    } catch (err) {
+      setError(err.message || "Could not delete the show. Try again.");
+    } finally {
+      setDeletingShowId(null);
     }
   }
 
@@ -289,38 +299,67 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
 
   function renderShow(show) {
     const expanded = expandedId === show.id;
-    const completed = show.completed;
+    const isArchived = show.isArchived;
     // Only non-watchers see the Join button; clicking it adds them.
     const isMember = show.members.some((member) => member.id === user.id);
-    // Only the creator sees the complete/reopen control.
-    const isCreator = show.createdById === user.id;
     // Furthest-along watchers first: sort by season, then episode, descending.
     // Copied so we never mutate the show list's member array in place.
     const orderedMembers = [...show.members].sort(
       (a, b) => b.season - a.season || b.episode - a.episode,
     );
+    const swipeActions = isArchived
+      ? [
+          {
+            label: restoringShowId === show.id ? "Restoring…" : "Restore",
+            pendingLabel: restoringShowId === show.id ? "Restoring…" : "Restore",
+            disabled: Boolean(restoringShowId || deletingShowId),
+            onClick: () => handleRestore(show),
+          },
+          {
+            label: deletingShowId === show.id ? "Deleting…" : "Delete",
+            pendingLabel: deletingShowId === show.id ? "Deleting…" : "Delete",
+            tone: "danger",
+            disabled: Boolean(restoringShowId || deletingShowId),
+            onClick: () => handleDelete(show),
+          },
+        ]
+      : [
+          {
+            label: archivingShowId === show.id ? "Archiving…" : "Archive",
+            pendingLabel: archivingShowId === show.id ? "Archiving…" : "Archive",
+            disabled: Boolean(archivingShowId || deletingShowId),
+            onClick: () => handleArchive(show),
+          },
+          {
+            label: deletingShowId === show.id ? "Deleting…" : "Delete",
+            pendingLabel: deletingShowId === show.id ? "Deleting…" : "Delete",
+            tone: "danger",
+            disabled: Boolean(archivingShowId || deletingShowId),
+            onClick: () => handleDelete(show),
+          },
+        ];
     return (
-      <div
-        key={show.id}
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        onClick={() => toggleExpanded(show.id)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            toggleExpanded(show.id);
-          }
-        }}
-        className={cx(styles.card, completed ? styles.completedCard : "")}
-      >
+      <SwipeActionRow key={show.id} actions={swipeActions} disabled={expanded}>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={expanded}
+          onClick={() => toggleExpanded(show.id)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              toggleExpanded(show.id);
+            }
+          }}
+          className={cx(styles.card, isArchived ? styles.completedCard : "")}
+        >
         <div className={styles.summary}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
               {moduleTag}
               <p className={styles.title}>{show.title}</p>
-              {completed && (
-                <span className={styles.completedChip}>Completed</span>
+              {isArchived && (
+                <span className={styles.completedChip}>Archived</span>
               )}
             </div>
             <p className={styles.meta}>
@@ -329,7 +368,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
               {relativeTime(show.createdAt)}
             </p>
           </div>
-          {!completed && !isMember && (
+          {!isArchived && !isMember && (
             <button
               type="button"
               onClick={(event) => {
@@ -340,25 +379,6 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
               className={cx("ui-pillButton ui-pillPrimary", styles.joinButton)}
             >
               {joiningShowId === show.id ? "Joining…" : "Join"}
-            </button>
-          )}
-          {isCreator && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleToggleComplete(show);
-              }}
-              disabled={completingShowId === show.id}
-              className={cx("ui-pillButton ui-pillSecondary", styles.joinButton)}
-            >
-              {completingShowId === show.id
-                ? completed
-                  ? "Reopening…"
-                  : "Completing…"
-                : completed
-                  ? "Reopen"
-                  : "Complete"}
             </button>
           )}
         </div>
@@ -380,7 +400,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
             >
               {show.members.length === 0 ? (
                 <p className={styles.watchersEmpty}>
-                  {completed
+                  {isArchived
                     ? "No watchers."
                     : "No one's watching yet — tap Join to start tracking."}
                 </p>
@@ -391,7 +411,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
                       key={member.id}
                       member={member}
                       busy={busyMemberIds.includes(member.id)}
-                      readOnly={completed}
+                      readOnly={isArchived}
                       onAdjust={(target, field, delta) =>
                         handleAdjust(show, target, field, delta)
                       }
@@ -406,7 +426,8 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </SwipeActionRow>
     );
   }
 
@@ -417,31 +438,10 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
       <div className={styles.list}>
         {shows.length === 0 ? (
           <p className={styles.empty}>No shows yet. Add one to get started.</p>
-        ) : activeShows.length === 0 ? (
-          <p className={styles.empty}>
-            No active shows — completed ones are below.
-          </p>
         ) : (
-          activeShows.map(renderShow)
+          shows.map(renderShow)
         )}
       </div>
-
-      {completedShows.length > 0 && (
-        <div className={styles.completedSection}>
-          <button
-            type="button"
-            onClick={() => setShowCompleted((current) => !current)}
-            className={styles.completedToggle}
-            aria-expanded={showCompleted}
-          >
-            <span>Completed shows ({completedShows.length})</span>
-            <span aria-hidden="true">{showCompleted ? "▴" : "▾"}</span>
-          </button>
-          {showCompleted && (
-            <div className={styles.list}>{completedShows.map(renderShow)}</div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -22,6 +22,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/activities`                                       | `{ text, proposedById, startAt?, endAt? }` | full updated activity list                              |
 | `PATCH /api/activities/<id>/schedule`                        | `{ requesterId, startAt?, endAt? }`        | full updated activity list                              |
 | `POST /api/activities/<id>/archive`                          | `{ requesterId }`                          | full updated activity list                              |
+| `POST /api/activities/<id>/restore`                          | `{ requesterId }`                          | full updated activity list                              |
 | `DELETE /api/activities/<id>`                                | `{ requesterId }`                          | full updated activity list                              |
 | `POST /api/activities/<id>/start`                            | `{ requesterId }`                          | full updated activity list                              |
 | `POST /api/activities/<id>/end`                              | `{ requesterId }`                          | full updated activity list                              |
@@ -29,8 +30,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `GET /api/requests`                                          | `?userId=<id>`                             | full request list                                       |
 | `POST /api/requests`                                         | `{ text, requesterId, requestedIds }`      | full updated request list                               |
 | `POST /api/requests/<id>/responses`                          | `{ userId, response }`                     | full updated request list                               |
-| `POST /api/requests/<id>/complete`                           | `{ userId }`                               | full updated request list                               |
-| `POST /api/requests/<id>/reopen`                             | `{ userId }`                               | full updated request list                               |
+| `POST /api/requests/<id>/archive`                            | `{ userId }`                               | full updated request list                               |
+| `POST /api/requests/<id>/restore`                            | `{ userId }`                               | full updated request list                               |
 | `DELETE /api/requests/<id>`                                  | `{ requesterId }`                          | full updated request list                               |
 | `POST /api/requests/<id>/comments`                           | `{ authorId, text }`                       | full updated request list                               |
 | `PUT/DELETE /api/requests/<id>/comments/<commentId>/likes`   | `{ userId }`                               | full updated request list                               |
@@ -42,9 +43,20 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `PATCH /api/checklists/<id>/items/<itemId>`                  | `{ userId, text }`                         | full updated checklist list                             |
 | `DELETE /api/checklists/<id>/items/<itemId>`                 | `{ userId }`                               | full updated checklist list                             |
 | `POST /api/checklists/<id>/archive`                          | `{ userId }`                               | full updated checklist list                             |
+| `POST /api/checklists/<id>/restore`                          | `{ userId }`                               | full updated checklist list                             |
+| `DELETE /api/checklists/<id>`                                | `{ userId }`                               | full updated checklist list                             |
+| `GET /api/shows`                                             | `?userId=<id>`                             | full show list                                          |
+| `POST /api/shows`                                            | `{ title, createdById }`                   | full updated show list                                  |
+| `POST /api/shows/<id>/join`                                  | `{ userId }`                               | full updated show list                                  |
+| `POST /api/shows/<id>/leave`                                 | `{ userId }`                               | full updated show list                                  |
+| `PATCH /api/shows/<id>/watchers/<memberId>/<field>`          | `{ userId, delta }`                        | full updated show list                                  |
+| `PUT /api/shows/<id>/watchers/<memberId>/<field>`            | `{ userId, value }`                        | full updated show list                                  |
+| `POST /api/shows/<id>/archive`                               | `{ requesterId }`                          | full updated show list                                  |
+| `POST /api/shows/<id>/restore`                               | `{ requesterId }`                          | full updated show list                                  |
+| `DELETE /api/shows/<id>`                                     | `{ requesterId }`                          | full updated show list                                  |
 | `GET /api/jam`                                               | `?userId=<id>`                             | active Spotify Jam or `null`                            |
 | `POST /api/jam`                                              | `{ hostId, link }`                         | active Spotify Jam, replacing prior Jam                 |
-| `DELETE /api/jam`                                            | `{ hostId }`                               | `null` after host ends active Jam                       |
+| `DELETE /api/jam`                                            | `{ hostId }`                               | `null` after any roommate removes active Jam            |
 | `POST /api/push/subscribe`                                   | `{ subscription, userId }`                 | `{ ok: true }`                                          |
 | `GET  /api/health`                                           | —                                          | `{ status: "ok" }`                                      |
 
@@ -59,16 +71,15 @@ their stable id (for example `andre`) and demo password **`roomie`**. Newly
 created accounts are valid sign-in accounts but have `groupId = null`, so they
 cannot see or use household features until they join a group with a reusable
 invite code. The current seeded household uses `groupId = "yorkshire"`.
-The module feed (`/api/feed`) normalizes active events, requests, checklists,
+The module feed (`/api/feed`) normalizes events, requests, checklists,
 TV shows, and the singleton Spotify Jam into `{ id, type, createdAt, updatedAt,
-sortAt, title, subtitle, actor, payload }` records sorted oldest-to-newest by
+sortAt, title, subtitle, actor, isArchived, payload }` records sorted oldest-to-newest by
 `updatedAt` (falling back to `createdAt` for legacy rows). New activities store
 both the creator's stable roommate id (`proposedById`) and
-canonical display name (`proposedBy`). Any roommate can archive an activity,
-which sets its `endedAt` timestamp so it leaves the active module feed. Only the
-creator can permanently delete the activity, edit its schedule, start it early,
-end it, or restart it after expiration. Legacy activities without
-`proposedById` remain visible but cannot be deleted. Activities may overlap. A
+canonical display name (`proposedBy`). Any roommate can archive or delete an activity.
+Archiving sets `isArchived` metadata without removing the row, and restoring an
+expired activity restarts it immediately. Only the creator can edit its schedule,
+start it early, end it, or restart it after expiration. Activities may overlap. A
 scheduled activity is live once its `startAt` passes and expires when its
 optional `endAt` passes. Manual end is terminal; restart starts immediately and
 clears the old end. Lifecycle is
@@ -91,19 +102,19 @@ Live-event pushes include an activity-change event type so open apps refresh
 their banner immediately.
 Requests are stored as typed records in the activities table, targeted to
 specific roommate ids, and support comments and comment likes. Requested
-roommates can accept or deny, any roommate can complete a request, and request
+roommates can accept or deny, any roommate can archive, restore, or delete a request, and request
 notifications target the requested users or the requester as appropriate.
-Completed requests leave active module views; only the requester can delete a
-request. Request notifications include a request deep link so tapping one opens
+Archived requests leave the active section but remain visible in the feed's archived
+section. Request notifications include a request deep link so tapping one opens
 the Requests module filter with that request expanded.
 Checklists are stored as typed records in the activities table. Active
 checklists can be expanded from the Checklists tab, added to by any roommate,
 checked off by multiple roommates per item, edited or pruned item-by-item, and
-archived by anyone. Checklist reminders are household-wide pushes that exclude
+archived, restored, or deleted by anyone. Checklist reminders are household-wide pushes that exclude
 the requester and include a checklist deep link so tapping one opens the
 expanded checklist card.
 Only one Spotify Jam link is active for the shire at a time. Sharing a new
-Jam replaces the previous link, and the host can end the active Jam. The Jam
+Jam replaces the previous link, and any roommate can remove the active Jam. The Jam
 widget is hidden until someone shares a link; once active, roommates can join
 from the widget or replace it with a newer Jam link.
 

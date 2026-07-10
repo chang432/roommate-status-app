@@ -16,7 +16,6 @@ import activities
 JAM_TYPE = "spotifyJam"
 
 END_NOT_FOUND = "not_found"
-END_FORBIDDEN = "forbidden"
 END_OK = "ended"
 
 
@@ -79,13 +78,11 @@ def end(host_id: str, group_id: str) -> str:
     item = table.get_item(Key={"id": _active_jam_id(group_id)}, ConsistentRead=True).get("Item")
     if item is None or item.get("itemType") != JAM_TYPE:
         return END_NOT_FOUND
-    if item.get("hostId") != host_id:
-        return END_FORBIDDEN
     try:
         table.delete_item(
             Key={"id": _active_jam_id(group_id)},
-            ConditionExpression="itemType = :jam AND hostId = :host AND groupId = :groupId",
-            ExpressionAttributeValues={":jam": JAM_TYPE, ":host": host_id, ":groupId": group_id},
+            ConditionExpression="itemType = :jam AND groupId = :groupId",
+            ExpressionAttributeValues={":jam": JAM_TYPE, ":groupId": group_id},
         )
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
@@ -93,5 +90,5 @@ def end(host_id: str, group_id: str) -> str:
         current = table.get_item(Key={"id": _active_jam_id(group_id)}, ConsistentRead=True).get("Item")
         if current is None or current.get("itemType") != JAM_TYPE:
             return END_NOT_FOUND
-        return END_FORBIDDEN
+        return END_NOT_FOUND
     return END_OK

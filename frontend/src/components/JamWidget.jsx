@@ -3,6 +3,7 @@ import { endJam, shareJam } from '../api/client.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { cx } from '../utils/classNames.js'
 import { relativeTime } from '../utils/time.js'
+import SwipeActionRow from './SwipeActionRow.jsx'
 import styles from './styling/JamWidget.module.css'
 
 function Waveform() {
@@ -53,25 +54,6 @@ function ReplaceIcon() {
       <path d="m13 3 4 4-4 4" />
       <path d="M21 17H8" />
       <path d="m11 13-4 4 4 4" />
-    </svg>
-  )
-}
-
-function EndIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.25"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M6 6 18 18" />
-      <path d="M18 6 6 18" />
     </svg>
   )
 }
@@ -134,7 +116,6 @@ export default function JamWidget({ jam, onJamChange, onReplace, moduleTag }) {
   const { user } = useAuth()
   const [ending, setEnding] = useState(false)
   const [error, setError] = useState('')
-  const isHost = jam?.hostId === user.id
 
   if (!jam) return null
 
@@ -152,22 +133,32 @@ export default function JamWidget({ jam, onJamChange, onReplace, moduleTag }) {
   }
 
   return (
-    <section className={styles.wrap} aria-label="Spotify Jam">
-      <div className={styles.row}>
-        <div className={styles.titleBlock}>
-          <Waveform />
-          <div className={styles.titleText}>
-            <div className={styles.titleRow}>
-              {moduleTag}
-              <p className={styles.eyebrow}>Spotify Jam</p>
+    <SwipeActionRow
+      actions={[
+        {
+          label: ending ? 'Deleting…' : 'Delete',
+          pendingLabel: ending ? 'Deleting…' : 'Delete',
+          tone: 'danger',
+          disabled: ending,
+          onClick: handleEnd,
+        },
+      ]}
+    >
+      <section className={styles.wrap} aria-label="Spotify Jam">
+        <div className={styles.row}>
+          <div className={styles.titleBlock}>
+            <Waveform />
+            <div className={styles.titleText}>
+              <div className={styles.titleRow}>
+                {moduleTag}
+                <p className={styles.eyebrow}>Spotify Jam</p>
+              </div>
+              <h2 className={styles.title}>{jam.hostName}&apos;s Jam is live</h2>
+              <p className={styles.meta}>Shared {relativeTime(jam.createdAt)}</p>
             </div>
-            <h2 className={styles.title}>{jam.hostName}&apos;s Jam is live</h2>
-            <p className={styles.meta}>Shared {relativeTime(jam.createdAt)}</p>
           </div>
-        </div>
 
-        <div className={styles.controls}>
-          {!isHost && (
+          <div className={styles.controls}>
             <a
               href={jam.link}
               target="_blank"
@@ -178,32 +169,20 @@ export default function JamWidget({ jam, onJamChange, onReplace, moduleTag }) {
             >
               <JoinIcon />
             </a>
-          )}
-          <button
-            type="button"
-            onClick={onReplace}
-            aria-label="Replace Jam"
-            title="Replace Jam"
-            className={styles.replaceButton}
-          >
-            <ReplaceIcon />
-          </button>
-        {isHost && (
-          <button
-            type="button"
-            onClick={handleEnd}
-            disabled={ending}
-            aria-label="End Jam"
-            title="End Jam"
-            className={styles.endButton}
-          >
-            <EndIcon />
-          </button>
-        )}
+            <button
+              type="button"
+              onClick={onReplace}
+              aria-label="Replace Jam"
+              title="Replace Jam"
+              className={styles.replaceButton}
+            >
+              <ReplaceIcon />
+            </button>
+          </div>
         </div>
-      </div>
 
-      {error ? <p className={cx('ui-errorText', styles.error)}>{error}</p> : null}
-    </section>
+        {error ? <p className={cx('ui-errorText', styles.error)}>{error}</p> : null}
+      </section>
+    </SwipeActionRow>
   )
 }

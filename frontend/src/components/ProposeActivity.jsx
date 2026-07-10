@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   archiveActivity,
@@ -6,10 +6,12 @@ import {
   joinActivity,
   leaveActivity,
   commentOnActivity,
+  restoreActivity,
   setCommentLiked,
   updateActivitySchedule,
 } from "../api/client.js";
 import FeedComments from "./FeedComments.jsx";
+import SwipeActionRow from "./SwipeActionRow.jsx";
 import {
   activityTimeLabel,
   fromDateTimeLocal,
@@ -37,31 +39,19 @@ export default function ProposeActivity({
   const [commentingId, setCommentingId] = useState(null);
   const [likingCommentIds, setLikingCommentIds] = useState([]);
   const [openLikesCommentId, setOpenLikesCommentId] = useState(null);
-  const [confirmingArchiveId, setConfirmingArchiveId] = useState(null);
   const [archivingId, setArchivingId] = useState(null);
-  const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
+  const [restoringId, setRestoringId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [editingScheduleId, setEditingScheduleId] = useState(null);
   const [editStartTime, setEditStartTime] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
   const [savingScheduleId, setSavingScheduleId] = useState(null);
-  const [showExpired, setShowExpired] = useState(false);
-
-  const { currentActivities, expiredActivities } = useMemo(
-    () => ({
-      currentActivities: activities.filter((activity) => !activity.isExpired),
-      expiredActivities: activities.filter((activity) => activity.isExpired),
-    }),
-    [activities],
-  );
 
   useEffect(() => {
     if (!activityFocusRequest?.activityId) return;
     const { activityId } = activityFocusRequest;
     setExpandedId(activityId);
     setCommentText("");
-    setConfirmingArchiveId(null);
-    setConfirmingDeleteId(null);
     requestAnimationFrame(() => {
       activityRefs.current.get(activityId)?.scrollIntoView({
         behavior: "smooth",
@@ -74,8 +64,6 @@ export default function ProposeActivity({
     setExpandedId((current) => (current === id ? null : id));
     setCommentText("");
     setOpenLikesCommentId(null);
-    setConfirmingArchiveId(null);
-    setConfirmingDeleteId(null);
     setEditingScheduleId(null);
   }
 
@@ -97,7 +85,6 @@ export default function ProposeActivity({
     setError("");
     try {
       onActivitiesChange(await deleteActivity(activity.id, user.id));
-      setConfirmingDeleteId(null);
       setExpandedId((current) => (current === activity.id ? null : current));
     } catch (err) {
       setError(err.message || "Could not delete the activity. Try again.");
@@ -112,11 +99,23 @@ export default function ProposeActivity({
     setError("");
     try {
       onActivitiesChange(await archiveActivity(activity.id, user.id));
-      setConfirmingArchiveId(null);
     } catch (err) {
       setError(err.message || "Could not archive the activity. Try again.");
     } finally {
       setArchivingId(null);
+    }
+  }
+
+  async function handleRestore(activity) {
+    if (restoringId) return;
+    setRestoringId(activity.id);
+    setError("");
+    try {
+      onActivitiesChange(await restoreActivity(activity.id, user.id));
+    } catch (err) {
+      setError(err.message || "Could not restore the activity. Try again.");
+    } finally {
+      setRestoringId(null);
     }
   }
 
@@ -219,36 +218,70 @@ export default function ProposeActivity({
     const expanded = expandedId === activity.id;
     const scheduleLabel = activityTimeLabel(activity);
     const editingSchedule = editingScheduleId === activity.id;
+    const isArchived = Boolean(activity.isArchived || activity.isExpired);
+    const swipeActions = isArchived
+      ? [
+          {
+            label: restoringId === activity.id ? "Restoring…" : "Restore",
+            pendingLabel: restoringId === activity.id ? "Restoring…" : "Restore",
+            disabled: Boolean(restoringId || deletingId),
+            onClick: () => handleRestore(activity),
+          },
+          {
+            label: deletingId === activity.id ? "Deleting…" : "Delete",
+            pendingLabel: deletingId === activity.id ? "Deleting…" : "Delete",
+            tone: "danger",
+            disabled: Boolean(restoringId || deletingId || activity.isLive),
+            onClick: () => handleDelete(activity),
+          },
+        ]
+      : [
+          {
+            label: archivingId === activity.id ? "Archiving…" : "Archive",
+            pendingLabel: archivingId === activity.id ? "Archiving…" : "Archive",
+            disabled: Boolean(archivingId || deletingId),
+            onClick: () => handleArchive(activity),
+          },
+          {
+            label: deletingId === activity.id ? "Deleting…" : "Delete",
+            pendingLabel: deletingId === activity.id ? "Deleting…" : "Delete",
+            tone: "danger",
+            disabled: Boolean(archivingId || deletingId || activity.isLive),
+            onClick: () => handleDelete(activity),
+          },
+        ];
     return (
-      <div
-        key={activity.id}
-        ref={(node) => {
-          if (node) activityRefs.current.set(activity.id, node);
-          else activityRefs.current.delete(activity.id);
-        }}
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        onClick={() => toggleExpanded(activity.id)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            toggleExpanded(activity.id);
-          }
-        }}
-        className={cx(
-          activity.isLive ? styles.activeCard : styles.card,
-          activity.isExpired ? styles.expiredCard : "",
-        )}
-      >
+      <SwipeActionRow key={activity.id} actions={swipeActions} disabled={expanded}>
+        <div
+          ref={(node) => {
+            if (node) activityRefs.current.set(activity.id, node);
+            else activityRefs.current.delete(activity.id);
+          }}
+          role="button"
+          tabIndex={0}
+          aria-expanded={expanded}
+          onClick={() => toggleExpanded(activity.id)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              toggleExpanded(activity.id);
+            }
+          }}
+          className={cx(
+            activity.isLive ? styles.activeCard : styles.card,
+            isArchived ? styles.expiredCard : "",
+          )}
+        >
         <div className={styles.summary}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
               {moduleTag}
               <p className={styles.activityText}>{activity.text}</p>
               {activity.isLive && <span className={styles.liveChip}>Live</span>}
-              {activity.isExpired && (
-                <span className={styles.expiredChip}>Expired</span>
+              {isArchived && (
+                <span className={styles.expiredChip}>
+                  {activity.isArchived ? "Archived" : "Expired"}
+                </span>
               )}
             </div>
             <p className={styles.meta}>
@@ -261,7 +294,7 @@ export default function ProposeActivity({
           <span className={styles.memberCount} title={`${members.length} joined`}>
             👥 {members.length}
           </span>
-          {isOwner && (
+          {isOwner && !isArchived && (
             <button
               type="button"
               onClick={(event) => {
@@ -285,12 +318,10 @@ export default function ProposeActivity({
                   : "Starting…"
                 : activity.isLive
                   ? "End"
-                  : activity.isExpired
-                    ? "Restart"
-                    : "Start"}
+                  : "Start"}
             </button>
           )}
-          {!isOwner && !activity.isExpired && (
+          {!isOwner && !isArchived && (
             <button
               type="button"
               onClick={(event) => {
@@ -330,7 +361,7 @@ export default function ProposeActivity({
                 ))}
               </div>
 
-              {isOwner && !activity.isLive && !activity.isExpired && (
+              {isOwner && !activity.isLive && !isArchived && (
                 <div
                   className={styles.schedulePanel}
                   onClick={(event) => event.stopPropagation()}
@@ -358,6 +389,7 @@ export default function ProposeActivity({
                           <span>Start</span>
                           <input
                             type="datetime-local"
+                            step="60"
                             value={editStartTime}
                             onChange={(event) => {
                               setEditStartTime(event.target.value)
@@ -370,6 +402,7 @@ export default function ProposeActivity({
                           <span>End (optional)</span>
                           <input
                             type="datetime-local"
+                            step="60"
                             value={editEndTime}
                             onChange={(event) =>
                               setEditEndTime(event.target.value)
@@ -425,139 +458,13 @@ export default function ProposeActivity({
                 }
                 openLikesCommentId={openLikesCommentId}
                 onOpenLikesChange={setOpenLikesCommentId}
-                readOnly={activity.isExpired}
+                readOnly={isArchived}
               />
-
-              {(!activity.isExpired || isOwner) && (
-                <div
-                  className={styles.deleteActions}
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                  {!activity.isExpired && confirmingArchiveId === activity.id ? (
-                    <>
-                      <span className={styles.deletePrompt}>Archive this event?</span>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmingArchiveId(null)}
-                        disabled={archivingId === activity.id}
-                        className={cx(
-                          "ui-pillButton ui-pillSecondary",
-                          styles.smallPill,
-                        )}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleArchive(activity)}
-                        disabled={archivingId === activity.id}
-                        className={cx(
-                          "ui-pillButton ui-pillDangerSoft",
-                          styles.smallPill,
-                        )}
-                      >
-                        {archivingId === activity.id ? "Archiving…" : "Archive"}
-                      </button>
-                    </>
-                  ) : null}
-
-                  {!activity.isExpired && confirmingDeleteId === activity.id ? (
-                    <>
-                      <span className={styles.deletePrompt}>Delete this event?</span>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmingDeleteId(null)}
-                        disabled={deletingId === activity.id}
-                        className={cx(
-                          "ui-pillButton ui-pillSecondary",
-                          styles.smallPill,
-                        )}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(activity)}
-                        disabled={deletingId === activity.id || activity.isLive}
-                        className={cx(
-                          "ui-pillButton ui-pillDanger",
-                          styles.smallPill,
-                        )}
-                      >
-                        {deletingId === activity.id ? "Deleting…" : "Delete"}
-                      </button>
-                    </>
-                  ) : null}
-
-                  {!activity.isExpired &&
-                  confirmingArchiveId !== activity.id &&
-                  confirmingDeleteId !== activity.id ? (
-                    <div className={styles.actionButtonRow}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setConfirmingDeleteId(null);
-                          setConfirmingArchiveId(activity.id);
-                        }}
-                        className={cx(
-                          "ui-pillButton ui-pillSecondary",
-                          styles.smallPill,
-                        )}
-                      >
-                        Archive event
-                      </button>
-                      {isOwner && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setConfirmingArchiveId(null);
-                            setConfirmingDeleteId(activity.id);
-                          }}
-                          disabled={activity.isLive}
-                          title={
-                            activity.isLive
-                              ? "End the event before deleting it"
-                              : undefined
-                          }
-                          className={cx(
-                            "ui-pillButton ui-pillDangerSoft",
-                            styles.smallPill,
-                          )}
-                        >
-                          Delete event
-                        </button>
-                      )}
-                    </div>
-                  ) : null}
-
-                  {activity.isExpired && isOwner ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setConfirmingArchiveId(null);
-                        setConfirmingDeleteId(activity.id);
-                      }}
-                      disabled={activity.isLive}
-                      title={
-                        activity.isLive
-                          ? "End the event before deleting it"
-                          : undefined
-                      }
-                      className={cx(
-                        "ui-pillButton ui-pillDangerSoft",
-                        styles.smallPill,
-                      )}
-                    >
-                      Delete event
-                    </button>
-                  ) : null}
-                </div>
-              )}
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </SwipeActionRow>
     );
   }
 
@@ -566,31 +473,12 @@ export default function ProposeActivity({
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
 
       <div className={styles.list}>
-        {currentActivities.length === 0 ? (
+        {activities.length === 0 ? (
           <p className={styles.empty}>No current activities.</p>
         ) : (
-          currentActivities.map(renderActivity)
+          activities.map(renderActivity)
         )}
       </div>
-
-      {expiredActivities.length > 0 && (
-        <div className={styles.expiredSection}>
-          <button
-            type="button"
-            onClick={() => setShowExpired((current) => !current)}
-            className={styles.expiredToggle}
-            aria-expanded={showExpired}
-          >
-            <span>Expired activities ({expiredActivities.length})</span>
-            <span aria-hidden="true">{showExpired ? "▴" : "▾"}</span>
-          </button>
-          {showExpired && (
-            <div className={styles.list}>
-              {expiredActivities.map(renderActivity)}
-            </div>
-          )}
-        </div>
-      )}
     </section>
   );
 }

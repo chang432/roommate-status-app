@@ -33,8 +33,9 @@ PROGRESS_FIELDS = ("season", "episode")
 
 # Distinct non-None results from the mutation helpers, so routes can map an
 # outcome to an HTTP status without touching boto3 details.
-MUTATION_COMPLETED = "completed"  # edit rejected: the show is completed (read-only)
-COMPLETE_FORBIDDEN = "forbidden"  # only the creator may complete/reopen a show
+MUTATION_ARCHIVED = "archived"  # edit rejected: the show is archived (read-only)
+DELETE_OK = "deleted"
+DELETE_NOT_FOUND = "not_found"
 
 TABLE_NAME = os.environ.get("SHOWS_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-shows"
@@ -96,9 +97,8 @@ def _project_member(raw: dict) -> dict:
 
 
 def _project(item: dict) -> dict:
-    """Project a raw item to the exact shape the frontend expects. `completed`
-    is a convenience flag derived from `completedAt` (absent while active)."""
-    completed_at = item.get("completedAt")
+    """Project a raw item to the exact shape the frontend expects."""
+    archived_at = item.get("archivedAt")
     return {
         "id": item["id"],
         "title": item.get("title", ""),
@@ -107,8 +107,10 @@ def _project(item: dict) -> dict:
         "groupId": item.get("groupId"),
         "createdAt": int(item["createdAt"]),
         "updatedAt": int(item.get("updatedAt", item["createdAt"])),
-        "completedAt": int(completed_at) if completed_at is not None else None,
-        "completed": completed_at is not None,
+        "archivedAt": int(archived_at) if archived_at is not None else None,
+        "isArchived": bool(item.get("isArchived", False)),
+        "archivedBy": item.get("archivedBy"),
+        "archivedById": item.get("archivedById"),
         "members": [_project_member(raw) for raw in item.get("members") or []],
     }
 
@@ -168,14 +170,14 @@ def _mutate_members(show_id: str, group_id: str, mutate):
     (e.g. member not found) so the caller gets None. A show in another group is
     invisible here (returns None). Completed shows are read-only and yield
     MUTATION_COMPLETED. The conditional update also re-checks the group and the
-    completed flag to guard against a concurrent change between read and write.
+    archived flag to guard against a concurrent change between read and write.
     """
     table = _get_table()
     item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
     if not _in_group(item, group_id):
         return None
-    if item.get("completedAt") is not None:
-        return MUTATION_COMPLETED
+    if item.get("isArchived", False):
+        return MUTATION_ARCHIVED
 
     members = [dict(member) for member in (item.get("members") or [])]
     if mutate(members) is False:
@@ -189,11 +191,12 @@ def _mutate_members(show_id: str, group_id: str, mutate):
             ExpressionAttributeValues={
                 ":members": members,
                 ":updated_at": int(time.time() * 1000),
+                ":false": False,
                 ":groupId": group_id,
             },
             ConditionExpression=(
                 "attribute_exists(id) AND groupId = :groupId AND "
-                "attribute_not_exists(completedAt)"
+                "(attribute_not_exists(isArchived) OR isArchived = :false)"
             ),
             ReturnValues="ALL_NEW",
         )
@@ -265,27 +268,39 @@ def adjust_progress(show_id: str, member_id: str, field: str, delta: int, group_
     return _mutate_members(show_id, group_id, mutate)
 
 
-def _set_completed(show_id: str, requester_id: str, group_id: str, completed: bool):
-    """Creator-only lifecycle toggle backing complete()/reopen(). A show in
-    another group is invisible (returns None)."""
+def _set_archived(show_id: str, user_id: str, name: str, group_id: str, archived: bool):
+    """Archive or restore a show. Any roommate in the group may do this."""
     table = _get_table()
     item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
     if not _in_group(item, group_id):
         return None
-    if item.get("createdById") != requester_id:
-        return COMPLETE_FORBIDDEN
-
-    # Store completedAt only while completed; reopening removes the attribute so
-    # `attribute_not_exists(completedAt)` cleanly means "active".
-    if completed:
+    if archived:
         update = dict(
-            UpdateExpression="SET completedAt = :ts, updatedAt = :ts",
-            ExpressionAttributeValues={":ts": int(time.time() * 1000), ":groupId": group_id},
+            UpdateExpression=(
+                "SET isArchived = :true, archivedAt = :ts, archivedById = :user_id, "
+                "archivedBy = :name, updatedAt = :ts"
+            ),
+            ExpressionAttributeValues={
+                ":ts": int(time.time() * 1000),
+                ":groupId": group_id,
+                ":true": True,
+                ":user_id": user_id,
+                ":name": name,
+            },
         )
     else:
         update = dict(
-            UpdateExpression="SET updatedAt = :ts REMOVE completedAt",
-            ExpressionAttributeValues={":ts": int(time.time() * 1000), ":groupId": group_id},
+            UpdateExpression=(
+                "SET isArchived = :false, restoredById = :user_id, restoredBy = :name, updatedAt = :ts "
+                "REMOVE archivedAt, archivedById, archivedBy"
+            ),
+            ExpressionAttributeValues={
+                ":ts": int(time.time() * 1000),
+                ":groupId": group_id,
+                ":false": False,
+                ":user_id": user_id,
+                ":name": name,
+            },
         )
 
     try:
@@ -302,11 +317,32 @@ def _set_completed(show_id: str, requester_id: str, group_id: str, completed: bo
     return _project(resp["Attributes"])
 
 
-def complete(show_id: str, requester_id: str, group_id: str):
-    """Mark a show completed so it drops out of the active list (creator-only)."""
-    return _set_completed(show_id, requester_id, group_id, completed=True)
+def archive(show_id: str, user_id: str, name: str, group_id: str):
+    """Archive a show so it drops out of the active list."""
+    return _set_archived(show_id, user_id, name, group_id, archived=True)
 
 
-def reopen(show_id: str, requester_id: str, group_id: str):
-    """Move a completed show back to the active list (creator-only)."""
-    return _set_completed(show_id, requester_id, group_id, completed=False)
+def restore(show_id: str, user_id: str, name: str, group_id: str):
+    """Restore a previously archived show to the active list."""
+    return _set_archived(show_id, user_id, name, group_id, archived=False)
+
+
+def delete(show_id: str, group_id: str) -> str:
+    table = _get_table()
+    item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
+    if not _in_group(item, group_id):
+        return DELETE_NOT_FOUND
+    try:
+        table.delete_item(
+            Key={"id": show_id},
+            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
+            ExpressionAttributeValues={":groupId": group_id},
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        current = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
+        if not _in_group(current, group_id):
+            return DELETE_NOT_FOUND
+        return DELETE_NOT_FOUND
+    return DELETE_OK
