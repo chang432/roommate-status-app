@@ -6,8 +6,8 @@ CloudFormation + a deploy script for the app's AWS resources.
 | -------------------------- | -------------------------------------------------------------- |
 | `dynamodb-table-dev.yaml`  | CloudFormation template: the **dev** tables (`RoommateStatus-dev` + `-pushsubs` + `-activities` + `-shows` + `-groups`)  |
 | `dynamodb-table-main.yaml` | CloudFormation template: the **main** tables (`RoommateStatus-main` + `-pushsubs` + `-activities` + `-shows` + `-groups`) |
-| `dynamodb-schema-dev.md`   | Human-readable schema (keys, attributes, example rows) for the **dev** tables |
-| `dynamodb-schema-main.md`  | Human-readable schema (keys, attributes, example rows) for the **main** tables |
+| `dynamodb-schema-dev.csv`  | Human-readable schema grids (keys, attributes, example rows) for the **dev** tables |
+| `dynamodb-schema-main.csv` | Human-readable schema grids (keys, attributes, example rows) for the **main** tables |
 | `deploy.py`                | Creates/updates a stack via boto3 and prints outputs           |
 | `requirements.txt`         | Python deps (`boto3`)                                          |
 | `docker-compose.dynamodb-local.yml` | Local-dev only: in-memory DynamoDB Local + a one-off table-creator (the local stand-in for the CloudFormation tables) |
@@ -26,8 +26,11 @@ proposed-activities table, and a TV-show tracker table:
 | `main`     | `roomie-dynamodb-main` | `RoommateStatus-main` | `RoommateStatus-main-groups` | `RoommateStatus-main-pushsubs` | `RoommateStatus-main-activities` | `RoommateStatus-main-shows` |
 
 Per-table keys, attributes, and example rows are documented in
-[`dynamodb-schema-dev.md`](./dynamodb-schema-dev.md) and
-[`dynamodb-schema-main.md`](./dynamodb-schema-main.md).
+[`dynamodb-schema-dev.csv`](./dynamodb-schema-dev.csv) and
+[`dynamodb-schema-main.csv`](./dynamodb-schema-main.csv). Each file stacks one
+CSV grid per table (the multi-type activities table gets a grid per `itemType`);
+a grid is a title row, a header row of `attributeName (DynamoDBType)`, then
+example rows. Open them in a spreadsheet, or read them as text.
 
 The roommate table holds one item per account, keyed by a string `id` (the
 normalized username). Grouped accounts also appear as roommates; account and

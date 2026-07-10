@@ -39,7 +39,9 @@ If any requested feature doesn't make sense in terms of the existing code struct
 - That section should list the concrete owner tasks still needed, such as cloud/OAuth console configuration, domain/redirect setup, secret provisioning, account verification/publishing steps, policy decisions, or real-browser consent/testing.
 
 ## Database Schema Docs
-- The DynamoDB schema docs `infrastructure/dynamodb-schema-dev.md` and `infrastructure/dynamodb-schema-main.md` are the source of truth for the tables and must stay in sync with the code.
+- The DynamoDB schema docs `infrastructure/dynamodb-schema-dev.csv` and `infrastructure/dynamodb-schema-main.csv` are the source of truth for the tables and must stay in sync with the code.
+- Each doc is a stack of CSV grids: a legend, a tables-at-a-glance grid, a common-settings grid, then one grid per table — with the multi-type activities table split into one grid per `itemType`. A grid is a title row, a header row of `attributeName (DynamoDBType)`, then example rows.
 - Whenever you change the data model, update **both** schema docs in the same change. This includes: adding/removing a table or index, changing a partition/sort key, adding/removing/renaming an item attribute, adding a new `itemType` to the shared activities table, or changing an embedded shape (e.g. a show's `members`, a checklist's `items`).
 - Treat both the CloudFormation templates (`dynamodb-table-{dev,main}.yaml`) and the Flask modules that write items (`docker/flask/*.py`) as inputs — the docs describe keys/indexes from the templates and effective attributes from the code.
-- Keep the two docs parallel (they differ only by the `-dev` / `-main` table-name prefix) and refresh the affected attribute tables and example rows so they match reality.
+- Keep the two docs parallel (they differ only by the `-dev` / `-main` table-name prefix and the counterpart cross-reference) and refresh the affected header columns and example rows so they match reality.
+- Preserve the CSV conventions: an empty cell means the attribute is absent from the item, the literal `null` means the DynamoDB `NULL` type, and `SS` / `L` / `M` values are written as JSON inside a single quoted cell.
