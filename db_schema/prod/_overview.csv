@@ -1,0 +1,36 @@
+DynamoDB Schema - prod production deployment
+Detail,Value
+CloudFormation stack,roomie-dynamodb-main
+Template,infrastructure/dynamodb-table-main.yaml
+Table-name prefix,RoommateStatus-main-
+Parallel folder,db_schema/dev — identical apart from the prefix
+Grid format,"Each CSV is a title row, a header row of attributeName (DynamoDBType), then example rows"
+
+LEGEND
+Notation,Meaning
+S,DynamoDB string
+N,DynamoDB number
+BOOL,DynamoDB boolean
+SS,DynamoDB string set
+L,DynamoDB list
+M,DynamoDB map
+NULL,DynamoDB null
+(empty cell),Attribute is absent from the item
+null,Attribute is present and holds the NULL type
+JSON in a cell,SS / L / M values are shown as JSON
+Schemaless,Only the keys are fixed by CloudFormation; these are the attributes the Flask backend (docker/flask/) actually writes
+
+TABLES AT A GLANCE (one CSV per table in this folder)
+Table,CSV file,Partition key,Index,Written by,Purpose
+RoommateStatus-main,RoommateStatus-main.csv,id (S),,db.py,Accounts / roommate status
+RoommateStatus-main-pushsubs,RoommateStatus-main-pushsubs.csv,id (S),,push.py,Web Push subscriptions
+RoommateStatus-main-activities,RoommateStatus-main-activities.csv,id (S),,"activities.py, household_checklists.py, household_requests.py, jam.py","Activities, checklists, requests, Spotify Jam + comment likes (multi-type)"
+RoommateStatus-main-shows,RoommateStatus-main-shows.csv,id (S),,household_shows.py,TV show tracker
+RoommateStatus-main-groups,RoommateStatus-main-groups.csv,groupId (S),"JoinCodeIndex (HASH joinCode, ProjectionType ALL)",groups.py,Households / join-by-code groups
+
+"COMMON SETTINGS (every table, from the CloudFormation template)"
+Setting,Value
+BillingMode,PAY_PER_REQUEST (on-demand capacity)
+Encryption at rest,"Enabled, AWS-owned key"
+Point-in-time recovery,Enabled
+DeletionPolicy,Retain (data survives a stack delete)
