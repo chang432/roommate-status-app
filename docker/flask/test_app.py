@@ -22,6 +22,7 @@ import pytest
 from moto import mock_aws
 
 import activities
+import comment_likes
 import db
 import groups
 import household_checklists
@@ -55,6 +56,7 @@ def _dynamodb():
             db.TABLE_NAME,
             push.TABLE_NAME,
             activities.TABLE_NAME,
+            comment_likes.TABLE_NAME,
             household_shows.TABLE_NAME,
             household_checklists.TABLE_NAME,
         ):
@@ -89,6 +91,7 @@ def client():
     # Clear mutable tables so each test starts with no activities/subscriptions.
     for table in (
         activities._get_table(),
+        comment_likes._get_table(),
         push._get_table(),
         household_shows._get_table(),
         household_checklists._get_table(),
@@ -956,9 +959,9 @@ def test_requester_can_delete_request_and_comment_likes(client, monkeypatch):
     assert deleted.get_json() == []
     assert household_requests.get(request_item["id"], TEST_GROUP_ID, consistent=True) is None
     assert not [
-        item
-        for item in household_requests._scan_all(consistent=True)
-        if item.get("itemType") == household_requests.REQUEST_COMMENT_LIKE_TYPE
+        like
+        for like in comment_likes._scan_all(consistent=True)
+        if like.get("requestId") == request_item["id"]
     ]
     assert calls == [
         (

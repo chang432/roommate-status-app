@@ -24,6 +24,7 @@ import uuid
 
 from botocore.exceptions import ClientError
 
+import comment_likes
 import db
 
 # Reuse db's resource builder so all tables sign requests the same way and share
@@ -56,7 +57,6 @@ SCHEDULE_FORBIDDEN = "forbidden"
 SCHEDULE_CONFLICT = "conflict"
 
 MUTATION_EXPIRED = "expired"
-COMMENT_LIKE_TYPE = "commentLike"
 
 LIKE_OK = "ok"
 LIKE_NOT_FOUND = "not_found"
@@ -426,12 +426,14 @@ def set_comment_like(
     ):
         return LIKE_SELF_FORBIDDEN
 
+    # The activity is validated against the activities table above; the like row
+    # itself lives in the dedicated comment-likes table.
+    likes_table = comment_likes._get_table()
     key = {"id": _comment_like_id(activity_id, comment_id, user_id)}
     if liked:
-        table.put_item(
+        likes_table.put_item(
             Item={
                 **key,
-                "itemType": COMMENT_LIKE_TYPE,
                 "activityId": activity_id,
                 "commentId": comment_id,
                 "groupId": group_id,
@@ -439,7 +441,7 @@ def set_comment_like(
             }
         )
     else:
-        table.delete_item(Key=key)
+        likes_table.delete_item(Key=key)
     return LIKE_OK
 
 
@@ -703,15 +705,16 @@ def delete(activity_id: str, group_id: str) -> str:
             return DELETE_NOT_FOUND
         return DELETE_LIVE if _lifecycle(current)["isLive"] else DELETE_NOT_FOUND
 
-    # Likes are separate idempotent records so concurrent reactions cannot
-    # clobber the embedded comment list. Remove them with their parent event.
-    for reaction in _scan_all(consistent=True):
+    # Likes are separate idempotent records (now in their own table) so
+    # concurrent reactions cannot clobber the embedded comment list. Remove
+    # this event's likes alongside it.
+    likes_table = comment_likes._get_table()
+    for reaction in comment_likes._scan_all(consistent=True):
         if (
-            reaction.get("itemType") == COMMENT_LIKE_TYPE
-            and reaction.get("groupId") == group_id
+            reaction.get("groupId") == group_id
             and reaction.get("activityId") == activity_id
         ):
-            table.delete_item(Key={"id": reaction["id"]})
+            likes_table.delete_item(Key={"id": reaction["id"]})
     return DELETE_OK
 
 
@@ -725,12 +728,12 @@ def list_recent(group_id: str, limit: int | None = None, consistent: bool = Fals
     """
     items = _scan_all(consistent=consistent)
     likes_by_activity: dict[str, dict[str, set[str]]] = {}
-    for item in items:
-        if item.get("itemType") != COMMENT_LIKE_TYPE or item.get("groupId") != group_id:
+    for like in comment_likes._scan_all(consistent=consistent):
+        if like.get("groupId") != group_id or not like.get("activityId"):
             continue
-        likes_by_activity.setdefault(item["activityId"], {}).setdefault(
-            item["commentId"], set()
-        ).add(item["userId"])
+        likes_by_activity.setdefault(like["activityId"], {}).setdefault(
+            like["commentId"], set()
+        ).add(like["userId"])
 
     items = [
         item

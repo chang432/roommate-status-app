@@ -15,9 +15,9 @@ import uuid
 from botocore.exceptions import ClientError
 
 import activities
+import comment_likes
 
 REQUEST_TYPE = "request"
-REQUEST_COMMENT_LIKE_TYPE = "requestCommentLike"
 
 RECENT_LIMIT = 10
 COMMENTS_LIMIT = activities.COMMENTS_LIMIT
@@ -300,13 +300,15 @@ def delete(request_id: str, group_id: str) -> str:
             return DELETE_NOT_FOUND
         return DELETE_NOT_FOUND
 
-    for reaction in _scan_all(consistent=True):
+    # A request's comment likes live in the dedicated comment-likes table; drop
+    # them alongside the request.
+    likes_table = comment_likes._get_table()
+    for reaction in comment_likes._scan_all(consistent=True):
         if (
-            reaction.get("itemType") == REQUEST_COMMENT_LIKE_TYPE
-            and reaction.get("groupId") == group_id
+            reaction.get("groupId") == group_id
             and reaction.get("requestId") == request_id
         ):
-            table.delete_item(Key={"id": reaction["id"]})
+            likes_table.delete_item(Key={"id": reaction["id"]})
     return DELETE_OK
 
 
@@ -341,12 +343,14 @@ def set_comment_like(
     ):
         return LIKE_SELF_FORBIDDEN
 
+    # The request is validated against the activities table above; the like row
+    # itself lives in the dedicated comment-likes table.
+    likes_table = comment_likes._get_table()
     key = {"id": _comment_like_id(request_id, comment_id, user_id)}
     if liked:
-        table.put_item(
+        likes_table.put_item(
             Item={
                 **key,
-                "itemType": REQUEST_COMMENT_LIKE_TYPE,
                 "requestId": request_id,
                 "commentId": comment_id,
                 "groupId": group_id,
@@ -354,19 +358,19 @@ def set_comment_like(
             }
         )
     else:
-        table.delete_item(Key=key)
+        likes_table.delete_item(Key=key)
     return LIKE_OK
 
 
 def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
     items = _scan_all(consistent=consistent)
     likes_by_request: dict[str, dict[str, set[str]]] = {}
-    for item in items:
-        if item.get("itemType") != REQUEST_COMMENT_LIKE_TYPE or item.get("groupId") != group_id:
+    for like in comment_likes._scan_all(consistent=consistent):
+        if like.get("groupId") != group_id or not like.get("requestId"):
             continue
-        likes_by_request.setdefault(item["requestId"], {}).setdefault(
-            item["commentId"], set()
-        ).add(item["userId"])
+        likes_by_request.setdefault(like["requestId"], {}).setdefault(
+            like["commentId"], set()
+        ).add(like["userId"])
 
     requests = [
         item

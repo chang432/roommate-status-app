@@ -10,6 +10,8 @@ Description: >-
       (household_shows.py).
     - RoommateStatus-dev-checklists: one household checklist per item
       (household_checklists.py).
+    - RoommateStatus-dev-comment-likes: one row per user per liked comment
+      (activities.py, household_requests.py).
     - RoommateStatus-dev-groups: one group per item, keyed by groupId.
 
   The "-dev" half of the dev/main split (see dynamodb-table-main.yaml for the
@@ -149,6 +151,32 @@ Resources:
         - Key: Environment
           Value: dev
 
+  # Comment likes for the dev deployment. Separate table; one row per user per
+  # liked comment, written by activities.py and household_requests.py. Each row
+  # self-describes its parent via activityId or requestId.
+  CommentLikesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-comment-likes
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
   # Groups for the dev deployment. Group attributes remain schemaless beyond
   # the stable groupId partition key.
   GroupsTable:
@@ -270,6 +298,18 @@ Outputs:
     Value: !GetAtt ChecklistsTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ChecklistsTableArn"
+
+  CommentLikesTableName:
+    Description: Name of the comment-likes DynamoDB table.
+    Value: !Ref CommentLikesTable
+    Export:
+      Name: !Sub "${AWS::StackName}-CommentLikesTableName"
+
+  CommentLikesTableArn:
+    Description: ARN of the comment-likes DynamoDB table.
+    Value: !GetAtt CommentLikesTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CommentLikesTableArn"
 
   GroupsTableName:
     Description: Name of the groups DynamoDB table.

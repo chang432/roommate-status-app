@@ -1,0 +1,4 @@
+"TABLE RoommateStatus-dev-comment-likes - likes on activity and request comments. One row per user per liked comment: a like is a single conditional put keyed by a deterministic id, an unlike is a delete. No itemType — each row self-describes its parent (activity likes set activityId, request likes set requestId). Every row carries a groupId so feeds stay isolated per household. Written by activities.py (id ""comment-like#<activityId>#<commentId>#<userId>"") and household_requests.py (id ""request-comment-like#<requestId>#<commentId>#<userId>"")."
+id (S),activityId (S),requestId (S),commentId (S),groupId (S),userId (S)
+comment-like#3f9a1c2b8d4e4f7a9b0c1d2e3f4a5b6c#7d2e5f6a1b3c4d5e#andre,3f9a1c2b8d4e4f7a9b0c1d2e3f4a5b6c,,7d2e5f6a1b3c4d5e,yorkshire,andre
+request-comment-like#d4e5f6a7b8c94d0ea1b2c3d4e5f6a7b8#9c8b7a6d5e4f3a2b#sheryl,,d4e5f6a7b8c94d0ea1b2c3d4e5f6a7b8,9c8b7a6d5e4f3a2b,yorkshire,sheryl
