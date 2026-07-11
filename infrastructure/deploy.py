@@ -71,10 +71,18 @@ def parse_args() -> argparse.Namespace:
     # explicitly overridden.
     parser.add_argument("--stack-name", default=None, help="Override the CloudFormation stack name.")
     parser.add_argument("--template", default=None, help="Override the path to the CloudFormation template.")
+    # Prefer the standard AWS region env vars, but fall back to us-east-1 when
+    # neither is set (or is blank) so a missing/empty AWS_REGION — e.g. an unset
+    # CI secret — can't leave boto3 with an empty signing region, which AWS
+    # rejects as SignatureDoesNotMatch: "Credential should be scoped to a valid
+    # region". Mirrors the default in docker/flask/aws.py and the VPS config.
+    default_region = (
+        os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or ""
+    ).strip() or "us-east-1"
     parser.add_argument(
         "--region",
-        default=os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION"),
-        help="AWS region (defaults to the configured AWS_REGION/AWS_DEFAULT_REGION).",
+        default=default_region,
+        help="AWS region (defaults to AWS_REGION/AWS_DEFAULT_REGION, else us-east-1).",
     )
     return parser.parse_args()
 
