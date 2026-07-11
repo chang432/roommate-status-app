@@ -3,20 +3,18 @@ Description: >-
   DynamoDB tables for the "main" (production) deployment of the Yorkshire
   Roomie Status app:
     - RoommateStatus-main: one item per roommate, keyed by a stable string id
-      (e.g. "jordan"); name/status/statusText are schemaless, written by the app.
-    - RoommateStatus-main-pushsubs: one item per Web Push subscription, keyed by
-      a hash of the push endpoint (see docker/flask/push.py).
-    - RoommateStatus-main-activities: one item per proposed activity, keyed by a
-      generated id (see docker/flask/activities.py).
-    - RoommateStatus-main-shows: one item per TV show, keyed by a generated id,
-      with watchers embedded (see docker/flask/household_shows.py).
-    - RoommateStatus-main-checklists: one item per household checklist, keyed by
-      a generated id (see docker/flask/household_checklists.py).
-    - RoommateStatus-main-groups: one item per group, keyed by groupId.
+      (e.g. "jordan"); name/status/statusText are schemaless, app-written.
+    - RoommateStatus-main-pushsubs: one Web Push subscription per item (push.py).
+    - RoommateStatus-main-activities: one proposed activity per item (activities.py).
+    - RoommateStatus-main-shows: one TV show per item, watchers embedded
+      (household_shows.py).
+    - RoommateStatus-main-checklists: one household checklist per item
+      (household_checklists.py).
+    - RoommateStatus-main-groups: one group per item, keyed by groupId.
 
-  This is the "-main" half of the dev/main split (see dynamodb-table-dev.yaml
-  for the dev tables). Table names are fixed per template so the two
-  deployments can never accidentally share data.
+  The "-main" half of the dev/main split (see dynamodb-table-dev.yaml for the
+  dev tables); table names are fixed per template so the two deployments can
+  never accidentally share data.
 
 Resources:
   RoommateStatusTable:
