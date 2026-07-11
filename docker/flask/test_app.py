@@ -1166,7 +1166,7 @@ def test_checklist_notify_all_excludes_requester(client, monkeypatch):
     ]
 
 
-def test_archive_checklist_removes_it_from_active_feed(client, monkeypatch):
+def test_archive_checklist_flags_it_but_keeps_it_in_feed(client, monkeypatch):
     checklist = _make_checklist(client).get_json()[0]
     calls = _capture_notifications(monkeypatch)
 
@@ -1176,7 +1176,9 @@ def test_archive_checklist_removes_it_from_active_feed(client, monkeypatch):
     )
 
     assert archived.status_code == 200
-    assert archived.get_json() == []
+    returned = archived.get_json()
+    assert [item["id"] for item in returned] == [checklist["id"]]
+    assert returned[0]["isArchived"] is True
     stored = household_checklists.get(checklist["id"], TEST_GROUP_ID, consistent=True)
     assert stored["isArchived"] is True
     assert stored["archivedBy"] == "Ting"
@@ -2221,7 +2223,7 @@ def test_creator_can_delete_activity_and_all_embedded_data(client, monkeypatch):
     assert kwargs["body"] == "Andre deleted Movie night"
 
 
-def test_any_roommate_can_archive_activity_into_expired_section(client, monkeypatch):
+def test_any_roommate_can_archive_activity(client, monkeypatch):
     monkeypatch.setattr(activities.time, "time", lambda: 1_000)
     created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
@@ -2236,8 +2238,10 @@ def test_any_roommate_can_archive_activity_into_expired_section(client, monkeypa
 
     assert archived.status_code == 200
     archived_item = next(item for item in archived.get_json() if item["id"] == activity_id)
-    assert archived_item["isExpired"] is True
-    assert archived_item["endedAt"] == 1_200_000
+    assert archived_item["isArchived"] is True
+    assert archived_item["archivedById"] == "kayla"
+    assert archived_item["archivedBy"] == "Kayla"
+    assert isinstance(archived_item["archivedAt"], int)
     assert len(calls) == 1
     audience, kwargs = calls[0]
     assert audience == "users"
@@ -2246,7 +2250,7 @@ def test_any_roommate_can_archive_activity_into_expired_section(client, monkeypa
     assert kwargs["body"] == "Kayla archived Movie night"
 
 
-def test_archive_live_activity_moves_it_to_expired_section(client, monkeypatch):
+def test_archive_live_activity_flags_it_without_ending(client, monkeypatch):
     monkeypatch.setattr(activities.time, "time", lambda: 1_000)
     created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
@@ -2263,9 +2267,10 @@ def test_archive_live_activity_moves_it_to_expired_section(client, monkeypatch):
 
     assert archived.status_code == 200
     archived_item = next(item for item in archived.get_json() if item["id"] == activity_id)
-    assert archived_item["isLive"] is False
-    assert archived_item["isExpired"] is True
-    assert archived_item["endedAt"] == 1_300_000
+    assert archived_item["isArchived"] is True
+    assert archived_item["isLive"] is True
+    assert archived_item["isExpired"] is False
+    assert archived_item["endedAt"] is None
 
 
 def test_archive_activity_requires_requester(client):
@@ -2283,20 +2288,20 @@ def test_archive_unknown_activity_404(client):
     assert res.status_code == 404
 
 
-def test_non_creator_cannot_delete_activity(client):
+def test_any_roommate_can_delete_activity(client):
     created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
 
-    denied = client.delete(
+    deleted = client.delete(
         f"/api/activities/{activity_id}",
         json={"requesterId": "kayla"},
     )
 
-    assert denied.status_code == 403
-    assert activities.get(activity_id, TEST_GROUP_ID) is not None
+    assert deleted.status_code == 200
+    assert activities.get(activity_id, TEST_GROUP_ID) is None
 
 
-def test_legacy_activity_cannot_be_deleted(client):
+def test_legacy_activity_can_be_deleted(client):
     activities._get_table().put_item(
         Item={
             "id": "legacy-delete",
@@ -2307,13 +2312,13 @@ def test_legacy_activity_cannot_be_deleted(client):
         }
     )
 
-    denied = client.delete(
+    deleted = client.delete(
         "/api/activities/legacy-delete",
         json={"requesterId": "andre"},
     )
 
-    assert denied.status_code == 403
-    assert activities.get("legacy-delete", TEST_GROUP_ID) is not None
+    assert deleted.status_code == 200
+    assert activities.get("legacy-delete", TEST_GROUP_ID) is None
 
 
 def test_delete_activity_requires_requester(client):
