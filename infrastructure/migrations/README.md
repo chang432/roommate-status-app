@@ -48,9 +48,10 @@ Whether a migration has run on an environment is recorded in the
 migration, plus a transient `lock#<env>` item held during a run. This table,
 **not** `status.md` and not any committed file, is authoritative: it survives the
 pipeline's `git reset --hard` and needs no CI push-back. It is owned by
-CloudFormation; provision it once per environment with
-`cd infrastructure && python deploy.py --dev` (or `--main`) before the first
-migration.
+CloudFormation and provisioned by `deploy.py`, which the pipeline runs
+automatically before each migration step (see [Pipeline](#pipeline)); for a
+manual or local first run, `cd infrastructure && python deploy.py --dev` (or
+`--main`) creates it.
 
 ## Running
 
@@ -71,10 +72,15 @@ Already-applied earlier migrations are left in place.
 
 ## Pipeline
 
-`.github/workflows/on_merge_{dev,main}.yml` run the runner in a `migrate-db` job
-that the deploy job `needs:`, so migrations apply **before** the app is
-redeployed and a failure blocks the deploy. The runner is a no-op when nothing is
-pending, so it always runs — you never wire a migration into CI by hand.
+`.github/workflows/on_merge_{dev,main}.yml` run a `provision-and-migrate` job
+that `needs:` the app-deploy job, so it runs **after** the app is redeployed to
+the VPS. That job first runs `deploy.py` (CloudFormation create/update — a no-op
+when the templates are unchanged) so the tables exist, then runs the migration
+runner. The runner is a no-op when nothing is pending, so it always runs — you
+never wire a migration into CI by hand. Because the app is already live when
+migrations run, write migrations backward-compatibly (deploy tolerant code
+first, migrate after); a failed migration is auto-reverted and fails the job but
+does not roll back the deploy.
 
 ## Tests
 

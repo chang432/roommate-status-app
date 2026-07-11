@@ -60,10 +60,12 @@ Table *structure* (keys, indexes) is provisioned by the CloudFormation templates
 above. Changes that need *in-place updates to existing rows* — backfilling a new
 attribute, reshaping an embedded field, splitting items — are handled separately
 by the migration system in [`migrations/`](./migrations). Author a dated
-migration folder (forward + reverse scripts) and the deploy pipeline applies any
-pending migrations against the environment's tables before redeploying the app,
-rolling back and blocking the deploy on failure. Whether a migration has run is
-tracked in the `-migrations` DynamoDB table, not a committed file. See
+migration folder (forward + reverse scripts) and, after redeploying the app, the
+pipeline runs `deploy.py` to provision the tables and then applies any pending
+migrations against the environment's tables. A failed migration is auto-reverted
+and fails the job (but does not roll back the already-live deploy), so write
+migrations backward-compatibly. Whether a migration has run is tracked in the
+`-migrations` DynamoDB table, not a committed file. See
 [`migrations/README.md`](./migrations/README.md) for the full workflow.
 
 ## Deploy
