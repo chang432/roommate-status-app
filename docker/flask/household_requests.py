@@ -1,23 +1,31 @@
 """Household request feed for the Roomie Status backend.
 
-Requests share the activities DynamoDB table as typed items. That keeps the
-local/dev/prod infrastructure unchanged while allowing the UI to add another
-tabbed feed beside proposed activities. Activity scans ignore typed request
-items, so the existing activity feed remains unchanged.
+Requests live in their own DynamoDB table (RoommateStatus-<env>-requests), one
+item per request with its comments embedded. Comment likes are stored separately
+in the comment-likes table (see comment_likes.py). A request's shape is fixed
+only by its `id` key; everything else is written by this module.
+
+Configuration (env):
+    REQUESTS_TABLE  - override the table name
+                      (default: "${ROOMMATE_TABLE}-requests")
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
+import threading
 import time
 import uuid
 
 from botocore.exceptions import ClientError
 
+# Reuse db's resource builder so every table signs requests the same way and
+# shares the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
+from db import resource
+
 import activities
 import comment_likes
-
-REQUEST_TYPE = "request"
 
 RECENT_LIMIT = 10
 COMMENTS_LIMIT = activities.COMMENTS_LIMIT
@@ -36,13 +44,39 @@ ARCHIVE_OK = "archived"
 ARCHIVE_NOT_FOUND = "not_found"
 MUTATION_ARCHIVED = "archived"
 
+TABLE_NAME = os.environ.get("REQUESTS_TABLE") or (
+    f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-requests"
+)
+
+_table = None
+_table_lock = threading.Lock()
+
 
 def _get_table():
-    return activities._get_table()
+    """Return the cached Requests Table resource, built lazily (like db.py).
+
+    The table is created by CloudFormation, not here, so it must already exist.
+    """
+    global _table
+    if _table is None:
+        with _table_lock:
+            if _table is None:
+                _table = resource().Table(TABLE_NAME)
+    return _table
 
 
 def _scan_all(consistent: bool = False) -> list[dict]:
-    return activities._scan_all(consistent=consistent)
+    """Read every request row."""
+    table = _get_table()
+    resp = table.scan(ConsistentRead=consistent)
+    items = resp.get("Items", [])
+    while "LastEvaluatedKey" in resp:
+        resp = table.scan(
+            ExclusiveStartKey=resp["LastEvaluatedKey"],
+            ConsistentRead=consistent,
+        )
+        items.extend(resp.get("Items", []))
+    return items
 
 
 def _legacy_comment_id(request_id: str, index: int) -> str:
@@ -118,7 +152,6 @@ def add_request(
     names_by_id = {roommate["id"]: roommate["name"] for roommate in requested_roommates}
     item = {
         "id": uuid.uuid4().hex,
-        "itemType": REQUEST_TYPE,
         "text": text,
         "requester": requester_name,
         "requesterId": requester_id,
@@ -139,7 +172,7 @@ def get(request_id: str, group_id: str, consistent: bool = False) -> dict | None
         Key={"id": request_id},
         ConsistentRead=consistent,
     ).get("Item")
-    if not item or item.get("itemType") != REQUEST_TYPE or item.get("groupId") != group_id:
+    if not item or item.get("groupId") != group_id:
         return None
     return _project(item)
 
@@ -163,7 +196,7 @@ def add_comment(
         "createdAt": int(time.time() * 1000),
     }
     if existing := _get_table().get_item(Key={"id": request_id}, ConsistentRead=True).get("Item"):
-        if existing.get("itemType") != REQUEST_TYPE or existing.get("groupId") != group_id:
+        if existing.get("groupId") != group_id:
             return None
         if existing.get("isArchived", False):
             return MUTATION_ARCHIVED
@@ -175,13 +208,12 @@ def add_comment(
                 "updatedAt = :updated_at"
             ),
             ExpressionAttributeValues={
-                ":request": REQUEST_TYPE,
                 ":c": [comment],
                 ":empty": [],
                 ":updated_at": comment["createdAt"],
                 ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND itemType = :request AND groupId = :groupId",
+            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -193,7 +225,7 @@ def add_comment(
 
 def set_response(request_id: str, user_id: str, group_id: str, response: str) -> dict | None:
     item = _get_table().get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") != REQUEST_TYPE or item.get("groupId") != group_id:
+    if item is None or item.get("groupId") != group_id:
         return None
     if item.get("isArchived", False):
         return MUTATION_ARCHIVED
@@ -203,15 +235,13 @@ def set_response(request_id: str, user_id: str, group_id: str, response: str) ->
             UpdateExpression="SET responses.#user = :response, updatedAt = :updated_at",
             ExpressionAttributeNames={"#user": user_id},
             ExpressionAttributeValues={
-                ":request": REQUEST_TYPE,
                 ":user_id": user_id,
                 ":response": response,
                 ":updated_at": int(time.time() * 1000),
                 ":groupId": group_id,
             },
             ConditionExpression=(
-                "attribute_exists(id) AND itemType = :request AND "
-                "groupId = :groupId AND "
+                "attribute_exists(id) AND groupId = :groupId AND "
                 "contains(requestedIds, :user_id)"
             ),
             ReturnValues="ALL_NEW",
@@ -233,14 +263,13 @@ def archive(request_id: str, user_id: str, name: str, group_id: str) -> dict | N
                 "archivedById = :user_id, archivedBy = :name, updatedAt = :archived_at"
             ),
             ExpressionAttributeValues={
-                ":request": REQUEST_TYPE,
                 ":true": True,
                 ":archived_at": archived_at,
                 ":user_id": user_id,
                 ":name": name,
                 ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND itemType = :request AND groupId = :groupId",
+            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -260,14 +289,13 @@ def restore(request_id: str, user_id: str, name: str, group_id: str) -> dict | N
                 "REMOVE archivedAt, archivedById, archivedBy"
             ),
             ExpressionAttributeValues={
-                ":request": REQUEST_TYPE,
                 ":false": False,
                 ":user_id": user_id,
                 ":name": name,
                 ":updated_at": int(time.time() * 1000),
                 ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND itemType = :request AND groupId = :groupId",
+            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -280,15 +308,14 @@ def restore(request_id: str, user_id: str, name: str, group_id: str) -> dict | N
 def delete(request_id: str, group_id: str) -> str:
     table = _get_table()
     item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") != REQUEST_TYPE or item.get("groupId") != group_id:
+    if item is None or item.get("groupId") != group_id:
         return DELETE_NOT_FOUND
 
     try:
         table.delete_item(
             Key={"id": request_id},
-            ConditionExpression="itemType = :request AND groupId = :groupId",
+            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
             ExpressionAttributeValues={
-                ":request": REQUEST_TYPE,
                 ":groupId": group_id,
             },
         )
@@ -296,7 +323,7 @@ def delete(request_id: str, group_id: str) -> str:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         current = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType") != REQUEST_TYPE or current.get("groupId") != group_id:
+        if current is None or current.get("groupId") != group_id:
             return DELETE_NOT_FOUND
         return DELETE_NOT_FOUND
 
@@ -326,7 +353,7 @@ def set_comment_like(
 ) -> str:
     table = _get_table()
     item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") != REQUEST_TYPE or item.get("groupId") != group_id:
+    if item is None or item.get("groupId") != group_id:
         return LIKE_NOT_FOUND
     if item.get("isArchived", False):
         return MUTATION_ARCHIVED
@@ -375,7 +402,7 @@ def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = Fal
     requests = [
         item
         for item in items
-        if item.get("itemType") == REQUEST_TYPE and "createdAt" in item and item.get("groupId") == group_id
+        if "createdAt" in item and item.get("groupId") == group_id
     ]
     requests.sort(key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True)
     return [

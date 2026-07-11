@@ -1,0 +1,4 @@
+"TABLE RoommateStatus-main-requests - household requests (one item per request, comments embedded, keyed by a generated id). responses maps an account id to yes / no / maybe; targets not yet answered are absent. Every request carries a groupId so feeds stay isolated per household. Written by household_requests.py; comment likes live in the -comment-likes table."
+id (S),text (S),requester (S),requesterId (S),groupId (S),createdAt (N),updatedAt (N),requestedIds (SS),requestedNamesById (M),responses (M),isCompleted (BOOL)
+d4e5f6a7b8c94d0ea1b2c3d4e5f6a7b8,Can someone grab oat milk?,Sheryl,sheryl,yorkshire,1720200000000,1720201000000,"[""andre"",""kayla""]","{""andre"": ""Andre"",""kayla"": ""Kayla""}","{""andre"": ""yes""}",false
+0a1b2c3d4e5f60718293a4b5c6d7e8f9,Trash out before 8am Tuesday?,Andre,andre,yorkshire,1720000000000,1720090000000,"[""sheryl""]","{""sheryl"": ""Sheryl""}","{""sheryl"": ""yes""}",true

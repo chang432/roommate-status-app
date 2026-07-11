@@ -2,25 +2,50 @@
 
 Only one Jam is active for the shire. Sharing a new link overwrites the
 fixed active record so the UI never has to resolve competing sessions.
+
+Stored in its own DynamoDB table (RoommateStatus-<env>-spotify-jam): a single
+`activeJam#<group>` item per group, so an absent item means no active Jam.
+
+Configuration (env):
+    JAM_TABLE  - override the table name
+                 (default: "${ROOMMATE_TABLE}-spotify-jam")
 """
 
 from __future__ import annotations
 
+import os
+import threading
 import time
 import urllib.parse
 
 from botocore.exceptions import ClientError
 
-import activities
-
-JAM_TYPE = "spotifyJam"
+# Reuse db's resource builder so every table signs requests the same way and
+# shares the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
+from db import resource
 
 END_NOT_FOUND = "not_found"
 END_OK = "ended"
 
+TABLE_NAME = os.environ.get("JAM_TABLE") or (
+    f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-spotify-jam"
+)
+
+_table = None
+_table_lock = threading.Lock()
+
 
 def _get_table():
-    return activities._get_table()
+    """Return the cached Spotify-Jam Table resource, built lazily (like db.py).
+
+    The table is created by CloudFormation, not here, so it must already exist.
+    """
+    global _table
+    if _table is None:
+        with _table_lock:
+            if _table is None:
+                _table = resource().Table(TABLE_NAME)
+    return _table
 
 
 def _now_ms() -> int:
@@ -36,7 +61,7 @@ def valid_spotify_link(link: str) -> bool:
 
 
 def _project(item: dict | None) -> dict | None:
-    if item is None or item.get("itemType") != JAM_TYPE:
+    if item is None:
         return None
     return {
         "id": item["id"],
@@ -61,7 +86,6 @@ def share(link: str, host_id: str, host_name: str, group_id: str) -> dict:
     now_ms = _now_ms()
     item = {
         "id": _active_jam_id(group_id),
-        "itemType": JAM_TYPE,
         "groupId": group_id,
         "link": link,
         "hostId": host_id,
@@ -76,19 +100,19 @@ def share(link: str, host_id: str, host_name: str, group_id: str) -> dict:
 def end(host_id: str, group_id: str) -> str:
     table = _get_table()
     item = table.get_item(Key={"id": _active_jam_id(group_id)}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") != JAM_TYPE:
+    if item is None or item.get("groupId") != group_id:
         return END_NOT_FOUND
     try:
         table.delete_item(
             Key={"id": _active_jam_id(group_id)},
-            ConditionExpression="itemType = :jam AND groupId = :groupId",
-            ExpressionAttributeValues={":jam": JAM_TYPE, ":groupId": group_id},
+            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
+            ExpressionAttributeValues={":groupId": group_id},
         )
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         current = table.get_item(Key={"id": _active_jam_id(group_id)}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType") != JAM_TYPE:
+        if current is None or current.get("groupId") != group_id:
             return END_NOT_FOUND
         return END_NOT_FOUND
     return END_OK
