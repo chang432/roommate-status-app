@@ -56,6 +56,7 @@ def _dynamodb():
             push.TABLE_NAME,
             activities.TABLE_NAME,
             household_shows.TABLE_NAME,
+            household_checklists.TABLE_NAME,
         ):
             ddb.create_table(
                 TableName=table_name,
@@ -86,7 +87,12 @@ def _dynamodb():
 def client():
     db.reset()  # Isolate each test from prior status mutations.
     # Clear mutable tables so each test starts with no activities/subscriptions.
-    for table in (activities._get_table(), push._get_table(), household_shows._get_table()):
+    for table in (
+        activities._get_table(),
+        push._get_table(),
+        household_shows._get_table(),
+        household_checklists._get_table(),
+    ):
         for item in table.scan().get("Items", []):
             table.delete_item(Key={"id": item["id"]})
     app = create_app()
@@ -661,13 +667,11 @@ def test_share_jam_validates_link_and_roommate(client):
     assert bad_link.status_code == 400
 
 
-def test_end_jam_requires_host(client):
+def test_any_roommate_can_remove_jam(client):
     client.post("/api/jam", json={"hostId": "andre", "link": "https://spotify.link/first"})
 
-    forbidden = client.delete("/api/jam", json={"hostId": "kayla"})
-    ended = client.delete("/api/jam", json={"hostId": "andre"})
+    ended = client.delete("/api/jam", json={"hostId": "kayla"})
 
-    assert forbidden.status_code == 403
     assert ended.status_code == 200
     assert ended.get_json() is None
 
@@ -791,8 +795,8 @@ def test_create_request_targets_roommates_and_notifies_them(client, monkeypatch)
         {"id": "kayla", "name": "Kayla", "response": "pending"},
         {"id": "ting", "name": "Ting", "response": "pending"},
     ]
-    assert request_item["isCompleted"] is False
-    assert request_item["completedAt"] is None
+    assert request_item["isArchived"] is False
+    assert request_item["archivedAt"] is None
     assert client.get(grouped_path("/api/activities")).get_json() == []
     request_url = f"/?request={request_item['id']}"
     assert calls == [
@@ -866,29 +870,29 @@ def test_request_response_requires_requested_roommate(client):
     assert invalid_response.status_code == 400
 
 
-def test_any_roommate_can_complete_request_and_notify_requester(client, monkeypatch):
+def test_any_roommate_can_archive_request_and_notify_requester(client, monkeypatch):
     request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
     calls = _capture_notifications(monkeypatch)
 
     completed = client.post(
-        f"/api/requests/{request_item['id']}/complete",
+        f"/api/requests/{request_item['id']}/archive",
         json={"userId": "ting"},
     )
 
     assert completed.status_code == 200
     updated = completed.get_json()[0]
-    assert updated["isCompleted"] is True
-    assert updated["completedById"] == "ting"
-    assert updated["completedBy"] == "Ting"
-    assert isinstance(updated["completedAt"], int)
+    assert updated["isArchived"] is True
+    assert updated["archivedById"] == "ting"
+    assert updated["archivedBy"] == "Ting"
+    assert isinstance(updated["archivedAt"], int)
     assert calls == [
         (
             "users",
             {
-                "user_ids": {"andre"},
+                "user_ids": {"andre", "kayla"},
                 "exclude_user_ids": {"ting"},
-                "title": "Request completed",
-                "body": "Ting completed “Please take out recycling”",
+                "title": "Request archived",
+                "body": "Ting archived “Please take out recycling”",
                 "url": f"/?request={request_item['id']}",
                 "event_type": "requests-changed",
             },
@@ -896,33 +900,33 @@ def test_any_roommate_can_complete_request_and_notify_requester(client, monkeypa
     ]
 
 
-def test_any_roommate_can_reopen_completed_request(client, monkeypatch):
+def test_any_roommate_can_restore_archived_request(client, monkeypatch):
     request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
     client.post(
-        f"/api/requests/{request_item['id']}/complete",
+        f"/api/requests/{request_item['id']}/archive",
         json={"userId": "kayla"},
     )
     calls = _capture_notifications(monkeypatch)
 
     reopened = client.post(
-        f"/api/requests/{request_item['id']}/reopen",
+        f"/api/requests/{request_item['id']}/restore",
         json={"userId": "ting"},
     )
 
     assert reopened.status_code == 200
     updated = reopened.get_json()[0]
-    assert updated["isCompleted"] is False
-    assert updated["completedAt"] is None
-    assert updated["completedBy"] is None
-    assert updated["completedById"] is None
+    assert updated["isArchived"] is False
+    assert updated["archivedAt"] is None
+    assert updated["archivedBy"] is None
+    assert updated["archivedById"] is None
     assert calls == [
         (
             "users",
             {
                 "user_ids": {"andre", "kayla"},
                 "exclude_user_ids": {"ting"},
-                "title": "Request reopened",
-                "body": "Ting reopened “Please take out recycling”",
+                "title": "Request restored",
+                "body": "Ting restored “Please take out recycling”",
                 "url": f"/?request={request_item['id']}",
                 "event_type": "requests-changed",
             },
@@ -971,16 +975,16 @@ def test_requester_can_delete_request_and_comment_likes(client, monkeypatch):
     ]
 
 
-def test_only_requester_can_delete_request(client):
+def test_any_roommate_can_delete_request(client):
     request_item = _make_request(client, requested_ids=["kayla"]).get_json()[0]
 
-    denied = client.delete(
+    deleted = client.delete(
         f"/api/requests/{request_item['id']}",
         json={"requesterId": "kayla"},
     )
 
-    assert denied.status_code == 403
-    assert household_requests.get(request_item["id"], TEST_GROUP_ID, consistent=True) is not None
+    assert deleted.status_code == 200
+    assert household_requests.get(request_item["id"], TEST_GROUP_ID, consistent=True) is None
 
 
 def test_request_comments_and_likes_match_activity_shape(client, monkeypatch):
@@ -1162,7 +1166,7 @@ def test_checklist_notify_all_excludes_requester(client, monkeypatch):
     ]
 
 
-def test_archive_checklist_removes_it_from_active_feed(client, monkeypatch):
+def test_archive_checklist_flags_it_but_keeps_it_in_feed(client, monkeypatch):
     checklist = _make_checklist(client).get_json()[0]
     calls = _capture_notifications(monkeypatch)
 
@@ -1172,7 +1176,9 @@ def test_archive_checklist_removes_it_from_active_feed(client, monkeypatch):
     )
 
     assert archived.status_code == 200
-    assert archived.get_json() == []
+    returned = archived.get_json()
+    assert [item["id"] for item in returned] == [checklist["id"]]
+    assert returned[0]["isArchived"] is True
     stored = household_checklists.get(checklist["id"], TEST_GROUP_ID, consistent=True)
     assert stored["isArchived"] is True
     assert stored["archivedBy"] == "Ting"
@@ -2217,7 +2223,7 @@ def test_creator_can_delete_activity_and_all_embedded_data(client, monkeypatch):
     assert kwargs["body"] == "Andre deleted Movie night"
 
 
-def test_any_roommate_can_archive_activity_into_expired_section(client, monkeypatch):
+def test_any_roommate_can_archive_activity(client, monkeypatch):
     monkeypatch.setattr(activities.time, "time", lambda: 1_000)
     created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
@@ -2232,8 +2238,10 @@ def test_any_roommate_can_archive_activity_into_expired_section(client, monkeypa
 
     assert archived.status_code == 200
     archived_item = next(item for item in archived.get_json() if item["id"] == activity_id)
-    assert archived_item["isExpired"] is True
-    assert archived_item["endedAt"] == 1_200_000
+    assert archived_item["isArchived"] is True
+    assert archived_item["archivedById"] == "kayla"
+    assert archived_item["archivedBy"] == "Kayla"
+    assert isinstance(archived_item["archivedAt"], int)
     assert len(calls) == 1
     audience, kwargs = calls[0]
     assert audience == "users"
@@ -2242,7 +2250,7 @@ def test_any_roommate_can_archive_activity_into_expired_section(client, monkeypa
     assert kwargs["body"] == "Kayla archived Movie night"
 
 
-def test_archive_live_activity_moves_it_to_expired_section(client, monkeypatch):
+def test_archive_live_activity_flags_it_without_ending(client, monkeypatch):
     monkeypatch.setattr(activities.time, "time", lambda: 1_000)
     created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
@@ -2259,9 +2267,10 @@ def test_archive_live_activity_moves_it_to_expired_section(client, monkeypatch):
 
     assert archived.status_code == 200
     archived_item = next(item for item in archived.get_json() if item["id"] == activity_id)
-    assert archived_item["isLive"] is False
-    assert archived_item["isExpired"] is True
-    assert archived_item["endedAt"] == 1_300_000
+    assert archived_item["isArchived"] is True
+    assert archived_item["isLive"] is True
+    assert archived_item["isExpired"] is False
+    assert archived_item["endedAt"] is None
 
 
 def test_archive_activity_requires_requester(client):
@@ -2279,20 +2288,20 @@ def test_archive_unknown_activity_404(client):
     assert res.status_code == 404
 
 
-def test_non_creator_cannot_delete_activity(client):
+def test_any_roommate_can_delete_activity(client):
     created = _propose(client, "Movie night").get_json()
     activity_id = created[0]["id"]
 
-    denied = client.delete(
+    deleted = client.delete(
         f"/api/activities/{activity_id}",
         json={"requesterId": "kayla"},
     )
 
-    assert denied.status_code == 403
-    assert activities.get(activity_id, TEST_GROUP_ID) is not None
+    assert deleted.status_code == 200
+    assert activities.get(activity_id, TEST_GROUP_ID) is None
 
 
-def test_legacy_activity_cannot_be_deleted(client):
+def test_legacy_activity_can_be_deleted(client):
     activities._get_table().put_item(
         Item={
             "id": "legacy-delete",
@@ -2303,13 +2312,13 @@ def test_legacy_activity_cannot_be_deleted(client):
         }
     )
 
-    denied = client.delete(
+    deleted = client.delete(
         "/api/activities/legacy-delete",
         json={"requesterId": "andre"},
     )
 
-    assert denied.status_code == 403
-    assert activities.get("legacy-delete", TEST_GROUP_ID) is not None
+    assert deleted.status_code == 200
+    assert activities.get("legacy-delete", TEST_GROUP_ID) is None
 
 
 def test_delete_activity_requires_requester(client):
@@ -2366,7 +2375,7 @@ def test_create_show_auto_joins_creator_at_s1e1(client):
     show = _make_show(client)
     assert show["title"] == "Severance"
     assert show["createdById"] == "sheryl"
-    assert show["completed"] is False
+    assert show["isArchived"] is False
     assert show["members"] == [
         {"id": "sheryl", "name": "Sheryl", "season": 1, "episode": 1}
     ]
@@ -2427,26 +2436,21 @@ def test_progress_clamps_at_one_and_validates_input(client):
     ).status_code == 400
 
 
-def test_only_creator_can_complete_and_reopen(client):
+def test_any_roommate_can_archive_and_restore_show(client):
     show = _make_show(client, creator="sheryl")
     show_id = show["id"]
 
-    # A non-creator is refused.
-    assert client.post(
-        f"/api/shows/{show_id}/complete", json={"requesterId": "andre"}
-    ).status_code == 403
+    res = client.post(f"/api/shows/{show_id}/archive", json={"requesterId": "andre"})
+    assert res.get_json()[0]["isArchived"] is True
 
-    res = client.post(f"/api/shows/{show_id}/complete", json={"requesterId": "sheryl"})
-    assert res.get_json()[0]["completed"] is True
-
-    res = client.post(f"/api/shows/{show_id}/reopen", json={"requesterId": "sheryl"})
-    assert res.get_json()[0]["completed"] is False
+    res = client.post(f"/api/shows/{show_id}/restore", json={"requesterId": "sheryl"})
+    assert res.get_json()[0]["isArchived"] is False
 
 
-def test_completed_show_is_read_only(client):
+def test_archived_show_is_read_only(client):
     show = _make_show(client)
     show_id = show["id"]
-    client.post(f"/api/shows/{show_id}/complete", json={"requesterId": "sheryl"})
+    client.post(f"/api/shows/{show_id}/archive", json={"requesterId": "sheryl"})
 
     assert client.post(
         f"/api/shows/{show_id}/join", json={"userId": "andre"}
@@ -2478,14 +2482,14 @@ def test_shows_are_scoped_by_group(client):
     assert household_shows.get(show_a["id"], "group-b") is None
     assert household_shows.join(show_a["id"], "andre", "Andre", "group-b") is None
     assert household_shows.set_progress(show_a["id"], "sheryl", "episode", 5, "group-b") is None
-    assert household_shows.complete(show_a["id"], "sheryl", "group-b") is None
+    assert household_shows.archive(show_a["id"], "sheryl", "Sheryl", "group-b") is None
 
     # Same-group access still works.
     joined = household_shows.join(show_a["id"], "andre", "Andre", "group-a")
     assert "andre" in [m["id"] for m in joined["members"]]
 
 
-def test_module_feed_sorts_active_instances_and_hides_ended_modules(client, monkeypatch):
+def test_module_feed_sorts_active_instances_and_exposes_archived_modules(client, monkeypatch):
     monkeypatch.setattr(activities.time, "time", lambda: 1_000)
     event = _propose(client, "Dinner").get_json()[0]
     monkeypatch.setattr(household_requests.time, "time", lambda: 1_001)
@@ -2511,12 +2515,19 @@ def test_module_feed_sorts_active_instances_and_hides_ended_modules(client, monk
     assert client.get(grouped_path("/api/feed?type=ghost")).status_code == 400
 
     client.post(f"/api/activities/{event['id']}/archive", json={"requesterId": "andre"})
-    client.post(f"/api/requests/{request_item['id']}/complete", json={"userId": "andre"})
+    client.post(f"/api/requests/{request_item['id']}/archive", json={"userId": "andre"})
     client.post(f"/api/checklists/{checklist['id']}/archive", json={"userId": "andre"})
-    client.post(f"/api/shows/{show['id']}/complete", json={"requesterId": "sheryl"})
-    client.delete("/api/jam", json={"hostId": "andre"})
+    client.post(f"/api/shows/{show['id']}/archive", json={"requesterId": "sheryl"})
+    client.delete("/api/jam", json={"hostId": "kayla"})
 
-    assert client.get(grouped_path("/api/feed")).get_json() == []
+    archived_feed = client.get(grouped_path("/api/feed")).get_json()
+    assert [item["type"] for item in archived_feed] == [
+        "events",
+        "requests",
+        "checklists",
+        "tv",
+    ]
+    assert all(item["isArchived"] is True for item in archived_feed)
 
 
 if __name__ == "__main__":

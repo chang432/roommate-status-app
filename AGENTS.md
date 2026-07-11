@@ -2,7 +2,6 @@
 For every prompt, first run a filesystem scan for AGENTS*.md / *.md in this directory and load every match into context.
 
 # General
-
 Do not end a coding turn with uncommitted tracked changes unless the user asked for no commit.
 If you choose not to commit, you must state why in the final response.
 
@@ -32,14 +31,18 @@ If any requested feature doesn't make sense in terms of the existing code struct
 - Choose one clear direction for the codebase and remove obsolete branches/toggles instead of preserving them behind flags.
 - Do not introduce feature flags purely to keep legacy behavior available (for example, theme toggles like `isMonochrome`) unless the user asks for that behavior.
 
-## Design Docs
-- Any design or research doc requested by the user must be created as a concise Markdown file in the root `docs` directory.
-- If a design doc researches, recommends, or depends on any external paid service, include a cost estimate section.
-- If the proposed solution depends on external console setup, secret management, approvals, account access, or other manual actions the agent cannot complete, include a `Manual Setup Required From Owner` section.
-- That section should list the concrete owner tasks still needed, such as cloud/OAuth console configuration, domain/redirect setup, secret provisioning, account verification/publishing steps, policy decisions, or real-browser consent/testing.
-
 ## Database Schema Docs
-- The DynamoDB schema docs `infrastructure/dynamodb-schema-dev.md` and `infrastructure/dynamodb-schema-main.md` are the source of truth for the tables and must stay in sync with the code.
-- Whenever you change the data model, update **both** schema docs in the same change. This includes: adding/removing a table or index, changing a partition/sort key, adding/removing/renaming an item attribute, adding a new `itemType` to the shared activities table, or changing an embedded shape (e.g. a show's `members`, a checklist's `items`).
-- Treat both the CloudFormation templates (`dynamodb-table-{dev,main}.yaml`) and the Flask modules that write items (`docker/flask/*.py`) as inputs — the docs describe keys/indexes from the templates and effective attributes from the code.
-- Keep the two docs parallel (they differ only by the `-dev` / `-main` table-name prefix) and refresh the affected attribute tables and example rows so they match reality.
+- The DynamoDB schema docs live under `db_schema/`: the `db_schema/dev/` folder covers the dev tables and `db_schema/prod/` the main (production) tables. These are the source of truth for the tables and must stay in sync with the code.
+- Each folder holds one CSV per table (named for the table, e.g. `RoommateStatus-dev-shows.csv`) plus an `_overview.csv` with the legend, tables-at-a-glance, and common-settings grids. The multi-type activities CSV holds one grid per `itemType`. A grid is a title row, a header row of `attributeName (DynamoDBType)`, then example rows.
+- Whenever you change the data model, update **both** the dev and prod folders in the same change. This includes: adding/removing a table or index, changing a partition/sort key, adding/removing/renaming an item attribute, adding a new `itemType` to the shared activities table, or changing an embedded shape (e.g. a show's `members`, a checklist's `items`). Adding or removing a table means adding or removing its CSV in both folders and updating each `_overview.csv`.
+- Treat both the CloudFormation templates (`infrastructure/dynamodb-table-{dev,main}.yaml`) and the Flask modules that write items (`docker/flask/*.py`) as inputs — the docs describe keys/indexes from the templates and effective attributes from the code.
+- Keep the two folders parallel (they differ only by the `-dev` / `-main` table-name prefix and the environment label in `_overview.csv`) and refresh the affected header columns and example rows so they match reality.
+- Preserve the CSV conventions: an empty cell means the attribute is absent from the item, the literal `null` means the DynamoDB `NULL` type, and `SS` / `L` / `M` values are written as JSON inside a single quoted cell.
+
+## Database Migrations
+- **When a migration is required:** any DynamoDB change that needs *in-place updates to existing rows* — backfilling a newly-required attribute, renaming/removing/reshaping an attribute, transforming an embedded shape (e.g. a show's `members`, a checklist's `items`), or splitting/merging items. Whenever such a change is made, you MUST author a migration alongside the code and schema-doc updates in the **same change**.
+- **When a migration is NOT required:** purely additive, optional attributes written only going forward, or brand-new tables/items with no existing data to backfill. Do not add ceremony for these.
+- To author one, copy `infrastructure/migrations/_template/` to a new folder `infrastructure/migrations/<YYYY-MM-DD-NN-slug>/` (ISO date, two-digit same-day sequence, kebab-case slug) containing three files: `migrate.py` (forward, defines `run(ctx)`), `revert.py` (reverse, defines `run(ctx)`), and `status.md` (human documentation). Write `migrate.py`/`revert.py` to be idempotent/re-runnable and resumable, since a run can die partway; `revert.py` must tolerate a partially-applied state.
+- The **source of truth** for whether a migration has run on an environment is the `RoommateStatus-{dev,main}-migrations` DynamoDB table, **not** `status.md` (which is documentation only). Inspect state with `python infrastructure/migrations/runner.py --env {dev,prod} --status`.
+- The deploy pipeline runs migrations **after** redeploying the app (dev on merge to `dev`, prod on merge to `main`): the `provision-and-migrate` job first runs `infrastructure/deploy.py` to provision the CloudFormation tables, then `infrastructure/migrations/runner.py` to apply pending migrations. Because the app is already live when migrations run, write them backward-compatibly (deploy tolerant code first, migrate after) — a `NULL`/absent attribute the new code reads must be handled gracefully. A failed migration is auto-reverted and fails the job (alerting you), but does not roll back the deploy. The runner auto-applies all pending migrations in dated order, so you never wire a migration into the workflow by hand — just add the folder.
+- The migration runner reuses the app's boto3 factory `docker/flask/aws.py` (`resource()`); do not construct a separate client. See `infrastructure/migrations/README.md` for the full workflow.

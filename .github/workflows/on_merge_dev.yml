@@ -170,3 +170,30 @@ jobs:
               exit 1
             fi
             echo "Deploy succeeded; the dev stack is running."
+
+  # After the app is redeployed, (1) provision the DynamoDB infrastructure so the
+  # right tables exist (CloudFormation create/update; a no-op when unchanged),
+  # then (2) apply any pending in-place data migrations against those tables. A
+  # failed migration is auto-reverted and fails this job; note the app is already
+  # live by this point, so migrations should be written backward-compatibly
+  # (deploy tolerant code first, migrate after).
+  provision-and-migrate:
+    needs: deploy-dev-vps
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies (boto3)
+        run: pip install -r infrastructure/requirements.txt
+      - name: Deploy DynamoDB infrastructure (dev)
+        run: python infrastructure/deploy.py --dev
+      - name: Apply pending DynamoDB migrations (dev)
+        run: python infrastructure/migrations/runner.py --env dev

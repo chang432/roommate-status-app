@@ -8,6 +8,8 @@ Description: >-
       a hash of the push endpoint (see docker/flask/push.py).
     - RoommateStatus-dev-activities: one item per proposed activity, keyed by a
       generated id (see docker/flask/activities.py).
+    - RoommateStatus-dev-checklists: one item per household checklist, keyed by a
+      generated id (see docker/flask/household_checklists.py).
     - RoommateStatus-dev-groups: one item per group, keyed by groupId.
 
   This is the "-dev" half of the dev/main split (see dynamodb-table-main.yaml
@@ -121,6 +123,32 @@ Resources:
         - Key: Environment
           Value: dev
 
+  # Household checklists for the dev deployment. Separate table; one item per
+  # checklist, keyed by a generated id, with items embedded (see
+  # docker/flask/household_checklists.py).
+  ChecklistsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-checklists
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
   # Groups for the dev deployment. Group attributes remain schemaless beyond
   # the stable groupId partition key.
   GroupsTable:
@@ -145,6 +173,33 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
+  # In-place data-migration ledger for the dev deployment. One item per applied
+  # migration (id = migration folder name) plus a transient lock item; written
+  # by infrastructure/migrations/runner.py, not the app. It is the source of
+  # truth for whether a migration has run against these tables.
+  MigrationsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-migrations
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
       SSESpecification:
         SSEEnabled: true
       PointInTimeRecoverySpecification:
@@ -204,6 +259,18 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-ShowsTableArn"
 
+  ChecklistsTableName:
+    Description: Name of the household checklists DynamoDB table.
+    Value: !Ref ChecklistsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ChecklistsTableName"
+
+  ChecklistsTableArn:
+    Description: ARN of the household checklists DynamoDB table.
+    Value: !GetAtt ChecklistsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ChecklistsTableArn"
+
   GroupsTableName:
     Description: Name of the groups DynamoDB table.
     Value: !Ref GroupsTable
@@ -215,3 +282,15 @@ Outputs:
     Value: !GetAtt GroupsTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-GroupsTableArn"
+
+  MigrationsTableName:
+    Description: Name of the data-migration ledger DynamoDB table.
+    Value: !Ref MigrationsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-MigrationsTableName"
+
+  MigrationsTableArn:
+    Description: ARN of the data-migration ledger DynamoDB table.
+    Value: !GetAtt MigrationsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-MigrationsTableArn"

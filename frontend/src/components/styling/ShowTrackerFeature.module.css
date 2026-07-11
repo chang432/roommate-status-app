@@ -20,7 +20,7 @@
 
 /* A completed show, shown read-only in the collapsible section. */
 .completedCard {
-  @apply border-surface-expired-border bg-surface-muted opacity-90;
+  @apply border-surface-expired-border bg-surface-muted;
 }
 
 .summary {

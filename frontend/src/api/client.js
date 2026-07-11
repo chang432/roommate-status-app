@@ -154,7 +154,7 @@ export async function shareJam(link, hostId) {
   })
 }
 
-// DELETE /api/jam — end the active Jam owned by the host.
+// DELETE /api/jam — remove the active Jam.
 export async function endJam(hostId) {
   return request('/jam', {
     method: 'DELETE',
@@ -185,8 +185,16 @@ export async function archiveActivity(id, requesterId) {
   })
 }
 
-// DELETE /api/activities/:id — permanently remove an activity owned by the
-// requesting roommate. Returns the refreshed activity list.
+// POST /api/activities/:id/restore — bring an archived or expired activity
+// back into the active list. Returns the refreshed activity list.
+export async function restoreActivity(id, requesterId) {
+  return request(`/activities/${id}/restore`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
+// DELETE /api/activities/:id — permanently remove an activity from the group.
 export async function deleteActivity(id, requesterId) {
   return request(`/activities/${id}`, {
     method: 'DELETE',
@@ -277,23 +285,23 @@ export async function respondToRequest(id, userId, response) {
   })
 }
 
-// POST /api/requests/:id/complete — mark a request completed.
-export async function completeRequest(id, userId) {
-  return request(`/requests/${id}/complete`, {
+// POST /api/requests/:id/archive — archive a request.
+export async function archiveRequest(id, userId) {
+  return request(`/requests/${id}/archive`, {
     method: 'POST',
     body: JSON.stringify({ userId }),
   })
 }
 
-// POST /api/requests/:id/reopen — move a completed request back to active.
-export async function reopenRequest(id, userId) {
-  return request(`/requests/${id}/reopen`, {
+// POST /api/requests/:id/restore — restore an archived request.
+export async function restoreRequest(id, userId) {
+  return request(`/requests/${id}/restore`, {
     method: 'POST',
     body: JSON.stringify({ userId }),
   })
 }
 
-// DELETE /api/requests/:id — delete a request owned by the requester.
+// DELETE /api/requests/:id — delete a request from the household feed.
 export async function deleteRequest(id, requesterId) {
   return request(`/requests/${id}`, {
     method: 'DELETE',
@@ -380,6 +388,22 @@ export async function archiveChecklist(id, userId) {
   })
 }
 
+// POST /api/checklists/:id/restore — restore an archived checklist.
+export async function restoreChecklist(id, userId) {
+  return request(`/checklists/${id}/restore`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}
+
+// DELETE /api/checklists/:id — delete a checklist from the household feed.
+export async function deleteChecklist(id, userId) {
+  return request(`/checklists/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ userId }),
+  })
+}
+
 // --- TV show tracker -----------------------------------------------------
 // Backed by the Flask server's /api/shows endpoints (docker/flask/
 // household_shows.py), which persist to a dedicated DynamoDB table. Every
@@ -416,20 +440,26 @@ export async function leaveShow(id, userId) {
   })
 }
 
-// POST /api/shows/:id/complete — creator-only: mark a show completed so it
-// leaves the active list. Returns the refreshed show list.
-export async function completeShow(id, requesterId) {
-  return request(`/shows/${id}/complete`, {
+// POST /api/shows/:id/archive — archive a show so it leaves the active list.
+export async function archiveShow(id, requesterId) {
+  return request(`/shows/${id}/archive`, {
     method: 'POST',
     body: JSON.stringify({ requesterId }),
   })
 }
 
-// POST /api/shows/:id/reopen — creator-only: move a completed show back to the
-// active list. Returns the refreshed show list.
-export async function reopenShow(id, requesterId) {
-  return request(`/shows/${id}/reopen`, {
+// POST /api/shows/:id/restore — restore an archived show to the active list.
+export async function restoreShow(id, requesterId) {
+  return request(`/shows/${id}/restore`, {
     method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
+// DELETE /api/shows/:id — delete a show from the household feed.
+export async function deleteShow(id, requesterId) {
+  return request(`/shows/${id}`, {
+    method: 'DELETE',
     body: JSON.stringify({ requesterId }),
   })
 }

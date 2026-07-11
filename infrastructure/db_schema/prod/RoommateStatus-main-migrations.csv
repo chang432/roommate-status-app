@@ -1,0 +1,5 @@
+"TABLE RoommateStatus-main-migrations - in-place data-migration ledger, written by infrastructure/migrations/runner.py (NOT the Flask app). This table is the source of truth for whether a migration has run in this environment; the per-migration status.md is human documentation only. Two item shapes share it: one ledger row per applied/reverted/failed migration (id = the migration folder name), plus a single transient lock row (id = lock#<env>) held while the runner is applying migrations so two runs can't overlap."
+id (S),status (S),appliedAt (N),updatedAt (N),checksum (S),lockedAt (N),runId (S)
+2026-07-10-01-backfill-updatedAt,applied,1720600000000,1720600000000,sha256:9b74c9897bac770ffc029102a200c5de,,
+2026-07-09-01-drop-legacy-flag,reverted,1720500000000,1720550000000,sha256:2c26b46b68ffc68ff99b453c1d304134,,
+lock#main,locked,,,,1720600000000,gha-run-8412

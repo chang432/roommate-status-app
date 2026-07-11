@@ -1,0 +1,5 @@
+TABLE RoommateStatus-main - accounts & roommate status (one item per account; id is the normalized lowercase username)
+id (S),username (S),name (S),passwordHash (S),groupId (S|NULL),status (S),statusText (S),statusUpdatedAt (N)
+sheryl,sheryl,Sheryl,scrypt:32768:8:1$Zt9QpKm2vRxL$b1c4e7a9,yorkshire,available,in the kitchen,1720200000000
+andre,andre,Andre,scrypt:32768:8:1$Kd3RmVn7pQwZ$4f81ba2c,yorkshire,ooh,back around 7,1720199000000
+wanda,wanda,Wanda,scrypt:32768:8:1$Aa1BcDe4fGhI$77de91b0,null,busy,,
