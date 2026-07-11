@@ -182,12 +182,13 @@ def _checksum(migration_dir: Path) -> str:
 def discover(migrations_dir: Path) -> list[Path]:
     """Return migration folders in apply order, validating names and contents.
 
-    Anything starting with ``_`` (``_template``) and non-directories (``runner.py``,
-    ``README.md``) are ignored, so only real migrations are returned.
+    Non-directories (``runner.py``, ``README.md``) and folders starting with
+    ``_`` (``_template``, ``__pycache__``) or ``.`` (``.pytest_cache``) are
+    ignored, so only real migrations are returned.
     """
     found: list[Path] = []
     for path in sorted(migrations_dir.iterdir()):
-        if not path.is_dir() or path.name.startswith("_"):
+        if not path.is_dir() or path.name.startswith(("_", ".")):
             continue
         if not _MIGRATION_RE.match(path.name):
             raise SystemExit(

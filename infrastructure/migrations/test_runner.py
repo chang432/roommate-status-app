@@ -65,13 +65,15 @@ def test_ensure_exists_missing_table_is_fatal(aws):
         tracking.ensure_exists()
 
 
-def test_discover_orders_and_skips_underscore(tmp_path):
+def test_discover_orders_and_skips_underscore_and_dot(tmp_path):
     (tmp_path / "_template").mkdir()
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / ".pytest_cache").mkdir()  # dot-dirs must not trip discovery
     (tmp_path / "README.md").write_text("x")
     for name in ("2026-07-10-02-b", "2026-07-10-01-a"):
         _make_migration(tmp_path, name, "pass", "pass")
     found = [p.name for p in runner.discover(tmp_path)]
-    assert found == ["2026-07-10-01-a", "2026-07-10-02-b"]  # sorted; _template excluded
+    assert found == ["2026-07-10-01-a", "2026-07-10-02-b"]  # sorted; _/. dirs excluded
 
 
 def test_discover_rejects_bad_name(tmp_path):
