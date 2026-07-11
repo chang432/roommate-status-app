@@ -36,6 +36,7 @@ create_table() {
 create_table "$ROOMMATE_TABLE" id
 create_table "$ROOMMATE_TABLE-activities" id
 create_table "$ROOMMATE_TABLE-shows" id
+create_table "$ROOMMATE_TABLE-checklists" id
 create_table "$ROOMMATE_TABLE-pushsubs" id
 # Data-migration ledger, so the migration runner can be exercised locally.
 create_table "$ROOMMATE_TABLE-migrations" id

@@ -24,8 +24,9 @@ TABLES AT A GLANCE (one CSV per table in this folder)
 Table,CSV file,Partition key,Index,Written by,Purpose
 RoommateStatus-dev,RoommateStatus-dev.csv,id (S),,db.py,Accounts / roommate status
 RoommateStatus-dev-pushsubs,RoommateStatus-dev-pushsubs.csv,id (S),,push.py,Web Push subscriptions
-RoommateStatus-dev-activities,RoommateStatus-dev-activities.csv,id (S),,"activities.py, household_checklists.py, household_requests.py, jam.py","Activities, checklists, requests, Spotify Jam + comment likes (multi-type)"
+RoommateStatus-dev-activities,RoommateStatus-dev-activities.csv,id (S),,"activities.py, household_requests.py, jam.py","Activities, requests, Spotify Jam + comment likes (multi-type)"
 RoommateStatus-dev-shows,RoommateStatus-dev-shows.csv,id (S),,household_shows.py,TV show tracker
+RoommateStatus-dev-checklists,RoommateStatus-dev-checklists.csv,id (S),,household_checklists.py,Household checklists
 RoommateStatus-dev-groups,RoommateStatus-dev-groups.csv,groupId (S),"JoinCodeIndex (HASH joinCode, ProjectionType ALL)",groups.py,Households / join-by-code groups
 RoommateStatus-dev-migrations,RoommateStatus-dev-migrations.csv,id (S),,migrations/runner.py,In-place data-migration ledger + run lock
 

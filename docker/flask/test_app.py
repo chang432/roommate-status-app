@@ -56,6 +56,7 @@ def _dynamodb():
             push.TABLE_NAME,
             activities.TABLE_NAME,
             household_shows.TABLE_NAME,
+            household_checklists.TABLE_NAME,
         ):
             ddb.create_table(
                 TableName=table_name,
@@ -86,7 +87,12 @@ def _dynamodb():
 def client():
     db.reset()  # Isolate each test from prior status mutations.
     # Clear mutable tables so each test starts with no activities/subscriptions.
-    for table in (activities._get_table(), push._get_table(), household_shows._get_table()):
+    for table in (
+        activities._get_table(),
+        push._get_table(),
+        household_shows._get_table(),
+        household_checklists._get_table(),
+    ):
         for item in table.scan().get("Items", []):
             table.delete_item(Key={"id": item["id"]})
     app = create_app()
