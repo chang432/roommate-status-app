@@ -1,20 +1,13 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  DynamoDB tables for the "main" (production) deployment of the Yorkshire
-  Roomie Status app:
-    - RoommateStatus-main: one item per roommate, keyed by a stable string id
-      (e.g. "jordan"); name/status/statusText are schemaless, app-written.
-    - RoommateStatus-main-pushsubs: one Web Push subscription per item (push.py).
-    - RoommateStatus-main-activities: one proposed activity per item (activities.py).
-    - RoommateStatus-main-shows: one TV show per item, watchers embedded
-      (household_shows.py).
-    - RoommateStatus-main-checklists: one household checklist per item
-      (household_checklists.py).
-    - RoommateStatus-main-groups: one group per item, keyed by groupId.
-
-  The "-main" half of the dev/main split (see dynamodb-table-dev.yaml for the
-  dev tables); table names are fixed per template so the two deployments can
-  never accidentally share data.
+  DynamoDB tables for the "main" (production) deployment of the Yorkshire Roomie
+  Status app — one table per concern, all keyed by a string id (groups keyed by
+  groupId): RoommateStatus-main (roommates/accounts), plus the -pushsubs,
+  -activities, -requests, -spotify-jam, -shows, -checklists, -comment-likes,
+  -groups, and -migrations tables. See the matching Flask modules in
+  docker/flask/ for each table's shape. Table names are fixed per template so the
+  dev and main deployments can never accidentally share data (see
+  dynamodb-table-dev.yaml for the dev half).
 
 Resources:
   RoommateStatusTable:
@@ -131,6 +124,84 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       TableName: RoommateStatus-main-checklists
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: main
+
+  # Household requests for the production deployment. Separate table; one item
+  # per request, keyed by a generated id, with comments embedded (see
+  # docker/flask/household_requests.py).
+  RequestsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-main-requests
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: main
+
+  # Spotify Jam for the production deployment. Separate table; a single
+  # activeJam#<group> item per group (absent means no active Jam), see
+  # docker/flask/jam.py.
+  SpotifyJamTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-main-spotify-jam
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: main
+
+  # Comment likes for the production deployment. Separate table; one row per
+  # user per liked comment, written by activities.py and household_requests.py.
+  # Each row self-describes its parent via activityId or requestId.
+  CommentLikesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-main-comment-likes
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: id
@@ -267,6 +338,42 @@ Outputs:
     Value: !GetAtt ChecklistsTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ChecklistsTableArn"
+
+  RequestsTableName:
+    Description: Name of the household-requests DynamoDB table.
+    Value: !Ref RequestsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-RequestsTableName"
+
+  RequestsTableArn:
+    Description: ARN of the household-requests DynamoDB table.
+    Value: !GetAtt RequestsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RequestsTableArn"
+
+  SpotifyJamTableName:
+    Description: Name of the Spotify Jam DynamoDB table.
+    Value: !Ref SpotifyJamTable
+    Export:
+      Name: !Sub "${AWS::StackName}-SpotifyJamTableName"
+
+  SpotifyJamTableArn:
+    Description: ARN of the Spotify Jam DynamoDB table.
+    Value: !GetAtt SpotifyJamTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-SpotifyJamTableArn"
+
+  CommentLikesTableName:
+    Description: Name of the comment-likes DynamoDB table.
+    Value: !Ref CommentLikesTable
+    Export:
+      Name: !Sub "${AWS::StackName}-CommentLikesTableName"
+
+  CommentLikesTableArn:
+    Description: ARN of the comment-likes DynamoDB table.
+    Value: !GetAtt CommentLikesTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CommentLikesTableArn"
 
   GroupsTableName:
     Description: Name of the groups DynamoDB table.

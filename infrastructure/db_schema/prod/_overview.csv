@@ -24,9 +24,12 @@ TABLES AT A GLANCE (one CSV per table in this folder)
 Table,CSV file,Partition key,Index,Written by,Purpose
 RoommateStatus-main,RoommateStatus-main.csv,id (S),,db.py,Accounts / roommate status
 RoommateStatus-main-pushsubs,RoommateStatus-main-pushsubs.csv,id (S),,push.py,Web Push subscriptions
-RoommateStatus-main-activities,RoommateStatus-main-activities.csv,id (S),,"activities.py, household_requests.py, jam.py","Activities, requests, Spotify Jam + comment likes (multi-type)"
+RoommateStatus-main-activities,RoommateStatus-main-activities.csv,id (S),,activities.py,Proposed activities
+RoommateStatus-main-requests,RoommateStatus-main-requests.csv,id (S),,household_requests.py,Household requests
+RoommateStatus-main-spotify-jam,RoommateStatus-main-spotify-jam.csv,id (S),,jam.py,Active Spotify Jam (one per group)
 RoommateStatus-main-shows,RoommateStatus-main-shows.csv,id (S),,household_shows.py,TV show tracker
 RoommateStatus-main-checklists,RoommateStatus-main-checklists.csv,id (S),,household_checklists.py,Household checklists
+RoommateStatus-main-comment-likes,RoommateStatus-main-comment-likes.csv,id (S),,"activities.py, household_requests.py",Likes on activity & request comments
 RoommateStatus-main-groups,RoommateStatus-main-groups.csv,groupId (S),"JoinCodeIndex (HASH joinCode, ProjectionType ALL)",groups.py,Households / join-by-code groups
 RoommateStatus-main-migrations,RoommateStatus-main-migrations.csv,id (S),,migrations/runner.py,In-place data-migration ledger + run lock
 

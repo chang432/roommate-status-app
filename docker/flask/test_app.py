@@ -22,6 +22,7 @@ import pytest
 from moto import mock_aws
 
 import activities
+import comment_likes
 import db
 import groups
 import household_checklists
@@ -55,8 +56,11 @@ def _dynamodb():
             db.TABLE_NAME,
             push.TABLE_NAME,
             activities.TABLE_NAME,
+            comment_likes.TABLE_NAME,
+            household_requests.TABLE_NAME,
             household_shows.TABLE_NAME,
             household_checklists.TABLE_NAME,
+            jam.TABLE_NAME,
         ):
             ddb.create_table(
                 TableName=table_name,
@@ -89,9 +93,12 @@ def client():
     # Clear mutable tables so each test starts with no activities/subscriptions.
     for table in (
         activities._get_table(),
+        comment_likes._get_table(),
+        household_requests._get_table(),
         push._get_table(),
         household_shows._get_table(),
         household_checklists._get_table(),
+        jam._get_table(),
     ):
         for item in table.scan().get("Items", []):
             table.delete_item(Key={"id": item["id"]})
@@ -639,7 +646,7 @@ def test_share_jam_replaces_active_link_and_notifies(client, monkeypatch):
         "createdAt": data["createdAt"],
     }
     assert client.get(grouped_path("/api/jam")).get_json()["link"] == "https://spotify.link/second"
-    stored = activities._get_table().get_item(Key={"id": jam._active_jam_id(TEST_GROUP_ID)})["Item"]
+    stored = jam._get_table().get_item(Key={"id": jam._active_jam_id(TEST_GROUP_ID)})["Item"]
     assert stored["hostId"] == "kayla"
     assert calls[-1] == (
         "all",
@@ -956,9 +963,9 @@ def test_requester_can_delete_request_and_comment_likes(client, monkeypatch):
     assert deleted.get_json() == []
     assert household_requests.get(request_item["id"], TEST_GROUP_ID, consistent=True) is None
     assert not [
-        item
-        for item in household_requests._scan_all(consistent=True)
-        if item.get("itemType") == household_requests.REQUEST_COMMENT_LIKE_TYPE
+        like
+        for like in comment_likes._scan_all(consistent=True)
+        if like.get("requestId") == request_item["id"]
     ]
     assert calls == [
         (
@@ -1895,7 +1902,7 @@ def test_activity_sorting_and_typed_request_isolation(client, monkeypatch):
         },
         {
             "id": "request-record",
-            "itemType": household_requests.REQUEST_TYPE,
+            "itemType": "request",
             "groupId": TEST_GROUP_ID,
             "text": "Not an activity",
             "createdAt": 7,
