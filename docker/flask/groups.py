@@ -116,8 +116,17 @@ def get_group_by_code(code: str) -> dict | None:
     return _project_group(items[0]) if items else None
 
 
+def list_groups_for_user(user_id: str) -> list[dict]:
+    """Return the metadata for every group an account belongs to."""
+    return [
+        group
+        for group_id in db.get_group_ids(user_id)
+        if (group := get_group_by_id(group_id)) is not None
+    ]
+
+
 def join_group(user_id: str, code: str) -> tuple[dict | None, str | None]:
-    """Assign a pending account to the group that owns the invite code."""
+    """Add an account to the group that owns the invite code."""
     normalized_code = normalize_join_code(code)
     if not valid_join_code(normalized_code):
         return None, "invalid_code"
@@ -126,31 +135,13 @@ def join_group(user_id: str, code: str) -> tuple[dict | None, str | None]:
     if group is None:
         return None, "unknown_code"
 
-    try:
-        _get_account_table().update_item(
-            Key={"id": db.normalize_username(user_id)},
-            UpdateExpression="SET groupId = :groupId",
-            ExpressionAttributeValues={
-                ":groupId": group["groupId"],
-                ":nullType": "NULL",
-            },
-            ConditionExpression=(
-                "attribute_exists(id) AND "
-                "(attribute_not_exists(groupId) OR attribute_type(groupId, :nullType))"
-            ),
-            ReturnValues="ALL_NEW",
-        )
-    except ClientError as err:
-        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            account = db.get_account_by_id(db.normalize_username(user_id))
-            if account is None:
-                return None, "unknown_user"
-            if account.get("groupId"):
-                return None, "already_grouped"
-            return None, "unknown_user"
-        raise
-    return db.get_account_by_id(db.normalize_username(user_id)), None
-
-
-def _get_account_table():
-    return db._get_table()
+    account = db.get_account_by_id(db.normalize_username(user_id))
+    if account is None:
+        return None, "unknown_user"
+    if db.get_membership(account["id"], group["groupId"]):
+        return None, "already_member"
+    if db.create_membership(account["id"], group["groupId"], account["name"]) is None:
+        return None, "already_member"
+    # The client switches to the group it just joined, even if lexical group
+    # ordering would make a different membership appear first on the account.
+    return {**db.get_account_by_id(account["id"]), "groupId": group["groupId"]}, None

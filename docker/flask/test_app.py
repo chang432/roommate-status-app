@@ -84,6 +84,25 @@ def _dynamodb():
             ],
             BillingMode="PAY_PER_REQUEST",
         )
+        ddb.create_table(
+            TableName=db.MEMBERSHIPS_TABLE,
+            KeySchema=[
+                {"AttributeName": "groupId", "KeyType": "HASH"},
+                {"AttributeName": "userId", "KeyType": "RANGE"},
+            ],
+            AttributeDefinitions=[
+                {"AttributeName": "groupId", "AttributeType": "S"},
+                {"AttributeName": "userId", "AttributeType": "S"},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    "IndexName": db.MEMBERSHIP_USER_INDEX,
+                    "KeySchema": [{"AttributeName": "userId", "KeyType": "HASH"}],
+                    "Projection": {"ProjectionType": "ALL"},
+                }
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
         yield
 
 
@@ -216,6 +235,42 @@ def test_get_account_includes_pending_no_group_accounts(client):
     res = client.get("/api/accounts/pending")
     assert res.status_code == 200
     assert res.get_json()["user"]["hasGroup"] is False
+
+
+def test_group_memberships_switch_status_scope_with_request_header(client):
+    groups._get_table().put_item(
+        Item={
+            "groupId": "cedar-house",
+            "name": "Cedar House",
+            "joinCode": "CEDAR77",
+            "createdAt": 1,
+        }
+    )
+
+    joined = client.post("/api/groups/join", json={"userId": "andre", "code": "CEDAR77"})
+    assert joined.status_code == 200
+    assert joined.get_json()["group"]["groupId"] == "cedar-house"
+
+    listed = client.get("/api/groups?userId=andre").get_json()["groups"]
+    assert [group["groupId"] for group in listed] == ["cedar-house", "yorkshire"]
+
+    cedar_headers = {"X-Roomie-Group-ID": "cedar-house"}
+    cedar_roster = client.get("/api/roommates?userId=andre", headers=cedar_headers)
+    assert [roommate["id"] for roommate in cedar_roster.get_json()] == ["andre"]
+
+    updated = client.put(
+        "/api/roommates/andre/status",
+        headers=cedar_headers,
+        json={"status": "available", "statusText": "At the cabin"},
+    )
+    assert updated.status_code == 200
+    assert updated.get_json()[0]["statusText"] == "At the cabin"
+
+    yorkshire = client.get(
+        "/api/roommates?userId=andre",
+        headers={"X-Roomie-Group-ID": "yorkshire"},
+    ).get_json()
+    assert next(roommate for roommate in yorkshire if roommate["id"] == "andre")["status"] == "busy"
 
 
 def test_get_account_unknown_user_flags_invalid_user(client):
@@ -391,7 +446,7 @@ def test_gather_push_waits_until_ended_activity_participant_saves_again(client, 
             {
                 "title": "Roomies are free!",
                 "body": "3 roomies are free! LETS HANG 🎉!",
-                "url": "/",
+                "url": "/?groupId=yorkshire",
                 "exclude_user_ids": {"andre"},
             },
         )
@@ -484,7 +539,7 @@ def test_status_reminder_notifies_household_except_requester(client, monkeypatch
             {
                 "title": "Update your status",
                 "body": "Kayla wants to know what you're up to 👀",
-                "url": "/",
+                "url": "/?groupId=yorkshire",
                 "exclude_user_ids": {"kayla"},
             },
         )
@@ -514,7 +569,7 @@ def test_poke_roommate_sends_targeted_status_update_notification(client, monkeyp
                 "user_ids": {"sheryl"},
                 "title": "Andre poked you 👋",
                 "body": "Update your status so they know what you're up to.",
-                "url": "/?updateStatus=1",
+                "url": "/?updateStatus=1&groupId=yorkshire",
             },
         )
     ]
@@ -653,7 +708,7 @@ def test_share_jam_replaces_active_link_and_notifies(client, monkeypatch):
         {
             "title": "Spotify Jam is live",
             "body": "Kayla shared a Jam. Tap to join.",
-            "url": "/",
+            "url": "/?groupId=yorkshire",
             "event_type": "jam-changed",
             "exclude_user_ids": {"kayla"},
         },
@@ -805,7 +860,7 @@ def test_create_request_targets_roommates_and_notifies_them(client, monkeypatch)
     assert request_item["isArchived"] is False
     assert request_item["archivedAt"] is None
     assert client.get(grouped_path("/api/activities")).get_json() == []
-    request_url = f"/?request={request_item['id']}"
+    request_url = f"/?request={request_item['id']}&groupId=yorkshire"
     assert calls == [
         (
             "users",
@@ -848,7 +903,7 @@ def test_requested_roommate_can_accept_or_deny(client, monkeypatch):
             "exclude_user_ids": {"kayla"},
             "title": "Request response",
             "body": "Kayla accepted “Please take out recycling”",
-            "url": f"/?request={request_item['id']}",
+            "url": f"/?request={request_item['id']}&groupId=yorkshire",
             "event_type": "requests-changed",
         },
     )
@@ -900,7 +955,7 @@ def test_any_roommate_can_archive_request_and_notify_requester(client, monkeypat
                 "exclude_user_ids": {"ting"},
                 "title": "Request archived",
                 "body": "Ting archived “Please take out recycling”",
-                "url": f"/?request={request_item['id']}",
+                "url": f"/?request={request_item['id']}&groupId=yorkshire",
                 "event_type": "requests-changed",
             },
         )
@@ -934,7 +989,7 @@ def test_any_roommate_can_restore_archived_request(client, monkeypatch):
                 "exclude_user_ids": {"ting"},
                 "title": "Request restored",
                 "body": "Ting restored “Please take out recycling”",
-                "url": f"/?request={request_item['id']}",
+                "url": f"/?request={request_item['id']}&groupId=yorkshire",
                 "event_type": "requests-changed",
             },
         )
@@ -975,7 +1030,7 @@ def test_requester_can_delete_request_and_comment_likes(client, monkeypatch):
                 "exclude_user_ids": {"andre"},
                 "title": "Request deleted",
                 "body": "Andre deleted “Please take out recycling”",
-                "url": f"/?request={request_item['id']}",
+                "url": f"/?request={request_item['id']}&groupId=yorkshire",
                 "event_type": "requests-changed",
             },
         )
@@ -1015,7 +1070,7 @@ def test_request_comments_and_likes_match_activity_shape(client, monkeypatch):
             "user_ids": {"andre"},
             "title": "New request comment",
             "body": "Kayla on “Please take out recycling”: I can do this",
-            "url": f"/?request={request_item['id']}",
+            "url": f"/?request={request_item['id']}&groupId=yorkshire",
             "event_type": "requests-changed",
         },
     )
@@ -1047,7 +1102,7 @@ def test_request_comment_mentions_target_named_users(client, monkeypatch):
             "user_ids": {"ting"},
             "title": "Kayla mentioned you",
             "body": "On request “Please take out recycling”: @Ting can you help?",
-            "url": f"/?request={request_item['id']}",
+            "url": f"/?request={request_item['id']}&groupId=yorkshire",
             "event_type": "requests-changed",
         },
     )
@@ -1075,7 +1130,7 @@ def test_create_checklist_returns_active_list_and_notifies_household(client, mon
             {
                 "title": "New checklist",
                 "body": "Andre posted “Kitchen reset”",
-                "url": f"/?checklist={checklist['id']}",
+                "url": f"/?checklist={checklist['id']}&groupId=yorkshire",
                 "event_type": "checklists-changed",
                 "exclude_user_ids": {"andre"},
             },
@@ -1165,7 +1220,7 @@ def test_checklist_notify_all_excludes_requester(client, monkeypatch):
             {
                 "title": "Checklist reminder",
                 "body": "Kayla reminded everyone to update “Costco Run”",
-                "url": f"/?checklist={checklist['id']}",
+                "url": f"/?checklist={checklist['id']}&groupId=yorkshire",
                 "event_type": "checklists-changed",
                 "exclude_user_ids": {"kayla"},
             },
@@ -1195,7 +1250,7 @@ def test_archive_checklist_flags_it_but_keeps_it_in_feed(client, monkeypatch):
             {
                 "title": "Checklist archived",
                 "body": "Ting archived “Costco Run”",
-                "url": "/",
+                "url": "/?groupId=yorkshire",
                 "event_type": "checklists-changed",
                 "exclude_user_ids": {"ting"},
             },
@@ -1486,7 +1541,7 @@ def test_new_activity_notifies_household_except_creator(client, monkeypatch):
             {
                 "title": "New activity proposed 🎉",
                 "body": "Andre: Picnic",
-                "url": "/",
+                "url": "/?groupId=yorkshire",
                 "exclude_user_ids": {"andre"},
             },
         )
@@ -1510,7 +1565,7 @@ def test_creator_can_start_end_and_restart_event(client, monkeypatch):
         {
             "title": "Event started 🔴",
             "body": "Andre started Dinner",
-            "url": "/",
+            "url": "/?groupId=yorkshire",
             "event_type": "activities-changed",
             "exclude_user_ids": {"andre"},
         },
@@ -1529,7 +1584,7 @@ def test_creator_can_start_end_and_restart_event(client, monkeypatch):
         {
             "title": "Event ended 🏁",
             "body": "Andre ended Dinner",
-            "url": "/",
+            "url": "/?groupId=yorkshire",
             "event_type": "activities-changed",
             "exclude_user_ids": {"andre"},
         },
@@ -2006,7 +2061,7 @@ def test_mentions_notify_household_members_and_store_canonical_metadata(
             "user_ids": {"sheryl", "ting"},
             "title": "Kayla mentioned you",
             "body": "On “Movie night”: @sheryl, can you ask @Ting? @SHERYL",
-            "url": "/",
+            "url": "/?groupId=yorkshire",
         },
     )
     assert participant_call[0] == "users"
@@ -2038,7 +2093,7 @@ def test_all_mention_notifies_household_once_and_excludes_author(client, monkeyp
             {
                 "title": "Kayla mentioned everyone",
                 "body": "On “Movie night”: @ALL please join us, especially @Sheryl",
-                "url": "/",
+                "url": "/?groupId=yorkshire",
                 "exclude_user_ids": {"kayla"},
             },
         )

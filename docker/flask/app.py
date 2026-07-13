@@ -78,8 +78,9 @@ from __future__ import annotations
 import os
 import re
 import threading
+from urllib.parse import quote
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 
 import activities
@@ -213,10 +214,16 @@ def notify_group(
         user_ids=group_user_ids(group_id),
         title=title,
         body=body,
-        url=url,
+        url=group_url(group_id, url),
         event_type=event_type,
         exclude_user_ids=exclude_user_ids,
     )
+
+
+def group_url(group_id: str, url: str = "/") -> str:
+    """Keep notification deep links in the household that generated them."""
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}groupId={quote(group_id)}"
 
 
 def _activity_status_overrides(group_id: str, consistent: bool = False) -> dict[str, dict]:
@@ -279,6 +286,15 @@ def create_app() -> Flask:
     def ensure_group_state():
         if request.path.startswith("/api/"):
             ensure_group_features_ready()
+            g.request_group_token = db.set_request_group_id(
+                request.headers.get("X-Roomie-Group-ID")
+            )
+
+    @app.teardown_request
+    def clear_request_group_state(_error):
+        token = getattr(g, "request_group_token", None)
+        if token is not None:
+            db.reset_request_group_id(token)
 
     @app.get("/api/health")
     def health():
@@ -356,12 +372,20 @@ def create_app() -> Flask:
             return jsonify({"error": "Enter a valid group code."}), 400
         if error == "unknown_code":
             return jsonify({"error": "That group code was not recognized."}), 404
-        if error == "already_grouped":
-            return jsonify({"error": "This account already belongs to a group."}), 409
+        if error == "already_member":
+            return jsonify({"error": "This account already belongs to that group."}), 409
         if error == "unknown_user" or user is None:
             return jsonify({"error": "A valid account is required."}), 400
         group = groups.get_group_by_id(user["groupId"])
         return jsonify({"user": user, "group": group})
+
+    @app.get("/api/groups")
+    def get_groups():
+        """Return every group the account can select in the home drawer."""
+        user_id = (request.args.get("userId") or "").strip()
+        if db.get_account_by_id(user_id) is None:
+            return invalid_user_response()
+        return jsonify({"groups": groups.list_groups_for_user(user_id)})
 
     @app.get("/api/groups/current")
     def get_current_group():
@@ -461,7 +485,7 @@ def create_app() -> Flask:
             user_ids={target["id"]},
             title=f"{requester['name']} poked you 👋",
             body="Update your status so they know what you're up to.",
-            url="/?updateStatus=1",
+            url=f"/?updateStatus=1&groupId={quote(requester['groupId'])}",
         )
         if result["sent"] == 0:
             return (
@@ -750,7 +774,7 @@ def create_app() -> Flask:
                 exclude_user_ids={requester_id},
                 title="Activity archived",
                 body=f"{actor_name} archived {activity['text']}",
-                url="/",
+                url=group_url(requester["groupId"]),
             )
         except Exception:  # noqa: BLE001 - archiving must remain successful
             app.logger.exception("Failed to send activity archive notification")
@@ -799,7 +823,7 @@ def create_app() -> Flask:
                 exclude_user_ids={requester_id},
                 title="Activity deleted",
                 body=f"{activity['proposedBy']} deleted {activity['text']}",
-                url="/",
+                url=group_url(requester["groupId"]),
             )
         except Exception:  # noqa: BLE001 - deletion must remain successful
             app.logger.exception("Failed to send activity deletion notification")
@@ -828,7 +852,7 @@ def create_app() -> Flask:
                 exclude_user_ids={roommate["id"]},
                 title="Someone joined an activity 🙌",
                 body=f"{roommate['name']} joined {activity['text']}",
-                url="/",
+                url=group_url(roommate["groupId"]),
             )
         except Exception:  # noqa: BLE001 - never let push break the request
             app.logger.exception("Failed to send join notification")
@@ -893,7 +917,7 @@ def create_app() -> Flask:
                     user_ids=user_ids,
                     title=title,
                     body=notification_body,
-                    url="/",
+                    url=group_url(author["groupId"]),
                 )
                 app.logger.info(
                     "Comment push result for %d recipient(s): %s",
@@ -1011,7 +1035,7 @@ def create_app() -> Flask:
                 user_ids={roommate["id"] for roommate in requested_roommates},
                 title="New request",
                 body=f"{requester['name']} requested: {text}",
-                url=request_url,
+                url=group_url(requester["groupId"], request_url),
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - never let push break request creation
@@ -1048,7 +1072,7 @@ def create_app() -> Flask:
                 exclude_user_ids={roommate["id"]},
                 title="Request response",
                 body=f"{roommate['name']} {response} “{updated['text']}”",
-                url=request_url,
+                url=group_url(roommate["groupId"], request_url),
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - response must remain successful
@@ -1080,7 +1104,7 @@ def create_app() -> Flask:
                 exclude_user_ids={roommate["id"]},
                 title="Request archived",
                 body=f"{roommate['name']} archived “{updated['text']}”",
-                url=request_url,
+                url=group_url(roommate["groupId"], request_url),
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - archive must remain successful
@@ -1112,7 +1136,7 @@ def create_app() -> Flask:
                 exclude_user_ids={roommate["id"]},
                 title="Request restored",
                 body=f"{roommate['name']} restored “{updated['text']}”",
-                url=request_url,
+                url=group_url(roommate["groupId"], request_url),
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - restore must remain successful
@@ -1142,7 +1166,7 @@ def create_app() -> Flask:
                 exclude_user_ids={requester_id},
                 title="Request deleted",
                 body=f"{request_item['requester']} deleted “{request_item['text']}”",
-                url=f"/?request={request_item['id']}",
+                url=group_url(requester["groupId"], f"/?request={request_item['id']}"),
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - deletion must remain successful
@@ -1192,7 +1216,7 @@ def create_app() -> Flask:
                     user_ids=user_ids,
                     title=title,
                     body=notification_body,
-                    url=f"/?request={updated['id']}",
+                    url=group_url(author["groupId"], f"/?request={updated['id']}"),
                     event_type="requests-changed",
                 )
             except Exception:  # noqa: BLE001 - never let push break the comment
@@ -1637,7 +1661,7 @@ def create_app() -> Flask:
             exclude_user_ids={emphasized_by["id"]},
             title="Activity emphasized 👀",
             body=f"{emphasized_by['name']} emphasized {activity['text']}",
-            url="/",
+            url=group_url(emphasized_by["groupId"]),
         )
         return jsonify(result)
 

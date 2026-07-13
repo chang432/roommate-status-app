@@ -121,12 +121,12 @@ export default function GroupFeed({ roommates }) {
 
   const loadFeed = useCallback(async () => {
     try {
-      setModules(createModules(await getFeed(user.id, "all")));
+      setModules(createModules(await getFeed(user.id, "all", user.activeGroupId)));
       setLiveError("");
     } catch {
       setLiveError("Could not load the group feed.");
     }
-  }, [user.id]);
+  }, [user.activeGroupId, user.id]);
 
   useEffect(() => {
     loadFeed().finally(() => setLoading(false));

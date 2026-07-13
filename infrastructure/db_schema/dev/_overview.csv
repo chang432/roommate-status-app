@@ -22,7 +22,7 @@ Schemaless,Only the keys are fixed by CloudFormation; these are the attributes t
 
 TABLES AT A GLANCE (one CSV per table in this folder)
 Table,CSV file,Partition key,Index,Written by,Purpose
-RoommateStatus-dev,RoommateStatus-dev.csv,id (S),,db.py,Accounts / roommate status
+RoommateStatus-dev,RoommateStatus-dev.csv,id (S),,db.py,Accounts
 RoommateStatus-dev-pushsubs,RoommateStatus-dev-pushsubs.csv,id (S),,push.py,Web Push subscriptions
 RoommateStatus-dev-activities,RoommateStatus-dev-activities.csv,id (S),,activities.py,Proposed activities
 RoommateStatus-dev-requests,RoommateStatus-dev-requests.csv,id (S),,household_requests.py,Household requests
@@ -31,6 +31,7 @@ RoommateStatus-dev-shows,RoommateStatus-dev-shows.csv,id (S),,household_shows.py
 RoommateStatus-dev-checklists,RoommateStatus-dev-checklists.csv,id (S),,household_checklists.py,Household checklists
 RoommateStatus-dev-comment-likes,RoommateStatus-dev-comment-likes.csv,id (S),,"activities.py, household_requests.py",Likes on activity & request comments
 RoommateStatus-dev-groups,RoommateStatus-dev-groups.csv,groupId (S),"JoinCodeIndex (HASH joinCode, ProjectionType ALL)",groups.py,Households / join-by-code groups
+RoommateStatus-dev-memberships,RoommateStatus-dev-memberships.csv,"groupId (S) + userId (S)","UserIdIndex (HASH userId, ProjectionType ALL)",db.py,Account memberships and per-group statuses
 RoommateStatus-dev-migrations,RoommateStatus-dev-migrations.csv,id (S),,migrations/runner.py,In-place data-migration ledger + run lock
 
 "COMMON SETTINGS (every table, from the CloudFormation template)"

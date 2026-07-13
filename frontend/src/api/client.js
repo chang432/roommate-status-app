@@ -6,6 +6,7 @@
 // VITE_API_TARGET, default http://localhost:8000).
 
 const API_BASE = '/api'
+const SESSION_KEY = 'roomie-session'
 
 // Called when the backend reports the stored session's user no longer exists
 // (error code "invalid_user") — e.g. the local in-memory DB was reseeded.
@@ -21,9 +22,19 @@ export function setInvalidUserHandler(handler) {
 // Error responses carry a JSON `{ error }` body (see the Flask backend), which
 // we surface as the thrown Error's message for display in the UI.
 async function request(path, options = {}) {
+  let activeGroupId = null
+  try {
+    activeGroupId = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null')?.activeGroupId || null
+  } catch {
+    // A malformed local session is handled by AuthContext; requests simply omit scope.
+  }
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(activeGroupId ? { 'X-Roomie-Group-ID': activeGroupId } : {}),
+      ...options.headers,
+    },
   })
 
   const data = await res.json().catch(() => null)
@@ -86,14 +97,21 @@ export async function joinGroup(userId, code) {
   })
 }
 
+// GET /api/groups — list every household the account can select.
+export async function getGroups(userId) {
+  return request(withQuery('/groups', { userId }))
+}
+
 // GET /api/groups/current — fetch the signed-in user's group metadata.
 export async function getCurrentGroup(userId) {
   return request(withQuery('/groups/current', { userId }))
 }
 
 // GET /api/roommates — the whole household with their current statuses.
-export async function getRoommates(userId) {
-  return request(withQuery('/roommates', { userId }))
+export async function getRoommates(userId, groupId) {
+  return request(withQuery('/roommates', { userId }), {
+    headers: groupId ? { 'X-Roomie-Group-ID': groupId } : undefined,
+  })
 }
 
 // PUT /api/roommates/:id/status — update one roommate's status.
@@ -142,8 +160,10 @@ export async function getJam(userId) {
 }
 
 // GET /api/feed — normalized active module instances in feed order.
-export async function getFeed(userId, type = 'all') {
-  return request(withQuery('/feed', { userId, type }))
+export async function getFeed(userId, type = 'all', groupId) {
+  return request(withQuery('/feed', { userId, type }), {
+    headers: groupId ? { 'X-Roomie-Group-ID': groupId } : undefined,
+  })
 }
 
 // POST /api/jam — replace the active household Jam link.
@@ -163,8 +183,10 @@ export async function endJam(hostId) {
 }
 
 // GET /api/activities — current activities followed by expired history.
-export async function getActivities(userId) {
-  return request(withQuery('/activities', { userId }))
+export async function getActivities(userId, groupId) {
+  return request(withQuery('/activities', { userId }), {
+    headers: groupId ? { 'X-Roomie-Group-ID': groupId } : undefined,
+  })
 }
 
 // POST /api/activities — propose an activity (also pushes it to everyone).

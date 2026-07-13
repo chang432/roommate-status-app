@@ -1,0 +1,91 @@
+.backdrop {
+  @apply fixed inset-0 z-40 bg-ink/30;
+}
+
+.drawer {
+  @apply fixed left-0 top-0 z-50 flex h-full w-[min(86vw,340px)] -translate-x-full flex-col border-r border-line bg-card px-5 py-6 shadow-card transition-transform duration-200;
+}
+
+.open {
+  @apply translate-x-0;
+}
+
+.header {
+  @apply mb-7 flex items-start justify-between;
+}
+
+.eyebrow {
+  @apply text-[12px] font-black uppercase tracking-[0.08em] text-ink-soft;
+}
+
+.title {
+  @apply mt-1 font-display text-[28px] font-semibold leading-none text-ink;
+}
+
+.close {
+  @apply grid h-9 w-9 place-items-center rounded-full border border-line text-[24px] leading-none text-ink-soft transition hover:border-accent hover:text-ink;
+}
+
+.section {
+  @apply space-y-1;
+}
+
+.groupRow {
+  @apply flex w-full items-center gap-3 rounded-sm border border-transparent px-2 py-2 text-left text-ink transition hover:bg-surface-hover;
+}
+
+.groupRowActive {
+  @apply border-accent bg-accent-soft;
+}
+
+.avatar {
+  @apply grid h-11 w-11 flex-none place-items-center rounded-full text-[16px] font-black text-white;
+}
+
+.groupName {
+  @apply min-w-0 truncate text-[15px] font-black;
+}
+
+.state {
+  @apply px-2 py-3 text-[14px] text-ink-soft;
+}
+
+.error {
+  @apply mt-2 text-[13px] font-semibold text-red-700;
+}
+
+.joinSection {
+  @apply mt-auto border-t border-line pt-4;
+}
+
+.joinButton {
+  @apply flex w-full items-center gap-2 rounded-sm border border-line px-3 py-3 text-left text-[14px] font-black text-ink-soft transition hover:border-accent hover:bg-surface-hover hover:text-ink;
+}
+
+.joinButton span {
+  @apply text-[22px] leading-none;
+}
+
+.joinForm {
+  @apply space-y-2;
+}
+
+.joinLabel {
+  @apply block text-[12px] font-black uppercase tracking-[0.07em] text-ink-soft;
+}
+
+.joinFields {
+  @apply flex gap-2;
+}
+
+.joinFields input {
+  @apply min-w-0 flex-1 rounded-sm border border-line bg-card px-3 py-2 text-[14px] uppercase text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft;
+}
+
+.joinFields button {
+  @apply rounded-sm bg-accent px-3 py-2 text-[13px] font-black text-white transition hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.cancel {
+  @apply text-[13px] font-bold text-ink-soft transition hover:text-ink;
+}

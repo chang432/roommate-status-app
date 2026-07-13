@@ -23,6 +23,7 @@ import os
 import re
 import threading
 import time
+from contextvars import ContextVar
 
 from botocore.exceptions import ClientError
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -56,6 +57,8 @@ AVAILABLE_THRESHOLD = 3
 # dev or main table without code changes. Defaults to the production table; the
 # dev deployment sets ROOMMATE_TABLE=RoommateStatus-dev.
 TABLE_NAME = os.environ.get("ROOMMATE_TABLE", "RoommateStatus-main")
+MEMBERSHIPS_TABLE = os.environ.get("MEMBERSHIPS_TABLE") or f"{TABLE_NAME}-memberships"
+MEMBERSHIP_USER_INDEX = "UserIdIndex"
 
 # Initial household roster. Used only by seed()/reset(); once seeded, DynamoDB
 # is the source of truth and these values are not consulted again.
@@ -84,6 +87,9 @@ _SEED = [
 # lets tests activate their DynamoDB mock before the first real call.
 _table = None
 _table_lock = threading.Lock()
+_memberships_table = None
+_memberships_table_lock = threading.Lock()
+_request_group_id: ContextVar[str | None] = ContextVar("request_group_id", default=None)
 
 
 def _get_table():
@@ -94,6 +100,25 @@ def _get_table():
             if _table is None:
                 _table = resource().Table(TABLE_NAME)
     return _table
+
+
+def _get_memberships_table():
+    """Return the membership table, which owns group-specific status data."""
+    global _memberships_table
+    if _memberships_table is None:
+        with _memberships_table_lock:
+            if _memberships_table is None:
+                _memberships_table = resource().Table(MEMBERSHIPS_TABLE)
+    return _memberships_table
+
+
+def set_request_group_id(group_id: str | None):
+    """Select a group for the current request without sharing state between workers."""
+    return _request_group_id.set((group_id or "").strip() or None)
+
+
+def reset_request_group_id(token) -> None:
+    _request_group_id.reset(token)
 
 
 def _to_roommate(item: dict) -> dict:
@@ -115,13 +140,14 @@ def _to_roommate(item: dict) -> dict:
 
 def _to_account_user(item: dict) -> dict:
     """Project an account to the auth/session shape, excluding credentials."""
-    group_id = item.get("groupId")
+    group_ids = get_group_ids(item["id"])
     return {
         "id": item["id"],
         "name": item["name"],
         "username": item.get("username", item["id"]),
-        "groupId": group_id,
-        "hasGroup": bool(group_id),
+        # groupId remains the selected membership for legacy frontend callers.
+        "groupId": group_ids[0] if group_ids else None,
+        "hasGroup": bool(group_ids),
     }
 
 
@@ -137,6 +163,110 @@ def _scan_items(consistent: bool = False) -> list[dict]:
         )
         items.extend(resp.get("Items", []))
     return items
+
+
+def _query_memberships(**kwargs) -> list[dict]:
+    table = _get_memberships_table()
+    try:
+        response = table.query(**kwargs)
+    except ClientError as err:
+        # The app rolls out before CloudFormation provisions this new table.
+        # Legacy account fields keep existing users readable during that gap.
+        if err.response["Error"]["Code"] == "ResourceNotFoundException":
+            return []
+        raise
+    items = response.get("Items", [])
+    while "LastEvaluatedKey" in response:
+        response = table.query(ExclusiveStartKey=response["LastEvaluatedKey"], **kwargs)
+        items.extend(response.get("Items", []))
+    return items
+
+
+def _membership_items_for_user(user_id: str) -> list[dict]:
+    if not user_id:
+        return []
+    return _query_memberships(
+        IndexName=MEMBERSHIP_USER_INDEX,
+        KeyConditionExpression="userId = :userId",
+        ExpressionAttributeValues={":userId": user_id},
+    )
+
+
+def _membership_items_for_group(group_id: str) -> list[dict]:
+    if not group_id:
+        return []
+    return _query_memberships(
+        KeyConditionExpression="groupId = :groupId",
+        ExpressionAttributeValues={":groupId": group_id},
+    )
+
+
+def get_group_ids(user_id: str) -> list[str]:
+    """List a user's memberships, falling back only until the migration runs."""
+    memberships = _membership_items_for_user(user_id)
+    if memberships:
+        return sorted({item["groupId"] for item in memberships})
+
+    # The application deploys before its data migration. This read-only bridge
+    # keeps existing single-group accounts usable until their rows are copied.
+    item = _get_table().get_item(Key={"id": user_id}, ConsistentRead=True).get("Item")
+    return [item["groupId"]] if item and item.get("groupId") else []
+
+
+def get_membership(user_id: str, group_id: str) -> dict | None:
+    if not user_id or not group_id:
+        return None
+    try:
+        item = _get_memberships_table().get_item(
+            Key={"groupId": group_id, "userId": user_id}, ConsistentRead=True
+        ).get("Item")
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ResourceNotFoundException":
+            raise
+        item = None
+    if item:
+        return item
+
+    # See get_group_ids: legacy rows are read, never written, during rollout.
+    account = _get_table().get_item(Key={"id": user_id}, ConsistentRead=True).get("Item")
+    if account and account.get("groupId") == group_id:
+        return {
+            "groupId": group_id,
+            "userId": user_id,
+            "name": account["name"],
+            "status": account.get("status", "busy"),
+            "statusText": account.get("statusText", ""),
+            "statusUpdatedAt": account.get("statusUpdatedAt"),
+            "_legacy": True,
+        }
+    return None
+
+
+def create_membership(user_id: str, group_id: str, name: str) -> dict | None:
+    """Create one membership with an independent initial status."""
+    joined_at = int(time.time() * 1000)
+    item = {
+        "groupId": group_id,
+        "userId": user_id,
+        "name": name,
+        "status": "busy",
+        "statusText": "",
+        "statusUpdatedAt": None,
+        "joinedAt": joined_at,
+    }
+    try:
+        _get_memberships_table().put_item(
+            Item=item,
+            ConditionExpression="attribute_not_exists(groupId) AND attribute_not_exists(userId)",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] in {
+            "ConditionalCheckFailedException",
+            "ResourceNotFoundException",
+        }:
+            return None
+        raise
+    return item
 
 
 def normalize_username(username: str) -> str:
@@ -156,12 +286,15 @@ def get_all(group_id: str, consistent: bool = False) -> list[dict]:
     """
     if not group_id:
         return []
-    items = [
-        item
-        for item in _scan_items(consistent=consistent)
-        if item.get("groupId") == group_id
-    ]
-    return sorted((_to_roommate(i) for i in items), key=lambda r: r["name"].lower())
+    items = {item["userId"]: item for item in _membership_items_for_group(group_id)}
+    # Keep legacy records visible while the resumable migration is in progress.
+    for account in _scan_items(consistent=consistent):
+        if account.get("groupId") == group_id and account["id"] not in items:
+            items[account["id"]] = {**account, "userId": account["id"]}
+    return sorted(
+        (_to_roommate({**item, "id": item.get("userId", item.get("id"))}) for item in items.values()),
+        key=lambda r: r["name"].lower(),
+    )
 
 
 def get_account_by_id(user_id: str) -> dict | None:
@@ -177,22 +310,26 @@ def get_group_member(user_id: str, expected_group_id: str | None = None) -> dict
     if not user_id:
         return None
     item = _get_table().get_item(Key={"id": user_id}, ConsistentRead=True).get("Item")
-    if not item or not item.get("groupId"):
+    if not item:
         return None
-    if expected_group_id is not None and item.get("groupId") != expected_group_id:
+    group_id = expected_group_id or _request_group_id.get()
+    group_ids = get_group_ids(user_id)
+    if group_id is None:
+        group_id = group_ids[0] if group_ids else None
+    if not group_id or group_id not in group_ids:
         return None
-    return _to_account_user(item)
+    return {**_to_account_user(item), "groupId": group_id}
 
 
 def get_group_user_ids(group_id: str, consistent: bool = False) -> list[str]:
     """Return every account id that belongs to the given group."""
     if not group_id:
         return []
-    return sorted(
-        item["id"]
-        for item in _scan_items(consistent=consistent)
-        if item.get("groupId") == group_id
+    user_ids = {item["userId"] for item in _membership_items_for_group(group_id)}
+    user_ids.update(
+        item["id"] for item in _scan_items(consistent=consistent) if item.get("groupId") == group_id
     )
+    return sorted(user_ids)
 
 
 def authenticate(username: str, password: str) -> dict | None:
@@ -227,9 +364,6 @@ def create_account(username: str, name: str, password: str) -> tuple[dict | None
         "username": normalized,
         "name": display_name,
         "passwordHash": generate_password_hash(password),
-        "groupId": None,
-        "status": "busy",
-        "statusText": "",
     }
     try:
         _get_table().put_item(Item=item, ConditionExpression="attribute_not_exists(id)")
@@ -252,6 +386,10 @@ def delete_account(user_id: str, password: str) -> bool:
     password_hash = item.get("passwordHash")
     if not password_hash or not check_password_hash(password_hash, password):
         return False
+    for membership in _membership_items_for_user(normalized):
+        _get_memberships_table().delete_item(
+            Key={"groupId": membership["groupId"], "userId": normalized}
+        )
     table.delete_item(Key={"id": normalized})
     return True
 
@@ -271,8 +409,8 @@ def update_status(
     """
     try:
         updated_at = int(time.time() * 1000)
-        _get_table().update_item(
-            Key={"id": roommate_id},
+        _get_memberships_table().update_item(
+            Key={"groupId": group_id, "userId": roommate_id},
             # `status` is a DynamoDB reserved word, so reference it via a name
             # placeholder.
             UpdateExpression="SET #s = :s, statusText = :t, statusUpdatedAt = :u",
@@ -281,13 +419,28 @@ def update_status(
                 ":s": status,
                 ":t": status_text,
                 ":u": updated_at,
-                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
+            ConditionExpression="attribute_exists(groupId) AND attribute_exists(userId)",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            return None  # Unknown roommate id.
+            # Only legacy accounts can take this branch during the deploy window.
+            legacy = get_membership(roommate_id, group_id)
+            if not legacy or not legacy.get("_legacy"):
+                return None
+            _get_table().update_item(
+                Key={"id": roommate_id},
+                UpdateExpression="SET #s = :s, statusText = :t, statusUpdatedAt = :u",
+                ExpressionAttributeNames={"#s": "status"},
+                ExpressionAttributeValues={
+                    ":s": status,
+                    ":t": status_text,
+                    ":u": int(time.time() * 1000),
+                    ":groupId": group_id,
+                },
+                ConditionExpression="attribute_exists(id) AND groupId = :groupId",
+            )
+            return get_all(group_id, consistent=True)
         raise
     return get_all(group_id, consistent=True)
 
@@ -307,31 +460,31 @@ def seed() -> None:
     table = _get_table()
     for r in _SEED:
         seeded = {
-            **r,
-            "groupId": DEFAULT_GROUP_ID,
+            "id": r["id"],
+            "username": r["username"],
+            "name": r["name"],
             "passwordHash": generate_password_hash(DEMO_PASSWORD),
         }
         try:
             table.put_item(Item=seeded, ConditionExpression="attribute_not_exists(id)")
         except ClientError as err:
             if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-                # Backfill credential/group metadata without overwriting live status.
+                # Backfill credentials without overwriting live account data.
                 table.update_item(
                     Key={"id": r["id"]},
                     UpdateExpression=(
                         "SET username = if_not_exists(username, :username), "
-                        "passwordHash = if_not_exists(passwordHash, :passwordHash), "
-                        "groupId = if_not_exists(groupId, :groupId)"
+                        "passwordHash = if_not_exists(passwordHash, :passwordHash)"
                     ),
                     ExpressionAttributeValues={
                         ":username": r["username"],
                         ":passwordHash": generate_password_hash(DEMO_PASSWORD),
-                        ":groupId": DEFAULT_GROUP_ID,
                     },
                     ConditionExpression="attribute_exists(id)",
                 )
             else:
                 raise  # The roommate already exists — leave their data untouched.
+        create_membership(r["id"], DEFAULT_GROUP_ID, r["name"])
 
 
 def reset() -> None:
@@ -339,4 +492,12 @@ def reset() -> None:
     table = _get_table()
     for item in _scan_items():
         table.delete_item(Key={"id": item["id"]})
+    memberships = _get_memberships_table()
+    response = memberships.scan()
+    items = response.get("Items", [])
+    while "LastEvaluatedKey" in response:
+        response = memberships.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
+        items.extend(response.get("Items", []))
+    for item in items:
+        memberships.delete_item(Key={"groupId": item["groupId"], "userId": item["userId"]})
     seed()

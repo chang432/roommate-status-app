@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import Brandmark from "../components/Brandmark.jsx";
 import EnableNotifications from "../components/EnableNotifications.jsx";
 import GroupFeed from "../components/GroupFeed.jsx";
+import GroupSwitcherDrawer from "../components/GroupSwitcherDrawer.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
 import ModalShell from "../components/ModalShell.jsx";
 import NotificationBanner from "../components/NotificationBanner.jsx";
@@ -14,6 +15,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import {
   endActivity,
   getActivities,
+  getGroups,
   getRoommates,
   notifyRoommatesToUpdateStatus,
   pokeRoommate,
@@ -41,7 +43,7 @@ function whenLabel() {
 }
 
 export default function StatusPage() {
-  const { user, logout, deleteAccount } = useAuth();
+  const { user, logout, deleteAccount, joinGroup, selectGroup } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const ownCardRef = useRef(null);
   const feedRef = useRef(null);
@@ -56,24 +58,58 @@ export default function StatusPage() {
   const [saving, setSaving] = useState(false);
   const [notifyingHousehold, setNotifyingHousehold] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
+  const [groups, setGroups] = useState([]);
+  const [groupsLoading, setGroupsLoading] = useState(true);
+  const [groupsError, setGroupsError] = useState("");
+
+  const loadGroups = useCallback(async () => {
+    try {
+      const { groups: memberships } = await getGroups(user.id);
+      setGroups(memberships);
+      setGroupsError("");
+
+      const requestedGroupId = searchParams.get("groupId");
+      const isMember = (groupId) => memberships.some((group) => group.groupId === groupId);
+      const nextGroupId = isMember(requestedGroupId)
+        ? requestedGroupId
+        : isMember(user.activeGroupId)
+          ? user.activeGroupId
+          : memberships[0]?.groupId;
+      if (nextGroupId && nextGroupId !== user.activeGroupId) selectGroup(nextGroupId);
+      if (requestedGroupId) {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("groupId");
+        setSearchParams(nextParams, { replace: true });
+      }
+    } catch (err) {
+      setGroupsError(err.message || "Could not load your groups.");
+    } finally {
+      setGroupsLoading(false);
+    }
+  }, [searchParams, selectGroup, setSearchParams, user.activeGroupId, user.id]);
+
+  useEffect(() => {
+    loadGroups();
+  }, [loadGroups]);
 
   const loadRoommates = useCallback(async () => {
     try {
-      setRoommates(await getRoommates(user.id));
+      setRoommates(await getRoommates(user.id, user.activeGroupId));
       setError("");
     } catch {
       setError("Could not load roommate statuses.");
     }
-  }, [user.id]);
+  }, [user.activeGroupId, user.id]);
 
   const loadActivities = useCallback(async () => {
     try {
-      setActivities(await getActivities(user.id));
+      setActivities(await getActivities(user.id, user.activeGroupId));
       setLiveError("");
     } catch {
       setLiveError("Could not load household events.");
     }
-  }, [user.id]);
+  }, [user.activeGroupId, user.id]);
 
   const loadAll = useCallback(async () => {
     await Promise.all([loadRoommates(), loadActivities()]);
@@ -146,6 +182,7 @@ export default function StatusPage() {
   const freeCount = availableCount(displayedRoommates);
   const showBanner = freeCount >= AVAILABLE_THRESHOLD;
   const liveEvents = activities.filter((activity) => activity.isLive);
+  const selectedGroup = groups.find((group) => group.groupId === user.activeGroupId) ?? groups[0];
 
   useEffect(() => {
     if (!me || searchParams.get("updateStatus") !== "1") return;
@@ -211,12 +248,33 @@ export default function StatusPage() {
     feedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  async function handleJoinGroup(code) {
+    const joined = await joinGroup(code);
+    const { groups: memberships } = await getGroups(joined.id);
+    setGroups(memberships);
+    setGroupsError("");
+  }
+
   return (
     <>
       <PullToRefreshIndicator
         pull={pull}
         refreshing={refreshing}
         threshold={threshold}
+      />
+
+      <GroupSwitcherDrawer
+        groups={groups}
+        activeGroupId={user.activeGroupId}
+        open={groupDrawerOpen}
+        loading={groupsLoading}
+        error={groupsError}
+        onClose={() => setGroupDrawerOpen(false)}
+        onSelect={(groupId) => {
+          selectGroup(groupId);
+          setGroupDrawerOpen(false);
+        }}
+        onJoin={handleJoinGroup}
       />
 
       <div
@@ -227,12 +285,19 @@ export default function StatusPage() {
         }}
       >
         <header className={styles.header}>
-          <Brandmark
-            className={styles.brandmark}
-            iconClassName={styles.brandmarkIcon}
-          />
+          <button
+            type="button"
+            onClick={() => setGroupDrawerOpen(true)}
+            className={styles.brandmarkButton}
+            aria-label="Open your groups"
+          >
+            <Brandmark
+              className={styles.brandmark}
+              iconClassName={styles.brandmarkIcon}
+            />
+          </button>
           <div className={styles.headerText}>
-            <h1 className={styles.title}>Yorkshire Roomie Status</h1>
+            <h1 className={styles.title}>{selectedGroup?.name || "Roomie"} Status</h1>
             <p className={styles.subtitle}>{whenLabel()}</p>
           </div>
           <button
@@ -295,7 +360,7 @@ export default function StatusPage() {
 
             <div className={styles.householdHeader}>
               <p className={cx("ui-sectionLabel", styles.householdTitle)}>
-                The Shire
+                {selectedGroup?.name || "Your group"}
               </p>
               <button
                 type="button"

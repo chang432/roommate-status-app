@@ -66,7 +66,7 @@ export function AuthProvider({ children }) {
     const stored = readSession()
     if (!stored) return
     apiGetAccount(stored.id)
-      .then(({ user: fresh }) => persistUser(fresh))
+      .then(({ user: fresh }) => persistUser({ ...fresh, activeGroupId: stored.activeGroupId }))
       .catch(() => {})
   }, [persistUser])
 
@@ -78,8 +78,13 @@ export function AuthProvider({ children }) {
 
   const joinGroup = useCallback(async (code) => {
     if (!user) return null
-    const { user: joined } = await apiJoinGroup(user.id, code)
-    return persistUser(joined)
+    const { user: joined, group } = await apiJoinGroup(user.id, code)
+    return persistUser({ ...joined, activeGroupId: group.groupId })
+  }, [persistUser, user])
+
+  const selectGroup = useCallback((groupId) => {
+    if (!user || !groupId || groupId === user.activeGroupId) return
+    persistUser({ ...user, activeGroupId: groupId })
   }, [persistUser, user])
 
   return (
@@ -88,6 +93,7 @@ export function AuthProvider({ children }) {
       login,
       createAccount,
       joinGroup,
+      selectGroup,
       deleteAccount,
       logout,
     }}

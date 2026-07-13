@@ -4,8 +4,8 @@ CloudFormation + a deploy script for the app's AWS resources.
 
 | File                       | Purpose                                                        |
 | -------------------------- | -------------------------------------------------------------- |
-| `dynamodb-table-dev.yaml`  | CloudFormation template: the **dev** tables (`RoommateStatus-dev` + `-pushsubs` + `-activities` + `-shows` + `-groups` + `-migrations`)  |
-| `dynamodb-table-main.yaml` | CloudFormation template: the **main** tables (`RoommateStatus-main` + `-pushsubs` + `-activities` + `-shows` + `-groups` + `-migrations`) |
+| `dynamodb-table-dev.yaml`  | CloudFormation template: the **dev** tables (`RoommateStatus-dev` + `-pushsubs` + `-activities` + `-shows` + `-groups` + `-memberships` + `-migrations`)  |
+| `dynamodb-table-main.yaml` | CloudFormation template: the **main** tables (`RoommateStatus-main` + `-pushsubs` + `-activities` + `-shows` + `-groups` + `-memberships` + `-migrations`) |
 | `deploy.py`                | Creates/updates a stack via boto3 and prints outputs           |
 | `requirements.txt`         | Python deps (`boto3`) — used by `deploy.py` and `migrations/runner.py` |
 | `migrations/`              | In-place DynamoDB **data** migrations + the runner (see `migrations/README.md`) |
@@ -16,15 +16,15 @@ CloudFormation + a deploy script for the app's AWS resources.
 ## DynamoDB tables
 
 There are two independent deployments, each with its own template and stack so
-dev and main can never share data. Each stack provisions **six** tables — the
+dev and main can never share data. Each stack provisions **seven** tables — the
 roommate table, a groups table, a Web Push subscriptions table, a
 proposed-activities table, a TV-show tracker table, and a data-migration ledger
 (`-migrations`, written by `migrations/runner.py`, not the app):
 
-| Deployment | Stack                  | Roommate table        | Groups table              | Push subscriptions table       | Activities table                | Shows table                | Migrations ledger              |
-| ---------- | ---------------------- | --------------------- | ------------------------- | ------------------------------ | ------------------------------- | -------------------------- | ------------------------------ |
-| `dev`      | `roomie-dynamodb-dev`  | `RoommateStatus-dev`  | `RoommateStatus-dev-groups`  | `RoommateStatus-dev-pushsubs`  | `RoommateStatus-dev-activities`  | `RoommateStatus-dev-shows`  | `RoommateStatus-dev-migrations`  |
-| `main`     | `roomie-dynamodb-main` | `RoommateStatus-main` | `RoommateStatus-main-groups` | `RoommateStatus-main-pushsubs` | `RoommateStatus-main-activities` | `RoommateStatus-main-shows` | `RoommateStatus-main-migrations` |
+| Deployment | Stack                  | Account table        | Groups table              | Memberships table                    | Push subscriptions table       | Activities table                | Shows table                | Migrations ledger              |
+| ---------- | ---------------------- | -------------------- | ------------------------- | ------------------------------------ | ------------------------------ | ------------------------------- | -------------------------- | ------------------------------ |
+| `dev`      | `roomie-dynamodb-dev`  | `RoommateStatus-dev` | `RoommateStatus-dev-groups`  | `RoommateStatus-dev-memberships`  | `RoommateStatus-dev-pushsubs`  | `RoommateStatus-dev-activities`  | `RoommateStatus-dev-shows`  | `RoommateStatus-dev-migrations`  |
+| `main`     | `roomie-dynamodb-main` | `RoommateStatus-main` | `RoommateStatus-main-groups` | `RoommateStatus-main-memberships` | `RoommateStatus-main-pushsubs` | `RoommateStatus-main-activities` | `RoommateStatus-main-shows` | `RoommateStatus-main-migrations` |
 
 Per-table keys, attributes, and example rows are documented under
 [`db_schema/`](./db_schema): [`db_schema/dev/`](./db_schema/dev) for the dev
@@ -35,10 +35,10 @@ CSV, a grid is a title row, a header row of `attributeName (DynamoDBType)`, then
 example rows; the multi-type activities CSV has one grid per `itemType`. Open
 them in a spreadsheet, or read them as text.
 
-The roommate table holds one item per account, keyed by a string `id` (the
-normalized username). Grouped accounts also appear as roommates; account and
-status attributes (`username`, `name`, `passwordHash`, `groupId`, `status`,
-`statusText`, `statusUpdatedAt`) are schemaless and written by the app. The groups table
+The account table holds one item per account, keyed by a string `id` (the
+normalized username). The memberships table stores each `groupId` / `userId`
+relationship, including that member's group-specific status and note; its
+`UserIdIndex` lists the groups an account can select. The groups table
 holds one item per household, keyed by `groupId`, with a `joinCode` global
 secondary index for reusable invite-code lookup. The push subscriptions
 table holds one item per browser Web Push subscription, keyed by a hash of the

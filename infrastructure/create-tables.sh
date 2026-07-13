@@ -65,3 +65,26 @@ else
     --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null
   echo "  created table '$ROOMMATE_TABLE-groups'"
 fi
+
+if aws dynamodb describe-table \
+    --table-name "$ROOMMATE_TABLE-memberships" \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then
+  echo "  table '$ROOMMATE_TABLE-memberships' already exists — leaving as-is"
+else
+  aws dynamodb create-table \
+    --table-name "$ROOMMATE_TABLE-memberships" \
+    --attribute-definitions \
+      AttributeName=groupId,AttributeType=S \
+      AttributeName=userId,AttributeType=S \
+    --key-schema AttributeName=groupId,KeyType=HASH AttributeName=userId,KeyType=RANGE \
+    --global-secondary-indexes '[
+      {
+        "IndexName":"UserIdIndex",
+        "KeySchema":[{"AttributeName":"userId","KeyType":"HASH"}],
+        "Projection":{"ProjectionType":"ALL"}
+      }
+    ]' \
+    --billing-mode PAY_PER_REQUEST \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null
+  echo "  created table '$ROOMMATE_TABLE-memberships'"
+fi
