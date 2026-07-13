@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useExpandOnModuleFocus } from "../context/ModuleFocusContext.jsx";
 import {
   archiveActivity,
   deleteActivity,
@@ -27,11 +28,9 @@ export default function ProposeActivity({
   transitioningId,
   onLiveTransition,
   roommates,
-  activityFocusRequest,
   moduleTag,
 }) {
   const { user } = useAuth();
-  const activityRefs = useRef(new Map());
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [joiningId, setJoiningId] = useState(null);
@@ -46,19 +45,7 @@ export default function ProposeActivity({
   const [editStartTime, setEditStartTime] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
   const [savingScheduleId, setSavingScheduleId] = useState(null);
-
-  useEffect(() => {
-    if (!activityFocusRequest?.activityId) return;
-    const { activityId } = activityFocusRequest;
-    setExpandedId(activityId);
-    setCommentText("");
-    requestAnimationFrame(() => {
-      activityRefs.current.get(activityId)?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    });
-  }, [activityFocusRequest]);
+  useExpandOnModuleFocus(setExpandedId);
 
   function toggleExpanded(id) {
     setExpandedId((current) => (current === id ? null : id));
@@ -253,10 +240,6 @@ export default function ProposeActivity({
     return (
       <SwipeActionRow key={activity.id} actions={swipeActions} disabled={expanded}>
         <div
-          ref={(node) => {
-            if (node) activityRefs.current.set(activity.id, node);
-            else activityRefs.current.delete(activity.id);
-          }}
           role="button"
           tabIndex={0}
           aria-expanded={expanded}

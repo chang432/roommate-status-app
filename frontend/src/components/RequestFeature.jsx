@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useExpandOnModuleFocus } from "../context/ModuleFocusContext.jsx";
 import {
   archiveRequest,
   commentOnRequest,
@@ -39,11 +40,9 @@ export default function RequestFeature({
   requests,
   onRequestsChange,
   roommates,
-  requestFocusRequest,
   moduleTag,
 }) {
   const { user } = useAuth();
-  const requestRefs = useRef(new Map());
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [commentText, setCommentText] = useState("");
@@ -54,22 +53,7 @@ export default function RequestFeature({
   const [archivingId, setArchivingId] = useState(null);
   const [restoringId, setRestoringId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-
-  useEffect(() => {
-    if (!requestFocusRequest?.requestId) return;
-    const requestExists = requests.some(
-      (requestItem) => requestItem.id === requestFocusRequest.requestId,
-    );
-    if (!requestExists) return;
-    setExpandedId(requestFocusRequest.requestId);
-    setCommentText("");
-    setOpenLikesCommentId(null);
-    window.requestAnimationFrame(() => {
-      requestRefs.current
-        .get(requestFocusRequest.requestId)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-  }, [requestFocusRequest, requests]);
+  useExpandOnModuleFocus(setExpandedId);
 
   function toggleExpanded(id) {
     setExpandedId((current) => (current === id ? null : id));
@@ -222,13 +206,6 @@ export default function RequestFeature({
             return (
               <SwipeActionRow key={requestItem.id} actions={swipeActions} disabled={expanded}>
                 <div
-                  ref={(node) => {
-                    if (node) {
-                      requestRefs.current.set(requestItem.id, node);
-                    } else {
-                      requestRefs.current.delete(requestItem.id);
-                    }
-                  }}
                   role="button"
                   tabIndex={0}
                   aria-expanded={expanded}

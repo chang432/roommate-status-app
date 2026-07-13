@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlencode
 
 import activities
 import household_checklists
@@ -18,6 +19,16 @@ import jam
 
 
 MODULE_TYPES = {"events", "requests", "checklists", "tv", "spotify"}
+
+
+def module_url(module_type: str, item_id: str | None = None) -> str:
+    """Build the canonical frontend destination for a module or module filter."""
+    if module_type not in MODULE_TYPES:
+        raise ValueError(f"Unknown module type: {module_type}")
+    params = {"module": module_type}
+    if item_id:
+        params["item"] = item_id
+    return f"/?{urlencode(params)}"
 
 
 @dataclass(frozen=True)

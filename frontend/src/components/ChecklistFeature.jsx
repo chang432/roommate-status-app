@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useExpandOnModuleFocus } from "../context/ModuleFocusContext.jsx";
 import {
   addChecklistItem,
   archiveChecklist,
@@ -62,11 +63,9 @@ function ChecklistItemEditor({
 export default function ChecklistFeature({
   checklists,
   onChecklistsChange,
-  checklistFocusRequest,
   moduleTag,
 }) {
   const { user } = useAuth();
-  const checklistRefs = useRef(new Map());
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [addingChecklistId, setAddingChecklistId] = useState(null);
@@ -78,6 +77,7 @@ export default function ChecklistFeature({
   const [archivingId, setArchivingId] = useState(null);
   const [restoringId, setRestoringId] = useState(null);
   const [deletingChecklistId, setDeletingChecklistId] = useState(null);
+  useExpandOnModuleFocus(setExpandedId);
 
   const cancelAdding = useCallback(() => {
     setAddingChecklistId(null);
@@ -87,22 +87,6 @@ export default function ChecklistFeature({
   const cancelEditing = useCallback(() => {
     setEditingItem(null);
   }, []);
-
-  useEffect(() => {
-    if (!checklistFocusRequest?.checklistId) return;
-    const checklistExists = checklists.some(
-      (checklist) => checklist.id === checklistFocusRequest.checklistId,
-    );
-    if (!checklistExists) return;
-    setExpandedId(checklistFocusRequest.checklistId);
-    cancelAdding();
-    setEditingItem(null);
-    window.requestAnimationFrame(() => {
-      checklistRefs.current
-        .get(checklistFocusRequest.checklistId)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-  }, [cancelAdding, checklistFocusRequest, checklists]);
 
   function toggleExpanded(id) {
     setExpandedId((current) => (current === id ? null : id));
@@ -290,13 +274,6 @@ export default function ChecklistFeature({
             return (
               <SwipeActionRow key={checklist.id} actions={swipeActions} disabled={expanded}>
                 <div
-                  ref={(node) => {
-                    if (node) {
-                      checklistRefs.current.set(checklist.id, node);
-                    } else {
-                      checklistRefs.current.delete(checklist.id);
-                    }
-                  }}
                   role="button"
                   tabIndex={0}
                   aria-expanded={expanded}
