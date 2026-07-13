@@ -43,7 +43,7 @@ function whenLabel() {
 }
 
 export default function StatusPage() {
-  const { user, logout, deleteAccount, joinGroup, selectGroup } = useAuth();
+  const { user, logout, deleteAccount, joinGroup, createGroup, selectGroup } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const ownCardRef = useRef(null);
   const feedRef = useRef(null);
@@ -255,6 +255,13 @@ export default function StatusPage() {
     setGroupsError("");
   }
 
+  async function handleCreateGroup(name) {
+    const created = await createGroup(name);
+    const { groups: memberships } = await getGroups(created.id);
+    setGroups(memberships);
+    setGroupsError("");
+  }
+
   return (
     <>
       <PullToRefreshIndicator
@@ -275,6 +282,7 @@ export default function StatusPage() {
           setGroupDrawerOpen(false);
         }}
         onJoin={handleJoinGroup}
+        onCreate={handleCreateGroup}
       />
 
       <div

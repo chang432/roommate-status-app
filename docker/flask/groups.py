@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import threading
 import time
 
@@ -17,6 +18,8 @@ GROUPS_TABLE = os.environ.get("GROUPS_TABLE") or (
 JOIN_CODE_INDEX = "JoinCodeIndex"
 DEFAULT_GROUP_JOIN_CODE = os.environ.get("DEFAULT_GROUP_JOIN_CODE", "YORKSHIRE")
 JOIN_CODE_RE = re.compile(r"^[A-Z0-9]{6,16}$")
+GROUP_SLUG_RE = re.compile(r"[^a-z0-9]+")
+GROUP_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 _table = None
 _table_lock = threading.Lock()
@@ -123,6 +126,46 @@ def list_groups_for_user(user_id: str) -> list[dict]:
         for group_id in db.get_group_ids(user_id)
         if (group := get_group_by_id(group_id)) is not None
     ]
+
+
+def create_group(user_id: str, name: str) -> tuple[dict | None, dict | None, str | None]:
+    """Create a household with a unique invite code and add its creator."""
+    account = db.get_account_by_id(db.normalize_username(user_id))
+    display_name = (name or "").strip()
+    if account is None:
+        return None, None, "unknown_user"
+    if not display_name or len(display_name) > 80:
+        return None, None, "invalid_name"
+
+    slug = GROUP_SLUG_RE.sub("-", display_name.lower()).strip("-") or "group"
+    table = _get_table()
+    for _ in range(8):
+        group_id = f"{slug[:48]}-{secrets.token_hex(3)}"
+        join_code = "".join(secrets.choice(GROUP_CODE_ALPHABET) for _ in range(8))
+        group_item = {
+            "groupId": group_id,
+            "name": display_name,
+            "joinCode": join_code,
+            "createdAt": int(time.time() * 1000),
+        }
+        try:
+            table.put_item(
+                Item=group_item,
+                ConditionExpression="attribute_not_exists(groupId)",
+            )
+        except ClientError as err:
+            if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                continue
+            raise
+
+        membership = db.create_membership(account["id"], group_id, account["name"])
+        if membership is not None:
+            return {**account, "groupId": group_id, "hasGroup": True}, _project_group(group_item), None
+
+        # A group without its creator is unusable; clean up the rare failed write.
+        table.delete_item(Key={"groupId": group_id})
+        return None, None, "membership_failed"
+    return None, None, "creation_failed"
 
 
 def join_group(user_id: str, code: str) -> tuple[dict | None, str | None]:

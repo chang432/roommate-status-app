@@ -97,6 +97,14 @@ export async function joinGroup(userId, code) {
   })
 }
 
+// POST /api/groups — create a group and join its creator immediately.
+export async function createGroup(userId, name) {
+  return request('/groups', {
+    method: 'POST',
+    body: JSON.stringify({ userId, name }),
+  })
+}
+
 // GET /api/groups — list every household the account can select.
 export async function getGroups(userId) {
   return request(withQuery('/groups', { userId }))

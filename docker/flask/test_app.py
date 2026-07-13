@@ -273,6 +273,41 @@ def test_group_memberships_switch_status_scope_with_request_header(client):
     assert next(roommate for roommate in yorkshire if roommate["id"] == "andre")["status"] == "busy"
 
 
+def test_create_group_adds_creator_and_returns_an_invite_code(client):
+    created = client.post(
+        "/api/groups",
+        json={"userId": "andre", "name": "Friday Cabin"},
+    )
+
+    assert created.status_code == 201
+    payload = created.get_json()
+    group = payload["group"]
+    assert group["name"] == "Friday Cabin"
+    assert group["groupId"].startswith("friday-cabin-")
+    assert len(group["joinCode"]) == 8
+    assert group["joinCode"].isalnum()
+    assert payload["user"]["groupId"] == group["groupId"]
+
+    roster = client.get(
+        "/api/roommates?userId=andre",
+        headers={"X-Roomie-Group-ID": group["groupId"]},
+    )
+    assert roster.get_json() == [
+        {
+            "id": "andre",
+            "name": "Andre",
+            "status": "busy",
+            "statusText": "",
+            "statusUpdatedAt": None,
+        }
+    ]
+
+
+def test_create_group_rejects_blank_name(client):
+    created = client.post("/api/groups", json={"userId": "andre", "name": "   "})
+    assert created.status_code == 400
+
+
 def test_get_account_unknown_user_flags_invalid_user(client):
     res = client.get("/api/accounts/ghost")
     assert res.status_code == 404

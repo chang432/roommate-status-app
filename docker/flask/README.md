@@ -12,6 +12,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/accounts`                                         | `{ username, name, password }`             | new no-group `{ user }`                                 |
 | `DELETE /api/accounts/<id>`                                  | `{ password }`                             | `{ ok: true }` after password verification              |
 | `POST /api/groups/join`                                      | `{ userId, code }`                         | `{ user, group }`                                       |
+| `POST /api/groups`                                           | `{ userId, name }`                         | newly created `{ user, group }`                         |
 | `GET  /api/groups`                                           | `?userId=<id>`                             | every selectable group                                  |
 | `GET  /api/groups/current`                                   | `?userId=<id>`                             | `{ group: { groupId, name, joinCode, createdAt } }`     |
 | `GET  /api/roommates`                                        | `?userId=<id>`                             | `[ { id, name, status, statusText, statusUpdatedAt } ]` |

@@ -12,10 +12,11 @@ export default function GroupSwitcherDrawer({
   onClose,
   onSelect,
   onJoin,
+  onCreate,
 }) {
-  const [joining, setJoining] = useState(false);
-  const [code, setCode] = useState("");
-  const [joinError, setJoinError] = useState("");
+  const [mode, setMode] = useState(null);
+  const [value, setValue] = useState("");
+  const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -29,16 +30,16 @@ export default function GroupSwitcherDrawer({
 
   async function handleSubmit(event) {
     event.preventDefault();
-    if (!code.trim() || submitting) return;
+    if (!value.trim() || submitting) return;
     setSubmitting(true);
-    setJoinError("");
+    setFormError("");
     try {
-      await onJoin(code);
-      setCode("");
-      setJoining(false);
+      await (mode === "create" ? onCreate(value) : onJoin(value));
+      setValue("");
+      setMode(null);
       onClose();
     } catch (err) {
-      setJoinError(err.message || "Could not join that group.");
+      setFormError(err.message || `Could not ${mode} that group.`);
     } finally {
       setSubmitting(false);
     }
@@ -90,26 +91,37 @@ export default function GroupSwitcherDrawer({
         </section>
 
         <section className={styles.joinSection}>
-          {!joining ? (
-            <button type="button" className={styles.joinButton} onClick={() => setJoining(true)}>
-              <span aria-hidden="true">+</span> Join a group
-            </button>
+          {!mode ? (
+            <div className={styles.groupActions}>
+              <button type="button" className={styles.joinButton} onClick={() => setMode("join")}>
+                <span aria-hidden="true">+</span> Join a group
+              </button>
+              <button type="button" className={styles.joinButton} onClick={() => setMode("create")}>
+                <span aria-hidden="true">+</span> Create a group
+              </button>
+            </div>
           ) : (
             <form onSubmit={handleSubmit} className={styles.joinForm}>
-              <label htmlFor="group-invite-code" className={styles.joinLabel}>Invite code</label>
+              <label htmlFor="group-drawer-value" className={styles.joinLabel}>
+                {mode === "create" ? "Group name" : "Invite code"}
+              </label>
               <div className={styles.joinFields}>
                 <input
-                  id="group-invite-code"
-                  value={code}
-                  onChange={(event) => setCode(event.target.value)}
-                  autoComplete="off"
+                  id="group-drawer-value"
+                  value={value}
+                  onChange={(event) => setValue(event.target.value)}
+                  autoComplete={mode === "create" ? "organization" : "off"}
                   autoFocus
                   disabled={submitting}
+                  maxLength={mode === "create" ? 80 : 16}
+                  className={mode === "join" ? styles.inviteCode : ""}
                 />
-                <button type="submit" disabled={submitting}>{submitting ? "Joining…" : "Join"}</button>
+                <button type="submit" disabled={submitting}>
+                  {submitting ? (mode === "create" ? "Creating…" : "Joining…") : mode === "create" ? "Create" : "Join"}
+                </button>
               </div>
-              {joinError && <p className={styles.error}>{joinError}</p>}
-              <button type="button" className={styles.cancel} onClick={() => setJoining(false)} disabled={submitting}>
+              {formError && <p className={styles.error}>{formError}</p>}
+              <button type="button" className={styles.cancel} onClick={() => setMode(null)} disabled={submitting}>
                 Cancel
               </button>
             </form>

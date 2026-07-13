@@ -379,6 +379,22 @@ def create_app() -> Flask:
         group = groups.get_group_by_id(user["groupId"])
         return jsonify({"user": user, "group": group})
 
+    @app.post("/api/groups")
+    def create_group():
+        """Create a group and make its creator the first member."""
+        body = request.get_json(silent=True) or {}
+        user, group, error = groups.create_group(
+            (body.get("userId") or "").strip(),
+            body.get("name", ""),
+        )
+        if error == "invalid_name":
+            return jsonify({"error": "Enter a group name up to 80 characters."}), 400
+        if error == "unknown_user":
+            return invalid_user_response()
+        if error or user is None or group is None:
+            return jsonify({"error": "Could not create that group. Try again."}), 500
+        return jsonify({"user": user, "group": group}), 201
+
     @app.get("/api/groups")
     def get_groups():
         """Return every group the account can select in the home drawer."""

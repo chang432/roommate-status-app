@@ -66,6 +66,10 @@
   @apply text-[22px] leading-none;
 }
 
+.groupActions {
+  @apply space-y-2;
+}
+
 .joinForm {
   @apply space-y-2;
 }
@@ -79,7 +83,11 @@
 }
 
 .joinFields input {
-  @apply min-w-0 flex-1 rounded-sm border border-line bg-card px-3 py-2 text-[14px] uppercase text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft;
+  @apply min-w-0 flex-1 rounded-sm border border-line bg-card px-3 py-2 text-[14px] text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft;
+}
+
+.inviteCode {
+  @apply uppercase;
 }
 
 .joinFields button {

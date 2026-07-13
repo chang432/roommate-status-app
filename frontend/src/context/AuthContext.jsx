@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import {
   createAccount as apiCreateAccount,
+  createGroup as apiCreateGroup,
   deleteAccount as apiDeleteAccount,
   getAccount as apiGetAccount,
   joinGroup as apiJoinGroup,
@@ -87,6 +88,12 @@ export function AuthProvider({ children }) {
     persistUser({ ...user, activeGroupId: groupId })
   }, [persistUser, user])
 
+  const createGroup = useCallback(async (name) => {
+    if (!user) return null
+    const { user: created, group } = await apiCreateGroup(user.id, name)
+    return persistUser({ ...created, activeGroupId: group.groupId })
+  }, [persistUser, user])
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -94,6 +101,7 @@ export function AuthProvider({ children }) {
       createAccount,
       joinGroup,
       selectGroup,
+      createGroup,
       deleteAccount,
       logout,
     }}
