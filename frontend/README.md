@@ -31,11 +31,14 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Module feed**: `/feed` contains events, requests, checklists, TV shows, and
   the active Spotify Jam in one chronological group feed. Material updates bump
   the module instance to the bottom, and the side drawer/rail filters by module
-  type. Horizontal swipes alternate between the status page and feed, the feed
-  hamburger opens module filters, and the floating `+` creates modules.
+  type. Module notifications use `/?module=<type>&item=<id>` links that select
+  the matching filter, reveal archived items, and focus each target once without
+  replaying during feed polling. Horizontal swipes alternate between the status
+  page and feed, the feed hamburger opens module filters, and the floating `+`
+  creates modules.
 - **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, archive or restore requests, and open
-  request notifications directly to the expanded request card.
+  module notifications directly to the expanded request card.
 - **Checklists**: the shire board includes shared checklists that can be
   posted, expanded, added to, checked off by multiple roommates, notified, archived,
   restored, or deleted.

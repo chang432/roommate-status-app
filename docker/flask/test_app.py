@@ -29,6 +29,7 @@ import household_checklists
 import household_requests
 import household_shows
 import jam
+import module_models
 import push
 from app import create_app, mentions_all, resolve_mentions
 
@@ -39,6 +40,18 @@ TEST_USER_ID = "andre"
 def grouped_path(path: str, user_id: str = TEST_USER_ID) -> str:
     separator = "&" if "?" in path else "?"
     return f"{path}{separator}userId={user_id}"
+
+
+def test_module_url_builds_canonical_encoded_destinations():
+    assert module_models.module_url("requests", "request 1") == (
+        "/?module=requests&item=request+1"
+    )
+    assert module_models.module_url("spotify", "activeJam#shire") == (
+        "/?module=spotify&item=activeJam%23shire"
+    )
+    assert module_models.module_url("tv") == "/?module=tv"
+    with pytest.raises(ValueError, match="Unknown module type"):
+        module_models.module_url("unknown", "item")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -653,7 +666,7 @@ def test_share_jam_replaces_active_link_and_notifies(client, monkeypatch):
         {
             "title": "Spotify Jam is live",
             "body": "Kayla shared a Jam. Tap to join.",
-            "url": "/",
+            "url": "/?module=spotify&item=activeJam%23yorkshire",
             "event_type": "jam-changed",
             "exclude_user_ids": {"kayla"},
         },
@@ -805,7 +818,7 @@ def test_create_request_targets_roommates_and_notifies_them(client, monkeypatch)
     assert request_item["isArchived"] is False
     assert request_item["archivedAt"] is None
     assert client.get(grouped_path("/api/activities")).get_json() == []
-    request_url = f"/?request={request_item['id']}"
+    request_url = f"/?module=requests&item={request_item['id']}"
     assert calls == [
         (
             "users",
@@ -848,7 +861,7 @@ def test_requested_roommate_can_accept_or_deny(client, monkeypatch):
             "exclude_user_ids": {"kayla"},
             "title": "Request response",
             "body": "Kayla accepted “Please take out recycling”",
-            "url": f"/?request={request_item['id']}",
+            "url": f"/?module=requests&item={request_item['id']}",
             "event_type": "requests-changed",
         },
     )
@@ -900,7 +913,7 @@ def test_any_roommate_can_archive_request_and_notify_requester(client, monkeypat
                 "exclude_user_ids": {"ting"},
                 "title": "Request archived",
                 "body": "Ting archived “Please take out recycling”",
-                "url": f"/?request={request_item['id']}",
+                "url": f"/?module=requests&item={request_item['id']}",
                 "event_type": "requests-changed",
             },
         )
@@ -934,7 +947,7 @@ def test_any_roommate_can_restore_archived_request(client, monkeypatch):
                 "exclude_user_ids": {"ting"},
                 "title": "Request restored",
                 "body": "Ting restored “Please take out recycling”",
-                "url": f"/?request={request_item['id']}",
+                "url": f"/?module=requests&item={request_item['id']}",
                 "event_type": "requests-changed",
             },
         )
@@ -975,7 +988,7 @@ def test_requester_can_delete_request_and_comment_likes(client, monkeypatch):
                 "exclude_user_ids": {"andre"},
                 "title": "Request deleted",
                 "body": "Andre deleted “Please take out recycling”",
-                "url": f"/?request={request_item['id']}",
+                "url": "/?module=requests",
                 "event_type": "requests-changed",
             },
         )
@@ -1015,7 +1028,7 @@ def test_request_comments_and_likes_match_activity_shape(client, monkeypatch):
             "user_ids": {"andre"},
             "title": "New request comment",
             "body": "Kayla on “Please take out recycling”: I can do this",
-            "url": f"/?request={request_item['id']}",
+            "url": f"/?module=requests&item={request_item['id']}",
             "event_type": "requests-changed",
         },
     )
@@ -1047,7 +1060,7 @@ def test_request_comment_mentions_target_named_users(client, monkeypatch):
             "user_ids": {"ting"},
             "title": "Kayla mentioned you",
             "body": "On request “Please take out recycling”: @Ting can you help?",
-            "url": f"/?request={request_item['id']}",
+            "url": f"/?module=requests&item={request_item['id']}",
             "event_type": "requests-changed",
         },
     )
@@ -1075,7 +1088,7 @@ def test_create_checklist_returns_active_list_and_notifies_household(client, mon
             {
                 "title": "New checklist",
                 "body": "Andre posted “Kitchen reset”",
-                "url": f"/?checklist={checklist['id']}",
+                "url": f"/?module=checklists&item={checklist['id']}",
                 "event_type": "checklists-changed",
                 "exclude_user_ids": {"andre"},
             },
@@ -1165,7 +1178,7 @@ def test_checklist_notify_all_excludes_requester(client, monkeypatch):
             {
                 "title": "Checklist reminder",
                 "body": "Kayla reminded everyone to update “Costco Run”",
-                "url": f"/?checklist={checklist['id']}",
+                "url": f"/?module=checklists&item={checklist['id']}",
                 "event_type": "checklists-changed",
                 "exclude_user_ids": {"kayla"},
             },
@@ -1195,7 +1208,7 @@ def test_archive_checklist_flags_it_but_keeps_it_in_feed(client, monkeypatch):
             {
                 "title": "Checklist archived",
                 "body": "Ting archived “Costco Run”",
-                "url": "/",
+                "url": f"/?module=checklists&item={checklist['id']}",
                 "event_type": "checklists-changed",
                 "exclude_user_ids": {"ting"},
             },
@@ -1486,7 +1499,7 @@ def test_new_activity_notifies_household_except_creator(client, monkeypatch):
             {
                 "title": "New activity proposed 🎉",
                 "body": "Andre: Picnic",
-                "url": "/",
+                "url": f"/?module=events&item={res.get_json()[0]['id']}",
                 "exclude_user_ids": {"andre"},
             },
         )
@@ -1510,7 +1523,7 @@ def test_creator_can_start_end_and_restart_event(client, monkeypatch):
         {
             "title": "Event started 🔴",
             "body": "Andre started Dinner",
-            "url": "/",
+            "url": f"/?module=events&item={created['id']}",
             "event_type": "activities-changed",
             "exclude_user_ids": {"andre"},
         },
@@ -1529,7 +1542,7 @@ def test_creator_can_start_end_and_restart_event(client, monkeypatch):
         {
             "title": "Event ended 🏁",
             "body": "Andre ended Dinner",
-            "url": "/",
+            "url": f"/?module=events&item={created['id']}",
             "event_type": "activities-changed",
             "exclude_user_ids": {"andre"},
         },
@@ -2006,7 +2019,7 @@ def test_mentions_notify_household_members_and_store_canonical_metadata(
             "user_ids": {"sheryl", "ting"},
             "title": "Kayla mentioned you",
             "body": "On “Movie night”: @sheryl, can you ask @Ting? @SHERYL",
-            "url": "/",
+            "url": f"/?module=events&item={activity_id}",
         },
     )
     assert participant_call[0] == "users"
@@ -2038,7 +2051,7 @@ def test_all_mention_notifies_household_once_and_excludes_author(client, monkeyp
             {
                 "title": "Kayla mentioned everyone",
                 "body": "On “Movie night”: @ALL please join us, especially @Sheryl",
-                "url": "/",
+                "url": f"/?module=events&item={activity_id}",
                 "exclude_user_ids": {"kayla"},
             },
         )

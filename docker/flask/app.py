@@ -541,7 +541,7 @@ def create_app() -> Flask:
                 host["groupId"],
                 title="Spotify Jam is live",
                 body=f"{host['name']} shared a Jam. Tap to join.",
-                url="/",
+                url=module_models.module_url("spotify", active["id"]),
                 event_type="jam-changed",
                 exclude_user_ids={host["id"]},
             )
@@ -565,7 +565,7 @@ def create_app() -> Flask:
                 host["groupId"],
                 title="Spotify Jam removed",
                 body=f"{host['name']} removed the active Jam.",
-                url="/",
+                url=module_models.module_url("spotify"),
                 event_type="jam-changed",
                 exclude_user_ids={host["id"]},
             )
@@ -611,7 +611,7 @@ def create_app() -> Flask:
         if schedule_error:
             return jsonify({"error": schedule_error}), 400
 
-        activities.add_activity(
+        created = activities.add_activity(
             text,
             proposer["id"],
             proposer["name"],
@@ -627,7 +627,7 @@ def create_app() -> Flask:
                 proposer["groupId"],
                 title="New activity proposed 🎉",
                 body=f"{proposer['name']}: {text}",
-                url="/",
+                url=module_models.module_url("events", created["id"]),
                 exclude_user_ids={proposer["id"]},
             )
         except Exception:  # noqa: BLE001 - never let push break the request
@@ -671,7 +671,7 @@ def create_app() -> Flask:
                     if action == "start"
                     else f"{activity['proposedBy']} ended {activity['text']}"
                 ),
-                url="/",
+                url=module_models.module_url("events", activity_id),
                 event_type="activities-changed",
                 exclude_user_ids={requester_id},
             )
@@ -750,7 +750,7 @@ def create_app() -> Flask:
                 exclude_user_ids={requester_id},
                 title="Activity archived",
                 body=f"{actor_name} archived {activity['text']}",
-                url="/",
+                url=module_models.module_url("events", activity_id),
             )
         except Exception:  # noqa: BLE001 - archiving must remain successful
             app.logger.exception("Failed to send activity archive notification")
@@ -799,7 +799,7 @@ def create_app() -> Flask:
                 exclude_user_ids={requester_id},
                 title="Activity deleted",
                 body=f"{activity['proposedBy']} deleted {activity['text']}",
-                url="/",
+                url=module_models.module_url("events"),
             )
         except Exception:  # noqa: BLE001 - deletion must remain successful
             app.logger.exception("Failed to send activity deletion notification")
@@ -828,7 +828,7 @@ def create_app() -> Flask:
                 exclude_user_ids={roommate["id"]},
                 title="Someone joined an activity 🙌",
                 body=f"{roommate['name']} joined {activity['text']}",
-                url="/",
+                url=module_models.module_url("events", activity_id),
             )
         except Exception:  # noqa: BLE001 - never let push break the request
             app.logger.exception("Failed to send join notification")
@@ -893,7 +893,7 @@ def create_app() -> Flask:
                     user_ids=user_ids,
                     title=title,
                     body=notification_body,
-                    url="/",
+                    url=module_models.module_url("events", activity_id),
                 )
                 app.logger.info(
                     "Comment push result for %d recipient(s): %s",
@@ -909,7 +909,7 @@ def create_app() -> Flask:
                     author["groupId"],
                     title=f"{author['name']} mentioned everyone",
                     body=f"On “{activity['text']}”: {text}",
-                    url="/",
+                    url=module_models.module_url("events", activity_id),
                     exclude_user_ids={author["id"]},
                 )
                 app.logger.info("Comment @all push result: %s", result)
@@ -1005,7 +1005,7 @@ def create_app() -> Flask:
             requester["groupId"],
             requested_roommates,
         )
-        request_url = f"/?request={created['id']}"
+        request_url = module_models.module_url("requests", created["id"])
         try:
             push.notify_users(
                 user_ids={roommate["id"] for roommate in requested_roommates},
@@ -1041,7 +1041,7 @@ def create_app() -> Flask:
         if updated == household_requests.MUTATION_ARCHIVED:
             return jsonify({"error": "Archived requests are read-only."}), 409
 
-        request_url = f"/?request={updated['id']}"
+        request_url = module_models.module_url("requests", updated["id"])
         try:
             push.notify_users(
                 user_ids={updated["requesterId"]},
@@ -1073,7 +1073,7 @@ def create_app() -> Flask:
         if updated is None:
             return jsonify({"error": f"Unknown request: {request_id}"}), 404
 
-        request_url = f"/?request={updated['id']}"
+        request_url = module_models.module_url("requests", updated["id"])
         try:
             push.notify_users(
                 user_ids={updated["requesterId"], *updated["requestedIds"]},
@@ -1105,7 +1105,7 @@ def create_app() -> Flask:
         if updated is None:
             return jsonify({"error": f"Unknown request: {request_id}"}), 404
 
-        request_url = f"/?request={updated['id']}"
+        request_url = module_models.module_url("requests", updated["id"])
         try:
             push.notify_users(
                 user_ids={updated["requesterId"], *updated["requestedIds"]},
@@ -1142,7 +1142,7 @@ def create_app() -> Flask:
                 exclude_user_ids={requester_id},
                 title="Request deleted",
                 body=f"{request_item['requester']} deleted “{request_item['text']}”",
-                url=f"/?request={request_item['id']}",
+                url=module_models.module_url("requests"),
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - deletion must remain successful
@@ -1192,7 +1192,7 @@ def create_app() -> Flask:
                     user_ids=user_ids,
                     title=title,
                     body=notification_body,
-                    url=f"/?request={updated['id']}",
+                    url=module_models.module_url("requests", updated["id"]),
                     event_type="requests-changed",
                 )
             except Exception:  # noqa: BLE001 - never let push break the comment
@@ -1204,7 +1204,7 @@ def create_app() -> Flask:
                     author["groupId"],
                     title=f"{author['name']} mentioned everyone",
                     body=f"On request “{updated['text']}”: {text}",
-                    url=f"/?request={updated['id']}",
+                    url=module_models.module_url("requests", updated["id"]),
                     event_type="requests-changed",
                     exclude_user_ids={author["id"]},
                 )
@@ -1301,7 +1301,7 @@ def create_app() -> Flask:
                 creator["groupId"],
                 title="New checklist",
                 body=f"{creator['name']} posted “{created['title']}”",
-                url=f"/?checklist={created['id']}",
+                url=module_models.module_url("checklists", created["id"]),
                 event_type="checklists-changed",
                 exclude_user_ids={creator["id"]},
             )
@@ -1327,7 +1327,7 @@ def create_app() -> Flask:
             requester["groupId"],
             title="Checklist reminder",
             body=f"{requester['name']} reminded everyone to update “{checklist['title']}”",
-            url=f"/?checklist={checklist['id']}",
+            url=module_models.module_url("checklists", checklist["id"]),
             event_type="checklists-changed",
             exclude_user_ids={requester["id"]},
         )
@@ -1427,7 +1427,7 @@ def create_app() -> Flask:
                 roommate["groupId"],
                 title="Checklist archived",
                 body=f"{roommate['name']} archived “{updated['title']}”",
-                url="/",
+                url=module_models.module_url("checklists", updated["id"]),
                 event_type="checklists-changed",
                 exclude_user_ids={roommate["id"]},
             )
@@ -1637,7 +1637,7 @@ def create_app() -> Flask:
             exclude_user_ids={emphasized_by["id"]},
             title="Activity emphasized 👀",
             body=f"{emphasized_by['name']} emphasized {activity['text']}",
-            url="/",
+            url=module_models.module_url("events", activity_id),
         )
         return jsonify(result)
 

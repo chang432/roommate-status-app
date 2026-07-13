@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useExpandOnModuleFocus } from "../context/ModuleFocusContext.jsx";
 import {
   adjustProgress,
   archiveShow,
@@ -189,6 +190,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
   const [archivingShowId, setArchivingShowId] = useState(null);
   const [restoringShowId, setRestoringShowId] = useState(null);
   const [deletingShowId, setDeletingShowId] = useState(null);
+  useExpandOnModuleFocus(setExpandedId);
 
   function toggleExpanded(id) {
     setExpandedId((current) => (current === id ? null : id));

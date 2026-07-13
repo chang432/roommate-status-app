@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import ActivityCreateForm from "./ActivityCreateForm.jsx";
 import ChecklistCreateForm from "./ChecklistCreateForm.jsx";
@@ -11,6 +11,7 @@ import RequestFeature from "./RequestFeature.jsx";
 import ShowCreateForm from "./ShowCreateForm.jsx";
 import ShowTrackerFeature from "./ShowTrackerFeature.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import { ModuleFocusProvider } from "../context/ModuleFocusContext.jsx";
 import { endActivity, getFeed, startActivity } from "../api/client.js";
 import {
   MODULE_TYPES,
@@ -19,6 +20,10 @@ import {
   modulePanelStyle,
 } from "../models/modules.js";
 import { cx } from "../utils/classNames.js";
+import {
+  moduleFocusFromSearchParams,
+  withoutModuleFocus,
+} from "../utils/moduleFocus.js";
 // The feed shares the status page's stylesheet — it renders inline beneath the
 // status section on the same page.
 import styles from "../pages/StatusPage.module.css";
@@ -94,8 +99,29 @@ function ModuleTag({ module }) {
   );
 }
 
-function ModuleFeedItem({ children }) {
-  return <article className={styles.moduleItem}>{children}</article>;
+function ModuleFeedItem({ module, focusIntent, onFocusHandled, children }) {
+  const itemRef = useRef(null);
+  const matchingIntent =
+    focusIntent?.itemId === module.id && focusIntent.type === module.type
+      ? focusIntent
+      : null;
+
+  useEffect(() => {
+    if (!matchingIntent) return undefined;
+    const frameId = window.requestAnimationFrame(() => {
+      itemRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      onFocusHandled(matchingIntent.token);
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [matchingIntent, onFocusHandled]);
+
+  return (
+    <ModuleFocusProvider intent={matchingIntent}>
+      <article ref={itemRef} className={styles.moduleItem}>
+        {children}
+      </article>
+    </ModuleFocusProvider>
+  );
 }
 
 // The group feed, rendered inline below the status section. Owns its own feed
@@ -110,10 +136,8 @@ export default function GroupFeed({ roommates }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [liveError, setLiveError] = useState("");
+  const [navigationError, setNavigationError] = useState("");
   const [transitioningId, setTransitioningId] = useState(null);
-  const [activityFocusRequest] = useState(null);
-  const [requestFocusRequest, setRequestFocusRequest] = useState(null);
-  const [checklistFocusRequest, setChecklistFocusRequest] = useState(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createType, setCreateType] = useState(null);
   const [jamModalOpen, setJamModalOpen] = useState(false);
@@ -199,33 +223,71 @@ export default function GroupFeed({ roommates }) {
     [modules],
   );
 
-  // Deep links (from push notifications) land on "/" — focus the referenced
-  // request/checklist and clear the param.
-  useEffect(() => {
-    const requestId = searchParams.get("request");
-    if (!requestId) return;
-    setActiveType("requests");
-    setRequestFocusRequest((current) => ({
-      requestId,
-      requestKey: (current?.requestKey ?? 0) + 1,
-    }));
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("request");
-    setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+  const focusIntent = useMemo(
+    () => moduleFocusFromSearchParams(searchParams),
+    [searchParams],
+  );
+  const moduleTypeIds = useMemo(
+    () =>
+      new Set(
+        MODULE_TYPES.filter((type) => type.id !== "all").map((type) => type.id),
+      ),
+    [],
+  );
 
+  const consumeFocusIntent = useCallback(
+    (token) => {
+      setSearchParams(
+        (currentParams) => {
+          const currentIntent = moduleFocusFromSearchParams(currentParams);
+          return currentIntent?.token === token
+            ? withoutModuleFocus(currentParams)
+            : currentParams;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  // Navigation intent is consumed only after its target can be rendered. Feed
+  // refreshes therefore cannot replay expansion, scrolling, or editor resets.
   useEffect(() => {
-    const checklistId = searchParams.get("checklist");
-    if (!checklistId) return;
-    setActiveType("checklists");
-    setChecklistFocusRequest((current) => ({
-      checklistId,
-      requestKey: (current?.requestKey ?? 0) + 1,
-    }));
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("checklist");
-    setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+    if (!focusIntent) return;
+    if (!moduleTypeIds.has(focusIntent.type)) {
+      setNavigationError("That module type is not available.");
+      consumeFocusIntent(focusIntent.token);
+      return;
+    }
+
+    setActiveType(focusIntent.type);
+    if (!focusIntent.itemId) {
+      setNavigationError("");
+      consumeFocusIntent(focusIntent.token);
+      return;
+    }
+    if (loading || liveError) return;
+
+    const target = modules.find(
+      (module) =>
+        module.type === focusIntent.type && module.id === focusIntent.itemId,
+    );
+    if (!target) {
+      setNavigationError("That module is no longer available.");
+      consumeFocusIntent(focusIntent.token);
+      return;
+    }
+
+    setNavigationError("");
+    if (target.isArchived) setArchivedOpen(true);
+  }, [
+    consumeFocusIntent,
+    focusIntent,
+    liveError,
+    loading,
+    moduleTypeIds,
+    modules,
+  ]);
 
   useEffect(() => {
     if (!drawerOpen) return undefined;
@@ -261,6 +323,7 @@ export default function GroupFeed({ roommates }) {
 
   function selectModuleType(type) {
     setActiveType(type);
+    setNavigationError("");
     setDrawerOpen(false);
   }
 
@@ -344,7 +407,6 @@ export default function GroupFeed({ roommates }) {
           transitioningId={transitioningId}
           onLiveTransition={handleLiveTransition}
           roommates={roommates}
-          activityFocusRequest={activityFocusRequest}
           moduleTag={moduleTag}
         />
       );
@@ -355,7 +417,6 @@ export default function GroupFeed({ roommates }) {
           requests={[module.payload]}
           onRequestsChange={handleRequestsChange}
           roommates={roommates}
-          requestFocusRequest={requestFocusRequest}
           moduleTag={moduleTag}
         />
       );
@@ -365,7 +426,6 @@ export default function GroupFeed({ roommates }) {
         <ChecklistFeature
           checklists={[module.payload]}
           onChecklistsChange={handleChecklistsChange}
-          checklistFocusRequest={checklistFocusRequest}
           moduleTag={moduleTag}
         />
       );
@@ -409,6 +469,9 @@ export default function GroupFeed({ roommates }) {
       {liveError && (
         <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
       )}
+      {navigationError && (
+        <p className={cx("ui-errorBox", styles.pageError)}>{navigationError}</p>
+      )}
 
       <div className={styles.shell}>
         <ModuleNav
@@ -451,7 +514,12 @@ export default function GroupFeed({ roommates }) {
               <p className={styles.emptyFeed}>No active modules here yet.</p>
             ) : (
               activeModules.map((module) => (
-                <ModuleFeedItem key={`${module.type}:${module.id}`}>
+                <ModuleFeedItem
+                  key={`${module.type}:${module.id}`}
+                  module={module}
+                  focusIntent={focusIntent}
+                  onFocusHandled={consumeFocusIntent}
+                >
                   {renderModule(module)}
                 </ModuleFeedItem>
               ))
@@ -472,7 +540,12 @@ export default function GroupFeed({ roommates }) {
               {archivedOpen && (
                 <div className={styles.feedList}>
                   {archivedModules.map((module) => (
-                    <ModuleFeedItem key={`${module.type}:${module.id}`}>
+                    <ModuleFeedItem
+                      key={`${module.type}:${module.id}`}
+                      module={module}
+                      focusIntent={focusIntent}
+                      onFocusHandled={consumeFocusIntent}
+                    >
                       {renderModule(module)}
                     </ModuleFeedItem>
                   ))}
