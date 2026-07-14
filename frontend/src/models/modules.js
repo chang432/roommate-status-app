@@ -1,10 +1,67 @@
+export const MODULE_DEFINITIONS = {
+  events: {
+    id: 'events',
+    label: 'Events',
+    shortLabel: 'Events',
+    ownerField: 'proposedById',
+    edit: {
+      label: 'Edit event',
+      field: 'text',
+      fieldLabel: 'Event',
+      schedule: true,
+    },
+  },
+  requests: {
+    id: 'requests',
+    label: 'Requests',
+    shortLabel: 'Requests',
+    ownerField: 'requesterId',
+    edit: {
+      label: 'Edit request',
+      field: 'text',
+      fieldLabel: 'Request',
+      recipients: true,
+    },
+  },
+  checklists: {
+    id: 'checklists',
+    label: 'Checklists',
+    shortLabel: 'Lists',
+    ownerField: 'createdById',
+    edit: {
+      label: 'Edit checklist',
+      field: 'title',
+      fieldLabel: 'Checklist title',
+    },
+  },
+  tv: {
+    id: 'tv',
+    label: 'TV',
+    shortLabel: 'TV',
+    ownerField: 'createdById',
+    edit: { label: 'Edit show', field: 'title', fieldLabel: 'Show title' },
+  },
+  spotify: {
+    id: 'spotify',
+    label: 'Spotify',
+    shortLabel: 'Spotify',
+    ownerField: 'hostId',
+    edit: {
+      label: 'Edit Spotify Jam',
+      field: 'link',
+      fieldLabel: 'Spotify Jam link',
+      inputType: 'url',
+    },
+  },
+}
+
 export const MODULE_TYPES = [
   { id: 'all', label: 'All modules', shortLabel: 'All' },
-  { id: 'events', label: 'Events', shortLabel: 'Events' },
-  { id: 'requests', label: 'Requests', shortLabel: 'Requests' },
-  { id: 'checklists', label: 'Checklists', shortLabel: 'Lists' },
-  { id: 'tv', label: 'TV', shortLabel: 'TV' },
-  { id: 'spotify', label: 'Spotify', shortLabel: 'Spotify' },
+  ...Object.values(MODULE_DEFINITIONS).map(({ id, label, shortLabel }) => ({
+    id,
+    label,
+    shortLabel,
+  })),
 ]
 
 // One warm, distinct color per module type (mirrors the avatarColor palette
@@ -53,6 +110,15 @@ export class BaseModule {
   get typeLabel() {
     return MODULE_TYPES.find((type) => type.id === this.type)?.shortLabel ?? this.type
   }
+
+  get ownerId() {
+    const ownerField = MODULE_DEFINITIONS[this.type]?.ownerField
+    return ownerField ? this.payload[ownerField] : null
+  }
+
+  isEditableBy(userId) {
+    return !this.isArchived && this.ownerId === userId
+  }
 }
 
 export class EventModule extends BaseModule {
@@ -60,17 +126,8 @@ export class EventModule extends BaseModule {
     return this.payload.isLive ? 'Live event' : 'Event'
   }
 }
-export class RequestModule extends BaseModule {}
-export class ChecklistModule extends BaseModule {}
-export class TvModule extends BaseModule {}
-
-export class SpotifyModule extends BaseModule {}
 
 MODULE_CLASS_BY_TYPE.events = EventModule
-MODULE_CLASS_BY_TYPE.requests = RequestModule
-MODULE_CLASS_BY_TYPE.checklists = ChecklistModule
-MODULE_CLASS_BY_TYPE.tv = TvModule
-MODULE_CLASS_BY_TYPE.spotify = SpotifyModule
 
 export function createModule(feedItem) {
   const ModuleClass = MODULE_CLASS_BY_TYPE[feedItem.type] ?? BaseModule

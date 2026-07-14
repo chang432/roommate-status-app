@@ -112,7 +112,7 @@ export function JamShareForm({ currentJam, onJamChange, onSuccess }) {
   )
 }
 
-export default function JamWidget({ jam, onJamChange, onReplace, moduleTag }) {
+export default function JamWidget({ jam, onJamChange, onReplace, moduleTag, canEdit = false }) {
   const { user } = useAuth()
   const [ending, setEnding] = useState(false)
   const [error, setError] = useState('')
@@ -169,15 +169,17 @@ export default function JamWidget({ jam, onJamChange, onReplace, moduleTag }) {
             >
               <JoinIcon />
             </a>
-            <button
-              type="button"
-              onClick={onReplace}
-              aria-label="Replace Jam"
-              title="Replace Jam"
-              className={styles.replaceButton}
-            >
-              <ReplaceIcon />
-            </button>
+            {!canEdit ? (
+              <button
+                type="button"
+                onClick={onReplace}
+                aria-label="Replace Jam"
+                title="Replace Jam"
+                className={styles.replaceButton}
+              >
+                <ReplaceIcon />
+              </button>
+            ) : null}
           </div>
         </div>
 

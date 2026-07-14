@@ -146,6 +146,14 @@ export async function getFeed(userId, type = 'all') {
   return request(withQuery('/feed', { userId, type }))
 }
 
+// PATCH /api/modules/:type/:id — creator-owned definition edit.
+export async function updateModule(type, id, editorId, changes) {
+  return request(`/modules/${type}/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ editorId, changes }),
+  })
+}
+
 // POST /api/jam — replace the active household Jam link.
 export async function shareJam(link, hostId) {
   return request('/jam', {
@@ -218,12 +226,9 @@ export async function endActivity(id, requesterId) {
   })
 }
 
-// PATCH /api/activities/:id/schedule — replace a pending owner's schedule.
+// Event schedule editing uses the same creator-owned module contract.
 export async function updateActivitySchedule(id, requesterId, startAt, endAt) {
-  return request(`/activities/${id}/schedule`, {
-    method: 'PATCH',
-    body: JSON.stringify({ requesterId, startAt, endAt }),
-  })
+  return updateModule('events', id, requesterId, { startAt, endAt })
 }
 
 // POST /api/activities/:id/join — add the identified roommate to an activity.

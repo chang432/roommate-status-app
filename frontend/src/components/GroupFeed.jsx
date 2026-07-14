@@ -5,6 +5,7 @@ import ChecklistCreateForm from "./ChecklistCreateForm.jsx";
 import ChecklistFeature from "./ChecklistFeature.jsx";
 import JamWidget, { JamShareForm } from "./JamWidget.jsx";
 import ModalShell from "./ModalShell.jsx";
+import ModuleEditForm from "./ModuleEditForm.jsx";
 import ProposeActivity from "./ProposeActivity.jsx";
 import RequestCreateForm from "./RequestCreateForm.jsx";
 import RequestFeature from "./RequestFeature.jsx";
@@ -15,6 +16,7 @@ import { ModuleFocusProvider } from "../context/ModuleFocusContext.jsx";
 import { endActivity, getFeed, startActivity } from "../api/client.js";
 import {
   MODULE_TYPES,
+  MODULE_DEFINITIONS,
   createModules,
   moduleTagStyle,
   modulePanelStyle,
@@ -99,7 +101,14 @@ function ModuleTag({ module }) {
   );
 }
 
-function ModuleFeedItem({ module, focusIntent, onFocusHandled, children }) {
+function ModuleFeedItem({
+  module,
+  focusIntent,
+  onFocusHandled,
+  canEdit,
+  onEdit,
+  children,
+}) {
   const itemRef = useRef(null);
   const matchingIntent =
     focusIntent?.itemId === module.id && focusIntent.type === module.type
@@ -118,6 +127,16 @@ function ModuleFeedItem({ module, focusIntent, onFocusHandled, children }) {
   return (
     <ModuleFocusProvider intent={matchingIntent}>
       <article ref={itemRef} className={styles.moduleItem}>
+        {canEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            className={styles.moduleEditButton}
+            aria-label={MODULE_DEFINITIONS[module.type].edit.label}
+          >
+            Edit
+          </button>
+        ) : null}
         {children}
       </article>
     </ModuleFocusProvider>
@@ -141,6 +160,7 @@ export default function GroupFeed({ roommates }) {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createType, setCreateType] = useState(null);
   const [jamModalOpen, setJamModalOpen] = useState(false);
+  const [editingModule, setEditingModule] = useState(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
 
   const loadFeed = useCallback(async () => {
@@ -445,6 +465,7 @@ export default function GroupFeed({ roommates }) {
           jam={module.payload}
           onJamChange={handleJamChange}
           onReplace={() => setJamModalOpen(true)}
+          canEdit={module.isEditableBy(user.id)}
           moduleTag={moduleTag}
         />
       );
@@ -519,6 +540,8 @@ export default function GroupFeed({ roommates }) {
                   module={module}
                   focusIntent={focusIntent}
                   onFocusHandled={consumeFocusIntent}
+                  canEdit={module.isEditableBy(user.id)}
+                  onEdit={() => setEditingModule(module)}
                 >
                   {renderModule(module)}
                 </ModuleFeedItem>
@@ -545,6 +568,8 @@ export default function GroupFeed({ roommates }) {
                       module={module}
                       focusIntent={focusIntent}
                       onFocusHandled={consumeFocusIntent}
+                      canEdit={module.isEditableBy(user.id)}
+                      onEdit={() => setEditingModule(module)}
                     >
                       {renderModule(module)}
                     </ModuleFeedItem>
@@ -575,6 +600,23 @@ export default function GroupFeed({ roommates }) {
             currentJam={currentJam}
             onJamChange={handleJamChange}
             onSuccess={() => setJamModalOpen(false)}
+          />
+        </ModalShell>
+      )}
+      {editingModule && (
+        <ModalShell
+          title={MODULE_DEFINITIONS[editingModule.type].edit.label}
+          onClose={() => setEditingModule(null)}
+          widthClassName={styles.createModal}
+        >
+          <ModuleEditForm
+            module={editingModule}
+            roommates={roommates}
+            onSaved={async () => {
+              await loadFeed();
+              setEditingModule(null);
+            }}
+            onCancel={() => setEditingModule(null)}
           />
         </ModalShell>
       )}

@@ -23,7 +23,6 @@ And the proposed-activities feed:
 
     GET  /api/activities               -> current + expired activity history
     POST /api/activities               -> the updated activity list (and pushes it)
-    PATCH /api/activities/<id>/schedule -> the updated activity list
     POST /api/activities/<id>/archive  -> the updated activity list
     POST /api/activities/<id>/restore  -> the updated activity list
     DELETE /api/activities/<id>        -> the updated activity list
@@ -89,6 +88,7 @@ import household_checklists
 import household_requests
 import household_shows
 import jam
+import module_edits
 import module_models
 import push
 
@@ -584,6 +584,53 @@ def create_app() -> Flask:
             return jsonify({"error": "Unknown module type."}), 400
         return jsonify(module_models.list_feed(viewer["groupId"], module_type))
 
+    @app.patch("/api/modules/<module_type>/<item_id>")
+    def edit_module(module_type: str, item_id: str):
+        """Apply a creator-owned edit through the registered module adapter."""
+        body = request.get_json(silent=True) or {}
+        editor_id = (body.get("editorId") or "").strip()
+        editor = db.get_group_member(editor_id) if editor_id else None
+        if editor is None:
+            return invalid_user_response()
+
+        result = module_edits.edit(module_type, item_id, editor, body.get("changes"))
+        if result.status == module_edits.EDIT_INVALID:
+            return jsonify({"error": result.error}), 400
+        if result.status == module_edits.EDIT_NOT_FOUND:
+            return jsonify({"error": "That module was not found."}), 404
+        if result.status == module_edits.EDIT_FORBIDDEN:
+            return jsonify({"error": "Only the module creator can edit it."}), 403
+        if result.status == module_edits.EDIT_READ_ONLY:
+            return jsonify({"error": "Archived or completed modules are read-only."}), 409
+        if result.status == module_edits.EDIT_CONFLICT:
+            return jsonify({"error": "The module changed while you were editing it."}), 409
+
+        feed_item = module_models.module_from_payload(
+            module_type, result.payload
+        ).to_feed_item()
+        module_url = module_models.module_url(module_type, item_id)
+        try:
+            if result.notify_group:
+                notify_group(
+                    editor["groupId"],
+                    title="Module updated",
+                    body=result.notification_body,
+                    url=module_url,
+                    event_type=f"{module_type}-changed",
+                    exclude_user_ids={editor["id"]},
+                )
+            elif result.notify_user_ids:
+                push.notify_users(
+                    user_ids=result.notify_user_ids,
+                    title="Module updated",
+                    body=result.notification_body,
+                    url=module_url,
+                    event_type=f"{module_type}-changed",
+                )
+        except Exception:  # noqa: BLE001 - notification failure cannot undo an edit
+            app.logger.exception("Failed to send module edit notification")
+        return jsonify({"module": feed_item})
+
     # --- Proposed activities ------------------------------------------------
     @app.get("/api/activities")
     def get_activities():
@@ -690,36 +737,6 @@ def create_app() -> Flask:
     def end_activity(activity_id: str):
         """Let an event creator permanently end their live event."""
         return transition_activity_live(activity_id, "end")
-
-    @app.patch("/api/activities/<activity_id>/schedule")
-    def update_activity_schedule(activity_id: str):
-        """Replace a pending activity's optional owner-controlled schedule."""
-        body = request.get_json(silent=True) or {}
-        requester_id = (body.get("requesterId") or "").strip()
-        if not requester_id:
-            return jsonify({"error": "A requester id is required."}), 400
-        start_at, end_at, schedule_error = validate_activity_schedule(body)
-        if schedule_error:
-            return jsonify({"error": schedule_error}), 400
-
-        requester = db.get_group_member(requester_id) if requester_id else None
-        if requester is None:
-            return jsonify({"error": "A valid requester is required."}), 400
-
-        result = activities.update_schedule_owned(
-            activity_id,
-            requester_id,
-            requester["groupId"],
-            start_at,
-            end_at,
-        )
-        if result == activities.SCHEDULE_NOT_FOUND:
-            return jsonify({"error": f"Unknown activity: {activity_id}"}), 404
-        if result == activities.SCHEDULE_FORBIDDEN:
-            return jsonify({"error": "Only the event creator can edit its schedule."}), 403
-        if result == activities.SCHEDULE_CONFLICT:
-            return jsonify({"error": "Only pending events can be rescheduled."}), 409
-        return jsonify(activities.list_recent(requester["groupId"], consistent=True))
 
     @app.post("/api/activities/<activity_id>/archive")
     def archive_activity(activity_id: str):

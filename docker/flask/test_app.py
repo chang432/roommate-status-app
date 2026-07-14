@@ -657,6 +657,7 @@ def test_share_jam_replaces_active_link_and_notifies(client, monkeypatch):
         "hostId": "kayla",
         "hostName": "Kayla",
         "createdAt": data["createdAt"],
+        "updatedAt": data["updatedAt"],
     }
     assert client.get(grouped_path("/api/jam")).get_json()["link"] == "https://spotify.link/second"
     stored = jam._get_table().get_item(Key={"id": jam._active_jam_id(TEST_GROUP_ID)})["Item"]
@@ -1762,29 +1763,49 @@ def test_activity_schedule_validation(client):
 def test_owner_can_edit_only_pending_schedule(client, monkeypatch):
     monkeypatch.setattr(activities.time, "time", lambda: 1_000)
     created = _propose(client, "Dinner", start_at=2_000_000).get_json()[0]
-    url = f"/api/activities/{created['id']}/schedule"
+    url = f"/api/modules/events/{created['id']}"
 
     denied = client.patch(
         url,
-        json={"requesterId": "kayla", "startAt": 3_000_000, "endAt": None},
+        json={
+            "editorId": "kayla",
+            "changes": {"startAt": 3_000_000, "endAt": None},
+        },
     )
     assert denied.status_code == 403
 
     updated = client.patch(
         url,
-        json={"requesterId": "andre", "startAt": 3_000_000, "endAt": 4_000_000},
+        json={
+            "editorId": "andre",
+            "changes": {"startAt": 3_000_000, "endAt": 4_000_000},
+        },
     )
     assert updated.status_code == 200
-    item = next(entry for entry in updated.get_json() if entry["id"] == created["id"])
+    item = updated.get_json()["module"]["payload"]
     assert item["startAt"] == 3_000_000
     assert item["endAt"] == 4_000_000
 
     monkeypatch.setattr(activities.time, "time", lambda: 3_500)
     conflict = client.patch(
         url,
-        json={"requesterId": "andre", "startAt": None, "endAt": None},
+        json={"editorId": "andre", "changes": {"startAt": None, "endAt": None}},
     )
     assert conflict.status_code == 409
+
+    live_text_edit = client.patch(
+        url,
+        json={"editorId": "andre", "changes": {"text": "Dinner is live"}},
+    )
+    assert live_text_edit.status_code == 200
+    assert live_text_edit.get_json()["module"]["payload"]["text"] == "Dinner is live"
+
+    monkeypatch.setattr(activities.time, "time", lambda: 4_500)
+    expired_text_edit = client.patch(
+        url,
+        json={"editorId": "andre", "changes": {"text": "Too late"}},
+    )
+    assert expired_text_edit.status_code == 409
 
 
 def test_early_start_retains_future_end_and_manual_end_is_terminal(client, monkeypatch):
@@ -2507,6 +2528,106 @@ def test_shows_are_scoped_by_group(client):
     # Same-group access still works.
     joined = household_shows.join(show_a["id"], "andre", "Andre", "group-a")
     assert "andre" in [m["id"] for m in joined["members"]]
+
+
+def test_creators_can_edit_every_module_definition(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+    event = _propose(client, "Dinner").get_json()[0]
+    request_item = _make_request(client, requested_ids=["kayla", "ting"]).get_json()[0]
+    client.post(
+        f"/api/requests/{request_item['id']}/responses",
+        json={"userId": "kayla", "response": "accepted"},
+    )
+    checklist = _make_checklist(client).get_json()[0]
+    show = _make_show(client, creator="sheryl")
+    jam_item = client.post(
+        "/api/jam", json={"hostId": "andre", "link": "https://spotify.link/old"}
+    ).get_json()
+    calls.clear()
+
+    edits = [
+        (
+            "events",
+            event["id"],
+            "andre",
+            {"text": "Late dinner", "startAt": 9_000_000_000_000, "endAt": None},
+            "text",
+            "Late dinner",
+        ),
+        (
+            "requests",
+            request_item["id"],
+            "andre",
+            {"text": "Please grab milk", "requestedIds": ["kayla", "sheryl"]},
+            "text",
+            "Please grab milk",
+        ),
+        ("checklists", checklist["id"], "andre", {"title": "Weekly shop"}, "title", "Weekly shop"),
+        ("tv", show["id"], "sheryl", {"title": "Severance S2"}, "title", "Severance S2"),
+        (
+            "spotify",
+            jam_item["id"],
+            "andre",
+            {"link": "https://spotify.link/new"},
+            "link",
+            "https://spotify.link/new",
+        ),
+    ]
+    for module_type, item_id, editor_id, changes, field, expected in edits:
+        encoded_item_id = item_id.replace("#", "%23")
+        response = client.patch(
+            f"/api/modules/{module_type}/{encoded_item_id}",
+            json={"editorId": editor_id, "changes": changes},
+        )
+        assert response.status_code == 200, (module_type, response.get_json())
+        module = response.get_json()["module"]
+        assert module["type"] == module_type
+        assert module["payload"][field] == expected
+
+    updated_request = household_requests.get(request_item["id"], TEST_GROUP_ID)
+    assert updated_request["requestedIds"] == ["kayla", "sheryl"]
+    assert next(person for person in updated_request["requested"] if person["id"] == "kayla")[
+        "response"
+    ] == "accepted"
+    assert jam.get_active(TEST_GROUP_ID)["createdAt"] == jam_item["createdAt"]
+    assert any(call[0] == "users" and call[1]["user_ids"] == {"kayla", "sheryl"} for call in calls)
+    assert any(call[0] == "all" and call[1]["event_type"] == "spotify-changed" for call in calls)
+
+
+def test_module_edits_enforce_creator_lifecycle_and_validation(client):
+    checklist = _make_checklist(client).get_json()[0]
+    url = f"/api/modules/checklists/{checklist['id']}"
+
+    assert client.patch(
+        url, json={"editorId": "kayla", "changes": {"title": "Nope"}}
+    ).status_code == 403
+    client.post(f"/api/checklists/{checklist['id']}/archive", json={"userId": "andre"})
+    assert client.patch(
+        url, json={"editorId": "andre", "changes": {"title": "Nope"}}
+    ).status_code == 409
+    assert client.patch(
+        "/api/modules/ghost/one",
+        json={"editorId": "andre", "changes": {"title": "Nope"}},
+    ).status_code == 400
+    assert client.patch(
+        "/api/modules/tv/missing",
+        json={"editorId": "andre", "changes": {"title": "Nope"}},
+    ).status_code == 404
+
+
+def test_noop_module_edit_preserves_timestamp_and_sends_no_notification(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+    checklist = _make_checklist(client, title="Same title").get_json()[0]
+    calls.clear()
+
+    response = client.patch(
+        f"/api/modules/checklists/{checklist['id']}",
+        json={"editorId": "andre", "changes": {"title": "  Same title  "}},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["module"]["updatedAt"] == checklist["updatedAt"]
+    assert calls == []
 
 
 def test_module_feed_sorts_active_instances_and_exposes_archived_modules(client, monkeypatch):
