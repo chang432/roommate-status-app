@@ -41,6 +41,7 @@ export default function RequestFeature({
   onRequestsChange,
   roommates,
   moduleTag,
+  editTrigger,
 }) {
   const { user } = useAuth();
   const [error, setError] = useState("");
@@ -209,6 +210,7 @@ export default function RequestFeature({
                   role="button"
                   tabIndex={0}
                   aria-expanded={expanded}
+                  {...editTrigger.keyboardProps}
                   onClick={() => toggleExpanded(requestItem.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -221,7 +223,7 @@ export default function RequestFeature({
                     isArchived ? styles.completedCard : "",
                   )}
                 >
-                  <div className={styles.summary}>
+                  <div className={styles.summary} {...editTrigger.headerProps}>
                     <div className={styles.summaryText}>
                       <div className={styles.titleRow}>
                         {moduleTag}

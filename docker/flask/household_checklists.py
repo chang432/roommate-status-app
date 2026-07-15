@@ -33,6 +33,10 @@ TABLE_NAME = os.environ.get("CHECKLISTS_TABLE") or (
 _table = None
 _table_lock = threading.Lock()
 
+EDIT_NOT_FOUND = "not_found"
+EDIT_FORBIDDEN = "forbidden"
+EDIT_READ_ONLY = "read_only"
+
 
 def _get_table():
     """Return the cached Checklists Table resource, built lazily (like db.py).
@@ -143,6 +147,46 @@ def get(checklist_id: str, group_id: str, consistent: bool = False) -> dict | No
         ConsistentRead=consistent,
     ).get("Item")
     return _project(item) if _in_group(item, group_id) else None
+
+
+def edit_title_owned(
+    checklist_id: str, creator_id: str, group_id: str, title: str
+) -> dict | str:
+    table = _get_table()
+    item = table.get_item(Key={"id": checklist_id}, ConsistentRead=True).get("Item")
+    if not _in_group(item, group_id):
+        return EDIT_NOT_FOUND
+    if item.get("createdById") != creator_id:
+        return EDIT_FORBIDDEN
+    if item.get("isArchived", False):
+        return EDIT_READ_ONLY
+    if item.get("title", "") == title:
+        return _project(item)
+    try:
+        response = table.update_item(
+            Key={"id": checklist_id},
+            UpdateExpression="SET title = :title, updatedAt = :now",
+            ExpressionAttributeValues={
+                ":title": title,
+                ":now": max(
+                    int(time.time() * 1000),
+                    int(item.get("updatedAt", item["createdAt"])) + 1,
+                ),
+                ":groupId": group_id,
+                ":creator": creator_id,
+                ":false": False,
+            },
+            ConditionExpression=(
+                "attribute_exists(id) AND groupId = :groupId AND createdById = :creator AND "
+                "(attribute_not_exists(isArchived) OR isArchived = :false)"
+            ),
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        return EDIT_READ_ONLY
+    return _project(response["Attributes"])
 
 
 def _mutate_items(checklist_id: str, group_id: str, mutate) -> dict | None:

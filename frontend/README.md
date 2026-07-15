@@ -82,6 +82,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
 | `pokeRoommate`                  | `POST /api/roommates/:id/poke`                             |
 | `getFeed`                       | `GET /api/feed?userId=:id&type=:type`                      |
+| `updateModule`                  | `PATCH /api/modules/:type/:id`                             |
 | `getJam`                        | `GET /api/jam?userId=:id`                                  |
 | `getActivities`                 | `GET /api/activities?userId=:id`                           |
 | `proposeActivity`               | `POST /api/activities`                                     |
@@ -90,7 +91,6 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `deleteActivity`                | `DELETE /api/activities/:id`                               |
 | `startActivity`                 | `POST /api/activities/:id/start`                           |
 | `endActivity`                   | `POST /api/activities/:id/end`                             |
-| `updateActivitySchedule`        | `PATCH /api/activities/:id/schedule`                       |
 | `setCommentLiked`               | `PUT/DELETE /api/activities/:id/comments/:commentId/likes` |
 | `getRequests`                   | `GET /api/requests?userId=:id`                             |
 | `createRequest`                 | `POST /api/requests`                                       |

@@ -1,0 +1,31 @@
+.form {
+  @apply space-y-5;
+}
+
+.field {
+  @apply block min-w-0;
+}
+
+.fieldLabel {
+  @apply mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
+}
+
+.input {
+  @apply w-full min-w-0 px-[14px] py-[12px] text-[14px];
+}
+
+.timeFields {
+  @apply grid grid-cols-2 gap-3 max-[520px]:grid-cols-1;
+}
+
+.error {
+  @apply mt-1;
+}
+
+.actions {
+  @apply flex flex-wrap justify-end gap-2;
+}
+
+.actionButton {
+  @apply min-w-[128px] px-[18px] py-[11px] text-[14px] max-[420px]:flex-1;
+}

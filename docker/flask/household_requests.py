@@ -43,6 +43,10 @@ DELETE_NOT_FOUND = "not_found"
 ARCHIVE_OK = "archived"
 ARCHIVE_NOT_FOUND = "not_found"
 MUTATION_ARCHIVED = "archived"
+EDIT_NOT_FOUND = "not_found"
+EDIT_FORBIDDEN = "forbidden"
+EDIT_READ_ONLY = "read_only"
+EDIT_CONFLICT = "conflict"
 
 TABLE_NAME = os.environ.get("REQUESTS_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-requests"
@@ -175,6 +179,84 @@ def get(request_id: str, group_id: str, consistent: bool = False) -> dict | None
     if not item or item.get("groupId") != group_id:
         return None
     return _project(item)
+
+
+def edit_owned(
+    request_id: str,
+    requester_id: str,
+    group_id: str,
+    text: str,
+    requested_roommates: list[dict],
+) -> dict | str:
+    """Edit request definition while preserving responses for retained recipients."""
+    table = _get_table()
+    item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("groupId") != group_id:
+        return EDIT_NOT_FOUND
+    if item.get("requesterId") != requester_id:
+        return EDIT_FORBIDDEN
+    if item.get("isArchived", False):
+        return EDIT_READ_ONLY
+
+    names_by_id = {person["id"]: person["name"] for person in requested_roommates}
+    requested_ids = set(names_by_id)
+    old_ids = set(item.get("requestedIds") or set())
+    old_responses = dict(item.get("responses") or {})
+    responses = {
+        user_id: response
+        for user_id, response in old_responses.items()
+        if user_id in requested_ids
+    }
+    if (
+        item.get("text", "") == text
+        and old_ids == requested_ids
+        and dict(item.get("requestedNamesById") or {}) == names_by_id
+    ):
+        return _project(item)
+
+    try:
+        response = table.update_item(
+            Key={"id": request_id},
+            UpdateExpression=(
+                "SET #text = :text, requestedIds = :requested_ids, "
+                "requestedNamesById = :requested_names, responses = :responses, "
+                "updatedAt = :now"
+            ),
+            ExpressionAttributeNames={"#text": "text"},
+            ExpressionAttributeValues={
+                ":text": text,
+                ":requested_ids": requested_ids,
+                ":requested_names": names_by_id,
+                ":responses": responses,
+                ":expected_ids": old_ids,
+                ":expected_responses": old_responses,
+                ":now": max(
+                    int(time.time() * 1000),
+                    int(item.get("updatedAt", item["createdAt"])) + 1,
+                ),
+                ":groupId": group_id,
+                ":requester": requester_id,
+                ":false": False,
+            },
+            ConditionExpression=(
+                "attribute_exists(id) AND groupId = :groupId AND requesterId = :requester AND "
+                "requestedIds = :expected_ids AND responses = :expected_responses AND "
+                "(attribute_not_exists(isArchived) OR isArchived = :false)"
+            ),
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        current = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
+        if current is None or current.get("groupId") != group_id:
+            return EDIT_NOT_FOUND
+        if current.get("requesterId") != requester_id:
+            return EDIT_FORBIDDEN
+        if current.get("isArchived", False):
+            return EDIT_READ_ONLY
+        return EDIT_CONFLICT
+    return _project(response["Attributes"])
 
 
 def add_comment(

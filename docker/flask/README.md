@@ -18,9 +18,9 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
 | `POST /api/roommates/<id>/poke`                              | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
 | `GET /api/feed`                                              | `?userId=<id>&type=<type>`                 | active module instances in chronological feed order     |
+| `PATCH /api/modules/<type>/<id>`                             | `{ editorId, changes }`                    | normalized updated module                               |
 | `GET /api/activities`                                        | `?userId=<id>`                             | active activity list                                    |
 | `POST /api/activities`                                       | `{ text, proposedById, startAt?, endAt? }` | full updated activity list                              |
-| `PATCH /api/activities/<id>/schedule`                        | `{ requesterId, startAt?, endAt? }`        | full updated activity list                              |
 | `POST /api/activities/<id>/archive`                          | `{ requesterId }`                          | full updated activity list                              |
 | `POST /api/activities/<id>/restore`                          | `{ requesterId }`                          | full updated activity list                              |
 | `DELETE /api/activities/<id>`                                | `{ requesterId }`                          | full updated activity list                              |

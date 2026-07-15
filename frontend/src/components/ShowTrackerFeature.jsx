@@ -12,12 +12,10 @@ import {
 } from "../api/client.js";
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
+import { LONG_PRESS_MS } from "../utils/useLongPress.js";
 import { relativeTime } from "../utils/time.js";
 import SwipeActionRow from "./SwipeActionRow.jsx";
 import styles from "./styling/ShowTrackerFeature.module.css";
-
-// How long the counter must be held before it flips into manual-edit mode.
-const LONG_PRESS_MS = 500;
 
 // A single progress chip: tapping increments immediately, while a long press
 // opens inline numeric editing for an exact season/episode jump.
@@ -179,7 +177,12 @@ function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove 
   );
 }
 
-export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) {
+export default function ShowTrackerFeature({
+  shows,
+  onShowsChange,
+  moduleTag,
+  editTrigger,
+}) {
   const { user } = useAuth();
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
@@ -346,6 +349,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
           role="button"
           tabIndex={0}
           aria-expanded={expanded}
+          {...editTrigger.keyboardProps}
           onClick={() => toggleExpanded(show.id)}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
@@ -355,7 +359,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
           }}
           className={cx(styles.card, isArchived ? styles.completedCard : "")}
         >
-        <div className={styles.summary}>
+        <div className={styles.summary} {...editTrigger.headerProps}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
               {moduleTag}

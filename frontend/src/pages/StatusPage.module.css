@@ -159,7 +159,7 @@
 }
 
 .moduleItem {
-  @apply min-w-0;
+  @apply relative min-w-0;
 }
 
 .moduleType {

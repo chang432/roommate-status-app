@@ -36,6 +36,9 @@ PROGRESS_FIELDS = ("season", "episode")
 MUTATION_ARCHIVED = "archived"  # edit rejected: the show is archived (read-only)
 DELETE_OK = "deleted"
 DELETE_NOT_FOUND = "not_found"
+EDIT_NOT_FOUND = "not_found"
+EDIT_FORBIDDEN = "forbidden"
+EDIT_READ_ONLY = "read_only"
 
 TABLE_NAME = os.environ.get("SHOWS_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-shows"
@@ -143,6 +146,44 @@ def get(show_id: str, group_id: str, consistent: bool = False) -> dict | None:
         Key={"id": show_id}, ConsistentRead=consistent
     ).get("Item")
     return _project(item) if _in_group(item, group_id) else None
+
+
+def edit_title_owned(show_id: str, creator_id: str, group_id: str, title: str) -> dict | str:
+    table = _get_table()
+    item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
+    if not _in_group(item, group_id):
+        return EDIT_NOT_FOUND
+    if item.get("createdById") != creator_id:
+        return EDIT_FORBIDDEN
+    if item.get("isArchived", False):
+        return EDIT_READ_ONLY
+    if item.get("title", "") == title:
+        return _project(item)
+    try:
+        response = table.update_item(
+            Key={"id": show_id},
+            UpdateExpression="SET title = :title, updatedAt = :now",
+            ExpressionAttributeValues={
+                ":title": title,
+                ":now": max(
+                    int(time.time() * 1000),
+                    int(item.get("updatedAt", item["createdAt"])) + 1,
+                ),
+                ":groupId": group_id,
+                ":creator": creator_id,
+                ":false": False,
+            },
+            ConditionExpression=(
+                "attribute_exists(id) AND groupId = :groupId AND createdById = :creator AND "
+                "(attribute_not_exists(isArchived) OR isArchived = :false)"
+            ),
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        return EDIT_READ_ONLY
+    return _project(response["Attributes"])
 
 
 def list_recent(

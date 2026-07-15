@@ -162,6 +162,24 @@ class SpotifyModule(BaseModule):
         )
 
 
+MODULE_CLASS_BY_TYPE = {
+    "events": EventModule,
+    "requests": RequestModule,
+    "checklists": ChecklistModule,
+    "tv": TvModule,
+    "spotify": SpotifyModule,
+}
+
+
+def module_from_payload(module_type: str, payload: dict[str, Any]) -> BaseModule:
+    """Normalize one persistence payload using the same registry as the feed."""
+    try:
+        module_class = MODULE_CLASS_BY_TYPE[module_type]
+    except KeyError as error:
+        raise ValueError(f"Unknown module type: {module_type}") from error
+    return module_class.from_payload(payload)
+
+
 def list_feed(group_id: str, module_type: str | None = None) -> list[dict[str, Any]]:
     requested_types = MODULE_TYPES if not module_type or module_type == "all" else {module_type}
     if not requested_types <= MODULE_TYPES:
@@ -170,28 +188,28 @@ def list_feed(group_id: str, module_type: str | None = None) -> list[dict[str, A
     modules: list[BaseModule] = []
     if "events" in requested_types:
         modules.extend(
-            EventModule.from_payload(item)
+            module_from_payload("events", item)
             for item in activities.list_recent(group_id, consistent=True)
         )
     if "requests" in requested_types:
         modules.extend(
-            RequestModule.from_payload(item)
+            module_from_payload("requests", item)
             for item in household_requests.list_recent(group_id, consistent=True)
         )
     if "checklists" in requested_types:
         modules.extend(
-            ChecklistModule.from_payload(item)
+            module_from_payload("checklists", item)
             for item in household_checklists.list_recent(group_id, consistent=True)
         )
     if "tv" in requested_types:
         modules.extend(
-            TvModule.from_payload(item)
+            module_from_payload("tv", item)
             for item in household_shows.list_recent(group_id, consistent=True)
         )
     if "spotify" in requested_types:
         active_jam = jam.get_active(group_id)
         if active_jam:
-            modules.append(SpotifyModule.from_payload(active_jam))
+            modules.append(module_from_payload("spotify", active_jam))
 
     modules.sort(key=lambda module: (module.sort_at, module.created_at, module.type, module.id))
     return [module.to_feed_item() for module in modules]

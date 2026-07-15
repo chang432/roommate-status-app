@@ -64,6 +64,7 @@ export default function ChecklistFeature({
   checklists,
   onChecklistsChange,
   moduleTag,
+  editTrigger,
 }) {
   const { user } = useAuth();
   const [error, setError] = useState("");
@@ -277,6 +278,7 @@ export default function ChecklistFeature({
                   role="button"
                   tabIndex={0}
                   aria-expanded={expanded}
+                  {...editTrigger.keyboardProps}
                   onClick={() => toggleExpanded(checklist.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -286,7 +288,7 @@ export default function ChecklistFeature({
                   }}
                   className={cx(styles.card, isArchived ? styles.archivedCard : "")}
                 >
-                  <div className={styles.summary}>
+                  <div className={styles.summary} {...editTrigger.headerProps}>
                     <div className={styles.summaryText}>
                       <div className={styles.titleRow}>
                         {moduleTag}

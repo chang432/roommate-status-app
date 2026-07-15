@@ -26,6 +26,8 @@ from db import resource
 
 END_NOT_FOUND = "not_found"
 END_OK = "ended"
+EDIT_NOT_FOUND = "not_found"
+EDIT_FORBIDDEN = "forbidden"
 
 TABLE_NAME = os.environ.get("JAM_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-spotify-jam"
@@ -70,6 +72,7 @@ def _project(item: dict | None) -> dict | None:
         "hostId": item.get("hostId"),
         "hostName": item.get("hostName", "Someone"),
         "createdAt": int(item["createdAt"]),
+        "updatedAt": int(item.get("updatedAt", item["createdAt"])),
     }
 
 
@@ -95,6 +98,38 @@ def share(link: str, host_id: str, host_name: str, group_id: str) -> dict:
     }
     _get_table().put_item(Item=item)
     return _project(item)
+
+
+def edit_owned(jam_id: str, host_id: str, group_id: str, link: str) -> dict | str:
+    """Update the active host's link without turning the edit into a new Jam."""
+    table = _get_table()
+    item = table.get_item(Key={"id": jam_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("groupId") != group_id or jam_id != _active_jam_id(group_id):
+        return EDIT_NOT_FOUND
+    if item.get("hostId") != host_id:
+        return EDIT_FORBIDDEN
+    if item.get("link") == link:
+        return _project(item)
+    try:
+        response = table.update_item(
+            Key={"id": jam_id},
+            UpdateExpression="SET link = :link, updatedAt = :now",
+            ExpressionAttributeValues={
+                ":link": link,
+                ":now": max(_now_ms(), int(item.get("updatedAt", item["createdAt"])) + 1),
+                ":groupId": group_id,
+                ":host": host_id,
+            },
+            ConditionExpression=(
+                "attribute_exists(id) AND groupId = :groupId AND hostId = :host"
+            ),
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        return EDIT_FORBIDDEN
+    return _project(response["Attributes"])
 
 
 def end(host_id: str, group_id: str) -> str:
