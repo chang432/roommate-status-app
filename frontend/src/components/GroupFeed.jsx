@@ -26,11 +26,15 @@ import {
   moduleFocusFromSearchParams,
   withoutModuleFocus,
 } from "../utils/moduleFocus.js";
+import { useLongPress } from "../utils/useLongPress.js";
 // The feed shares the status page's stylesheet — it renders inline beneath the
 // status section on the same page.
 import styles from "../pages/StatusPage.module.css";
 
 const FEED_POLL_INTERVAL_MS = 5000;
+const EDIT_HEADER_SELECTOR = "[data-module-edit-header]";
+const EDIT_KEYBOARD_SELECTOR = "[data-module-edit-keyboard]";
+const INTERACTIVE_SELECTOR = "button, a, input, textarea, select, [role='button']";
 
 const CREATE_LABEL_BY_TYPE = {
   events: "Create an event",
@@ -114,6 +118,34 @@ function ModuleFeedItem({
     focusIntent?.itemId === module.id && focusIntent.type === module.type
       ? focusIntent
       : null;
+  const longPressHandlers = useLongPress({
+    enabled: canEdit,
+    onLongPress: onEdit,
+    isPointerTarget: (event) => {
+      const header = event.target.closest?.(EDIT_HEADER_SELECTOR);
+      if (!header || !event.currentTarget.contains(header)) return false;
+      const interactive = event.target.closest?.(INTERACTIVE_SELECTOR);
+      return !interactive || !header.contains(interactive) || interactive === header;
+    },
+    isKeyboardTarget: (event) =>
+      event.target.matches?.(EDIT_KEYBOARD_SELECTOR) &&
+      event.currentTarget.contains(event.target),
+  });
+  const editTrigger = {
+    enabled: canEdit,
+    headerProps: canEdit
+      ? {
+          "data-module-edit-header": "",
+          title: "Long-press to edit",
+        }
+      : {},
+    keyboardProps: canEdit
+      ? {
+          "data-module-edit-keyboard": "",
+          "aria-description": "Hold Enter or Space to edit",
+        }
+      : {},
+  };
 
   useEffect(() => {
     if (!matchingIntent) return undefined;
@@ -126,18 +158,8 @@ function ModuleFeedItem({
 
   return (
     <ModuleFocusProvider intent={matchingIntent}>
-      <article ref={itemRef} className={styles.moduleItem}>
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={onEdit}
-            className={styles.moduleEditButton}
-            aria-label={MODULE_DEFINITIONS[module.type].edit.label}
-          >
-            Edit
-          </button>
-        ) : null}
-        {children}
+      <article ref={itemRef} className={styles.moduleItem} {...longPressHandlers}>
+        {children(editTrigger)}
       </article>
     </ModuleFocusProvider>
   );
@@ -417,7 +439,7 @@ export default function GroupFeed({ roommates }) {
     );
   }
 
-  function renderModule(module) {
+  function renderModule(module, editTrigger) {
     const moduleTag = <ModuleTag module={module} />;
     if (module.type === "events") {
       return (
@@ -428,6 +450,7 @@ export default function GroupFeed({ roommates }) {
           onLiveTransition={handleLiveTransition}
           roommates={roommates}
           moduleTag={moduleTag}
+          editTrigger={editTrigger}
         />
       );
     }
@@ -438,6 +461,7 @@ export default function GroupFeed({ roommates }) {
           onRequestsChange={handleRequestsChange}
           roommates={roommates}
           moduleTag={moduleTag}
+          editTrigger={editTrigger}
         />
       );
     }
@@ -447,6 +471,7 @@ export default function GroupFeed({ roommates }) {
           checklists={[module.payload]}
           onChecklistsChange={handleChecklistsChange}
           moduleTag={moduleTag}
+          editTrigger={editTrigger}
         />
       );
     }
@@ -456,6 +481,7 @@ export default function GroupFeed({ roommates }) {
           shows={[module.payload]}
           onShowsChange={handleShowsChange}
           moduleTag={moduleTag}
+          editTrigger={editTrigger}
         />
       );
     }
@@ -467,6 +493,7 @@ export default function GroupFeed({ roommates }) {
           onReplace={() => setJamModalOpen(true)}
           canEdit={module.isEditableBy(user.id)}
           moduleTag={moduleTag}
+          editTrigger={editTrigger}
         />
       );
     }
@@ -543,7 +570,7 @@ export default function GroupFeed({ roommates }) {
                   canEdit={module.isEditableBy(user.id)}
                   onEdit={() => setEditingModule(module)}
                 >
-                  {renderModule(module)}
+                  {(editTrigger) => renderModule(module, editTrigger)}
                 </ModuleFeedItem>
               ))
             )}
@@ -571,7 +598,7 @@ export default function GroupFeed({ roommates }) {
                       canEdit={module.isEditableBy(user.id)}
                       onEdit={() => setEditingModule(module)}
                     >
-                      {renderModule(module)}
+                      {(editTrigger) => renderModule(module, editTrigger)}
                     </ModuleFeedItem>
                   ))}
                 </div>

@@ -1,9 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import GroupFeed from './GroupFeed.jsx'
 import { getFeed, updateModule } from '../api/client.js'
+import { LONG_PRESS_MS } from '../utils/useLongPress.js'
 
 vi.mock('../context/AuthContext.jsx', () => ({
   useAuth: () => ({
@@ -113,6 +114,21 @@ function cardForText(text) {
   return screen.getByText(text).closest('[role="button"]')
 }
 
+function editHeaderForText(text) {
+  return screen.getByText(text).closest('[data-module-edit-header]')
+}
+
+async function longPress(element) {
+  fireEvent.pointerDown(element, {
+    pointerId: 1,
+    pointerType: 'touch',
+    clientX: 20,
+    clientY: 20,
+  })
+  await act(() => new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 20)))
+  fireEvent.pointerUp(element, { pointerId: 1, pointerType: 'touch' })
+}
+
 describe('GroupFeed module focus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -213,20 +229,95 @@ describe('GroupFeed module focus', () => {
     renderFeed('/', [feedItem(type)])
     const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: editLabel }))
+    await screen.findByText(type === 'spotify' ? "Andre's Jam is live" : value)
+    expect(screen.queryByRole('button', { name: editLabel })).not.toBeInTheDocument()
+    await longPress(editHeaderForText(type === 'spotify' ? "Andre's Jam is live" : value))
     expect(screen.getByRole('dialog', { name: editLabel })).toBeInTheDocument()
     expect(screen.getByLabelText(fieldLabel)).toHaveValue(value)
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  })
+
+  it('opens from an expanded header without collapsing the card', async () => {
+    renderFeed('/', [feedItem('requests')])
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByText('Pick up milk'))
+    expect(cardForText('Pick up milk')).toHaveAttribute('aria-expanded', 'true')
+    await longPress(editHeaderForText('Pick up milk'))
+
+    expect(screen.getByRole('dialog', { name: 'Edit request' })).toBeInTheDocument()
+    expect(cardForText('Pick up milk')).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('uses a keyboard hold for editing while a short key press still expands', async () => {
+    renderFeed('/', [feedItem('requests')])
+    await screen.findByText('Pick up milk')
+    const card = cardForText('Pick up milk')
+
+    fireEvent.keyDown(card, { key: 'Enter' })
+    fireEvent.keyUp(card, { key: 'Enter' })
+    expect(card).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.keyDown(card, { key: 'Enter' })
+    await act(() => new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 20)))
+    fireEvent.keyUp(card, { key: 'Enter' })
+
+    expect(screen.getByRole('dialog', { name: 'Edit request' })).toBeInTheDocument()
+    expect(card).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('cancels a header hold when the pointer moves like a scroll or swipe', async () => {
+    renderFeed('/', [feedItem('requests')])
+    await screen.findByText('Pick up milk')
+    const header = editHeaderForText('Pick up milk')
+
+    fireEvent.pointerDown(header, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 20,
+      clientY: 20,
+    })
+    fireEvent(
+      header,
+      new MouseEvent('pointermove', {
+        bubbles: true,
+        clientX: 45,
+        clientY: 20,
+      }),
+    )
+    await act(() => new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 20)))
+    fireEvent.pointerUp(header, { pointerId: 1, pointerType: 'touch' })
+
+    expect(screen.queryByRole('dialog', { name: 'Edit request' })).not.toBeInTheDocument()
   })
 
   it('does not expose editing to non-creators or archived module owners', async () => {
     const nonOwner = feedItem('requests')
     nonOwner.payload.requesterId = 'kayla'
     renderFeed('/', [nonOwner, feedItem('checklists', 'archived', true)])
+    const user = userEvent.setup()
 
     await screen.findByText('Pick up milk')
-    expect(screen.queryByRole('button', { name: 'Edit request' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Edit checklist' })).not.toBeInTheDocument()
+    expect(editHeaderForText('Pick up milk')).toBeNull()
+    await user.click(screen.getByRole('button', { name: /Archived \(1\)/ }))
+    expect(editHeaderForText('Kitchen reset')).toBeNull()
+  })
+
+  it('keeps Spotify Replace available to roommates who do not own the Jam', async () => {
+    const spotify = feedItem('spotify')
+    spotify.payload.hostId = 'kayla'
+    spotify.payload.hostName = 'Kayla'
+    renderFeed('/', [spotify])
+
+    expect(await screen.findByRole('button', { name: 'Replace Jam' })).toBeInTheDocument()
+  })
+
+  it('removes the event-specific schedule editor', async () => {
+    renderFeed('/', [feedItem('events')])
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByText('Movie night'))
+    expect(screen.queryByText('Schedule')).not.toBeInTheDocument()
   })
 
   it('preserves an open edit draft across polling and saves through the generic API', async () => {
@@ -234,7 +325,8 @@ describe('GroupFeed module focus', () => {
     renderFeed('/', [module])
     const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: 'Edit request' }))
+    await screen.findByText('Pick up milk')
+    await longPress(editHeaderForText('Pick up milk'))
     const input = screen.getByLabelText('Request')
     await user.clear(input)
     await user.type(input, 'draft request text')

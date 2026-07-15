@@ -179,7 +179,12 @@ function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove 
   );
 }
 
-export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) {
+export default function ShowTrackerFeature({
+  shows,
+  onShowsChange,
+  moduleTag,
+  editTrigger,
+}) {
   const { user } = useAuth();
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
@@ -346,6 +351,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
           role="button"
           tabIndex={0}
           aria-expanded={expanded}
+          {...editTrigger.keyboardProps}
           onClick={() => toggleExpanded(show.id)}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
@@ -355,7 +361,7 @@ export default function ShowTrackerFeature({ shows, onShowsChange, moduleTag }) 
           }}
           className={cx(styles.card, isArchived ? styles.completedCard : "")}
         >
-        <div className={styles.summary}>
+        <div className={styles.summary} {...editTrigger.headerProps}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
               {moduleTag}

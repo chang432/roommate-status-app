@@ -9,15 +9,12 @@ import {
   commentOnActivity,
   restoreActivity,
   setCommentLiked,
-  updateActivitySchedule,
 } from "../api/client.js";
 import FeedComments from "./FeedComments.jsx";
 import SwipeActionRow from "./SwipeActionRow.jsx";
 import {
   activityTimeLabel,
-  fromDateTimeLocal,
   relativeTime,
-  toDateTimeLocal,
 } from "../utils/time.js";
 import { cx } from "../utils/classNames.js";
 import styles from "./styling/ProposeActivity.module.css";
@@ -29,6 +26,7 @@ export default function ProposeActivity({
   onLiveTransition,
   roommates,
   moduleTag,
+  editTrigger,
 }) {
   const { user } = useAuth();
   const [error, setError] = useState("");
@@ -41,29 +39,12 @@ export default function ProposeActivity({
   const [archivingId, setArchivingId] = useState(null);
   const [restoringId, setRestoringId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-  const [editingScheduleId, setEditingScheduleId] = useState(null);
-  const [editStartTime, setEditStartTime] = useState("");
-  const [editEndTime, setEditEndTime] = useState("");
-  const [savingScheduleId, setSavingScheduleId] = useState(null);
   useExpandOnModuleFocus(setExpandedId);
 
   function toggleExpanded(id) {
     setExpandedId((current) => (current === id ? null : id));
     setCommentText("");
     setOpenLikesCommentId(null);
-    setEditingScheduleId(null);
-  }
-
-  function validateTimes(startValue, endValue) {
-    if (endValue && !startValue) return "Choose a start time before an end time.";
-    if (
-      startValue &&
-      endValue &&
-      fromDateTimeLocal(endValue) <= fromDateTimeLocal(startValue)
-    ) {
-      return "End time must be later than start time.";
-    }
-    return "";
   }
 
   async function handleDelete(activity) {
@@ -166,37 +147,6 @@ export default function ProposeActivity({
     }
   }
 
-  function beginScheduleEdit(activity) {
-    setEditingScheduleId(activity.id);
-    setEditStartTime(toDateTimeLocal(activity.startAt));
-    setEditEndTime(toDateTimeLocal(activity.endAt));
-  }
-
-  async function handleScheduleSave(activity) {
-    const timeError = validateTimes(editStartTime, editEndTime);
-    if (timeError) {
-      setError(timeError);
-      return;
-    }
-    setSavingScheduleId(activity.id);
-    setError("");
-    try {
-      onActivitiesChange(
-        await updateActivitySchedule(
-          activity.id,
-          user.id,
-          fromDateTimeLocal(editStartTime),
-          fromDateTimeLocal(editEndTime),
-        ),
-      );
-      setEditingScheduleId(null);
-    } catch (err) {
-      setError(err.message || "Could not update the schedule. Try again.");
-    } finally {
-      setSavingScheduleId(null);
-    }
-  }
-
   function renderActivity(activity) {
     const members = activity.members ?? [];
     const comments = activity.comments ?? [];
@@ -204,7 +154,6 @@ export default function ProposeActivity({
     const isOwner = activity.proposedById === user.id;
     const expanded = expandedId === activity.id;
     const scheduleLabel = activityTimeLabel(activity);
-    const editingSchedule = editingScheduleId === activity.id;
     const isArchived = Boolean(activity.isArchived || activity.isExpired);
     const swipeActions = isArchived
       ? [
@@ -243,6 +192,7 @@ export default function ProposeActivity({
           role="button"
           tabIndex={0}
           aria-expanded={expanded}
+          {...editTrigger.keyboardProps}
           onClick={() => toggleExpanded(activity.id)}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
@@ -255,7 +205,7 @@ export default function ProposeActivity({
             isArchived ? styles.expiredCard : "",
           )}
         >
-        <div className={styles.summary}>
+        <div className={styles.summary} {...editTrigger.headerProps}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
               {moduleTag}
@@ -343,89 +293,6 @@ export default function ProposeActivity({
                   </span>
                 ))}
               </div>
-
-              {isOwner && !activity.isLive && !isArchived && (
-                <div
-                  className={styles.schedulePanel}
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                  <div className={styles.scheduleHeader}>
-                    <p className={styles.panelTitle}>Schedule</p>
-                    {!editingSchedule && (
-                      <button
-                        type="button"
-                        onClick={() => beginScheduleEdit(activity)}
-                        className={cx(
-                          "ui-pillButton ui-pillSecondary",
-                          styles.smallPill,
-                        )}
-                      >
-                        Edit
-                      </button>
-                    )}
-                  </div>
-                  {editingSchedule ? (
-                    <>
-                      <div className={styles.timeFields}>
-                        <label className={styles.timeField}>
-                          <span>Start</span>
-                          <input
-                            type="datetime-local"
-                            step="60"
-                            value={editStartTime}
-                            onChange={(event) => {
-                              setEditStartTime(event.target.value)
-                              if (!event.target.value) setEditEndTime("")
-                            }}
-                            className={cx("ui-textInput", styles.timeInput)}
-                          />
-                        </label>
-                        <label className={styles.timeField}>
-                          <span>End (optional)</span>
-                          <input
-                            type="datetime-local"
-                            step="60"
-                            value={editEndTime}
-                            onChange={(event) =>
-                              setEditEndTime(event.target.value)
-                            }
-                            disabled={!editStartTime}
-                            className={cx("ui-textInput", styles.timeInput)}
-                          />
-                        </label>
-                      </div>
-                      <div className={styles.scheduleActions}>
-                        <button
-                          type="button"
-                          onClick={() => setEditingScheduleId(null)}
-                          className={cx(
-                            "ui-pillButton ui-pillSecondary",
-                            styles.smallPill,
-                          )}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleScheduleSave(activity)}
-                          disabled={savingScheduleId === activity.id}
-                          className={cx(
-                            "ui-pillButton ui-pillPrimary",
-                            styles.smallPill,
-                          )}
-                        >
-                          {savingScheduleId === activity.id ? "Saving…" : "Save"}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className={styles.scheduleValue}>
-                      {scheduleLabel || "No start time"}
-                    </p>
-                  )}
-                </div>
-              )}
 
               <FeedComments
                 comments={comments}

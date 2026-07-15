@@ -162,10 +162,6 @@
   @apply relative min-w-0;
 }
 
-.moduleEditButton {
-  @apply absolute right-3 top-[-8px] z-20 rounded-full border border-line bg-card px-3 py-1 text-[11px] font-black uppercase tracking-[0.04em] text-ink-soft shadow-soft transition hover:border-accent hover:text-ink focus:outline-none focus:ring-4 focus:ring-accent-soft;
-}
-
 .moduleType {
   @apply rounded-full border border-accent-soft bg-accent-soft px-2 py-[2px] text-[10px] font-black uppercase tracking-[0.07em] text-accent-deep;
 }

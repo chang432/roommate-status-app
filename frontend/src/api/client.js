@@ -226,11 +226,6 @@ export async function endActivity(id, requesterId) {
   })
 }
 
-// Event schedule editing uses the same creator-owned module contract.
-export async function updateActivitySchedule(id, requesterId, startAt, endAt) {
-  return updateModule('events', id, requesterId, { startAt, endAt })
-}
-
 // POST /api/activities/:id/join — add the identified roommate to an activity.
 // Returns the refreshed activity list (with updated member counts).
 export async function joinActivity(id, userId) {
