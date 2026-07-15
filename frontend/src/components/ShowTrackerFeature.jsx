@@ -12,12 +12,10 @@ import {
 } from "../api/client.js";
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
+import { LONG_PRESS_MS } from "../utils/useLongPress.js";
 import { relativeTime } from "../utils/time.js";
 import SwipeActionRow from "./SwipeActionRow.jsx";
 import styles from "./styling/ShowTrackerFeature.module.css";
-
-// How long the counter must be held before it flips into manual-edit mode.
-const LONG_PRESS_MS = 500;
 
 // A single progress chip: tapping increments immediately, while a long press
 // opens inline numeric editing for an exact season/episode jump.

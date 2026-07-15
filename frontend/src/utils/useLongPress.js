@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-export const LONG_PRESS_MS = 500
+export const LONG_PRESS_MS = 1000
 
 const MOVE_TOLERANCE_PX = 10
 
