@@ -308,6 +308,7 @@ export default function ProposeActivity({
                 }
                 openLikesCommentId={openLikesCommentId}
                 onOpenLikesChange={setOpenLikesCommentId}
+                open={expanded}
                 readOnly={isArchived}
               />
             </div>

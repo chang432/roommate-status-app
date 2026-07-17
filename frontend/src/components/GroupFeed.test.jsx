@@ -220,6 +220,54 @@ describe('GroupFeed module focus', () => {
   })
 
   it.each([
+    ['events', 'Movie night'],
+    ['requests', 'Pick up milk'],
+  ])('opens and reopens %s cards at the latest comment without snapping on refresh', async (type, label) => {
+    const module = feedItem(type)
+    module.payload.comments = [
+      {
+        id: 'comment-1',
+        author: 'Kayla',
+        authorId: 'kayla',
+        text: 'First comment',
+        createdAt: 1,
+        likedByIds: [],
+        likeCount: 0,
+      },
+      {
+        id: 'comment-2',
+        author: 'Andre',
+        authorId: 'andre',
+        text: 'Latest comment',
+        createdAt: 2,
+        likedByIds: [],
+        likeCount: 0,
+      },
+    ]
+    renderFeed('/', [module])
+    const user = userEvent.setup()
+
+    const scroller = (await screen.findByText('Latest comment')).closest('ul').parentElement
+    Object.defineProperty(scroller, 'scrollHeight', {
+      configurable: true,
+      value: 480,
+    })
+
+    await user.click(screen.getByText(label))
+    expect(scroller.scrollTop).toBe(480)
+
+    scroller.scrollTop = 24
+    getFeed.mockResolvedValue([{ ...module, payload: { ...module.payload } }])
+    fireEvent.focus(window)
+    await waitFor(() => expect(getFeed).toHaveBeenCalledTimes(2))
+    expect(scroller.scrollTop).toBe(24)
+
+    await user.click(screen.getByText(label))
+    await user.click(screen.getByText(label))
+    expect(scroller.scrollTop).toBe(480)
+  })
+
+  it.each([
     ['events', 'Edit event', 'Event', 'Movie night'],
     ['requests', 'Edit request', 'Request', 'Pick up milk'],
     ['checklists', 'Edit checklist', 'Checklist title', 'Kitchen reset'],
