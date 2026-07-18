@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react'
 import CommentComposer from './CommentComposer.jsx'
 import CommentLikeButton from './CommentLikeButton.jsx'
 import MentionText from './MentionText.jsx'
@@ -16,8 +17,18 @@ export default function FeedComments({
   onToggleLike,
   openLikesCommentId,
   onOpenLikesChange,
+  open,
   readOnly = false,
 }) {
+  const commentScrollerRef = useRef(null)
+
+  useLayoutEffect(() => {
+    if (!open || !commentScrollerRef.current) return
+    // The panel stays mounted while collapsed, so reset its internal position
+    // only when the card opens instead of on every feed refresh.
+    commentScrollerRef.current.scrollTop = commentScrollerRef.current.scrollHeight
+  }, [open])
+
   return (
     <div
       className={styles.comments}
@@ -28,7 +39,7 @@ export default function FeedComments({
       {comments.length === 0 ? (
         <p className={styles.emptyComments}>No comments yet.</p>
       ) : (
-        <div className={styles.commentScroller}>
+        <div ref={commentScrollerRef} className={styles.commentScroller}>
           <ul className={styles.commentList}>
             {comments.map((comment, index) => (
               <li

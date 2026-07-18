@@ -337,6 +337,7 @@ export default function RequestFeature({
                           }
                           openLikesCommentId={openLikesCommentId}
                           onOpenLikesChange={setOpenLikesCommentId}
+                          open={expanded}
                           readOnly={isArchived}
                         />
 
