@@ -19,6 +19,8 @@ export default {
         'accent-deep': token('accent-deep'),
         'accent-soft': token('accent-soft'),
         sage: token('sage'),
+        'on-strong': token('on-strong'),
+        overlay: token('overlay'),
         'surface-hover': token('surface-hover'),
         'surface-muted': token('surface-muted'),
         'surface-disabled': token('surface-disabled'),
@@ -81,12 +83,14 @@ export default {
       boxShadow: {
         soft: 'var(--shadow-soft)',
         card: 'var(--shadow-card)',
+        focus: 'var(--shadow-input-focus)',
+        selection: 'var(--shadow-selection)',
       },
       keyframes: {
         pulse: {
-          '0%': { boxShadow: '0 0 0 0 rgba(90, 164, 105, .5)' },
-          '70%': { boxShadow: '0 0 0 9px rgba(90, 164, 105, 0)' },
-          '100%': { boxShadow: '0 0 0 0 rgba(90, 164, 105, 0)' },
+          '0%': { boxShadow: '0 0 0 0 hsl(var(--color-status-green) / .5)' },
+          '70%': { boxShadow: '0 0 0 9px hsl(var(--color-status-green) / 0)' },
+          '100%': { boxShadow: '0 0 0 0 hsl(var(--color-status-green) / 0)' },
         },
         // Pull-to-refresh dots: a gentle rise + brighten, staggered per dot.
         'dot-bounce': {

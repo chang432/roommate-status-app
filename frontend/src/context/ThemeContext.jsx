@@ -5,15 +5,15 @@ import {
   useMemo,
   useState,
 } from 'react'
+import { isThemeId } from '../models/themes.js'
 
 const THEME_KEY = 'roomie-theme'
-const THEME_OPTIONS = ['system', 'light', 'dark']
 const ThemeContext = createContext(null)
 
 function safeStoredTheme() {
   try {
     const stored = localStorage.getItem(THEME_KEY)
-    return THEME_OPTIONS.includes(stored) ? stored : 'system'
+    return isThemeId(stored) ? stored : 'system'
   } catch {
     return 'system'
   }
@@ -21,7 +21,20 @@ function safeStoredTheme() {
 
 function systemTheme() {
   if (typeof window === 'undefined') return 'light'
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function applyBrowserTheme(resolvedTheme, preference) {
+  const root = document.documentElement
+  root.dataset.theme = resolvedTheme
+  root.dataset.themePreference = preference
+
+  // The CSS token is theme-owned so browser chrome follows future themes too.
+  const browserColor = getComputedStyle(root)
+    .getPropertyValue('--browser-theme-color')
+    .trim()
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (browserColor && meta) meta.setAttribute('content', browserColor)
 }
 
 export function ThemeProvider({ children }) {
@@ -31,17 +44,18 @@ export function ThemeProvider({ children }) {
   ))
 
   useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
 
     function applyTheme() {
-      const nextResolved = theme === 'system' ? (media.matches ? 'dark' : 'light') : theme
+      const nextResolved = theme === 'system'
+        ? (media?.matches ? 'dark' : 'light')
+        : theme
       setResolvedTheme(nextResolved)
-      document.documentElement.dataset.theme = nextResolved
-      document.documentElement.dataset.themePreference = theme
-      document.documentElement.style.colorScheme = nextResolved
+      applyBrowserTheme(nextResolved, theme)
     }
 
     applyTheme()
+    if (theme !== 'system' || !media) return undefined
     media.addEventListener('change', applyTheme)
     return () => media.removeEventListener('change', applyTheme)
   }, [theme])
@@ -50,7 +64,7 @@ export function ThemeProvider({ children }) {
     theme,
     resolvedTheme,
     setTheme(nextTheme) {
-      const safeTheme = THEME_OPTIONS.includes(nextTheme) ? nextTheme : 'system'
+      const safeTheme = isThemeId(nextTheme) ? nextTheme : 'system'
       setThemeState(safeTheme)
       try {
         localStorage.setItem(THEME_KEY, safeTheme)

@@ -40,7 +40,7 @@
 }
 
 .completedChip {
-  @apply rounded-full bg-ink-soft px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white;
+  @apply rounded-full bg-ink-soft px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-on-strong;
 }
 
 .meta {
@@ -89,7 +89,7 @@
 }
 
 .watcherAvatar {
-  @apply grid h-[28px] w-[28px] flex-none place-items-center rounded-full bg-status-grey text-[11px] font-bold uppercase text-white;
+  @apply grid h-[28px] w-[28px] flex-none place-items-center rounded-full bg-status-grey text-[11px] font-bold uppercase text-on-strong;
 }
 
 .watcherName {

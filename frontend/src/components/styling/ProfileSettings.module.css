@@ -7,7 +7,7 @@
 }
 
 .avatar {
-  @apply grid h-14 w-14 flex-none place-items-center rounded-full bg-accent text-[24px] font-black text-white shadow-soft;
+  @apply grid h-14 w-14 flex-none place-items-center rounded-full bg-accent text-[24px] font-black text-on-strong shadow-soft;
 }
 
 .identityText {
@@ -43,7 +43,7 @@
 }
 
 .themeChoices {
-  @apply grid gap-2 sm:grid-cols-3;
+  @apply grid gap-2 sm:grid-cols-2;
 }
 
 .themeChoice {
@@ -91,7 +91,7 @@
 }
 
 .deleteButton {
-  @apply w-full rounded-sm border border-status-red bg-status-red px-4 py-[12px] text-[14px] font-black text-white transition hover:bg-status-hover-red;
+  @apply w-full rounded-sm border border-status-red bg-status-red px-4 py-[12px] text-[14px] font-black text-on-strong transition hover:bg-status-hover-red;
 }
 
 .error {

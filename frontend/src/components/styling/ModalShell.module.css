@@ -1,5 +1,5 @@
 .backdrop {
-  @apply fixed inset-0 z-50 grid place-items-center bg-black/40 px-5 py-6;
+  @apply fixed inset-0 z-50 grid place-items-center bg-overlay/40 px-5 py-6;
 }
 
 .dialog {

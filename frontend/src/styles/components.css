@@ -19,7 +19,7 @@
 }
 
 .ui-primaryButton {
-  @apply rounded-sm bg-accent font-bold text-white transition hover:bg-accent-deep active:translate-y-px disabled:opacity-60;
+  @apply rounded-sm bg-accent font-bold text-on-strong transition hover:bg-accent-deep active:translate-y-px disabled:opacity-60;
 }
 
 .ui-secondaryButton {
@@ -31,7 +31,7 @@
 }
 
 .ui-pillPrimary {
-  @apply border-accent bg-accent text-white;
+  @apply border-accent bg-accent text-on-strong;
 }
 
 .ui-pillSecondary {
@@ -39,7 +39,7 @@
 }
 
 .ui-pillDanger {
-  @apply border-status-red bg-status-red text-white;
+  @apply border-status-red bg-status-red text-on-strong;
 }
 
 .ui-pillDangerSoft {
@@ -51,7 +51,7 @@
 }
 
 .ui-iconPrimary {
-  @apply grid flex-none place-items-center rounded-full border border-accent bg-accent text-white shadow-soft transition hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
+  @apply grid flex-none place-items-center rounded-full border border-accent bg-accent text-on-strong shadow-soft transition hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .ui-truncate {

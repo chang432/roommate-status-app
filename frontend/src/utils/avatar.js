@@ -1,12 +1,11 @@
-// Warm avatar background colors, rotated by roommate index for variety.
-// Mirrors the .av-1 … .av-6 palette from the original mockups.
+// Theme-owned avatar colors rotate by roommate index for stable visual identity.
 const AVATAR_COLORS = [
-  '#c97b5a',
-  '#8a9a7b',
-  '#d6a35c',
-  '#9d7b9c',
-  '#6f9a9a',
-  '#c4736f',
+  'hsl(var(--color-avatar-1))',
+  'hsl(var(--color-avatar-2))',
+  'hsl(var(--color-avatar-3))',
+  'hsl(var(--color-avatar-4))',
+  'hsl(var(--color-avatar-5))',
+  'hsl(var(--color-avatar-6))',
 ]
 
 export function avatarColor(index) {
