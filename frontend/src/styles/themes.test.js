@@ -75,4 +75,31 @@ describe('theme token contract', () => {
       )).toBeGreaterThanOrEqual(4.5)
     })
   })
+
+  it('keeps white foregrounds readable on every Dark solid surface', () => {
+    const tokens = themeTokens('dark')
+    const strongBackgrounds = [
+      'solid-accent',
+      'solid-accent-hover',
+      'solid-success',
+      'solid-danger',
+      'solid-danger-hover',
+      'solid-neutral',
+      'solid-pending',
+      'avatar-1',
+      'avatar-2',
+      'avatar-3',
+      'avatar-4',
+      'avatar-5',
+      'avatar-6',
+    ]
+
+    expect(tokens['--color-on-strong']).toBe('0 0% 100%')
+    strongBackgrounds.forEach((name) => {
+      expect(contrast(
+        tokens['--color-on-strong'],
+        tokens[`--color-${name}`],
+      )).toBeGreaterThanOrEqual(4.5)
+    })
+  })
 })

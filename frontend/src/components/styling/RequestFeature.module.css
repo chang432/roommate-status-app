@@ -59,11 +59,11 @@
 }
 
 .acceptedAction {
-  @apply border-status-green bg-status-green;
+  @apply border-status-green bg-solid-success;
 }
 
 .deniedAction {
-  @apply border-status-red bg-status-red;
+  @apply border-status-red bg-solid-danger;
 }
 
 .mutedAcceptAction {
@@ -79,15 +79,15 @@
 }
 
 .responsePending {
-  @apply bg-response-pending text-on-strong;
+  @apply bg-solid-pending text-on-strong;
 }
 
 .responseAccepted {
-  @apply bg-status-green text-on-strong;
+  @apply bg-solid-success text-on-strong;
 }
 
 .responseDenied {
-  @apply bg-status-red text-on-strong;
+  @apply bg-solid-danger text-on-strong;
 }
 
 .completedResponsePill {

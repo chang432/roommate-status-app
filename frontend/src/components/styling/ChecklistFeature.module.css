@@ -43,7 +43,7 @@
 }
 
 .notifyButton {
-  @apply grid h-[32px] w-[32px] p-[7px] flex-none place-items-center rounded-full border border-accent bg-accent text-[16px] leading-none text-on-strong transition hover:bg-accent-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
+  @apply grid h-[32px] w-[32px] p-[7px] flex-none place-items-center rounded-full border border-accent bg-solid-accent text-[16px] leading-none text-on-strong transition hover:bg-solid-accent-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .notifyIcon {
@@ -87,7 +87,7 @@
 }
 
 .checkButtonOn {
-  @apply !border-status-green bg-status-green text-on-strong;
+  @apply !border-status-green bg-solid-success text-on-strong;
 }
 
 .itemText {
@@ -99,7 +99,7 @@
 }
 
 .checkedIcon {
-  @apply grid h-[24px] w-[24px] place-items-center rounded-full bg-status-grey text-[11px] font-bold uppercase text-on-strong;
+  @apply grid h-[24px] w-[24px] place-items-center rounded-full bg-solid-neutral text-[11px] font-bold uppercase text-on-strong;
 }
 
 .itemEditor {

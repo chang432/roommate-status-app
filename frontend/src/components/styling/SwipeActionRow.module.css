@@ -29,11 +29,11 @@
 }
 
 .actionPrimary {
-  @apply bg-accent;
+  @apply bg-solid-accent;
 }
 
 .actionDanger {
-  @apply bg-status-red;
+  @apply bg-solid-danger;
 }
 
 .content {

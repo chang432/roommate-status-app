@@ -31,7 +31,7 @@
 }
 
 .profileInitial {
-  @apply grid h-8 w-8 place-items-center rounded-full bg-accent text-[14px] font-black text-on-strong;
+  @apply grid h-8 w-8 place-items-center rounded-full bg-solid-accent text-[14px] font-black text-on-strong;
 }
 
 .profileLabel {
@@ -225,7 +225,7 @@
 }
 
 .createInlineButton {
-  @apply grid h-11 w-11 flex-none place-items-center rounded-full bg-accent text-[26px] font-black leading-none text-on-strong shadow-soft transition hover:scale-105 hover:bg-accent-deep focus:outline-none focus:ring-4 focus:ring-accent-soft;
+  @apply grid h-11 w-11 flex-none place-items-center rounded-full bg-solid-accent text-[26px] font-black leading-none text-on-strong shadow-soft transition hover:scale-105 hover:bg-solid-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft;
 }
 
 .createPicker {
