@@ -2,7 +2,7 @@ export const THEME_DEFINITIONS = [
   { id: 'system', label: 'System', description: 'Match this device' },
   { id: 'light', label: 'Light', description: 'Warm daylight' },
   { id: 'dark', label: 'Dark', description: 'Low-light room' },
-  { id: 'forest', label: 'Forest', description: 'Cream and evergreen' },
+  { id: 'forest', label: 'Forest', description: 'Dark evergreen' },
 ]
 
 export const THEME_IDS = THEME_DEFINITIONS.map(({ id }) => id)

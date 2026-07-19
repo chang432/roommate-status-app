@@ -37,7 +37,7 @@ describe('ThemeProvider', () => {
     vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => ({
       getPropertyValue: (property) => (
         property === '--browser-theme-color'
-          ? ({ light: '#b3613f', dark: '#3b251d', forest: '#356442' }[element.dataset.theme] ?? '')
+          ? ({ light: '#b3613f', dark: '#3b251d', forest: '#143d2e' }[element.dataset.theme] ?? '')
           : ''
       ),
     }))
@@ -58,7 +58,7 @@ describe('ThemeProvider', () => {
     expect(document.documentElement).toHaveAttribute('data-theme-preference', 'forest')
     expect(document.querySelector('meta[name="theme-color"]')).toHaveAttribute(
       'content',
-      '#356442',
+      '#143d2e',
     )
 
     media.setDark(true)

@@ -76,8 +76,11 @@ describe('theme token contract', () => {
     })
   })
 
-  it('keeps white foregrounds readable on every Dark solid surface', () => {
-    const tokens = themeTokens('dark')
+  it.each([
+    ['Dark', 'dark', '0 0% 100%'],
+    ['Forest', 'forest', '52 60% 98%'],
+  ])('keeps %s foregrounds readable on every solid surface', (_, themeId, foreground) => {
+    const tokens = themeTokens(themeId)
     const strongBackgrounds = [
       'solid-accent',
       'solid-accent-hover',
@@ -94,7 +97,7 @@ describe('theme token contract', () => {
       'avatar-6',
     ]
 
-    expect(tokens['--color-on-strong']).toBe('0 0% 100%')
+    expect(tokens['--color-on-strong']).toBe(foreground)
     strongBackgrounds.forEach((name) => {
       expect(contrast(
         tokens['--color-on-strong'],
