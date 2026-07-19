@@ -51,10 +51,10 @@ LIVE_NOT_FOUND = "not_found"
 LIVE_FORBIDDEN = "forbidden"
 LIVE_CONFLICT = "conflict"
 
-SCHEDULE_OK = "ok"
-SCHEDULE_NOT_FOUND = "not_found"
-SCHEDULE_FORBIDDEN = "forbidden"
-SCHEDULE_CONFLICT = "conflict"
+EDIT_NOT_FOUND = "not_found"
+EDIT_FORBIDDEN = "forbidden"
+EDIT_READ_ONLY = "read_only"
+EDIT_CONFLICT = "conflict"
 
 MUTATION_EXPIRED = "expired"
 
@@ -454,6 +454,91 @@ def get(activity_id: str, group_id: str, consistent: bool = False) -> dict | Non
     return _project(item) if item and not item.get("itemType") and _in_group(item, group_id) else None
 
 
+def edit_owned(
+    activity_id: str,
+    requester_id: str,
+    group_id: str,
+    text: str,
+    start_at: int | None,
+    end_at: int | None,
+    schedule_changed: bool,
+) -> dict | str:
+    """Atomically edit an active event without allowing ownership or lifecycle drift."""
+    table = _get_table()
+    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+    if item is None or item.get("itemType") or not _in_group(item, group_id):
+        return EDIT_NOT_FOUND
+    if item.get("proposedById") != requester_id:
+        return EDIT_FORBIDDEN
+    lifecycle = _lifecycle(item)
+    if item.get("isArchived", False) or lifecycle["isExpired"]:
+        return EDIT_READ_ONLY
+    if schedule_changed and lifecycle["isLive"]:
+        return EDIT_READ_ONLY
+
+    old_start = _timestamp(item, "startAt")
+    old_end = _timestamp(item, "endAt")
+    if item.get("text", "") == text and old_start == start_at and old_end == end_at:
+        return _project(item)
+
+    names = {"#text": "text"}
+    values = {
+        ":text": text,
+        ":now": max(int(time.time() * 1000), int(item.get("updatedAt", item["createdAt"])) + 1),
+        ":groupId": group_id,
+        ":requester": requester_id,
+        ":false": False,
+    }
+    set_parts = ["#text = :text", "updatedAt = :now"]
+    remove_parts = []
+    if schedule_changed:
+        if start_at is None:
+            remove_parts.extend(["startAt", "endAt"])
+        else:
+            set_parts.append("startAt = :start")
+            values[":start"] = start_at
+            if end_at is None:
+                remove_parts.append("endAt")
+            else:
+                set_parts.append("endAt = :end")
+                values[":end"] = end_at
+
+    expression = f"SET {', '.join(set_parts)}"
+    if remove_parts:
+        expression += f" REMOVE {', '.join(remove_parts)}"
+    condition = (
+        "attribute_exists(id) AND groupId = :groupId AND "
+        "proposedById = :requester AND attribute_not_exists(itemType) AND "
+        "(attribute_not_exists(isArchived) OR isArchived = :false)"
+    )
+    if schedule_changed:
+        # Re-check pending state at write time so a scheduled event cannot begin
+        # between the initial read and the schedule update.
+        condition += (
+            " AND attribute_not_exists(endedAt) AND "
+            "(attribute_not_exists(startAt) OR startAt > :now)"
+        )
+    try:
+        response = table.update_item(
+            Key={"id": activity_id},
+            UpdateExpression=expression,
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=values,
+            ConditionExpression=condition,
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
+        if current is None or current.get("itemType") or not _in_group(current, group_id):
+            return EDIT_NOT_FOUND
+        if current.get("proposedById") != requester_id:
+            return EDIT_FORBIDDEN
+        return EDIT_CONFLICT
+    return _project(response["Attributes"])
+
+
 def start_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     """Start an owned activity now; expired activities restart without an end."""
     table = _get_table()
@@ -553,66 +638,6 @@ def end_owned(activity_id: str, requester_id: str, group_id: str) -> str:
             return LIVE_FORBIDDEN
         return LIVE_CONFLICT
     return LIVE_OK
-
-
-def update_schedule_owned(
-    activity_id: str,
-    requester_id: str,
-    group_id: str,
-    start_at: int | None,
-    end_at: int | None,
-) -> str:
-    """Replace an owned pending activity's schedule."""
-    table = _get_table()
-    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") or not _in_group(item, group_id):
-        return SCHEDULE_NOT_FOUND
-    if item.get("isArchived", False):
-        return SCHEDULE_CONFLICT
-    if item.get("proposedById") != requester_id:
-        return SCHEDULE_FORBIDDEN
-    lifecycle = _lifecycle(item)
-    if lifecycle["isLive"] or lifecycle["isExpired"]:
-        return SCHEDULE_CONFLICT
-
-    if start_at is None:
-        expression = "SET updatedAt = :now REMOVE startAt, endAt, endedAt, isLive, liveStartedAt"
-        values = {":requester": requester_id}
-    elif end_at is None:
-        expression = "SET startAt = :start, updatedAt = :now REMOVE endAt, endedAt, isLive, liveStartedAt"
-        values = {":requester": requester_id, ":start": start_at}
-    else:
-        expression = (
-            "SET startAt = :start, endAt = :end, updatedAt = :now "
-            "REMOVE endedAt, isLive, liveStartedAt"
-        )
-        values = {
-            ":requester": requester_id,
-            ":start": start_at,
-            ":end": end_at,
-        }
-    try:
-        now_ms = int(time.time() * 1000)
-        table.update_item(
-            Key={"id": activity_id},
-            UpdateExpression=expression,
-            ConditionExpression=(
-                "proposedById = :requester AND attribute_not_exists(itemType) AND "
-                "attribute_not_exists(endedAt) AND "
-                "(attribute_not_exists(startAt) OR startAt > :now)"
-            ),
-            ExpressionAttributeValues={**values, ":now": now_ms},
-        )
-    except ClientError as err:
-        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
-            raise
-        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType") or not _in_group(current, group_id):
-            return SCHEDULE_NOT_FOUND
-        if current.get("proposedById") != requester_id:
-            return SCHEDULE_FORBIDDEN
-        return SCHEDULE_CONFLICT
-    return SCHEDULE_OK
 
 
 def archive(activity_id: str, requester_id: str, group_id: str, requester_name: str | None = None) -> str:

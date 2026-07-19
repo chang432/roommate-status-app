@@ -4,7 +4,7 @@ import { createRequest } from '../api/client.js'
 import { cx } from '../utils/classNames.js'
 import styles from './styling/RequestCreateForm.module.css'
 
-function RoommateChecklist({ roommates, selectedIds, onChange, disabled }) {
+export function RoommateChecklist({ roommates, selectedIds, onChange, disabled }) {
   const [open, setOpen] = useState(false)
   const allSelected =
     roommates.length > 0 && selectedIds.length === roommates.length

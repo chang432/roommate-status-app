@@ -2,18 +2,6 @@
   @apply min-w-0;
 }
 
-.timeFields {
-  @apply grid grid-cols-2 gap-2 max-[480px]:grid-cols-1;
-}
-
-.timeField {
-  @apply min-w-0 text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
-}
-
-.timeInput {
-  @apply mt-1 px-3 py-2 text-[12px] font-normal normal-case tracking-normal disabled:cursor-not-allowed disabled:bg-surface-disabled disabled:opacity-60;
-}
-
 .error {
   @apply mb-[14px];
 }
@@ -116,22 +104,6 @@
 
 .memberPill {
   @apply rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink;
-}
-
-.schedulePanel {
-  @apply mt-[14px] border-t border-line pt-[12px];
-}
-
-.scheduleHeader {
-  @apply flex items-center justify-between;
-}
-
-.scheduleValue {
-  @apply text-[13px] text-ink-soft;
-}
-
-.scheduleActions {
-  @apply mt-2 flex justify-end gap-2;
 }
 
 .deleteActions {

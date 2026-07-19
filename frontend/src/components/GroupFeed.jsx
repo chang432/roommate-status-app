@@ -1,29 +1,40 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import ActivityCreateForm from "./ActivityCreateForm.jsx";
 import ChecklistCreateForm from "./ChecklistCreateForm.jsx";
 import ChecklistFeature from "./ChecklistFeature.jsx";
 import JamWidget, { JamShareForm } from "./JamWidget.jsx";
 import ModalShell from "./ModalShell.jsx";
+import ModuleEditForm from "./ModuleEditForm.jsx";
 import ProposeActivity from "./ProposeActivity.jsx";
 import RequestCreateForm from "./RequestCreateForm.jsx";
 import RequestFeature from "./RequestFeature.jsx";
 import ShowCreateForm from "./ShowCreateForm.jsx";
 import ShowTrackerFeature from "./ShowTrackerFeature.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import { ModuleFocusProvider } from "../context/ModuleFocusContext.jsx";
 import { endActivity, getFeed, startActivity } from "../api/client.js";
 import {
   MODULE_TYPES,
+  MODULE_DEFINITIONS,
   createModules,
   moduleTagStyle,
   modulePanelStyle,
 } from "../models/modules.js";
 import { cx } from "../utils/classNames.js";
+import {
+  moduleFocusFromSearchParams,
+  withoutModuleFocus,
+} from "../utils/moduleFocus.js";
+import { useLongPress } from "../utils/useLongPress.js";
 // The feed shares the status page's stylesheet — it renders inline beneath the
 // status section on the same page.
 import styles from "../pages/StatusPage.module.css";
 
 const FEED_POLL_INTERVAL_MS = 5000;
+const EDIT_HEADER_SELECTOR = "[data-module-edit-header]";
+const EDIT_KEYBOARD_SELECTOR = "[data-module-edit-keyboard]";
+const INTERACTIVE_SELECTOR = "button, a, input, textarea, select, [role='button']";
 
 const CREATE_LABEL_BY_TYPE = {
   events: "Create an event",
@@ -94,8 +105,64 @@ function ModuleTag({ module }) {
   );
 }
 
-function ModuleFeedItem({ children }) {
-  return <article className={styles.moduleItem}>{children}</article>;
+function ModuleFeedItem({
+  module,
+  focusIntent,
+  onFocusHandled,
+  canEdit,
+  onEdit,
+  children,
+}) {
+  const itemRef = useRef(null);
+  const matchingIntent =
+    focusIntent?.itemId === module.id && focusIntent.type === module.type
+      ? focusIntent
+      : null;
+  const longPressHandlers = useLongPress({
+    enabled: canEdit,
+    onLongPress: onEdit,
+    isPointerTarget: (event) => {
+      const header = event.target.closest?.(EDIT_HEADER_SELECTOR);
+      if (!header || !event.currentTarget.contains(header)) return false;
+      const interactive = event.target.closest?.(INTERACTIVE_SELECTOR);
+      return !interactive || !header.contains(interactive) || interactive === header;
+    },
+    isKeyboardTarget: (event) =>
+      event.target.matches?.(EDIT_KEYBOARD_SELECTOR) &&
+      event.currentTarget.contains(event.target),
+  });
+  const editTrigger = {
+    enabled: canEdit,
+    headerProps: canEdit
+      ? {
+          "data-module-edit-header": "",
+          title: "Long-press to edit",
+        }
+      : {},
+    keyboardProps: canEdit
+      ? {
+          "data-module-edit-keyboard": "",
+          "aria-description": "Hold Enter or Space to edit",
+        }
+      : {},
+  };
+
+  useEffect(() => {
+    if (!matchingIntent) return undefined;
+    const frameId = window.requestAnimationFrame(() => {
+      itemRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      onFocusHandled(matchingIntent.token);
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [matchingIntent, onFocusHandled]);
+
+  return (
+    <ModuleFocusProvider intent={matchingIntent}>
+      <article ref={itemRef} className={styles.moduleItem} {...longPressHandlers}>
+        {children(editTrigger)}
+      </article>
+    </ModuleFocusProvider>
+  );
 }
 
 // The group feed, rendered inline below the status section. Owns its own feed
@@ -110,13 +177,12 @@ export default function GroupFeed({ roommates }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [liveError, setLiveError] = useState("");
+  const [navigationError, setNavigationError] = useState("");
   const [transitioningId, setTransitioningId] = useState(null);
-  const [activityFocusRequest] = useState(null);
-  const [requestFocusRequest, setRequestFocusRequest] = useState(null);
-  const [checklistFocusRequest, setChecklistFocusRequest] = useState(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createType, setCreateType] = useState(null);
   const [jamModalOpen, setJamModalOpen] = useState(false);
+  const [editingModule, setEditingModule] = useState(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
 
   const loadFeed = useCallback(async () => {
@@ -199,33 +265,71 @@ export default function GroupFeed({ roommates }) {
     [modules],
   );
 
-  // Deep links (from push notifications) land on "/" — focus the referenced
-  // request/checklist and clear the param.
-  useEffect(() => {
-    const requestId = searchParams.get("request");
-    if (!requestId) return;
-    setActiveType("requests");
-    setRequestFocusRequest((current) => ({
-      requestId,
-      requestKey: (current?.requestKey ?? 0) + 1,
-    }));
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("request");
-    setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+  const focusIntent = useMemo(
+    () => moduleFocusFromSearchParams(searchParams),
+    [searchParams],
+  );
+  const moduleTypeIds = useMemo(
+    () =>
+      new Set(
+        MODULE_TYPES.filter((type) => type.id !== "all").map((type) => type.id),
+      ),
+    [],
+  );
 
+  const consumeFocusIntent = useCallback(
+    (token) => {
+      setSearchParams(
+        (currentParams) => {
+          const currentIntent = moduleFocusFromSearchParams(currentParams);
+          return currentIntent?.token === token
+            ? withoutModuleFocus(currentParams)
+            : currentParams;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  // Navigation intent is consumed only after its target can be rendered. Feed
+  // refreshes therefore cannot replay expansion, scrolling, or editor resets.
   useEffect(() => {
-    const checklistId = searchParams.get("checklist");
-    if (!checklistId) return;
-    setActiveType("checklists");
-    setChecklistFocusRequest((current) => ({
-      checklistId,
-      requestKey: (current?.requestKey ?? 0) + 1,
-    }));
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("checklist");
-    setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+    if (!focusIntent) return;
+    if (!moduleTypeIds.has(focusIntent.type)) {
+      setNavigationError("That module type is not available.");
+      consumeFocusIntent(focusIntent.token);
+      return;
+    }
+
+    setActiveType(focusIntent.type);
+    if (!focusIntent.itemId) {
+      setNavigationError("");
+      consumeFocusIntent(focusIntent.token);
+      return;
+    }
+    if (loading || liveError) return;
+
+    const target = modules.find(
+      (module) =>
+        module.type === focusIntent.type && module.id === focusIntent.itemId,
+    );
+    if (!target) {
+      setNavigationError("That module is no longer available.");
+      consumeFocusIntent(focusIntent.token);
+      return;
+    }
+
+    setNavigationError("");
+    if (target.isArchived) setArchivedOpen(true);
+  }, [
+    consumeFocusIntent,
+    focusIntent,
+    liveError,
+    loading,
+    moduleTypeIds,
+    modules,
+  ]);
 
   useEffect(() => {
     if (!drawerOpen) return undefined;
@@ -261,6 +365,7 @@ export default function GroupFeed({ roommates }) {
 
   function selectModuleType(type) {
     setActiveType(type);
+    setNavigationError("");
     setDrawerOpen(false);
   }
 
@@ -334,7 +439,7 @@ export default function GroupFeed({ roommates }) {
     );
   }
 
-  function renderModule(module) {
+  function renderModule(module, editTrigger) {
     const moduleTag = <ModuleTag module={module} />;
     if (module.type === "events") {
       return (
@@ -344,8 +449,8 @@ export default function GroupFeed({ roommates }) {
           transitioningId={transitioningId}
           onLiveTransition={handleLiveTransition}
           roommates={roommates}
-          activityFocusRequest={activityFocusRequest}
           moduleTag={moduleTag}
+          editTrigger={editTrigger}
         />
       );
     }
@@ -355,8 +460,8 @@ export default function GroupFeed({ roommates }) {
           requests={[module.payload]}
           onRequestsChange={handleRequestsChange}
           roommates={roommates}
-          requestFocusRequest={requestFocusRequest}
           moduleTag={moduleTag}
+          editTrigger={editTrigger}
         />
       );
     }
@@ -365,8 +470,8 @@ export default function GroupFeed({ roommates }) {
         <ChecklistFeature
           checklists={[module.payload]}
           onChecklistsChange={handleChecklistsChange}
-          checklistFocusRequest={checklistFocusRequest}
           moduleTag={moduleTag}
+          editTrigger={editTrigger}
         />
       );
     }
@@ -376,6 +481,7 @@ export default function GroupFeed({ roommates }) {
           shows={[module.payload]}
           onShowsChange={handleShowsChange}
           moduleTag={moduleTag}
+          editTrigger={editTrigger}
         />
       );
     }
@@ -385,7 +491,9 @@ export default function GroupFeed({ roommates }) {
           jam={module.payload}
           onJamChange={handleJamChange}
           onReplace={() => setJamModalOpen(true)}
+          canEdit={module.isEditableBy(user.id)}
           moduleTag={moduleTag}
+          editTrigger={editTrigger}
         />
       );
     }
@@ -408,6 +516,9 @@ export default function GroupFeed({ roommates }) {
     <section className={styles.feedSection}>
       {liveError && (
         <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
+      )}
+      {navigationError && (
+        <p className={cx("ui-errorBox", styles.pageError)}>{navigationError}</p>
       )}
 
       <div className={styles.shell}>
@@ -451,8 +562,15 @@ export default function GroupFeed({ roommates }) {
               <p className={styles.emptyFeed}>No active modules here yet.</p>
             ) : (
               activeModules.map((module) => (
-                <ModuleFeedItem key={`${module.type}:${module.id}`}>
-                  {renderModule(module)}
+                <ModuleFeedItem
+                  key={`${module.type}:${module.id}`}
+                  module={module}
+                  focusIntent={focusIntent}
+                  onFocusHandled={consumeFocusIntent}
+                  canEdit={module.isEditableBy(user.id)}
+                  onEdit={() => setEditingModule(module)}
+                >
+                  {(editTrigger) => renderModule(module, editTrigger)}
                 </ModuleFeedItem>
               ))
             )}
@@ -472,8 +590,15 @@ export default function GroupFeed({ roommates }) {
               {archivedOpen && (
                 <div className={styles.feedList}>
                   {archivedModules.map((module) => (
-                    <ModuleFeedItem key={`${module.type}:${module.id}`}>
-                      {renderModule(module)}
+                    <ModuleFeedItem
+                      key={`${module.type}:${module.id}`}
+                      module={module}
+                      focusIntent={focusIntent}
+                      onFocusHandled={consumeFocusIntent}
+                      canEdit={module.isEditableBy(user.id)}
+                      onEdit={() => setEditingModule(module)}
+                    >
+                      {(editTrigger) => renderModule(module, editTrigger)}
                     </ModuleFeedItem>
                   ))}
                 </div>
@@ -502,6 +627,23 @@ export default function GroupFeed({ roommates }) {
             currentJam={currentJam}
             onJamChange={handleJamChange}
             onSuccess={() => setJamModalOpen(false)}
+          />
+        </ModalShell>
+      )}
+      {editingModule && (
+        <ModalShell
+          title={MODULE_DEFINITIONS[editingModule.type].edit.label}
+          onClose={() => setEditingModule(null)}
+          widthClassName={styles.createModal}
+        >
+          <ModuleEditForm
+            module={editingModule}
+            roommates={roommates}
+            onSaved={async () => {
+              await loadFeed();
+              setEditingModule(null);
+            }}
+            onCancel={() => setEditingModule(null)}
           />
         </ModalShell>
       )}

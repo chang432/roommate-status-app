@@ -1,3 +1,3 @@
-"TABLE RoommateStatus-main-spotify-jam - the group's active Spotify Jam. A single activeJam#<group> item per group; ending the Jam deletes the item, so an absent item means no active Jam. updatedAt equals createdAt for the singleton replacement. Written by jam.py."
+"TABLE RoommateStatus-main-spotify-jam - the group's active Spotify Jam. A single activeJam#<group> item per group; ending the Jam deletes the item, so an absent item means no active Jam. Creator edits preserve createdAt and advance updatedAt. Written by jam.py."
 id (S),groupId (S),link (S),hostId (S),hostName (S),createdAt (N),updatedAt (N)
-activeJam#yorkshire,yorkshire,https://spotify.link/example,sheryl,Sheryl,1720200000000,1720200000000
+activeJam#yorkshire,yorkshire,https://spotify.link/example,sheryl,Sheryl,1720200000000,1720201000000

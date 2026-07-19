@@ -112,7 +112,14 @@ export function JamShareForm({ currentJam, onJamChange, onSuccess }) {
   )
 }
 
-export default function JamWidget({ jam, onJamChange, onReplace, moduleTag }) {
+export default function JamWidget({
+  jam,
+  onJamChange,
+  onReplace,
+  moduleTag,
+  canEdit = false,
+  editTrigger,
+}) {
   const { user } = useAuth()
   const [ending, setEnding] = useState(false)
   const [error, setError] = useState('')
@@ -146,7 +153,13 @@ export default function JamWidget({ jam, onJamChange, onReplace, moduleTag }) {
     >
       <section className={styles.wrap} aria-label="Spotify Jam">
         <div className={styles.row}>
-          <div className={styles.titleBlock}>
+          <div
+            className={styles.titleBlock}
+            {...editTrigger.headerProps}
+            {...editTrigger.keyboardProps}
+            role={editTrigger.enabled ? 'button' : undefined}
+            tabIndex={editTrigger.enabled ? 0 : undefined}
+          >
             <Waveform />
             <div className={styles.titleText}>
               <div className={styles.titleRow}>
@@ -169,15 +182,17 @@ export default function JamWidget({ jam, onJamChange, onReplace, moduleTag }) {
             >
               <JoinIcon />
             </a>
-            <button
-              type="button"
-              onClick={onReplace}
-              aria-label="Replace Jam"
-              title="Replace Jam"
-              className={styles.replaceButton}
-            >
-              <ReplaceIcon />
-            </button>
+            {!canEdit ? (
+              <button
+                type="button"
+                onClick={onReplace}
+                aria-label="Replace Jam"
+                title="Replace Jam"
+                className={styles.replaceButton}
+              >
+                <ReplaceIcon />
+              </button>
+            ) : null}
           </div>
         </div>
 

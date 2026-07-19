@@ -20,9 +20,9 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
 | `POST /api/roommates/<id>/poke`                              | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
 | `GET /api/feed`                                              | `?userId=<id>&type=<type>`                 | active module instances in chronological feed order     |
+| `PATCH /api/modules/<type>/<id>`                             | `{ editorId, changes }`                    | normalized updated module                               |
 | `GET /api/activities`                                        | `?userId=<id>`                             | active activity list                                    |
 | `POST /api/activities`                                       | `{ text, proposedById, startAt?, endAt? }` | full updated activity list                              |
-| `PATCH /api/activities/<id>/schedule`                        | `{ requesterId, startAt?, endAt? }`        | full updated activity list                              |
 | `POST /api/activities/<id>/archive`                          | `{ requesterId }`                          | full updated activity list                              |
 | `POST /api/activities/<id>/restore`                          | `{ requesterId }`                          | full updated activity list                              |
 | `DELETE /api/activities/<id>`                                | `{ requesterId }`                          | full updated activity list                              |
@@ -107,14 +107,14 @@ specific roommate ids, and support comments and comment likes. Requested
 roommates can accept or deny, any roommate can archive, restore, or delete a request, and request
 notifications target the requested users or the requester as appropriate.
 Archived requests leave the active section but remain visible in the feed's archived
-section. Request notifications include a request deep link so tapping one opens
-the Requests module filter with that request expanded.
+section. Module notifications use the canonical `/?module=<type>&item=<id>`
+deep link so tapping one selects its feed filter, reveals archived targets, and
+expands modules that have detail panels. Removed items link to their module filter.
 Checklists are stored as typed records in the activities table. Active
 checklists can be expanded from the Checklists tab, added to by any roommate,
 checked off by multiple roommates per item, edited or pruned item-by-item, and
 archived, restored, or deleted by anyone. Checklist reminders are household-wide pushes that exclude
-the requester and include a checklist deep link so tapping one opens the
-expanded checklist card.
+the requester and open the expanded checklist card through the shared module link.
 Only one Spotify Jam link is active for the shire at a time. Sharing a new
 Jam replaces the previous link, and any roommate can remove the active Jam. The Jam
 widget is hidden until someone shares a link; once active, roommates can join

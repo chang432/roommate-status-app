@@ -57,7 +57,7 @@ services:
       # Public hostname the TLS cert is issued for. Required; the stack refuses
       # to start without it so Caddy never tries to provision a cert for a
       # placeholder. Each VPS sets its own (dev. vs apex).
-      - SITE_DOMAIN=${SITE_DOMAIN:-dev.roomie-status.eu}
+      - SITE_DOMAIN=${SITE_DOMAIN:-dev.roomie-status.in}
     volumes:
       # Persist issued certs + ACME account across rebuilds so every deploy
       # doesn't re-issue (and risk hitting Let's Encrypt rate limits).

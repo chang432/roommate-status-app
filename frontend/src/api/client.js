@@ -174,6 +174,14 @@ export async function getFeed(userId, type = 'all', groupId) {
   })
 }
 
+// PATCH /api/modules/:type/:id — creator-owned definition edit.
+export async function updateModule(type, id, editorId, changes) {
+  return request(`/modules/${type}/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ editorId, changes }),
+  })
+}
+
 // POST /api/jam — replace the active household Jam link.
 export async function shareJam(link, hostId) {
   return request('/jam', {
@@ -245,14 +253,6 @@ export async function endActivity(id, requesterId) {
   return request(`/activities/${id}/end`, {
     method: 'POST',
     body: JSON.stringify({ requesterId }),
-  })
-}
-
-// PATCH /api/activities/:id/schedule — replace a pending owner's schedule.
-export async function updateActivitySchedule(id, requesterId, startAt, endAt) {
-  return request(`/activities/${id}/schedule`, {
-    method: 'PATCH',
-    body: JSON.stringify({ requesterId, startAt, endAt }),
   })
 }
 
