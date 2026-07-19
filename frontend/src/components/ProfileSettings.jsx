@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react'
 import { getCurrentGroup } from '../api/client.js'
 import { useTheme } from '../context/ThemeContext.jsx'
+import { THEME_DEFINITIONS, themeDefinition } from '../models/themes.js'
 import { cx } from '../utils/classNames.js'
 import styles from './styling/ProfileSettings.module.css'
-
-const THEME_CHOICES = [
-  { id: 'system', label: 'System', description: 'Match this device' },
-  { id: 'light', label: 'Light', description: 'Warm daylight' },
-  { id: 'dark', label: 'Dark', description: 'Low-light room' },
-]
 
 export default function ProfileSettings({
   user,
@@ -106,10 +101,10 @@ export default function ProfileSettings({
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h3>Appearance</h3>
-          <p>Current theme: {resolvedTheme}</p>
+          <p>Current theme: {themeDefinition(resolvedTheme)?.label ?? resolvedTheme}</p>
         </div>
         <div className={styles.themeChoices} role="radiogroup" aria-label="Theme">
-          {THEME_CHOICES.map((choice) => (
+          {THEME_DEFINITIONS.map((choice) => (
             <button
               key={choice.id}
               type="button"

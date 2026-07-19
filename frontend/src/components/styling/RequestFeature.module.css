@@ -51,19 +51,19 @@
 }
 
 .responseIcon {
-  @apply grid h-[24px] w-[24px] place-items-center rounded-full border-2 border-card text-[11px] font-bold uppercase text-white;
+  @apply grid h-[24px] w-[24px] place-items-center rounded-full border-2 border-card text-[11px] font-bold uppercase text-on-strong;
 }
 
 .iconAction {
-  @apply grid h-[32px] w-[32px] place-items-center rounded-full border text-[15px] font-black leading-none text-white transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+  @apply grid h-[32px] w-[32px] place-items-center rounded-full border text-[15px] font-black leading-none text-on-strong transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .acceptedAction {
-  @apply border-status-green bg-status-green;
+  @apply border-status-green bg-solid-success;
 }
 
 .deniedAction {
-  @apply border-status-red bg-status-red;
+  @apply border-status-red bg-solid-danger;
 }
 
 .mutedAcceptAction {
@@ -79,15 +79,15 @@
 }
 
 .responsePending {
-  @apply bg-response-pending text-white;
+  @apply bg-solid-pending text-on-strong;
 }
 
 .responseAccepted {
-  @apply bg-status-green text-white;
+  @apply bg-solid-success text-on-strong;
 }
 
 .responseDenied {
-  @apply bg-status-red text-white;
+  @apply bg-solid-danger text-on-strong;
 }
 
 .completedResponsePill {

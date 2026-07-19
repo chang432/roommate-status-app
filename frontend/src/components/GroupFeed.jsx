@@ -18,8 +18,6 @@ import {
   MODULE_TYPES,
   MODULE_DEFINITIONS,
   createModules,
-  moduleTagStyle,
-  modulePanelStyle,
 } from "../models/modules.js";
 import { cx } from "../utils/classNames.js";
 import {
@@ -82,8 +80,10 @@ function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
               key={type.id}
               type="button"
               onClick={() => onSelect(type.id)}
+              data-module-type={type.id === "all" ? undefined : type.id}
               className={cx(
                 styles.moduleNavItem,
+                type.id === "all" ? "" : styles.modulePalette,
                 activeType === type.id ? styles.moduleNavItemActive : "",
               )}
             >
@@ -99,7 +99,10 @@ function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
 
 function ModuleTag({ module }) {
   return (
-    <span className={styles.moduleType} style={moduleTagStyle(module.type)}>
+    <span
+      className={cx(styles.modulePalette, styles.moduleType)}
+      data-module-type={module.type}
+    >
       {module.typeLabel}
     </span>
   );
@@ -383,8 +386,8 @@ export default function GroupFeed({ roommates }) {
               key={type.id}
               type="button"
               onClick={() => setCreateType(type.id)}
-              className={styles.createPickerButton}
-              style={modulePanelStyle(type.id)}
+              className={cx(styles.modulePalette, styles.createPickerButton)}
+              data-module-type={type.id}
             >
               {CREATE_LABEL_BY_TYPE[type.id]}
             </button>

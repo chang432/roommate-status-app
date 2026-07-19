@@ -138,6 +138,25 @@ describe('GroupFeed module focus', () => {
 
   afterEach(() => cleanup())
 
+  it('adds theme hooks to tags, create cards, and typed filters', async () => {
+    const items = ['events', 'requests', 'checklists', 'tv', 'spotify'].map((type) => (
+      feedItem(type)
+    ))
+    renderFeed('/', items)
+    const user = userEvent.setup()
+
+    await screen.findByText("Andre's Jam is live")
+    await user.click(screen.getByRole('button', { name: 'Create a module' }))
+
+    Object.keys(items.reduce((types, item) => ({ ...types, [item.type]: true }), {}))
+      .forEach((type) => {
+        expect(document.querySelectorAll(`[data-module-type="${type}"]`)).toHaveLength(3)
+      })
+    expect(screen.getByRole('button', { name: /^All modules/ })).not.toHaveAttribute(
+      'data-module-type',
+    )
+  })
+
   it.each([
     ['events', 'Movie night'],
     ['requests', 'Pick up milk'],

@@ -43,11 +43,11 @@
 }
 
 .liveChip {
-  @apply rounded-full bg-status-red px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white;
+  @apply rounded-full bg-solid-danger px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-on-strong;
 }
 
 .expiredChip {
-  @apply rounded-full bg-ink-soft px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-white;
+  @apply rounded-full bg-solid-neutral px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-on-strong;
 }
 
 .meta {

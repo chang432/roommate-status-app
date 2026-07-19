@@ -5,6 +5,7 @@ import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
 import { registerServiceWorker } from './utils/push.js'
+import './styles/themes.css'
 import './index.css'
 import './styles/components.css'
 

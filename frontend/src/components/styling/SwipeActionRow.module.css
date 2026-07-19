@@ -16,7 +16,7 @@
 }
 
 .action {
-  @apply inline-flex h-full min-h-[100%] w-[88px] items-center justify-center border-r border-white/20 px-3 text-[12px] font-semibold text-white opacity-0 disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex h-full min-h-[100%] w-[88px] items-center justify-center border-r border-on-strong/20 px-3 text-[12px] font-semibold text-on-strong opacity-0 disabled:cursor-not-allowed disabled:opacity-60;
   transform: translateX(-10px);
 }
 
@@ -29,11 +29,11 @@
 }
 
 .actionPrimary {
-  @apply bg-accent;
+  @apply bg-solid-accent;
 }
 
 .actionDanger {
-  @apply bg-status-red;
+  @apply bg-solid-danger;
 }
 
 .content {
