@@ -807,7 +807,7 @@ def create_app() -> Flask:
                 exclude_user_ids={requester_id},
                 title="Activity archived",
                 body=f"{actor_name} archived {activity['text']}",
-                url=group_url(requester["groupId"]),
+                url=group_url(requester["groupId"], module_models.module_url("events", activity_id)),
             )
         except Exception:  # noqa: BLE001 - archiving must remain successful
             app.logger.exception("Failed to send activity archive notification")
@@ -856,7 +856,7 @@ def create_app() -> Flask:
                 exclude_user_ids={requester_id},
                 title="Activity deleted",
                 body=f"{activity['proposedBy']} deleted {activity['text']}",
-                url="/",
+                url=group_url(requester["groupId"], module_models.module_url("events")),
             )
         except Exception:  # noqa: BLE001 - deletion must remain successful
             app.logger.exception("Failed to send activity deletion notification")
@@ -885,7 +885,7 @@ def create_app() -> Flask:
                 exclude_user_ids={roommate["id"]},
                 title="Someone joined an activity 🙌",
                 body=f"{roommate['name']} joined {activity['text']}",
-                url="/",
+                url=group_url(roommate["groupId"], module_models.module_url("events", activity_id)),
             )
         except Exception:  # noqa: BLE001 - never let push break the request
             app.logger.exception("Failed to send join notification")
@@ -950,7 +950,7 @@ def create_app() -> Flask:
                     user_ids=user_ids,
                     title=title,
                     body=notification_body,
-                    url="/",
+                    url=group_url(author["groupId"], module_models.module_url("events", activity_id)),
                 )
                 app.logger.info(
                     "Comment push result for %d recipient(s): %s",
@@ -1199,7 +1199,7 @@ def create_app() -> Flask:
                 exclude_user_ids={requester_id},
                 title="Request deleted",
                 body=f"{request_item['requester']} deleted “{request_item['text']}”",
-                url=f"/?request={request_item['id']}",
+                url=group_url(requester["groupId"], module_models.module_url("requests")),
                 event_type="requests-changed",
             )
         except Exception:  # noqa: BLE001 - deletion must remain successful
@@ -1249,7 +1249,7 @@ def create_app() -> Flask:
                     user_ids=user_ids,
                     title=title,
                     body=notification_body,
-                    url=f"/?request={updated['id']}",
+                    url=group_url(author["groupId"], module_models.module_url("requests", updated["id"])),
                     event_type="requests-changed",
                 )
             except Exception:  # noqa: BLE001 - never let push break the comment
@@ -1694,7 +1694,7 @@ def create_app() -> Flask:
             exclude_user_ids={emphasized_by["id"]},
             title="Activity emphasized 👀",
             body=f"{emphasized_by['name']} emphasized {activity['text']}",
-            url="/",
+            url=group_url(emphasized_by["groupId"], module_models.module_url("events", activity_id)),
         )
         return jsonify(result)
 
