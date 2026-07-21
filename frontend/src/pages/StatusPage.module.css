@@ -102,6 +102,10 @@
   @apply flex w-full items-center justify-between rounded-sm border border-transparent px-3 py-3 text-left text-[14px] font-black text-ink-soft transition hover:border-line hover:bg-surface-hover hover:text-ink;
 }
 
+.moduleNavItemEditing {
+  @apply cursor-default hover:border-transparent hover:bg-transparent hover:text-ink-soft;
+}
+
 .moduleNavEditRow {
   @apply grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2;
 }
@@ -118,8 +122,12 @@
   @apply space-y-2;
 }
 
-.moduleNavAllMenuButton {
-  @apply flex h-9 min-w-[96px] items-center justify-center gap-2 rounded-full border border-line bg-card px-3 text-[11px] font-black uppercase tracking-[0.04em] text-ink-soft transition hover:border-accent hover:text-ink;
+.moduleNavAllDropdown {
+  @apply border-line bg-card;
+}
+
+.moduleNavAllSummary {
+  @apply flex items-center gap-2 rounded-full bg-surface-muted px-2 py-1 text-[11px] text-ink-soft;
 }
 
 .moduleNavAllMenu {

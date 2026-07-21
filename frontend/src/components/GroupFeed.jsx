@@ -88,6 +88,7 @@ function ModuleNav({
   onAllTypesChange,
   onReorderType,
 }) {
+  const navRef = useRef(null);
   const [allDropdownOpen, setAllDropdownOpen] = useState(false);
   const [draggingType, setDraggingType] = useState(null);
   const counts = modules.reduce((acc, module) => {
@@ -115,6 +116,27 @@ function ModuleNav({
     );
   }
 
+  const finishEditing = useCallback(() => {
+    onEditModeChange(false);
+    setAllDropdownOpen(false);
+    setDraggingType(null);
+  }, [onEditModeChange]);
+
+  useEffect(() => {
+    if (!editMode) return undefined;
+    function handlePointerDown(event) {
+      if (navRef.current?.contains(event.target)) return;
+      finishEditing();
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [editMode, finishEditing]);
+
+  useEffect(() => {
+    if (drawerOpen) return;
+    finishEditing();
+  }, [drawerOpen, finishEditing]);
+
   return (
     <>
       {drawerOpen ? (
@@ -122,10 +144,14 @@ function ModuleNav({
           type="button"
           aria-label="Close module list"
           className={styles.drawerBackdrop}
-          onClick={onClose}
+          onClick={() => {
+            finishEditing();
+            onClose();
+          }}
         />
       ) : null}
       <aside
+        ref={navRef}
         className={cx(styles.moduleNav, drawerOpen ? styles.moduleNavOpen : "")}
         aria-label="Module types"
       >
@@ -135,14 +161,20 @@ function ModuleNav({
             <button
               type="button"
               className={styles.moduleNavEdit}
-              onClick={() => onEditModeChange(!editMode)}
+              onClick={() => {
+                if (editMode) finishEditing();
+                else onEditModeChange(true);
+              }}
             >
               {editMode ? "Done" : "Edit"}
             </button>
             <button
               type="button"
               className={styles.moduleNavClose}
-              onClick={onClose}
+              onClick={() => {
+                finishEditing();
+                onClose();
+              }}
             >
               Close
             </button>
@@ -150,7 +182,26 @@ function ModuleNav({
         </div>
         <div className={styles.moduleNavList}>
           {moduleTypes.map((type) => {
-            const filterButton = (
+            const filterContent = (
+              <>
+                <span>{type.label}</span>
+                <span className={styles.moduleNavCount}>{counts[type.id] ?? 0}</span>
+              </>
+            );
+            const filterButton = editMode ? (
+              <div
+                key={type.id}
+                data-module-type={type.id === "all" ? undefined : type.id}
+                className={cx(
+                  styles.moduleNavItem,
+                  styles.moduleNavItemEditing,
+                  type.id === "all" ? "" : styles.modulePalette,
+                  activeType === type.id ? styles.moduleNavItemActive : "",
+                )}
+              >
+                {filterContent}
+              </div>
+            ) : (
               <button
                 key={type.id}
                 type="button"
@@ -162,28 +213,31 @@ function ModuleNav({
                   activeType === type.id ? styles.moduleNavItemActive : "",
                 )}
               >
-                <span>{type.label}</span>
-                <span className={styles.moduleNavCount}>{counts[type.id] ?? 0}</span>
+                {filterContent}
               </button>
             );
             if (!editMode) return filterButton;
             if (type.id === "all") {
               return (
                 <div key={type.id} className={styles.moduleNavAllEditor}>
-                  <div className={styles.moduleNavEditRow}>
-                    {filterButton}
-                    <button
-                      type="button"
-                      className={styles.moduleNavAllMenuButton}
-                      onClick={() => setAllDropdownOpen((current) => !current)}
-                      aria-expanded={allDropdownOpen}
-                    >
+                  <button
+                    type="button"
+                    className={cx(
+                      styles.moduleNavItem,
+                      styles.moduleNavAllDropdown,
+                      activeType === type.id ? styles.moduleNavItemActive : "",
+                    )}
+                    onClick={() => setAllDropdownOpen((current) => !current)}
+                    aria-expanded={allDropdownOpen}
+                  >
+                    <span>{type.label}</span>
+                    <span className={styles.moduleNavAllSummary}>
                       {selectedAllLabels.length === editableTypes.length
                         ? "All modules"
                         : `${selectedAllLabels.length} selected`}
                       <span aria-hidden="true">{allDropdownOpen ? "▴" : "▾"}</span>
-                    </button>
-                  </div>
+                    </span>
+                  </button>
                   {allDropdownOpen ? (
                     <div className={styles.moduleNavAllMenu}>
                       {editableTypes.map((option) => (
