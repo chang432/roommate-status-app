@@ -19,7 +19,7 @@
 }
 
 .tabActive {
-  @apply bg-accent text-white shadow-soft hover:text-white;
+  @apply bg-solid-accent text-on-strong shadow-soft hover:text-on-strong;
 }
 
 .panel {

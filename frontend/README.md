@@ -10,8 +10,9 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Pending accounts** can sign in but cannot use household features until a
   group code assigns them to a household.
 - **Profile settings** keep account actions in one place, including sign out,
-  account deletion, a light/dark/system appearance preference, and the current
-  household invite code for grouped users.
+  account deletion, System/Light/Dark/Forest appearance preferences, and the
+  current household invite code for grouped users. Theme choices are stored on
+  the current device.
 - **View** the whole household's current statuses at a glance.
 - **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.
@@ -46,8 +47,8 @@ availability to hang out. Built from the mockups in `../mockups`.
 ## Tech
 
 - [Vite](https://vitejs.dev/) + React 18
-- [Tailwind CSS](https://tailwindcss.com/) (cozy theme tokens in
-  `tailwind.config.js`)
+- [Tailwind CSS](https://tailwindcss.com/) (semantic theme tokens in
+  `src/styles/themes.css`, exposed through `tailwind.config.js`)
 - [React Router](https://reactrouter.com/) for `/login`, `/signup`, `/pending`,
   `/feed`, and `/`
 

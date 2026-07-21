@@ -75,6 +75,8 @@ log()  { printf '\033[1;36m▶ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
 
+log "Starting up local app deployment..."
+
 # --- Prerequisite checks ----------------------------------------------------
 command -v docker >/dev/null 2>&1 || die "docker is not installed or not on PATH."
 docker info >/dev/null 2>&1 || die "Docker daemon isn't running. Start Docker and retry."

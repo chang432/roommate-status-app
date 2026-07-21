@@ -3,8 +3,8 @@ Description: >-
   DynamoDB tables for the "dev" deployment of the Yorkshire Roomie Status app —
   one table per concern, all keyed by a string id (groups keyed by groupId):
   RoommateStatus-dev (roommates/accounts), plus the -pushsubs, -activities,
-  -requests, -spotify-jam, -shows, -checklists, -comment-likes, -groups, and
-  -migrations tables. See the matching Flask modules in docker/flask/ for each
+  -requests, -spotify-jam, -shows, -checklists, -comment-likes, -groups,
+  -memberships, and -migrations tables. See the matching Flask modules in docker/flask/ for each
   table's shape. Table names are fixed per template so the dev and main
   deployments can never accidentally share data (see dynamodb-table-main.yaml
   for the production half).
@@ -254,6 +254,42 @@ Resources:
         - Key: Environment
           Value: dev
 
+  # One row per account/group relationship. The table's primary key makes a
+  # household roster query efficient; UserIdIndex powers the home group drawer.
+  MembershipsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-memberships
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+        - AttributeName: userId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: UserIdIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
   # In-place data-migration ledger for the dev deployment. One item per applied
   # migration (id = migration folder name) plus a transient lock item; written
   # by infrastructure/migrations/runner.py, not the app. It is the source of
@@ -389,6 +425,18 @@ Outputs:
     Value: !GetAtt GroupsTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-GroupsTableArn"
+
+  MembershipsTableName:
+    Description: Name of the memberships DynamoDB table.
+    Value: !Ref MembershipsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-MembershipsTableName"
+
+  MembershipsTableArn:
+    Description: ARN of the memberships DynamoDB table.
+    Value: !GetAtt MembershipsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-MembershipsTableArn"
 
   MigrationsTableName:
     Description: Name of the data-migration ledger DynamoDB table.

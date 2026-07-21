@@ -2,6 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Apply the stored preference before React renders to prevent a light
+      // flash. Named themes pass through unchanged, so future themes need no
+      // bootstrap update; invalid values safely fall back to the root palette.
+      try {
+        const preference = localStorage.getItem('roomie-theme') || 'system'
+        const resolved = preference === 'system'
+          ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : preference
+        document.documentElement.dataset.theme = resolved
+        document.documentElement.dataset.themePreference = preference
+      } catch {
+        document.documentElement.dataset.theme = 'light'
+        document.documentElement.dataset.themePreference = 'system'
+      }
+    </script>
     <link rel="icon" type="image/svg+xml" href="/roof.svg" />
     <!-- Pin the scale to exactly 1 so the installed PWA opens fully zoomed out
          (whole device width) and can't be pinch-/double-tap-zoomed, and iOS

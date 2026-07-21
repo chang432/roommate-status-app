@@ -18,8 +18,6 @@ import {
   MODULE_TYPES,
   MODULE_DEFINITIONS,
   createModules,
-  moduleTagStyle,
-  modulePanelStyle,
 } from "../models/modules.js";
 import { cx } from "../utils/classNames.js";
 import {
@@ -82,8 +80,10 @@ function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
               key={type.id}
               type="button"
               onClick={() => onSelect(type.id)}
+              data-module-type={type.id === "all" ? undefined : type.id}
               className={cx(
                 styles.moduleNavItem,
+                type.id === "all" ? "" : styles.modulePalette,
                 activeType === type.id ? styles.moduleNavItemActive : "",
               )}
             >
@@ -99,7 +99,10 @@ function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
 
 function ModuleTag({ module }) {
   return (
-    <span className={styles.moduleType} style={moduleTagStyle(module.type)}>
+    <span
+      className={cx(styles.modulePalette, styles.moduleType)}
+      data-module-type={module.type}
+    >
       {module.typeLabel}
     </span>
   );
@@ -168,7 +171,7 @@ function ModuleFeedItem({
 // The group feed, rendered inline below the status section. Owns its own feed
 // polling and create/filter UI; `roommates` come from the parent status page so
 // we don't double-fetch the household.
-export default function GroupFeed({ roommates }) {
+export default function GroupFeed({ roommates, onLoadStateChange }) {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -187,16 +190,27 @@ export default function GroupFeed({ roommates }) {
 
   const loadFeed = useCallback(async () => {
     try {
-      setModules(createModules(await getFeed(user.id, "all")));
+      setModules(createModules(await getFeed(user.id, "all", user.activeGroupId)));
       setLiveError("");
     } catch {
       setLiveError("Could not load the group feed.");
     }
-  }, [user.id]);
+  }, [user.activeGroupId, user.id]);
 
   useEffect(() => {
-    loadFeed().finally(() => setLoading(false));
-  }, [loadFeed]);
+    let isCurrent = true;
+    const groupId = user.activeGroupId;
+    setLoading(true);
+    onLoadStateChange?.(groupId, true);
+    loadFeed().finally(() => {
+      if (!isCurrent) return;
+      setLoading(false);
+      onLoadStateChange?.(groupId, false);
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [loadFeed, onLoadStateChange, user.activeGroupId]);
 
   useEffect(() => {
     let pollId = null;
@@ -383,8 +397,8 @@ export default function GroupFeed({ roommates }) {
               key={type.id}
               type="button"
               onClick={() => setCreateType(type.id)}
-              className={styles.createPickerButton}
-              style={modulePanelStyle(type.id)}
+              className={cx(styles.modulePalette, styles.createPickerButton)}
+              data-module-type={type.id}
             >
               {CREATE_LABEL_BY_TYPE[type.id]}
             </button>

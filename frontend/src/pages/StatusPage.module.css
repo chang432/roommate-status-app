@@ -10,6 +10,10 @@
   @apply h-[46px] w-[46px];
 }
 
+.brandmarkButton {
+  @apply flex-none rounded-full transition hover:scale-105 focus:outline-none focus:ring-4 focus:ring-accent-soft;
+}
+
 .brandmarkIcon {
   @apply h-[26px] w-[26px];
 }
@@ -22,16 +26,12 @@
   @apply font-display text-[24px] font-semibold leading-[1.1] -tracking-[0.01em];
 }
 
-.subtitle {
-  @apply mt-[2px] text-[13.5px] text-ink-soft;
-}
-
 .profileButton {
   @apply flex flex-none items-center gap-2 rounded-full border border-line bg-card px-2 py-2 text-ink-soft shadow-soft transition hover:border-accent hover:bg-surface-hover hover:text-ink;
 }
 
 .profileInitial {
-  @apply grid h-8 w-8 place-items-center rounded-full bg-accent text-[14px] font-black text-white;
+  @apply grid h-8 w-8 place-items-center rounded-full bg-solid-accent text-[14px] font-black text-on-strong;
 }
 
 .profileLabel {
@@ -48,6 +48,14 @@
 
 .loading {
   @apply mt-10 text-center text-[14px] text-ink-soft;
+}
+
+.groupLoading {
+  @apply grid min-h-[380px] place-content-center justify-items-center gap-3 text-center text-[15px] font-bold text-ink-soft;
+}
+
+.loadingSpinner {
+  @apply h-9 w-9 animate-spin rounded-full border-4 border-line border-t-accent;
 }
 
 .shell {
@@ -92,6 +100,47 @@
 
 .moduleNavCount {
   @apply rounded-full bg-surface-muted px-2 py-1 text-[11px] text-ink-soft;
+}
+
+.modulePalette[data-module-type='events'] {
+  --module-bg: hsl(var(--color-module-events-bg));
+  --module-border: hsl(var(--color-module-events-border));
+  --module-text: hsl(var(--color-module-events-text));
+}
+
+.modulePalette[data-module-type='requests'] {
+  --module-bg: hsl(var(--color-module-requests-bg));
+  --module-border: hsl(var(--color-module-requests-border));
+  --module-text: hsl(var(--color-module-requests-text));
+}
+
+.modulePalette[data-module-type='checklists'] {
+  --module-bg: hsl(var(--color-module-checklists-bg));
+  --module-border: hsl(var(--color-module-checklists-border));
+  --module-text: hsl(var(--color-module-checklists-text));
+}
+
+.modulePalette[data-module-type='tv'] {
+  --module-bg: hsl(var(--color-module-tv-bg));
+  --module-border: hsl(var(--color-module-tv-border));
+  --module-text: hsl(var(--color-module-tv-text));
+}
+
+.modulePalette[data-module-type='spotify'] {
+  --module-bg: hsl(var(--color-module-spotify-bg));
+  --module-border: hsl(var(--color-module-spotify-border));
+  --module-text: hsl(var(--color-module-spotify-text));
+}
+
+.modulePalette .moduleNavCount {
+  background-color: var(--module-bg);
+  color: var(--module-text);
+}
+
+.moduleNavItemActive.modulePalette {
+  border-color: var(--module-border);
+  background-color: var(--module-bg);
+  color: var(--module-text);
 }
 
 .feedColumn {
@@ -163,7 +212,10 @@
 }
 
 .moduleType {
-  @apply rounded-full border border-accent-soft bg-accent-soft px-2 py-[2px] text-[10px] font-black uppercase tracking-[0.07em] text-accent-deep;
+  @apply rounded-full border px-2 py-[2px] text-[10px] font-black uppercase tracking-[0.07em];
+  border-color: var(--module-border);
+  background-color: var(--module-bg);
+  color: var(--module-text);
 }
 
 .emptyFeed {
@@ -181,7 +233,7 @@
 }
 
 .createInlineButton {
-  @apply grid h-11 w-11 flex-none place-items-center rounded-full bg-accent text-[26px] font-black leading-none text-white shadow-soft transition hover:scale-105 hover:bg-accent-deep focus:outline-none focus:ring-4 focus:ring-accent-soft;
+  @apply grid h-11 w-11 flex-none place-items-center rounded-full bg-solid-accent text-[26px] font-black leading-none text-on-strong shadow-soft transition hover:scale-105 hover:bg-solid-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft;
 }
 
 .createPicker {
@@ -189,7 +241,10 @@
 }
 
 .createPickerButton {
-  @apply rounded-sm border border-line bg-card px-4 py-5 text-left text-[15px] font-black text-ink shadow-soft transition hover:border-accent hover:bg-surface-hover;
+  @apply rounded-sm border px-4 py-5 text-left text-[15px] font-black shadow-soft transition hover:brightness-[0.98];
+  border-color: var(--module-border);
+  background-color: var(--module-bg);
+  color: var(--module-text);
 }
 
 .createModal {

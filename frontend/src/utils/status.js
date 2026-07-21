@@ -66,6 +66,9 @@ function activityStatusByUser(activities) {
       return
     }
 
+    // A scheduled event retains its end time before it happens. Only lifecycle
+    // state, not the presence of that timestamp, makes a participant finished.
+    if (!activity.isExpired) return
     const timestamp = activityEndedAt(activity)
     if (timestamp === null) return
     memberIds.forEach((userId) => {

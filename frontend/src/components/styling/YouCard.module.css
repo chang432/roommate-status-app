@@ -55,7 +55,7 @@
 }
 
 .statusSelectButtonOpen {
-  @apply border-accent shadow-[0_0_0_3px_rgba(211,111,65,0.12)];
+  @apply border-accent shadow-selection;
 }
 
 .statusSelectValue {

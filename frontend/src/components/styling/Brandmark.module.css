@@ -2,6 +2,10 @@
   @apply grid place-items-center rounded-2xl bg-accent-soft text-accent-deep;
 }
 
+.inverted {
+  @apply bg-solid-accent text-on-strong;
+}
+
 .defaultSize {
   @apply h-[54px] w-[54px];
 }

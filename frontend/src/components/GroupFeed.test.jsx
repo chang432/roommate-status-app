@@ -8,7 +8,13 @@ import { LONG_PRESS_MS } from '../utils/useLongPress.js'
 
 vi.mock('../context/AuthContext.jsx', () => ({
   useAuth: () => ({
-    user: { id: 'andre', name: 'Andre', hasGroup: true, groupId: 'shire' },
+    user: {
+      id: 'andre',
+      name: 'Andre',
+      hasGroup: true,
+      groupId: 'shire',
+      activeGroupId: 'shire',
+    },
   }),
 }))
 
@@ -137,6 +143,45 @@ describe('GroupFeed module focus', () => {
   })
 
   afterEach(() => cleanup())
+
+  it('reports when the active group feed has finished loading', async () => {
+    let resolveFeed
+    getFeed.mockImplementation(() => new Promise((resolve) => {
+      resolveFeed = resolve
+    }))
+    const onLoadStateChange = vi.fn()
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <GroupFeed roommates={ROOMMATES} onLoadStateChange={onLoadStateChange} />
+      </MemoryRouter>,
+    )
+
+    expect(onLoadStateChange).toHaveBeenCalledWith('shire', true)
+    resolveFeed([])
+    await waitFor(() =>
+      expect(onLoadStateChange).toHaveBeenCalledWith('shire', false),
+    )
+  })
+
+  it('adds theme hooks to tags, create cards, and typed filters', async () => {
+    const items = ['events', 'requests', 'checklists', 'tv', 'spotify'].map((type) => (
+      feedItem(type)
+    ))
+    renderFeed('/', items)
+    const user = userEvent.setup()
+
+    await screen.findByText("Andre's Jam is live")
+    await user.click(screen.getByRole('button', { name: 'Create a module' }))
+
+    Object.keys(items.reduce((types, item) => ({ ...types, [item.type]: true }), {}))
+      .forEach((type) => {
+        expect(document.querySelectorAll(`[data-module-type="${type}"]`)).toHaveLength(3)
+      })
+    expect(screen.getByRole('button', { name: /^All modules/ })).not.toHaveAttribute(
+      'data-module-type',
+    )
+  })
 
   it.each([
     ['events', 'Movie night'],
