@@ -495,10 +495,10 @@ export async function deleteShow(id, requesterId) {
 }
 
 // POST /api/shows/:id/watchparty/start|end — set a show watchparty live state.
-export async function startWatchparty(id, requesterId) {
+export async function startWatchparty(id, requesterId, season, episode) {
   return request(`/shows/${id}/watchparty/start`, {
     method: 'POST',
-    body: JSON.stringify({ requesterId }),
+    body: JSON.stringify({ requesterId, season, episode }),
   })
 }
 

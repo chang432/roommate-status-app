@@ -56,7 +56,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/shows/<id>/archive`                               | `{ requesterId }`                          | full updated show list                                  |
 | `POST /api/shows/<id>/restore`                               | `{ requesterId }`                          | full updated show list                                  |
 | `DELETE /api/shows/<id>`                                     | `{ requesterId }`                          | full updated show list                                  |
-| `POST /api/shows/<id>/watchparty/start`                      | `{ requesterId }`                          | full updated show list                                  |
+| `POST /api/shows/<id>/watchparty/start`                      | `{ requesterId, season, episode }`         | full updated show list                                  |
 | `POST /api/shows/<id>/watchparty/end`                        | `{ requesterId }`                          | full updated show list                                  |
 | `GET /api/jam`                                               | `?userId=<id>`                             | active Spotify Jam or `null`                            |
 | `POST /api/jam`                                              | `{ hostId, link }`                         | active Spotify Jam, replacing prior Jam                 |

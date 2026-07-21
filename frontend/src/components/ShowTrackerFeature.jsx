@@ -12,6 +12,7 @@ import {
   setProgress,
   startWatchparty,
 } from "../api/client.js";
+import ModalShell from "./ModalShell.jsx";
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
 import { LONG_PRESS_MS } from "../utils/useLongPress.js";
@@ -206,6 +207,11 @@ export default function ShowTrackerFeature({
   const [restoringShowId, setRestoringShowId] = useState(null);
   const [deletingShowId, setDeletingShowId] = useState(null);
   const [watchpartyShowId, setWatchpartyShowId] = useState(null);
+  const [watchpartyPrompt, setWatchpartyPrompt] = useState(null);
+  const [watchpartyDraft, setWatchpartyDraft] = useState({
+    season: "1",
+    episode: "1",
+  });
   useExpandOnModuleFocus(setExpandedId);
 
   function toggleExpanded(id) {
@@ -276,18 +282,49 @@ export default function ShowTrackerFeature({
     }
   }
 
-  async function handleWatchparty(show) {
+  function openWatchpartyPrompt(show) {
+    const members = show.members || [];
+    const ownProgress = members.find((member) => member.id === user.id);
+    const fallbackProgress = members[0] || { season: 1, episode: 1 };
+    const progress = ownProgress || fallbackProgress;
+    setWatchpartyDraft({
+      season: String(Math.max(1, Number.parseInt(progress.season, 10) || 1)),
+      episode: String(Math.max(1, Number.parseInt(progress.episode, 10) || 1)),
+    });
+    setWatchpartyPrompt(show);
+  }
+
+  async function handleWatchparty(show, episodeOverride = null) {
     if (watchpartyShowId) return;
     setWatchpartyShowId(show.id);
     setError("");
     try {
       const action = show.isWatchpartyLive ? endWatchparty : startWatchparty;
-      onShowsChange(await action(show.id, user.id));
+      onShowsChange(
+        await action(
+          show.id,
+          user.id,
+          episodeOverride?.season,
+          episodeOverride?.episode,
+        ),
+      );
+      setWatchpartyPrompt(null);
     } catch (err) {
       setError(err.message || "Could not update the watchparty. Try again.");
     } finally {
       setWatchpartyShowId(null);
     }
+  }
+
+  function handleWatchpartySubmit(event) {
+    event.preventDefault();
+    if (!watchpartyPrompt) return;
+    const season = Math.max(1, Number.parseInt(watchpartyDraft.season, 10) || 1);
+    const episode = Math.max(
+      1,
+      Number.parseInt(watchpartyDraft.episode, 10) || 1,
+    );
+    handleWatchparty(watchpartyPrompt, { season, episode });
   }
 
   async function handleAdjust(show, member, field, delta) {
@@ -380,7 +417,14 @@ export default function ShowTrackerFeature({
           </div>
           <button
             type="button"
-            onClick={() => handleWatchparty(show)}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (show.isWatchpartyLive) {
+                handleWatchparty(show);
+              } else {
+                openWatchpartyPrompt(show);
+              }
+            }}
             disabled={watchpartyShowId === show.id}
             className={cx(
               "ui-pillButton",
@@ -509,6 +553,72 @@ export default function ShowTrackerFeature({
   return (
     <div className={styles.wrap}>
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
+
+      {watchpartyPrompt && (
+        <ModalShell
+          title="Start watchparty"
+          ariaLabel={`Start ${watchpartyPrompt.title} watchparty`}
+          onClose={() => setWatchpartyPrompt(null)}
+          widthClassName={styles.watchpartyDialog}
+        >
+          <form
+            className={styles.watchpartyForm}
+            onSubmit={handleWatchpartySubmit}
+          >
+            <p className={styles.watchpartyTitle}>{watchpartyPrompt.title}</p>
+            <div className={styles.watchpartyFields}>
+              <label className={styles.watchpartyField}>
+                <span>Season</span>
+                <input
+                  type="number"
+                  min="1"
+                  inputMode="numeric"
+                  value={watchpartyDraft.season}
+                  onChange={(event) =>
+                    setWatchpartyDraft((current) => ({
+                      ...current,
+                      season: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className={styles.watchpartyField}>
+                <span>Episode</span>
+                <input
+                  type="number"
+                  min="1"
+                  inputMode="numeric"
+                  value={watchpartyDraft.episode}
+                  onChange={(event) =>
+                    setWatchpartyDraft((current) => ({
+                      ...current,
+                      episode: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+            <div className={styles.watchpartyModalActions}>
+              <button
+                type="button"
+                onClick={() => setWatchpartyPrompt(null)}
+                className="ui-pillButton ui-pillSecondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={watchpartyShowId === watchpartyPrompt.id}
+                className="ui-pillButton ui-pillPrimary"
+              >
+                {watchpartyShowId === watchpartyPrompt.id
+                  ? "Starting…"
+                  : "Start"}
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
 
       <div className={styles.list}>
         {shows.length === 0 ? (

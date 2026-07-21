@@ -2581,6 +2581,45 @@ def test_progress_clamps_at_one_and_validates_input(client):
     ).status_code == 400
 
 
+def test_start_watchparty_records_episode_for_banner(client, monkeypatch):
+    calls = _capture_notifications(monkeypatch)
+    show = _make_show(client)
+    show_id = show["id"]
+
+    res = client.post(
+        f"/api/shows/{show_id}/watchparty/start",
+        json={"requesterId": "sheryl", "season": 2, "episode": 5},
+    )
+
+    assert res.status_code == 200
+    updated = res.get_json()[0]
+    assert updated["isWatchpartyLive"] is True
+    assert updated["watchpartySeason"] == 2
+    assert updated["watchpartyEpisode"] == 5
+    assert calls[-1][1]["body"] == "Sheryl started watching Severance S2 E5"
+
+    ended = client.post(
+        f"/api/shows/{show_id}/watchparty/end", json={"requesterId": "sheryl"}
+    ).get_json()[0]
+    assert ended["isWatchpartyLive"] is False
+    assert ended["watchpartySeason"] is None
+    assert ended["watchpartyEpisode"] is None
+
+
+def test_start_watchparty_requires_episode_numbers(client):
+    show = _make_show(client)
+    show_id = show["id"]
+
+    assert client.post(
+        f"/api/shows/{show_id}/watchparty/start",
+        json={"requesterId": "sheryl", "season": "2", "episode": 5},
+    ).status_code == 400
+    assert client.post(
+        f"/api/shows/{show_id}/watchparty/start",
+        json={"requesterId": "sheryl", "season": 2},
+    ).status_code == 400
+
+
 def test_any_roommate_can_archive_and_restore_show(client):
     show = _make_show(client, creator="sheryl")
     show_id = show["id"]

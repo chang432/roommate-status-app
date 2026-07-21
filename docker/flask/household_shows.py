@@ -123,6 +123,16 @@ def _project(item: dict) -> dict:
         ),
         "watchpartyStartedBy": item.get("watchpartyStartedBy"),
         "watchpartyStartedById": item.get("watchpartyStartedById"),
+        "watchpartySeason": (
+            int(item["watchpartySeason"])
+            if item.get("watchpartySeason") is not None
+            else None
+        ),
+        "watchpartyEpisode": (
+            int(item["watchpartyEpisode"])
+            if item.get("watchpartyEpisode") is not None
+            else None
+        ),
         "members": [_project_member(raw) for raw in item.get("members") or []],
     }
 
@@ -318,7 +328,15 @@ def adjust_progress(show_id: str, member_id: str, field: str, delta: int, group_
     return _mutate_members(show_id, group_id, mutate)
 
 
-def set_watchparty(show_id: str, user_id: str, name: str, group_id: str, live: bool):
+def set_watchparty(
+    show_id: str,
+    user_id: str,
+    name: str,
+    group_id: str,
+    live: bool,
+    season: int | None = None,
+    episode: int | None = None,
+):
     """Start or end the show's live watchparty state."""
     table = _get_table()
     item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
@@ -331,15 +349,20 @@ def set_watchparty(show_id: str, user_id: str, name: str, group_id: str, live: b
 
     now_ms = int(time.time() * 1000)
     if live:
+        season = max(1, int(season or 1))
+        episode = max(1, int(episode or 1))
         update = dict(
             UpdateExpression=(
                 "SET watchpartyStartedAt = :now, watchpartyStartedById = :user_id, "
-                "watchpartyStartedBy = :name, updatedAt = :now"
+                "watchpartyStartedBy = :name, watchpartySeason = :season, "
+                "watchpartyEpisode = :episode, updatedAt = :now"
             ),
             ExpressionAttributeValues={
                 ":now": now_ms,
                 ":user_id": user_id,
                 ":name": name,
+                ":season": season,
+                ":episode": episode,
                 ":groupId": group_id,
                 ":false": False,
             },
@@ -348,7 +371,8 @@ def set_watchparty(show_id: str, user_id: str, name: str, group_id: str, live: b
         update = dict(
             UpdateExpression=(
                 "SET updatedAt = :now REMOVE watchpartyStartedAt, "
-                "watchpartyStartedById, watchpartyStartedBy"
+                "watchpartyStartedById, watchpartyStartedBy, "
+                "watchpartySeason, watchpartyEpisode"
             ),
             ExpressionAttributeValues={
                 ":now": now_ms,
@@ -374,8 +398,15 @@ def set_watchparty(show_id: str, user_id: str, name: str, group_id: str, live: b
     return _project(resp["Attributes"])
 
 
-def start_watchparty(show_id: str, user_id: str, name: str, group_id: str):
-    return set_watchparty(show_id, user_id, name, group_id, True)
+def start_watchparty(
+    show_id: str,
+    user_id: str,
+    name: str,
+    group_id: str,
+    season: int | None = None,
+    episode: int | None = None,
+):
+    return set_watchparty(show_id, user_id, name, group_id, True, season, episode)
 
 
 def end_watchparty(show_id: str, user_id: str, name: str, group_id: str):

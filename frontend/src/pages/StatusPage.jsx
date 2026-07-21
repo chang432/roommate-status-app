@@ -456,7 +456,11 @@ export default function StatusPage() {
                   key={`watchparty:${show.id}`}
                   event={{
                     id: show.id,
-                    text: `Watching ${show.title}`,
+                    text: `Watching ${show.title}${
+                      show.watchpartySeason && show.watchpartyEpisode
+                        ? ` S${show.watchpartySeason} E${show.watchpartyEpisode}`
+                        : ""
+                    }`,
                     proposedBy: show.watchpartyStartedBy || "Someone",
                     liveStartedAt: show.watchpartyStartedAt,
                     memberIds: (show.members || []).map((member) => member.id),

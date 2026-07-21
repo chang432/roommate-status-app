@@ -1644,10 +1644,32 @@ def create_app() -> Flask:
         requester = db.get_group_member(requester_id) if requester_id else None
         if requester is None:
             return invalid_user_response()
+        season = body.get("season")
+        episode = body.get("episode")
+        if live:
+            if not isinstance(season, int) or isinstance(season, bool):
+                return jsonify({"error": "A whole-number season is required."}), 400
+            if not isinstance(episode, int) or isinstance(episode, bool):
+                return jsonify({"error": "A whole-number episode is required."}), 400
 
         show = household_shows.get(show_id, requester["groupId"], consistent=True)
         action = household_shows.start_watchparty if live else household_shows.end_watchparty
-        result = action(show_id, requester["id"], requester["name"], requester["groupId"])
+        if live:
+            result = action(
+                show_id,
+                requester["id"],
+                requester["name"],
+                requester["groupId"],
+                season,
+                episode,
+            )
+        else:
+            result = action(
+                show_id,
+                requester["id"],
+                requester["name"],
+                requester["groupId"],
+            )
         if result is None:
             return jsonify({"error": f"Unknown show: {show_id}"}), 404
         if result == household_shows.MUTATION_ARCHIVED:
@@ -1662,7 +1684,8 @@ def create_app() -> Flask:
                 exclude_user_ids={requester["id"]},
                 title="Watchparty started" if live else "Watchparty ended",
                 body=(
-                    f"{requester['name']} started watching {result['title']}"
+                    f"{requester['name']} started watching {result['title']} "
+                    f"S{result['watchpartySeason']} E{result['watchpartyEpisode']}"
                     if live
                     else f"{requester['name']} ended the {result['title']} watchparty"
                 ),

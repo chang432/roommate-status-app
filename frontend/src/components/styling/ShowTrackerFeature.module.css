@@ -153,6 +153,34 @@
   @apply px-[13px] py-[7px] text-[12.5px];
 }
 
+.watchpartyDialog {
+  @apply max-w-[360px];
+}
+
+.watchpartyForm {
+  @apply space-y-4;
+}
+
+.watchpartyTitle {
+  @apply truncate text-[14px] font-semibold text-ink;
+}
+
+.watchpartyFields {
+  @apply grid grid-cols-2 gap-3;
+}
+
+.watchpartyField {
+  @apply space-y-1 text-[12px] font-semibold text-ink-soft;
+}
+
+.watchpartyField input {
+  @apply h-[40px] w-full rounded-sm border border-line bg-surface-hover px-3 text-[15px] font-semibold tabular-nums text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft;
+}
+
+.watchpartyModalActions {
+  @apply flex justify-end gap-2;
+}
+
 /* Collapsible section that hides completed shows, mirroring the activities'
    expired history. */
 .completedSection {
