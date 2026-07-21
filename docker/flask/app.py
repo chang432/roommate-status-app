@@ -243,6 +243,10 @@ def _activity_status_overrides(group_id: str, consistent: bool = False) -> dict[
                     overrides[user_id] = {"kind": "live", "timestamp": timestamp}
             continue
 
+        # Scheduled events already have an endAt, but must not suppress a
+        # participant's availability until their lifecycle has actually ended.
+        if not activity.get("isExpired"):
+            continue
         timestamp = activity.get("endedAt") or activity.get("endAt")
         if timestamp is None:
             continue

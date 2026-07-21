@@ -31,7 +31,7 @@ import household_shows
 import jam
 import module_models
 import push
-from app import create_app, mentions_all, resolve_mentions
+from app import _activity_status_overrides, create_app, mentions_all, resolve_mentions
 
 TEST_GROUP_ID = db.DEFAULT_GROUP_ID
 TEST_USER_ID = "andre"
@@ -463,6 +463,20 @@ def test_gather_push_ignores_live_activity_participants(client, monkeypatch):
 
     assert updated.status_code == 200
     assert calls == []
+
+
+def test_scheduled_activity_does_not_create_a_finished_status_override(client, monkeypatch):
+    monkeypatch.setattr(activities.time, "time", lambda: 1_000)
+    created = _propose(
+        client,
+        "Future dinner",
+        start_at=1_001_000,
+        end_at=1_002_000,
+    ).get_json()[0]
+
+    assert created["isLive"] is False
+    assert created["isExpired"] is False
+    assert _activity_status_overrides(TEST_GROUP_ID, consistent=True) == {}
 
 
 def test_gather_push_waits_until_ended_activity_participant_saves_again(client, monkeypatch):
