@@ -10,6 +10,7 @@ export default function LiveEventBanner({
   onEnd,
   user,
   onBannerClick,
+  type,
 }) {
   const isInvolved = useMemo(() => {
     return Boolean(user && (event.memberIds ?? []).includes(user.id));
@@ -56,7 +57,7 @@ export default function LiveEventBanner({
             disabled={ending}
             className={cx("ui-pillButton ui-pillDanger", styles.endButton)}
           >
-            {ending ? "Ending…" : "End event"}
+            {ending ? "Ending…" : "End"}
           </button>
         )}
       </div>

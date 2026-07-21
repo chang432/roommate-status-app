@@ -11,10 +11,7 @@ import {
   setCommentLiked,
 } from "../api/client.js";
 import FeedComments from "./FeedComments.jsx";
-import {
-  activityTimeLabel,
-  relativeTime,
-} from "../utils/time.js";
+import { activityTimeLabel, relativeTime } from "../utils/time.js";
 import { cx } from "../utils/classNames.js";
 import styles from "./styling/ProposeActivity.module.css";
 
@@ -130,12 +127,7 @@ export default function ProposeActivity({
     try {
       const liked = (comment.likedByIds ?? []).includes(user.id);
       onActivitiesChange(
-        await setCommentLiked(
-          activity.id,
-          comment.id,
-          user.id,
-          !liked,
-        ),
+        await setCommentLiked(activity.id, comment.id, user.id, !liked),
       );
     } catch (err) {
       setError(err.message || "Could not update the comment like. Try again.");
@@ -192,7 +184,10 @@ export default function ProposeActivity({
               <p className={styles.scheduleMeta}>{scheduleLabel}</p>
             )}
           </div>
-          <span className={styles.memberCount} title={`${members.length} joined`}>
+          <span
+            className={styles.memberCount}
+            title={`${members.length} joined`}
+          >
             👥 {members.length}
           </span>
           {isOwner && !isArchived && (
@@ -200,10 +195,7 @@ export default function ProposeActivity({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                onLiveTransition(
-                  activity,
-                  activity.isLive ? "end" : "start",
-                );
+                onLiveTransition(activity, activity.isLive ? "end" : "start");
               }}
               disabled={Boolean(transitioningId)}
               className={cx(
@@ -271,9 +263,7 @@ export default function ProposeActivity({
                 user={user}
                 commenting={commentingId === activity.id}
                 likingCommentIds={likingCommentIds}
-                onToggleLike={(comment) =>
-                  handleCommentLike(activity, comment)
-                }
+                onToggleLike={(comment) => handleCommentLike(activity, comment)}
                 openLikesCommentId={openLikesCommentId}
                 onOpenLikesChange={setOpenLikesCommentId}
                 open={expanded}
@@ -285,20 +275,21 @@ export default function ProposeActivity({
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
               >
-                <span className={styles.deletePrompt}>
-                  {isArchived
-                    ? activity.isArchived
-                      ? "Archived event"
-                      : "Expired event"
-                    : "Event actions"}
-                </span>
+                {isArchived && (
+                  <span className={styles.deletePrompt}>
+                    {activity.isArchived ? "Archived event" : "Expired event"}
+                  </span>
+                )}
                 <div className={styles.actionButtonRow}>
                   {isArchived ? (
                     <button
                       type="button"
                       onClick={() => handleRestore(activity)}
                       disabled={Boolean(restoringId || deletingId)}
-                      className={cx("ui-pillButton ui-pillSecondary", styles.smallPill)}
+                      className={cx(
+                        "ui-pillButton ui-pillSecondary",
+                        styles.smallPill,
+                      )}
                     >
                       {restoringId === activity.id ? "Restoring…" : "Restore"}
                     </button>
@@ -307,7 +298,10 @@ export default function ProposeActivity({
                       type="button"
                       onClick={() => handleArchive(activity)}
                       disabled={Boolean(archivingId || deletingId)}
-                      className={cx("ui-pillButton ui-pillSecondary", styles.smallPill)}
+                      className={cx(
+                        "ui-pillButton ui-pillSecondary",
+                        styles.smallPill,
+                      )}
                     >
                       {archivingId === activity.id ? "Archiving…" : "Archive"}
                     </button>
@@ -317,10 +311,13 @@ export default function ProposeActivity({
                     onClick={() => handleDelete(activity)}
                     disabled={Boolean(
                       (isArchived ? restoringId : archivingId) ||
-                        deletingId ||
-                        activity.isLive,
+                      deletingId ||
+                      activity.isLive,
                     )}
-                    className={cx("ui-pillButton ui-pillDanger", styles.smallPill)}
+                    className={cx(
+                      "ui-pillButton ui-pillDanger",
+                      styles.smallPill,
+                    )}
                   >
                     {deletingId === activity.id ? "Deleting…" : "Delete"}
                   </button>
@@ -329,7 +326,7 @@ export default function ProposeActivity({
             </div>
           </div>
         </div>
-        </div>
+      </div>
     );
   }
 

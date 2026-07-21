@@ -31,7 +31,8 @@ import styles from "../pages/StatusPage.module.css";
 const FEED_POLL_INTERVAL_MS = 5000;
 const EDIT_HEADER_SELECTOR = "[data-module-edit-header]";
 const EDIT_KEYBOARD_SELECTOR = "[data-module-edit-keyboard]";
-const INTERACTIVE_SELECTOR = "button, a, input, textarea, select, [role='button']";
+const INTERACTIVE_SELECTOR =
+  "button, a, input, textarea, select, [role='button']";
 const SWIPE_MIN_X = 64;
 const SWIPE_MAX_Y = 48;
 
@@ -47,10 +48,14 @@ function modulePreferenceKey(userId, groupId) {
 }
 
 function sanitizeModuleOrder(value) {
-  const available = MODULE_TYPES.filter((type) => type.id !== "all").map((type) => type.id);
+  const available = MODULE_TYPES.filter((type) => type.id !== "all").map(
+    (type) => type.id,
+  );
   const seen = new Set();
   const ordered = Array.isArray(value)
-    ? value.filter((id) => available.includes(id) && !seen.has(id) && seen.add(id))
+    ? value.filter(
+        (id) => available.includes(id) && !seen.has(id) && seen.add(id),
+      )
     : [];
   return [...ordered, ...available.filter((id) => !seen.has(id))];
 }
@@ -185,7 +190,9 @@ function ModuleNav({
             const filterContent = (
               <>
                 <span>{type.label}</span>
-                <span className={styles.moduleNavCount}>{counts[type.id] ?? 0}</span>
+                <span className={styles.moduleNavCount}>
+                  {counts[type.id] ?? 0}
+                </span>
               </>
             );
             const filterButton = editMode ? (
@@ -233,20 +240,28 @@ function ModuleNav({
                     <span>{type.label}</span>
                     <span className={styles.moduleNavAllSummary}>
                       {selectedAllLabels.length === editableTypes.length
-                        ? "All modules"
+                        ? "All selected"
                         : `${selectedAllLabels.length} selected`}
-                      <span aria-hidden="true">{allDropdownOpen ? "▴" : "▾"}</span>
+                      <span aria-hidden="true">
+                        {allDropdownOpen ? "▴" : "▾"}
+                      </span>
                     </span>
                   </button>
                   {allDropdownOpen ? (
                     <div className={styles.moduleNavAllMenu}>
                       {editableTypes.map((option) => (
-                        <label key={option.id} className={styles.moduleNavAllOption}>
+                        <label
+                          key={option.id}
+                          className={styles.moduleNavAllOption}
+                        >
                           <input
                             type="checkbox"
                             checked={allTypes.includes(option.id)}
                             onChange={(event) =>
-                              handleAllTypeToggle(option.id, event.target.checked)
+                              handleAllTypeToggle(
+                                option.id,
+                                event.target.checked,
+                              )
                             }
                           />
                           <span>{option.label}</span>
@@ -262,7 +277,9 @@ function ModuleNav({
                 key={type.id}
                 className={cx(
                   styles.moduleNavEditRow,
-                  draggingType === type.id ? styles.moduleNavEditRowDragging : "",
+                  draggingType === type.id
+                    ? styles.moduleNavEditRowDragging
+                    : "",
                 )}
                 onDragOver={(event) => {
                   event.preventDefault();
@@ -332,7 +349,9 @@ function ModuleFeedItem({
       const header = event.target.closest?.(EDIT_HEADER_SELECTOR);
       if (!header || !event.currentTarget.contains(header)) return false;
       const interactive = event.target.closest?.(INTERACTIVE_SELECTOR);
-      return !interactive || !header.contains(interactive) || interactive === header;
+      return (
+        !interactive || !header.contains(interactive) || interactive === header
+      );
     },
     isKeyboardTarget: (event) =>
       event.target.matches?.(EDIT_KEYBOARD_SELECTOR) &&
@@ -365,7 +384,11 @@ function ModuleFeedItem({
 
   return (
     <ModuleFocusProvider intent={matchingIntent}>
-      <article ref={itemRef} className={styles.moduleItem} {...longPressHandlers}>
+      <article
+        ref={itemRef}
+        className={styles.moduleItem}
+        {...longPressHandlers}
+      >
         {children(editTrigger)}
       </article>
     </ModuleFocusProvider>
@@ -422,7 +445,9 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
 
   const loadFeed = useCallback(async () => {
     try {
-      setModules(createModules(await getFeed(user.id, "all", user.activeGroupId)));
+      setModules(
+        createModules(await getFeed(user.id, "all", user.activeGroupId)),
+      );
       setLiveError("");
     } catch {
       setLiveError("Could not load the group feed.");
@@ -476,7 +501,10 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     startPolling();
     window.addEventListener("focus", loadFeed);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage);
+    navigator.serviceWorker?.addEventListener(
+      "message",
+      handleServiceWorkerMessage,
+    );
 
     return () => {
       stopPolling();
@@ -653,7 +681,8 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     if (!start) return;
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
-    if (Math.abs(deltaX) < SWIPE_MIN_X || Math.abs(deltaY) > SWIPE_MAX_Y) return;
+    if (Math.abs(deltaX) < SWIPE_MIN_X || Math.abs(deltaY) > SWIPE_MAX_Y)
+      return;
     selectAdjacentType(deltaX < 0 ? 1 : -1);
   }
 
@@ -666,17 +695,19 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     if (!createType) {
       return (
         <div className={styles.createPicker}>
-          {moduleTypes.filter((type) => type.id !== "all").map((type) => (
-            <button
-              key={type.id}
-              type="button"
-              onClick={() => setCreateType(type.id)}
-              className={cx(styles.modulePalette, styles.createPickerButton)}
-              data-module-type={type.id}
-            >
-              {CREATE_LABEL_BY_TYPE[type.id]}
-            </button>
-          ))}
+          {moduleTypes
+            .filter((type) => type.id !== "all")
+            .map((type) => (
+              <button
+                key={type.id}
+                type="button"
+                onClick={() => setCreateType(type.id)}
+                className={cx(styles.modulePalette, styles.createPickerButton)}
+                data-module-type={type.id}
+              >
+                {CREATE_LABEL_BY_TYPE[type.id]}
+              </button>
+            ))}
         </div>
       );
     }

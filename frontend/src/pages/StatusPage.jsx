@@ -39,7 +39,8 @@ import styles from "./StatusPage.module.css";
 const ACTIVITY_POLL_INTERVAL_MS = 5000;
 
 export default function StatusPage() {
-  const { user, logout, deleteAccount, joinGroup, createGroup, selectGroup } = useAuth();
+  const { user, logout, deleteAccount, joinGroup, createGroup, selectGroup } =
+    useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const ownCardRef = useRef(null);
   const feedRef = useRef(null);
@@ -75,13 +76,15 @@ export default function StatusPage() {
       setGroupsError("");
 
       const requestedGroupId = searchParams.get("groupId");
-      const isMember = (groupId) => memberships.some((group) => group.groupId === groupId);
+      const isMember = (groupId) =>
+        memberships.some((group) => group.groupId === groupId);
       const nextGroupId = isMember(requestedGroupId)
         ? requestedGroupId
         : isMember(user.activeGroupId)
           ? user.activeGroupId
           : memberships[0]?.groupId;
-      if (nextGroupId && nextGroupId !== user.activeGroupId) selectGroup(nextGroupId);
+      if (nextGroupId && nextGroupId !== user.activeGroupId)
+        selectGroup(nextGroupId);
       if (requestedGroupId) {
         const nextParams = new URLSearchParams(searchParams);
         nextParams.delete("groupId");
@@ -149,7 +152,12 @@ export default function StatusPage() {
   }, [user.activeGroupId, user.id]);
 
   const loadAll = useCallback(async () => {
-    await Promise.all([loadRoommates(), loadActivities(), loadJam(), loadShows()]);
+    await Promise.all([
+      loadRoommates(),
+      loadActivities(),
+      loadJam(),
+      loadShows(),
+    ]);
   }, [loadActivities, loadJam, loadRoommates, loadShows]);
 
   useEffect(() => {
@@ -230,7 +238,8 @@ export default function StatusPage() {
   const showBanner = freeCount >= AVAILABLE_THRESHOLD;
   const liveEvents = activities.filter((activity) => activity.isLive);
   const liveWatchparties = shows.filter((show) => show.isWatchpartyLive);
-  const selectedGroup = groups.find((group) => group.groupId === user.activeGroupId) ?? groups[0];
+  const selectedGroup =
+    groups.find((group) => group.groupId === user.activeGroupId) ?? groups[0];
   const groupDataLoading =
     groupsLoading ||
     statusLoadedGroupId !== user.activeGroupId ||
@@ -243,7 +252,10 @@ export default function StatusPage() {
     nextParams.delete("updateStatus");
     setSearchParams(nextParams, { replace: true });
     window.requestAnimationFrame(() => {
-      ownCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      ownCardRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
     });
   }, [me, searchParams, setSearchParams]);
 
@@ -324,13 +336,16 @@ export default function StatusPage() {
     setFeedLoadedGroupId(groupId);
   }, []);
 
-  const handleGroupSelect = useCallback((groupId) => {
-    setGroupDrawerOpen(false);
-    if (groupId === user.activeGroupId) return;
-    setStatusLoadedGroupId(null);
-    setFeedLoadedGroupId(null);
-    selectGroup(groupId);
-  }, [selectGroup, user.activeGroupId]);
+  const handleGroupSelect = useCallback(
+    (groupId) => {
+      setGroupDrawerOpen(false);
+      if (groupId === user.activeGroupId) return;
+      setStatusLoadedGroupId(null);
+      setFeedLoadedGroupId(null);
+      selectGroup(groupId);
+    },
+    [selectGroup, user.activeGroupId],
+  );
 
   async function handleJoinGroup(code) {
     const joined = await joinGroup(code);
@@ -389,7 +404,9 @@ export default function StatusPage() {
             />
           </button>
           <div className={styles.headerText}>
-            <h1 className={styles.title}>{selectedGroup?.name || "Your group"}</h1>
+            <h1 className={styles.title}>
+              {selectedGroup?.name || "Your group"}
+            </h1>
           </div>
           <button
             type="button"
@@ -416,93 +433,97 @@ export default function StatusPage() {
         )}
 
         <main hidden={groupDataLoading}>
-            {liveError && (
-              <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
-            )}
+          {liveError && (
+            <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
+          )}
 
-            {(liveEvents.length > 0 || liveWatchparties.length > 0) && (
-              <div className={styles.liveEvents}>
-                {liveEvents.map((liveEvent) => (
-                  <LiveEventBanner
-                    key={liveEvent.id}
-                    event={liveEvent}
-                    canEnd={liveEvent.proposedById === user.id}
-                    ending={transitioningId === liveEvent.id}
-                    onEnd={() => handleLiveTransition(liveEvent, "end")}
-                    user={user}
-                    onBannerClick={scrollToFeed}
-                  />
-                ))}
-                {liveWatchparties.map((show) => (
-                  <LiveEventBanner
-                    key={`watchparty:${show.id}`}
-                    event={{
-                      id: show.id,
-                      text: `Watching ${show.title}`,
-                      proposedBy: show.watchpartyStartedBy || "Someone",
-                      liveStartedAt: show.watchpartyStartedAt,
-                      memberIds: (show.members || []).map((member) => member.id),
-                    }}
-                    canEnd={(show.members || []).some((member) => member.id === user.id)}
-                    ending={transitioningId === show.id}
-                    onEnd={() => handleWatchpartyEnd(show)}
-                    user={user}
-                    onBannerClick={scrollToFeed}
-                  />
-                ))}
-              </div>
-            )}
-
-            <EnableNotifications />
-            {showBanner && <NotificationBanner count={freeCount} />}
-
-            {me && (
-              <div ref={ownCardRef} className={styles.ownCard}>
-                <YouCard
-                  roommate={me}
-                  avatarColor={avatarColor(meIndex)}
-                  editing={editing}
-                  saving={saving}
-                  onEdit={() => setEditing((v) => !v)}
-                  onSave={handleSave}
-                  onCancel={() => setEditing(false)}
+          {(liveEvents.length > 0 || liveWatchparties.length > 0) && (
+            <div className={styles.liveEvents}>
+              {liveEvents.map((liveEvent) => (
+                <LiveEventBanner
+                  key={liveEvent.id}
+                  event={liveEvent}
+                  canEnd={liveEvent.proposedById === user.id}
+                  ending={transitioningId === liveEvent.id}
+                  onEnd={() => handleLiveTransition(liveEvent, "end")}
+                  user={user}
+                  onBannerClick={scrollToFeed}
+                  type="event"
                 />
-              </div>
-            )}
-
-            <div className={styles.householdHeader}>
-              <p className={cx("ui-sectionLabel", styles.householdTitle)}>
-                {selectedGroup?.name || "Your group"}
-              </p>
-              <button
-                type="button"
-                onClick={handleNotifyHousehold}
-                disabled={notifyingHousehold}
-                aria-label="Notify all to update"
-                title="Notify all to update"
-                className={cx("ui-iconPrimary", styles.notifyButton)}
-              >
-                <img src="/megaphone.png" alt="" className={styles.notifyIcon} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setJamModalOpen(true)}
-                aria-label={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-                title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-                className={cx("ui-iconPrimary", styles.jamButton)}
-              >
-                <img src="/spotify.png" alt="" className={styles.spotifyIcon} />
-              </button>
-            </div>
-            <div className={styles.householdGrid}>
-              {others.map((roommate) => (
-                <StatusCard
-                  key={roommate.id}
-                  roommate={roommate}
-                  onPoke={handlePokeRoommate}
+              ))}
+              {liveWatchparties.map((show) => (
+                <LiveEventBanner
+                  key={`watchparty:${show.id}`}
+                  event={{
+                    id: show.id,
+                    text: `Watching ${show.title}`,
+                    proposedBy: show.watchpartyStartedBy || "Someone",
+                    liveStartedAt: show.watchpartyStartedAt,
+                    memberIds: (show.members || []).map((member) => member.id),
+                  }}
+                  canEnd={(show.members || []).some(
+                    (member) => member.id === user.id,
+                  )}
+                  ending={transitioningId === show.id}
+                  onEnd={() => handleWatchpartyEnd(show)}
+                  user={user}
+                  onBannerClick={scrollToFeed}
+                  type="watchparty"
                 />
               ))}
             </div>
+          )}
+
+          <EnableNotifications />
+          {showBanner && <NotificationBanner count={freeCount} />}
+
+          {me && (
+            <div ref={ownCardRef} className={styles.ownCard}>
+              <YouCard
+                roommate={me}
+                avatarColor={avatarColor(meIndex)}
+                editing={editing}
+                saving={saving}
+                onEdit={() => setEditing((v) => !v)}
+                onSave={handleSave}
+                onCancel={() => setEditing(false)}
+              />
+            </div>
+          )}
+
+          <div className={styles.householdHeader}>
+            <p className={cx("ui-sectionLabel", styles.householdTitle)}>
+              {selectedGroup?.name || "Your group"}
+            </p>
+            <button
+              type="button"
+              onClick={handleNotifyHousehold}
+              disabled={notifyingHousehold}
+              aria-label="Notify all to update"
+              title="Notify all to update"
+              className={cx("ui-iconPrimary", styles.notifyButton)}
+            >
+              <img src="/megaphone.png" alt="" className={styles.notifyIcon} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setJamModalOpen(true)}
+              aria-label={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+              title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+              className={cx("ui-iconPrimary", styles.jamButton)}
+            >
+              <img src="/spotify.png" alt="" className={styles.spotifyIcon} />
+            </button>
+          </div>
+          <div className={styles.householdGrid}>
+            {others.map((roommate) => (
+              <StatusCard
+                key={roommate.id}
+                roommate={roommate}
+                onPoke={handlePokeRoommate}
+              />
+            ))}
+          </div>
         </main>
 
         {jam && (

@@ -96,12 +96,6 @@ export class BaseModule {
   }
 }
 
-export class EventModule extends BaseModule {
-  get typeLabel() {
-    return this.payload.isLive ? 'Live event' : 'Event'
-  }
-}
-
 MODULE_CLASS_BY_TYPE.events = EventModule
 
 export function createModule(feedItem) {

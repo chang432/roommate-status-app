@@ -355,7 +355,10 @@ export default function ShowTrackerFeature({
             toggleExpanded(show.id);
           }
         }}
-        className={cx(styles.card, isArchived ? styles.completedCard : "")}
+        className={cx(
+          activity.isLive ? styles.activeCard : styles.card,
+          isArchived ? styles.completedCard : "",
+        )}
       >
         <div className={styles.summary} {...editTrigger.headerProps}>
           <div className={styles.summaryText}>
@@ -366,7 +369,7 @@ export default function ShowTrackerFeature({
                 <span className={styles.completedChip}>Archived</span>
               )}
               {show.isWatchpartyLive && (
-                <span className={styles.liveChip}>Watchparty</span>
+                <span className={styles.liveChip}>Live</span>
               )}
             </div>
             <p className={styles.meta}>
@@ -390,8 +393,8 @@ export default function ShowTrackerFeature({
                 ? "Ending…"
                 : "Starting…"
               : show.isWatchpartyLive
-                ? "End Watchparty"
-                : "Start Watchparty"}
+                ? "End"
+                : "Start"}
           </button>
           {!isArchived && !isMember && (
             <button
