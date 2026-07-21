@@ -5,16 +5,17 @@ import {
   adjustProgress,
   archiveShow,
   deleteShow,
+  endWatchparty,
   joinShow,
   leaveShow,
   restoreShow,
   setProgress,
+  startWatchparty,
 } from "../api/client.js";
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
 import { LONG_PRESS_MS } from "../utils/useLongPress.js";
 import { relativeTime } from "../utils/time.js";
-import SwipeActionRow from "./SwipeActionRow.jsx";
 import styles from "./styling/ShowTrackerFeature.module.css";
 
 // A single progress chip: tapping increments immediately, while a long press
@@ -193,6 +194,7 @@ export default function ShowTrackerFeature({
   const [archivingShowId, setArchivingShowId] = useState(null);
   const [restoringShowId, setRestoringShowId] = useState(null);
   const [deletingShowId, setDeletingShowId] = useState(null);
+  const [watchpartyShowId, setWatchpartyShowId] = useState(null);
   useExpandOnModuleFocus(setExpandedId);
 
   function toggleExpanded(id) {
@@ -263,6 +265,20 @@ export default function ShowTrackerFeature({
     }
   }
 
+  async function handleWatchparty(show) {
+    if (watchpartyShowId) return;
+    setWatchpartyShowId(show.id);
+    setError("");
+    try {
+      const action = show.isWatchpartyLive ? endWatchparty : startWatchparty;
+      onShowsChange(await action(show.id, user.id));
+    } catch (err) {
+      setError(err.message || "Could not update the watchparty. Try again.");
+    } finally {
+      setWatchpartyShowId(null);
+    }
+  }
+
   async function handleAdjust(show, member, field, delta) {
     if (busyMemberIds.includes(member.id)) return;
     markMemberBusy(member.id);
@@ -307,58 +323,25 @@ export default function ShowTrackerFeature({
     const isArchived = show.isArchived;
     // Only non-watchers see the Join button; clicking it adds them.
     const isMember = show.members.some((member) => member.id === user.id);
-    // Furthest-along watchers first: sort by season, then episode, descending.
-    // Copied so we never mutate the show list's member array in place.
     const orderedMembers = [...show.members].sort(
-      (a, b) => b.season - a.season || b.episode - a.episode,
+      (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
     );
-    const swipeActions = isArchived
-      ? [
-          {
-            label: restoringShowId === show.id ? "Restoring…" : "Restore",
-            pendingLabel: restoringShowId === show.id ? "Restoring…" : "Restore",
-            disabled: Boolean(restoringShowId || deletingShowId),
-            onClick: () => handleRestore(show),
-          },
-          {
-            label: deletingShowId === show.id ? "Deleting…" : "Delete",
-            pendingLabel: deletingShowId === show.id ? "Deleting…" : "Delete",
-            tone: "danger",
-            disabled: Boolean(restoringShowId || deletingShowId),
-            onClick: () => handleDelete(show),
-          },
-        ]
-      : [
-          {
-            label: archivingShowId === show.id ? "Archiving…" : "Archive",
-            pendingLabel: archivingShowId === show.id ? "Archiving…" : "Archive",
-            disabled: Boolean(archivingShowId || deletingShowId),
-            onClick: () => handleArchive(show),
-          },
-          {
-            label: deletingShowId === show.id ? "Deleting…" : "Delete",
-            pendingLabel: deletingShowId === show.id ? "Deleting…" : "Delete",
-            tone: "danger",
-            disabled: Boolean(archivingShowId || deletingShowId),
-            onClick: () => handleDelete(show),
-          },
-        ];
     return (
-      <SwipeActionRow key={show.id} actions={swipeActions} disabled={expanded}>
-        <div
-          role="button"
-          tabIndex={0}
-          aria-expanded={expanded}
-          {...editTrigger.keyboardProps}
-          onClick={() => toggleExpanded(show.id)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              toggleExpanded(show.id);
-            }
-          }}
-          className={cx(styles.card, isArchived ? styles.completedCard : "")}
-        >
+      <div
+        key={show.id}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        {...editTrigger.keyboardProps}
+        onClick={() => toggleExpanded(show.id)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleExpanded(show.id);
+          }
+        }}
+        className={cx(styles.card, isArchived ? styles.completedCard : "")}
+      >
         <div className={styles.summary} {...editTrigger.headerProps}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
@@ -366,6 +349,9 @@ export default function ShowTrackerFeature({
               <p className={styles.title}>{show.title}</p>
               {isArchived && (
                 <span className={styles.completedChip}>Archived</span>
+              )}
+              {show.isWatchpartyLive && (
+                <span className={styles.liveChip}>Watchparty</span>
               )}
             </div>
             <p className={styles.meta}>
@@ -429,11 +415,66 @@ export default function ShowTrackerFeature({
                   ))}
                 </ul>
               )}
+              <div
+                className={styles.showActions}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <span className={styles.showActionText}>
+                  {isArchived ? "Archived show" : "Show actions"}
+                </span>
+                {!isArchived && show.members.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => handleWatchparty(show)}
+                    disabled={watchpartyShowId === show.id}
+                    className={cx(
+                      "ui-pillButton",
+                      show.isWatchpartyLive ? "ui-pillDanger" : "ui-pillPrimary",
+                      styles.showActionButton,
+                    )}
+                  >
+                    {watchpartyShowId === show.id
+                      ? show.isWatchpartyLive
+                        ? "Ending…"
+                        : "Starting…"
+                      : show.isWatchpartyLive
+                        ? "End Watchparty"
+                        : "Start Watchparty"}
+                  </button>
+                ) : null}
+                {isArchived ? (
+                  <button
+                    type="button"
+                    onClick={() => handleRestore(show)}
+                    disabled={Boolean(restoringShowId || deletingShowId)}
+                    className={cx("ui-pillButton ui-pillSecondary", styles.showActionButton)}
+                  >
+                    {restoringShowId === show.id ? "Restoring…" : "Restore"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleArchive(show)}
+                    disabled={Boolean(archivingShowId || deletingShowId)}
+                    className={cx("ui-pillButton ui-pillSecondary", styles.showActionButton)}
+                  >
+                    {archivingShowId === show.id ? "Archiving…" : "Archive"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleDelete(show)}
+                  disabled={Boolean((isArchived ? restoringShowId : archivingShowId) || deletingShowId)}
+                  className={cx("ui-pillButton ui-pillDanger", styles.showActionButton)}
+                >
+                  {deletingShowId === show.id ? "Deleting…" : "Delete"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
         </div>
-      </SwipeActionRow>
     );
   }
 

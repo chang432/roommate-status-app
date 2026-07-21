@@ -11,7 +11,6 @@ import {
   setCommentLiked,
 } from "../api/client.js";
 import FeedComments from "./FeedComments.jsx";
-import SwipeActionRow from "./SwipeActionRow.jsx";
 import {
   activityTimeLabel,
   relativeTime,
@@ -155,56 +154,25 @@ export default function ProposeActivity({
     const expanded = expandedId === activity.id;
     const scheduleLabel = activityTimeLabel(activity);
     const isArchived = Boolean(activity.isArchived || activity.isExpired);
-    const swipeActions = isArchived
-      ? [
-          {
-            label: restoringId === activity.id ? "Restoring…" : "Restore",
-            pendingLabel: restoringId === activity.id ? "Restoring…" : "Restore",
-            disabled: Boolean(restoringId || deletingId),
-            onClick: () => handleRestore(activity),
-          },
-          {
-            label: deletingId === activity.id ? "Deleting…" : "Delete",
-            pendingLabel: deletingId === activity.id ? "Deleting…" : "Delete",
-            tone: "danger",
-            disabled: Boolean(restoringId || deletingId || activity.isLive),
-            onClick: () => handleDelete(activity),
-          },
-        ]
-      : [
-          {
-            label: archivingId === activity.id ? "Archiving…" : "Archive",
-            pendingLabel: archivingId === activity.id ? "Archiving…" : "Archive",
-            disabled: Boolean(archivingId || deletingId),
-            onClick: () => handleArchive(activity),
-          },
-          {
-            label: deletingId === activity.id ? "Deleting…" : "Delete",
-            pendingLabel: deletingId === activity.id ? "Deleting…" : "Delete",
-            tone: "danger",
-            disabled: Boolean(archivingId || deletingId || activity.isLive),
-            onClick: () => handleDelete(activity),
-          },
-        ];
     return (
-      <SwipeActionRow key={activity.id} actions={swipeActions} disabled={expanded}>
-        <div
-          role="button"
-          tabIndex={0}
-          aria-expanded={expanded}
-          {...editTrigger.keyboardProps}
-          onClick={() => toggleExpanded(activity.id)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              toggleExpanded(activity.id);
-            }
-          }}
-          className={cx(
-            activity.isLive ? styles.activeCard : styles.card,
-            isArchived ? styles.expiredCard : "",
-          )}
-        >
+      <div
+        key={activity.id}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        {...editTrigger.keyboardProps}
+        onClick={() => toggleExpanded(activity.id)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleExpanded(activity.id);
+          }
+        }}
+        className={cx(
+          activity.isLive ? styles.activeCard : styles.card,
+          isArchived ? styles.expiredCard : "",
+        )}
+      >
         <div className={styles.summary} {...editTrigger.headerProps}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
@@ -311,11 +279,57 @@ export default function ProposeActivity({
                 open={expanded}
                 readOnly={isArchived}
               />
+
+              <div
+                className={styles.deleteActions}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <span className={styles.deletePrompt}>
+                  {isArchived
+                    ? activity.isArchived
+                      ? "Archived event"
+                      : "Expired event"
+                    : "Event actions"}
+                </span>
+                <div className={styles.actionButtonRow}>
+                  {isArchived ? (
+                    <button
+                      type="button"
+                      onClick={() => handleRestore(activity)}
+                      disabled={Boolean(restoringId || deletingId)}
+                      className={cx("ui-pillButton ui-pillSecondary", styles.smallPill)}
+                    >
+                      {restoringId === activity.id ? "Restoring…" : "Restore"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleArchive(activity)}
+                      disabled={Boolean(archivingId || deletingId)}
+                      className={cx("ui-pillButton ui-pillSecondary", styles.smallPill)}
+                    >
+                      {archivingId === activity.id ? "Archiving…" : "Archive"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(activity)}
+                    disabled={Boolean(
+                      (isArchived ? restoringId : archivingId) ||
+                        deletingId ||
+                        activity.isLive,
+                    )}
+                    className={cx("ui-pillButton ui-pillDanger", styles.smallPill)}
+                  >
+                    {deletingId === activity.id ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
         </div>
-      </SwipeActionRow>
     );
   }
 

@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import ActivityCreateForm from "./ActivityCreateForm.jsx";
 import ChecklistCreateForm from "./ChecklistCreateForm.jsx";
 import ChecklistFeature from "./ChecklistFeature.jsx";
-import JamWidget, { JamShareForm } from "./JamWidget.jsx";
 import ModalShell from "./ModalShell.jsx";
 import ModuleEditForm from "./ModuleEditForm.jsx";
 import ProposeActivity from "./ProposeActivity.jsx";
@@ -33,22 +32,70 @@ const FEED_POLL_INTERVAL_MS = 5000;
 const EDIT_HEADER_SELECTOR = "[data-module-edit-header]";
 const EDIT_KEYBOARD_SELECTOR = "[data-module-edit-keyboard]";
 const INTERACTIVE_SELECTOR = "button, a, input, textarea, select, [role='button']";
+const SWIPE_MIN_X = 64;
+const SWIPE_MAX_Y = 48;
 
 const CREATE_LABEL_BY_TYPE = {
   events: "Create an event",
   requests: "Create a request",
   checklists: "Create a checklist",
   tv: "Add a show",
-  spotify: "Share Spotify Jam",
 };
 
-function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
+function modulePreferenceKey(userId, groupId) {
+  return `roomie-module-preferences:${userId}:${groupId}`;
+}
+
+function sanitizeModuleOrder(value) {
+  const available = MODULE_TYPES.filter((type) => type.id !== "all").map((type) => type.id);
+  const seen = new Set();
+  const ordered = Array.isArray(value)
+    ? value.filter((id) => available.includes(id) && !seen.has(id) && seen.add(id))
+    : [];
+  return [...ordered, ...available.filter((id) => !seen.has(id))];
+}
+
+function sanitizeAllTypes(value, orderedTypes) {
+  const selected = Array.isArray(value)
+    ? value.filter((id) => orderedTypes.includes(id))
+    : orderedTypes;
+  return selected.length > 0 ? selected : [orderedTypes[0]].filter(Boolean);
+}
+
+function readModulePreferences(userId, groupId) {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(modulePreferenceKey(userId, groupId)) || "null",
+    );
+    const order = sanitizeModuleOrder(stored?.order);
+    return { order, allTypes: sanitizeAllTypes(stored?.allTypes, order) };
+  } catch {
+    const order = sanitizeModuleOrder(null);
+    return { order, allTypes: sanitizeAllTypes(null, order) };
+  }
+}
+
+function ModuleNav({
+  activeType,
+  modules,
+  moduleTypes,
+  drawerOpen,
+  onClose,
+  onSelect,
+  editMode,
+  onEditModeChange,
+  allTypes,
+  onAllTypesChange,
+  onMoveType,
+}) {
   const counts = modules.reduce((acc, module) => {
     if (module.isArchived) return acc;
     acc[module.type] = (acc[module.type] ?? 0) + 1;
-    acc.all = (acc.all ?? 0) + 1;
     return acc;
   }, {});
+  counts.all = modules.filter(
+    (module) => !module.isArchived && allTypes.includes(module.type),
+  ).length;
 
   return (
     <>
@@ -66,31 +113,78 @@ function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
       >
         <div className={styles.moduleNavHeader}>
           <p className={styles.moduleNavEyebrow}>Modules</p>
-          <button
-            type="button"
-            className={styles.moduleNavClose}
-            onClick={onClose}
-          >
-            Close
-          </button>
+          <div className={styles.moduleNavHeaderActions}>
+            <button
+              type="button"
+              className={styles.moduleNavEdit}
+              onClick={() => onEditModeChange(!editMode)}
+            >
+              {editMode ? "Done" : "Edit"}
+            </button>
+            <button
+              type="button"
+              className={styles.moduleNavClose}
+              onClick={onClose}
+            >
+              Close
+            </button>
+          </div>
         </div>
         <div className={styles.moduleNavList}>
-          {MODULE_TYPES.map((type) => (
-            <button
-              key={type.id}
-              type="button"
-              onClick={() => onSelect(type.id)}
-              data-module-type={type.id === "all" ? undefined : type.id}
-              className={cx(
-                styles.moduleNavItem,
-                type.id === "all" ? "" : styles.modulePalette,
-                activeType === type.id ? styles.moduleNavItemActive : "",
-              )}
-            >
-              <span>{type.label}</span>
-              <span className={styles.moduleNavCount}>{counts[type.id] ?? 0}</span>
-            </button>
-          ))}
+          {moduleTypes.map((type, index) => {
+            const filterButton = (
+              <button
+                type="button"
+                onClick={() => onSelect(type.id)}
+                data-module-type={type.id === "all" ? undefined : type.id}
+                className={cx(
+                  styles.moduleNavItem,
+                  type.id === "all" ? "" : styles.modulePalette,
+                  activeType === type.id ? styles.moduleNavItemActive : "",
+                )}
+              >
+                <span>{type.label}</span>
+                <span className={styles.moduleNavCount}>{counts[type.id] ?? 0}</span>
+              </button>
+            );
+            if (!editMode || type.id === "all") return filterButton;
+            return (
+              <div key={type.id} className={styles.moduleNavEditRow}>
+                {filterButton}
+                <label className={styles.moduleNavAllToggle}>
+                  <input
+                    type="checkbox"
+                    checked={allTypes.includes(type.id)}
+                    onChange={(event) => {
+                      const next = event.target.checked
+                        ? [...allTypes, type.id]
+                        : allTypes.filter((id) => id !== type.id);
+                      onAllTypesChange(sanitizeAllTypes(next, moduleTypes.slice(1).map((item) => item.id)));
+                    }}
+                  />
+                  All
+                </label>
+                <div className={styles.moduleNavMoveButtons}>
+                  <button
+                    type="button"
+                    onClick={() => onMoveType(type.id, -1)}
+                    disabled={index <= 1}
+                    aria-label={`Move ${type.label} up`}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onMoveType(type.id, 1)}
+                    disabled={index >= moduleTypes.length - 1}
+                    aria-label={`Move ${type.label} down`}
+                  >
+                    ↓
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </aside>
     </>
@@ -177,16 +271,44 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
 
   const [modules, setModules] = useState([]);
   const [activeType, setActiveType] = useState("all");
+  const [moduleOrder, setModuleOrder] = useState(
+    () => readModulePreferences(user.id, user.activeGroupId).order,
+  );
+  const [allTypes, setAllTypes] = useState(
+    () => readModulePreferences(user.id, user.activeGroupId).allTypes,
+  );
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [moduleNavEditing, setModuleNavEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [liveError, setLiveError] = useState("");
   const [navigationError, setNavigationError] = useState("");
   const [transitioningId, setTransitioningId] = useState(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createType, setCreateType] = useState(null);
-  const [jamModalOpen, setJamModalOpen] = useState(false);
   const [editingModule, setEditingModule] = useState(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
+  const swipeStartRef = useRef(null);
+
+  const moduleTypes = useMemo(() => {
+    const byId = new Map(MODULE_TYPES.map((type) => [type.id, type]));
+    return [
+      byId.get("all"),
+      ...moduleOrder.map((id) => byId.get(id)).filter(Boolean),
+    ].filter(Boolean);
+  }, [moduleOrder]);
+
+  useEffect(() => {
+    const nextPreferences = readModulePreferences(user.id, user.activeGroupId);
+    setModuleOrder(nextPreferences.order);
+    setAllTypes(nextPreferences.allTypes);
+  }, [user.activeGroupId, user.id]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      modulePreferenceKey(user.id, user.activeGroupId),
+      JSON.stringify({ order: moduleOrder, allTypes }),
+    );
+  }, [allTypes, moduleOrder, user.activeGroupId, user.id]);
 
   const loadFeed = useCallback(async () => {
     try {
@@ -260,9 +382,9 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   const visibleModules = useMemo(
     () =>
       activeType === "all"
-        ? modules
+        ? modules.filter((module) => allTypes.includes(module.type))
         : modules.filter((module) => module.type === activeType),
-    [activeType, modules],
+    [activeType, allTypes, modules],
   );
   const activeModules = useMemo(
     () => visibleModules.filter((module) => !module.isArchived),
@@ -273,9 +395,8 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     [visibleModules],
   );
 
-  // The active Spotify Jam (if any) rides along in the feed as its own module.
-  const currentJam = useMemo(
-    () => modules.find((module) => module.type === "spotify")?.payload ?? null,
+  const feedModules = useMemo(
+    () => modules.filter((module) => module.type !== "spotify"),
     [modules],
   );
 
@@ -286,9 +407,9 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   const moduleTypeIds = useMemo(
     () =>
       new Set(
-        MODULE_TYPES.filter((type) => type.id !== "all").map((type) => type.id),
+        moduleTypes.filter((type) => type.id !== "all").map((type) => type.id),
       ),
-    [],
+    [moduleTypes],
   );
 
   const consumeFocusIntent = useCallback(
@@ -310,6 +431,11 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   // refreshes therefore cannot replay expansion, scrolling, or editor resets.
   useEffect(() => {
     if (!focusIntent) return;
+    if (focusIntent.type === "spotify") {
+      setNavigationError("");
+      consumeFocusIntent(focusIntent.token);
+      return;
+    }
     if (!moduleTypeIds.has(focusIntent.type)) {
       setNavigationError("That module type is not available.");
       consumeFocusIntent(focusIntent.token);
@@ -359,8 +485,10 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   const handleActivitiesChange = useCallback(() => loadFeed(), [loadFeed]);
   const handleRequestsChange = useCallback(() => loadFeed(), [loadFeed]);
   const handleChecklistsChange = useCallback(() => loadFeed(), [loadFeed]);
-  const handleShowsChange = useCallback(() => loadFeed(), [loadFeed]);
-  const handleJamChange = useCallback(() => loadFeed(), [loadFeed]);
+  const handleShowsChange = useCallback(() => {
+    window.dispatchEvent(new Event("roomie:shows-changed"));
+    loadFeed();
+  }, [loadFeed]);
 
   async function handleLiveTransition(activity, action) {
     if (transitioningId) return;
@@ -383,6 +511,41 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     setDrawerOpen(false);
   }
 
+  function moveModuleType(type, direction) {
+    setModuleOrder((current) => {
+      const next = [...current];
+      const index = next.indexOf(type);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= next.length) return current;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function selectAdjacentType(direction) {
+    const ids = moduleTypes.map((type) => type.id);
+    const index = ids.indexOf(activeType);
+    const safeIndex = index >= 0 ? index : 0;
+    const nextIndex = (safeIndex + direction + ids.length) % ids.length;
+    selectModuleType(ids[nextIndex]);
+  }
+
+  function handleFeedPointerDown(event) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.target.closest?.(INTERACTIVE_SELECTOR)) return;
+    swipeStartRef.current = { x: event.clientX, y: event.clientY };
+  }
+
+  function handleFeedPointerUp(event) {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start) return;
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (Math.abs(deltaX) < SWIPE_MIN_X || Math.abs(deltaY) > SWIPE_MAX_Y) return;
+    selectAdjacentType(deltaX < 0 ? 1 : -1);
+  }
+
   function openCreateModal() {
     setCreateType(activeType === "all" ? null : activeType);
     setCreateModalOpen(true);
@@ -392,7 +555,7 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     if (!createType) {
       return (
         <div className={styles.createPicker}>
-          {MODULE_TYPES.filter((type) => type.id !== "all").map((type) => (
+          {moduleTypes.filter((type) => type.id !== "all").map((type) => (
             <button
               key={type.id}
               type="button"
@@ -432,15 +595,6 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
           onShowsChange={handleShowsChange}
           onSuccess={() => setCreateModalOpen(false)}
           onCancel={() => setCreateModalOpen(false)}
-        />
-      );
-    }
-    if (createType === "spotify") {
-      return (
-        <JamShareForm
-          currentJam={currentJam}
-          onJamChange={handleJamChange}
-          onSuccess={() => setCreateModalOpen(false)}
         />
       );
     }
@@ -499,18 +653,6 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
         />
       );
     }
-    if (module.type === "spotify") {
-      return (
-        <JamWidget
-          jam={module.payload}
-          onJamChange={handleJamChange}
-          onReplace={() => setJamModalOpen(true)}
-          canEdit={module.isEditableBy(user.id)}
-          moduleTag={moduleTag}
-          editTrigger={editTrigger}
-        />
-      );
-    }
     return null;
   }
 
@@ -518,7 +660,7 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     ? CREATE_LABEL_BY_TYPE[createType]
     : "Create a module";
   const activeTypeLabel =
-    MODULE_TYPES.find((type) => type.id === activeType)?.label ?? "Modules";
+    moduleTypes.find((type) => type.id === activeType)?.label ?? "Modules";
   const createLabel =
     activeType === "all" ? "Create a module" : CREATE_LABEL_BY_TYPE[activeType];
 
@@ -538,13 +680,26 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
       <div className={styles.shell}>
         <ModuleNav
           activeType={activeType}
-          modules={modules}
+          modules={feedModules}
+          moduleTypes={moduleTypes}
           drawerOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           onSelect={selectModuleType}
+          editMode={moduleNavEditing}
+          onEditModeChange={setModuleNavEditing}
+          allTypes={allTypes}
+          onAllTypesChange={setAllTypes}
+          onMoveType={moveModuleType}
         />
 
-        <main className={styles.feedColumn}>
+        <main
+          className={styles.feedColumn}
+          onPointerDown={handleFeedPointerDown}
+          onPointerUp={handleFeedPointerUp}
+          onPointerCancel={() => {
+            swipeStartRef.current = null;
+          }}
+        >
           <div className={styles.feedHeader}>
             <div>
               <p className={styles.feedEyebrow}>Group feed</p>
@@ -629,19 +784,6 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
           widthClassName={styles.createModal}
         >
           {renderCreateContent()}
-        </ModalShell>
-      )}
-      {jamModalOpen && (
-        <ModalShell
-          title={currentJam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-          onClose={() => setJamModalOpen(false)}
-          widthClassName={styles.jamModal}
-        >
-          <JamShareForm
-            currentJam={currentJam}
-            onJamChange={handleJamChange}
-            onSuccess={() => setJamModalOpen(false)}
-          />
         </ModalShell>
       )}
       {editingModule && (

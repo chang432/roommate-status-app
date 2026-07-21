@@ -78,6 +78,10 @@
   @apply mb-4 flex items-center justify-between;
 }
 
+.moduleNavHeaderActions {
+  @apply flex items-center gap-2;
+}
+
 .moduleNavEyebrow {
   @apply text-[12px] font-black uppercase tracking-[0.08em] text-ink-soft;
 }
@@ -86,12 +90,32 @@
   @apply rounded-full border border-line px-3 py-1 text-[12px] font-bold text-ink-soft lg:hidden;
 }
 
+.moduleNavEdit {
+  @apply rounded-full border border-line px-3 py-1 text-[12px] font-bold text-ink-soft transition hover:border-accent hover:text-ink;
+}
+
 .moduleNavList {
   @apply space-y-2;
 }
 
 .moduleNavItem {
   @apply flex w-full items-center justify-between rounded-sm border border-transparent px-3 py-3 text-left text-[14px] font-black text-ink-soft transition hover:border-line hover:bg-surface-hover hover:text-ink;
+}
+
+.moduleNavEditRow {
+  @apply grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2;
+}
+
+.moduleNavAllToggle {
+  @apply flex items-center gap-1 text-[11px] font-black uppercase tracking-[0.04em] text-ink-soft;
+}
+
+.moduleNavMoveButtons {
+  @apply flex items-center gap-1;
+}
+
+.moduleNavMoveButtons button {
+  @apply grid h-8 w-8 place-items-center rounded-full border border-line text-[13px] font-black text-ink-soft transition hover:border-accent hover:text-ink disabled:cursor-not-allowed disabled:opacity-40;
 }
 
 .moduleNavItemActive {

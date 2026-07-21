@@ -14,7 +14,6 @@ import {
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
 import { relativeTime } from "../utils/time.js";
-import SwipeActionRow from "./SwipeActionRow.jsx";
 import styles from "./styling/ChecklistFeature.module.css";
 
 function ChecklistItemEditor({
@@ -241,53 +240,22 @@ export default function ChecklistFeature({
           checklists.map((checklist) => {
             const expanded = expandedId === checklist.id;
             const isArchived = checklist.isArchived;
-            const swipeActions = isArchived
-              ? [
-                  {
-                    label: restoringId === checklist.id ? "Restoring…" : "Restore",
-                    pendingLabel: restoringId === checklist.id ? "Restoring…" : "Restore",
-                    disabled: Boolean(restoringId || deletingChecklistId),
-                    onClick: () => handleRestore(checklist),
-                  },
-                  {
-                    label: deletingChecklistId === checklist.id ? "Deleting…" : "Delete",
-                    pendingLabel: deletingChecklistId === checklist.id ? "Deleting…" : "Delete",
-                    tone: "danger",
-                    disabled: Boolean(restoringId || deletingChecklistId),
-                    onClick: () => handleDeleteChecklist(checklist),
-                  },
-                ]
-              : [
-                  {
-                    label: archivingId === checklist.id ? "Archiving…" : "Archive",
-                    pendingLabel: archivingId === checklist.id ? "Archiving…" : "Archive",
-                    disabled: Boolean(archivingId || deletingChecklistId),
-                    onClick: () => handleArchive(checklist),
-                  },
-                  {
-                    label: deletingChecklistId === checklist.id ? "Deleting…" : "Delete",
-                    pendingLabel: deletingChecklistId === checklist.id ? "Deleting…" : "Delete",
-                    tone: "danger",
-                    disabled: Boolean(archivingId || deletingChecklistId),
-                    onClick: () => handleDeleteChecklist(checklist),
-                  },
-                ];
             return (
-              <SwipeActionRow key={checklist.id} actions={swipeActions} disabled={expanded}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={expanded}
-                  {...editTrigger.keyboardProps}
-                  onClick={() => toggleExpanded(checklist.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      toggleExpanded(checklist.id);
-                    }
-                  }}
-                  className={cx(styles.card, isArchived ? styles.archivedCard : "")}
-                >
+              <div
+                key={checklist.id}
+                role="button"
+                tabIndex={0}
+                aria-expanded={expanded}
+                {...editTrigger.keyboardProps}
+                onClick={() => toggleExpanded(checklist.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    toggleExpanded(checklist.id);
+                  }
+                }}
+                className={cx(styles.card, isArchived ? styles.archivedCard : "")}
+              >
                   <div className={styles.summary} {...editTrigger.headerProps}>
                     <div className={styles.summaryText}>
                       <div className={styles.titleRow}>
@@ -449,11 +417,43 @@ export default function ChecklistFeature({
                               Add item
                             </button>
                           ))}
+                        <div
+                          className={styles.actions}
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          {isArchived ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRestore(checklist)}
+                              disabled={Boolean(restoringId || deletingChecklistId)}
+                              className={cx("ui-pillButton ui-pillSecondary", styles.archiveButton)}
+                            >
+                              {restoringId === checklist.id ? "Restoring…" : "Restore"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleArchive(checklist)}
+                              disabled={Boolean(archivingId || deletingChecklistId)}
+                              className={cx("ui-pillButton ui-pillSecondary", styles.archiveButton)}
+                            >
+                              {archivingId === checklist.id ? "Archiving…" : "Archive"}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteChecklist(checklist)}
+                            disabled={Boolean((isArchived ? restoringId : archivingId) || deletingChecklistId)}
+                            className={cx("ui-pillButton ui-pillDanger", styles.archiveButton)}
+                          >
+                            {deletingChecklistId === checklist.id ? "Deleting…" : "Delete"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </SwipeActionRow>
+              </div>
             );
           })
         )}

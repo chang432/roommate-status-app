@@ -34,6 +34,7 @@ PROGRESS_FIELDS = ("season", "episode")
 # Distinct non-None results from the mutation helpers, so routes can map an
 # outcome to an HTTP status without touching boto3 details.
 MUTATION_ARCHIVED = "archived"  # edit rejected: the show is archived (read-only)
+WATCHPARTY_EMPTY = "empty"
 DELETE_OK = "deleted"
 DELETE_NOT_FOUND = "not_found"
 EDIT_NOT_FOUND = "not_found"
@@ -114,6 +115,14 @@ def _project(item: dict) -> dict:
         "isArchived": bool(item.get("isArchived", False)),
         "archivedBy": item.get("archivedBy"),
         "archivedById": item.get("archivedById"),
+        "isWatchpartyLive": item.get("watchpartyStartedAt") is not None,
+        "watchpartyStartedAt": (
+            int(item["watchpartyStartedAt"])
+            if item.get("watchpartyStartedAt") is not None
+            else None
+        ),
+        "watchpartyStartedBy": item.get("watchpartyStartedBy"),
+        "watchpartyStartedById": item.get("watchpartyStartedById"),
         "members": [_project_member(raw) for raw in item.get("members") or []],
     }
 
@@ -307,6 +316,70 @@ def adjust_progress(show_id: str, member_id: str, field: str, delta: int, group_
         return False
 
     return _mutate_members(show_id, group_id, mutate)
+
+
+def set_watchparty(show_id: str, user_id: str, name: str, group_id: str, live: bool):
+    """Start or end the show's live watchparty state."""
+    table = _get_table()
+    item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
+    if not _in_group(item, group_id):
+        return None
+    if item.get("isArchived", False):
+        return MUTATION_ARCHIVED
+    if live and not item.get("members"):
+        return WATCHPARTY_EMPTY
+
+    now_ms = int(time.time() * 1000)
+    if live:
+        update = dict(
+            UpdateExpression=(
+                "SET watchpartyStartedAt = :now, watchpartyStartedById = :user_id, "
+                "watchpartyStartedBy = :name, updatedAt = :now"
+            ),
+            ExpressionAttributeValues={
+                ":now": now_ms,
+                ":user_id": user_id,
+                ":name": name,
+                ":groupId": group_id,
+                ":false": False,
+            },
+        )
+    else:
+        update = dict(
+            UpdateExpression=(
+                "SET updatedAt = :now REMOVE watchpartyStartedAt, "
+                "watchpartyStartedById, watchpartyStartedBy"
+            ),
+            ExpressionAttributeValues={
+                ":now": now_ms,
+                ":groupId": group_id,
+                ":false": False,
+            },
+        )
+
+    try:
+        resp = table.update_item(
+            Key={"id": show_id},
+            ConditionExpression=(
+                "attribute_exists(id) AND groupId = :groupId AND "
+                "(attribute_not_exists(isArchived) OR isArchived = :false)"
+            ),
+            ReturnValues="ALL_NEW",
+            **update,
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None
+        raise
+    return _project(resp["Attributes"])
+
+
+def start_watchparty(show_id: str, user_id: str, name: str, group_id: str):
+    return set_watchparty(show_id, user_id, name, group_id, True)
+
+
+def end_watchparty(show_id: str, user_id: str, name: str, group_id: str):
+    return set_watchparty(show_id, user_id, name, group_id, False)
 
 
 def _set_archived(show_id: str, user_id: str, name: str, group_id: str, archived: bool):

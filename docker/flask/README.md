@@ -56,6 +56,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/shows/<id>/archive`                               | `{ requesterId }`                          | full updated show list                                  |
 | `POST /api/shows/<id>/restore`                               | `{ requesterId }`                          | full updated show list                                  |
 | `DELETE /api/shows/<id>`                                     | `{ requesterId }`                          | full updated show list                                  |
+| `POST /api/shows/<id>/watchparty/start`                      | `{ requesterId }`                          | full updated show list                                  |
+| `POST /api/shows/<id>/watchparty/end`                        | `{ requesterId }`                          | full updated show list                                  |
 | `GET /api/jam`                                               | `?userId=<id>`                             | active Spotify Jam or `null`                            |
 | `POST /api/jam`                                              | `{ hostId, link }`                         | active Spotify Jam, replacing prior Jam                 |
 | `DELETE /api/jam`                                            | `{ hostId }`                               | `null` after any roommate removes active Jam            |
@@ -76,7 +78,9 @@ invite code. The current seeded household uses `groupId = "yorkshire"`.
 The module feed (`/api/feed`) normalizes events, requests, checklists,
 TV shows, and the singleton Spotify Jam into `{ id, type, createdAt, updatedAt,
 sortAt, title, subtitle, actor, isArchived, payload }` records sorted oldest-to-newest by
-`updatedAt` (falling back to `createdAt` for legacy rows). New activities store
+`updatedAt` (falling back to `createdAt` for legacy rows). The frontend keeps
+Spotify outside the module filter and renders it beside the household notify
+button. New activities store
 both the creator's stable roommate id (`proposedById`) and
 canonical display name (`proposedBy`). Any roommate can archive or delete an activity.
 Archiving sets `isArchived` metadata without removing the row, and restoring an

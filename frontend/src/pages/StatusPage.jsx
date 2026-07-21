@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import Brandmark from "../components/Brandmark.jsx";
 import EnableNotifications from "../components/EnableNotifications.jsx";
 import GroupFeed from "../components/GroupFeed.jsx";
+import JamWidget, { JamShareForm } from "../components/JamWidget.jsx";
 import GroupSwitcherDrawer from "../components/GroupSwitcherDrawer.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
 import ModalShell from "../components/ModalShell.jsx";
@@ -14,9 +15,12 @@ import YouCard from "../components/YouCard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   endActivity,
+  endWatchparty,
   getActivities,
   getGroups,
+  getJam,
   getRoommates,
+  getShows,
   notifyRoommatesToUpdateStatus,
   pokeRoommate,
   startActivity,
@@ -42,6 +46,8 @@ export default function StatusPage() {
 
   const [roommates, setRoommates] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [shows, setShows] = useState([]);
+  const [jam, setJam] = useState(null);
   const [statusLoadedGroupId, setStatusLoadedGroupId] = useState(null);
   const [feedLoadedGroupId, setFeedLoadedGroupId] = useState(null);
   const [error, setError] = useState("");
@@ -52,6 +58,7 @@ export default function StatusPage() {
   const [notifyingHousehold, setNotifyingHousehold] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
+  const [jamModalOpen, setJamModalOpen] = useState(false);
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [groupsError, setGroupsError] = useState("");
@@ -121,9 +128,29 @@ export default function StatusPage() {
     }
   }, [user.activeGroupId, user.id]);
 
+  const loadJam = useCallback(async () => {
+    const groupId = user.activeGroupId;
+    try {
+      const nextJam = await getJam(user.id);
+      if (activeGroupIdRef.current === groupId) setJam(nextJam);
+    } catch {
+      if (activeGroupIdRef.current === groupId) setJam(null);
+    }
+  }, [user.activeGroupId, user.id]);
+
+  const loadShows = useCallback(async () => {
+    const groupId = user.activeGroupId;
+    try {
+      const nextShows = await getShows(user.id);
+      if (activeGroupIdRef.current === groupId) setShows(nextShows);
+    } catch {
+      if (activeGroupIdRef.current === groupId) setShows([]);
+    }
+  }, [user.activeGroupId, user.id]);
+
   const loadAll = useCallback(async () => {
-    await Promise.all([loadRoommates(), loadActivities()]);
-  }, [loadActivities, loadRoommates]);
+    await Promise.all([loadRoommates(), loadActivities(), loadJam(), loadShows()]);
+  }, [loadActivities, loadJam, loadRoommates, loadShows]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -160,9 +187,12 @@ export default function StatusPage() {
 
     function handleServiceWorkerMessage(event) {
       if (event.data?.type === "activities-changed") loadActivities();
+      if (event.data?.type === "jam-changed") loadJam();
+      if (event.data?.type === "shows-changed") loadShows();
     }
 
     startPolling();
+    window.addEventListener("roomie:shows-changed", loadShows);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     navigator.serviceWorker?.addEventListener(
       "message",
@@ -171,13 +201,14 @@ export default function StatusPage() {
 
     return () => {
       stopPolling();
+      window.removeEventListener("roomie:shows-changed", loadShows);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       navigator.serviceWorker?.removeEventListener(
         "message",
         handleServiceWorkerMessage,
       );
     };
-  }, [loadActivities]);
+  }, [loadActivities, loadJam, loadShows]);
 
   const { pull, refreshing, threshold } = usePullToRefresh(loadAll);
 
@@ -198,6 +229,7 @@ export default function StatusPage() {
   const freeCount = availableCount(displayedRoommates);
   const showBanner = freeCount >= AVAILABLE_THRESHOLD;
   const liveEvents = activities.filter((activity) => activity.isLive);
+  const liveWatchparties = shows.filter((show) => show.isWatchpartyLive);
   const selectedGroup = groups.find((group) => group.groupId === user.activeGroupId) ?? groups[0];
   const groupDataLoading =
     groupsLoading ||
@@ -228,6 +260,20 @@ export default function StatusPage() {
       handleActivitiesChange(await transition(activity.id, user.id));
     } catch (err) {
       setLiveError(err.message || `Could not ${action} the event. Try again.`);
+    } finally {
+      setTransitioningId(null);
+    }
+  }
+
+  async function handleWatchpartyEnd(show) {
+    if (transitioningId) return;
+    setTransitioningId(show.id);
+    setLiveError("");
+    try {
+      setShows(await endWatchparty(show.id, user.id));
+      window.dispatchEvent(new Event("roomie:shows-changed"));
+    } catch (err) {
+      setLiveError(err.message || "Could not end the watchparty. Try again.");
     } finally {
       setTransitioningId(null);
     }
@@ -374,7 +420,7 @@ export default function StatusPage() {
               <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
             )}
 
-            {liveEvents.length > 0 && (
+            {(liveEvents.length > 0 || liveWatchparties.length > 0) && (
               <div className={styles.liveEvents}>
                 {liveEvents.map((liveEvent) => (
                   <LiveEventBanner
@@ -383,6 +429,23 @@ export default function StatusPage() {
                     canEnd={liveEvent.proposedById === user.id}
                     ending={transitioningId === liveEvent.id}
                     onEnd={() => handleLiveTransition(liveEvent, "end")}
+                    user={user}
+                    onBannerClick={scrollToFeed}
+                  />
+                ))}
+                {liveWatchparties.map((show) => (
+                  <LiveEventBanner
+                    key={`watchparty:${show.id}`}
+                    event={{
+                      id: show.id,
+                      text: `Watching ${show.title}`,
+                      proposedBy: show.watchpartyStartedBy || "Someone",
+                      liveStartedAt: show.watchpartyStartedAt,
+                      memberIds: (show.members || []).map((member) => member.id),
+                    }}
+                    canEnd={(show.members || []).some((member) => member.id === user.id)}
+                    ending={transitioningId === show.id}
+                    onEnd={() => handleWatchpartyEnd(show)}
                     user={user}
                     onBannerClick={scrollToFeed}
                   />
@@ -421,6 +484,15 @@ export default function StatusPage() {
               >
                 <img src="/megaphone.png" alt="" className={styles.notifyIcon} />
               </button>
+              <button
+                type="button"
+                onClick={() => setJamModalOpen(true)}
+                aria-label={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+                title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+                className={cx("ui-iconPrimary", styles.jamButton)}
+              >
+                <img src="/spotify.png" alt="" className={styles.spotifyIcon} />
+              </button>
             </div>
             <div className={styles.householdGrid}>
               {others.map((roommate) => (
@@ -432,6 +504,16 @@ export default function StatusPage() {
               ))}
             </div>
         </main>
+
+        {jam && (
+          <div hidden={groupDataLoading}>
+            <JamWidget
+              jam={jam}
+              onJamChange={setJam}
+              onReplace={() => setJamModalOpen(true)}
+            />
+          </div>
+        )}
 
         <div ref={feedRef} hidden={groupDataLoading}>
           <GroupFeed
@@ -450,6 +532,19 @@ export default function StatusPage() {
               user={user}
               onSignOut={logout}
               onDeleteAccount={deleteAccount}
+            />
+          </ModalShell>
+        )}
+        {jamModalOpen && (
+          <ModalShell
+            title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
+            onClose={() => setJamModalOpen(false)}
+            widthClassName={styles.jamModal}
+          >
+            <JamShareForm
+              currentJam={jam}
+              onJamChange={setJam}
+              onSuccess={() => setJamModalOpen(false)}
             />
           </ModalShell>
         )}

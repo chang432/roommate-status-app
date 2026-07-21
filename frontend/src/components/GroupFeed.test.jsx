@@ -171,13 +171,14 @@ describe('GroupFeed module focus', () => {
     renderFeed('/', items)
     const user = userEvent.setup()
 
-    await screen.findByText("Andre's Jam is live")
+    await screen.findByText('Movie night')
     await user.click(screen.getByRole('button', { name: 'Create a module' }))
 
-    Object.keys(items.reduce((types, item) => ({ ...types, [item.type]: true }), {}))
-      .forEach((type) => {
-        expect(document.querySelectorAll(`[data-module-type="${type}"]`)).toHaveLength(3)
-      })
+    const themedTypes = ['events', 'requests', 'checklists', 'tv']
+    themedTypes.forEach((type) => {
+      expect(document.querySelectorAll(`[data-module-type="${type}"]`)).toHaveLength(3)
+    })
+    expect(document.querySelectorAll('[data-module-type="spotify"]')).toHaveLength(0)
     expect(screen.getByRole('button', { name: /^All modules/ })).not.toHaveAttribute(
       'data-module-type',
     )
@@ -197,14 +198,14 @@ describe('GroupFeed module focus', () => {
     expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1)
   })
 
-  it('scrolls a static Spotify module without adding expansion behavior', async () => {
+  it('consumes legacy Spotify module destinations without showing a filter error', async () => {
     const module = feedItem('spotify', 'activeJam#shire')
     renderFeed('/?module=spotify&item=activeJam%23shire', [module])
 
-    await screen.findByText("Andre's Jam is live")
-    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1))
+    await screen.findByText('No active modules here yet.')
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(''))
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { expanded: true })).not.toBeInTheDocument()
-    expect(screen.getByTestId('location')).toHaveTextContent('')
   })
 
   it('reveals archived targets before focusing them', async () => {
@@ -317,14 +318,13 @@ describe('GroupFeed module focus', () => {
     ['requests', 'Edit request', 'Request', 'Pick up milk'],
     ['checklists', 'Edit checklist', 'Checklist title', 'Kitchen reset'],
     ['tv', 'Edit show', 'Show title', 'Severance'],
-    ['spotify', 'Edit Spotify Jam', 'Spotify Jam link', 'https://spotify.link/jam'],
   ])('opens a prepopulated creator editor for %s', async (type, editLabel, fieldLabel, value) => {
     renderFeed('/', [feedItem(type)])
     const user = userEvent.setup()
 
-    await screen.findByText(type === 'spotify' ? "Andre's Jam is live" : value)
+    await screen.findByText(value)
     expect(screen.queryByRole('button', { name: editLabel })).not.toBeInTheDocument()
-    await longPress(editHeaderForText(type === 'spotify' ? "Andre's Jam is live" : value))
+    await longPress(editHeaderForText(value))
     expect(screen.getByRole('dialog', { name: editLabel })).toBeInTheDocument()
     expect(screen.getByLabelText(fieldLabel)).toHaveValue(value)
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -394,15 +394,6 @@ describe('GroupFeed module focus', () => {
     expect(editHeaderForText('Pick up milk')).toBeNull()
     await user.click(screen.getByRole('button', { name: /Archived \(1\)/ }))
     expect(editHeaderForText('Kitchen reset')).toBeNull()
-  })
-
-  it('keeps Spotify Replace available to roommates who do not own the Jam', async () => {
-    const spotify = feedItem('spotify')
-    spotify.payload.hostId = 'kayla'
-    spotify.payload.hostName = 'Kayla'
-    renderFeed('/', [spotify])
-
-    expect(await screen.findByRole('button', { name: 'Replace Jam' })).toBeInTheDocument()
   })
 
   it('removes the event-specific schedule editor', async () => {
