@@ -2,11 +2,15 @@ import { cx } from '../utils/classNames.js'
 import styles from './styling/Brandmark.module.css'
 
 // The little roof motif used in the headers for a "household" feel.
-export default function Brandmark({ className = '', iconClassName = '' }) {
+export default function Brandmark({ className = '', iconClassName = '', inverted = false }) {
   return (
     <div
       aria-hidden="true"
-      className={cx(styles.brandmark, className || styles.defaultSize)}
+      className={cx(
+        styles.brandmark,
+        inverted ? styles.inverted : '',
+        className || styles.defaultSize,
+      )}
     >
       <svg
         viewBox="0 0 24 24"

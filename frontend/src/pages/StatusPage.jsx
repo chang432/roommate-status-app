@@ -339,7 +339,7 @@ export default function StatusPage() {
           <button
             type="button"
             onClick={() => setGroupDrawerOpen(true)}
-            className={styles.groupSwitcherButton}
+            className={styles.brandmarkButton}
             aria-label={`Open group switcher. Current group: ${selectedGroup?.name || "unknown"}`}
             aria-haspopup="dialog"
             aria-expanded={groupDrawerOpen}
@@ -347,9 +347,8 @@ export default function StatusPage() {
             <Brandmark
               className={styles.brandmark}
               iconClassName={styles.brandmarkIcon}
+              inverted
             />
-            <span className={styles.groupSwitcherLabel}>Groups</span>
-            <span className={styles.groupSwitcherChevron} aria-hidden="true">⌄</span>
           </button>
           <div className={styles.headerText}>
             <p className={styles.currentGroupLabel}>Current group</p>
