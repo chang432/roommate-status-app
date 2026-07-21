@@ -34,14 +34,6 @@ import styles from "./StatusPage.module.css";
 
 const ACTIVITY_POLL_INTERVAL_MS = 5000;
 
-function whenLabel() {
-  const now = new Date();
-  const day = now.toLocaleDateString(undefined, { weekday: "long" });
-  const hour = now.getHours();
-  const part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-  return `${day} ${part} · status board`;
-}
-
 export default function StatusPage() {
   const { user, logout, deleteAccount, joinGroup, createGroup, selectGroup } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -351,9 +343,7 @@ export default function StatusPage() {
             />
           </button>
           <div className={styles.headerText}>
-            <p className={styles.currentGroupLabel}>Current group</p>
             <h1 className={styles.title}>{selectedGroup?.name || "Your group"}</h1>
-            <p className={styles.subtitle}>{whenLabel()}</p>
           </div>
           <button
             type="button"
