@@ -32,7 +32,7 @@ export default function EnableNotifications() {
   if (!supported) {
     return (
       <p className={styles.note}>
-        Want a nudge when roomies are free? On iPhone, tap Share →{" "}
+        Your notifs are off??? But why? <br /> On iPhone, tap Share →{" "}
         <b>Add to Home Screen</b>, then open this app from the new icon to
         enable notifications.
       </p>
