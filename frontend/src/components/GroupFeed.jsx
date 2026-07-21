@@ -86,8 +86,10 @@ function ModuleNav({
   onEditModeChange,
   allTypes,
   onAllTypesChange,
-  onMoveType,
+  onReorderType,
 }) {
+  const [allDropdownOpen, setAllDropdownOpen] = useState(false);
+  const [draggingType, setDraggingType] = useState(null);
   const counts = modules.reduce((acc, module) => {
     if (module.isArchived) return acc;
     acc[module.type] = (acc[module.type] ?? 0) + 1;
@@ -96,6 +98,22 @@ function ModuleNav({
   counts.all = modules.filter(
     (module) => !module.isArchived && allTypes.includes(module.type),
   ).length;
+  const editableTypes = moduleTypes.filter((type) => type.id !== "all");
+  const selectedAllLabels = editableTypes
+    .filter((type) => allTypes.includes(type.id))
+    .map((type) => type.shortLabel || type.label);
+
+  function handleAllTypeToggle(typeId, checked) {
+    const next = checked
+      ? [...allTypes, typeId]
+      : allTypes.filter((id) => id !== typeId);
+    onAllTypesChange(
+      sanitizeAllTypes(
+        next,
+        editableTypes.map((type) => type.id),
+      ),
+    );
+  }
 
   return (
     <>
@@ -131,9 +149,10 @@ function ModuleNav({
           </div>
         </div>
         <div className={styles.moduleNavList}>
-          {moduleTypes.map((type, index) => {
+          {moduleTypes.map((type) => {
             const filterButton = (
               <button
+                key={type.id}
                 type="button"
                 onClick={() => onSelect(type.id)}
                 data-module-type={type.id === "all" ? undefined : type.id}
@@ -147,41 +166,78 @@ function ModuleNav({
                 <span className={styles.moduleNavCount}>{counts[type.id] ?? 0}</span>
               </button>
             );
-            if (!editMode || type.id === "all") return filterButton;
-            return (
-              <div key={type.id} className={styles.moduleNavEditRow}>
-                {filterButton}
-                <label className={styles.moduleNavAllToggle}>
-                  <input
-                    type="checkbox"
-                    checked={allTypes.includes(type.id)}
-                    onChange={(event) => {
-                      const next = event.target.checked
-                        ? [...allTypes, type.id]
-                        : allTypes.filter((id) => id !== type.id);
-                      onAllTypesChange(sanitizeAllTypes(next, moduleTypes.slice(1).map((item) => item.id)));
-                    }}
-                  />
-                  All
-                </label>
-                <div className={styles.moduleNavMoveButtons}>
-                  <button
-                    type="button"
-                    onClick={() => onMoveType(type.id, -1)}
-                    disabled={index <= 1}
-                    aria-label={`Move ${type.label} up`}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onMoveType(type.id, 1)}
-                    disabled={index >= moduleTypes.length - 1}
-                    aria-label={`Move ${type.label} down`}
-                  >
-                    ↓
-                  </button>
+            if (!editMode) return filterButton;
+            if (type.id === "all") {
+              return (
+                <div key={type.id} className={styles.moduleNavAllEditor}>
+                  <div className={styles.moduleNavEditRow}>
+                    {filterButton}
+                    <button
+                      type="button"
+                      className={styles.moduleNavAllMenuButton}
+                      onClick={() => setAllDropdownOpen((current) => !current)}
+                      aria-expanded={allDropdownOpen}
+                    >
+                      {selectedAllLabels.length === editableTypes.length
+                        ? "All modules"
+                        : `${selectedAllLabels.length} selected`}
+                      <span aria-hidden="true">{allDropdownOpen ? "▴" : "▾"}</span>
+                    </button>
+                  </div>
+                  {allDropdownOpen ? (
+                    <div className={styles.moduleNavAllMenu}>
+                      {editableTypes.map((option) => (
+                        <label key={option.id} className={styles.moduleNavAllOption}>
+                          <input
+                            type="checkbox"
+                            checked={allTypes.includes(option.id)}
+                            onChange={(event) =>
+                              handleAllTypeToggle(option.id, event.target.checked)
+                            }
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
+              );
+            }
+            return (
+              <div
+                key={type.id}
+                className={cx(
+                  styles.moduleNavEditRow,
+                  draggingType === type.id ? styles.moduleNavEditRowDragging : "",
+                )}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const draggedId =
+                    event.dataTransfer.getData("text/plain") || draggingType;
+                  setDraggingType(null);
+                  if (draggedId && draggedId !== type.id) {
+                    onReorderType(draggedId, type.id);
+                  }
+                }}
+              >
+                {filterButton}
+                <button
+                  type="button"
+                  draggable
+                  className={styles.moduleNavDragHandle}
+                  aria-label={`Drag ${type.label} to reorder`}
+                  onDragStart={(event) => {
+                    setDraggingType(type.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", type.id);
+                  }}
+                  onDragEnd={() => setDraggingType(null)}
+                >
+                  ☰
+                </button>
               </div>
             );
           })}
@@ -511,13 +567,14 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     setDrawerOpen(false);
   }
 
-  function moveModuleType(type, direction) {
+  function reorderModuleType(draggedType, targetType) {
     setModuleOrder((current) => {
       const next = [...current];
-      const index = next.indexOf(type);
-      const target = index + direction;
-      if (index < 0 || target < 0 || target >= next.length) return current;
-      [next[index], next[target]] = [next[target], next[index]];
+      const fromIndex = next.indexOf(draggedType);
+      const toIndex = next.indexOf(targetType);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return current;
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
       return next;
     });
   }
@@ -689,7 +746,7 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
           onEditModeChange={setModuleNavEditing}
           allTypes={allTypes}
           onAllTypesChange={setAllTypes}
-          onMoveType={moveModuleType}
+          onReorderType={reorderModuleType}
         />
 
         <main

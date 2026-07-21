@@ -103,19 +103,31 @@
 }
 
 .moduleNavEditRow {
-  @apply grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2;
+  @apply grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2;
 }
 
-.moduleNavAllToggle {
-  @apply flex items-center gap-1 text-[11px] font-black uppercase tracking-[0.04em] text-ink-soft;
+.moduleNavEditRowDragging {
+  @apply opacity-55;
 }
 
-.moduleNavMoveButtons {
-  @apply flex items-center gap-1;
+.moduleNavDragHandle {
+  @apply grid h-9 w-9 cursor-grab place-items-center rounded-full border border-line bg-card text-[16px] font-black leading-none text-ink-soft transition hover:border-accent hover:text-ink active:cursor-grabbing;
 }
 
-.moduleNavMoveButtons button {
-  @apply grid h-8 w-8 place-items-center rounded-full border border-line text-[13px] font-black text-ink-soft transition hover:border-accent hover:text-ink disabled:cursor-not-allowed disabled:opacity-40;
+.moduleNavAllEditor {
+  @apply space-y-2;
+}
+
+.moduleNavAllMenuButton {
+  @apply flex h-9 min-w-[96px] items-center justify-center gap-2 rounded-full border border-line bg-card px-3 text-[11px] font-black uppercase tracking-[0.04em] text-ink-soft transition hover:border-accent hover:text-ink;
+}
+
+.moduleNavAllMenu {
+  @apply rounded-sm border border-line bg-surface-muted p-2 shadow-soft;
+}
+
+.moduleNavAllOption {
+  @apply flex items-center gap-2 rounded-sm px-2 py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-surface-hover hover:text-ink;
 }
 
 .moduleNavItemActive {
