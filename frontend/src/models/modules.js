@@ -56,7 +56,7 @@ export const MODULE_DEFINITIONS = {
 }
 
 export const MODULE_TYPES = [
-  { id: 'all', label: 'All modules', shortLabel: 'All' },
+  { id: 'all', label: 'All', shortLabel: 'All' },
   ...Object.values(MODULE_DEFINITIONS)
     .filter(({ id }) => id !== 'spotify')
     .map(({ id, label, shortLabel }) => ({

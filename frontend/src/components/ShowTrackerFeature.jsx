@@ -101,7 +101,11 @@ function CounterChip({
             type="button"
             disabled={busy || readOnly}
             className={readOnly ? styles.counterStatic : styles.counterChip}
-            title={readOnly ? `${label} ${value}` : `Tap to advance ${noun}; long-press to edit`}
+            title={
+              readOnly
+                ? `${label} ${value}`
+                : `Tap to advance ${noun}; long-press to edit`
+            }
             onPointerDown={startPress}
             onPointerUp={cancelPress}
             onPointerLeave={cancelPress}
@@ -129,7 +133,14 @@ function CounterChip({
 // Edits are open to everyone, so no ownership check gates the controls. A
 // completed show renders read-only, so its watchers show progress without the
 // increment/edit/remove controls.
-function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove }) {
+function WatcherRow({
+  member,
+  busy,
+  readOnly,
+  onAdjust,
+  onSetProgress,
+  onRemove,
+}) {
   return (
     <li className={styles.watcher}>
       <div className={styles.watcherHead}>
@@ -284,7 +295,9 @@ export default function ShowTrackerFeature({
     markMemberBusy(member.id);
     setError("");
     try {
-      onShowsChange(await adjustProgress(show.id, member.id, field, delta, user.id));
+      onShowsChange(
+        await adjustProgress(show.id, member.id, field, delta, user.id),
+      );
     } catch (err) {
       setError(err.message || `Could not update the ${field}. Try again.`);
     } finally {
@@ -297,7 +310,9 @@ export default function ShowTrackerFeature({
     markMemberBusy(member.id);
     setError("");
     try {
-      onShowsChange(await setProgress(show.id, member.id, field, value, user.id));
+      onShowsChange(
+        await setProgress(show.id, member.id, field, value, user.id),
+      );
     } catch (err) {
       setError(err.message || `Could not update the ${field}. Try again.`);
     } finally {
@@ -323,8 +338,8 @@ export default function ShowTrackerFeature({
     const isArchived = show.isArchived;
     // Only non-watchers see the Join button; clicking it adds them.
     const isMember = show.members.some((member) => member.id === user.id);
-    const orderedMembers = [...show.members].sort(
-      (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    const orderedMembers = [...show.members].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
     );
     return (
       <div
@@ -360,6 +375,24 @@ export default function ShowTrackerFeature({
               {relativeTime(show.createdAt)}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => handleWatchparty(show)}
+            disabled={watchpartyShowId === show.id}
+            className={cx(
+              "ui-pillButton",
+              show.isWatchpartyLive ? "ui-pillDanger" : "ui-pillPrimary",
+              styles.showActionButton,
+            )}
+          >
+            {watchpartyShowId === show.id
+              ? show.isWatchpartyLive
+                ? "Ending…"
+                : "Starting…"
+              : show.isWatchpartyLive
+                ? "End Watchparty"
+                : "Start Watchparty"}
+          </button>
           {!isArchived && !isMember && (
             <button
               type="button"
@@ -423,32 +456,15 @@ export default function ShowTrackerFeature({
                 <span className={styles.showActionText}>
                   {isArchived ? "Archived show" : "Show actions"}
                 </span>
-                {!isArchived && show.members.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => handleWatchparty(show)}
-                    disabled={watchpartyShowId === show.id}
-                    className={cx(
-                      "ui-pillButton",
-                      show.isWatchpartyLive ? "ui-pillDanger" : "ui-pillPrimary",
-                      styles.showActionButton,
-                    )}
-                  >
-                    {watchpartyShowId === show.id
-                      ? show.isWatchpartyLive
-                        ? "Ending…"
-                        : "Starting…"
-                      : show.isWatchpartyLive
-                        ? "End Watchparty"
-                        : "Start Watchparty"}
-                  </button>
-                ) : null}
                 {isArchived ? (
                   <button
                     type="button"
                     onClick={() => handleRestore(show)}
                     disabled={Boolean(restoringShowId || deletingShowId)}
-                    className={cx("ui-pillButton ui-pillSecondary", styles.showActionButton)}
+                    className={cx(
+                      "ui-pillButton ui-pillSecondary",
+                      styles.showActionButton,
+                    )}
                   >
                     {restoringShowId === show.id ? "Restoring…" : "Restore"}
                   </button>
@@ -457,7 +473,10 @@ export default function ShowTrackerFeature({
                     type="button"
                     onClick={() => handleArchive(show)}
                     disabled={Boolean(archivingShowId || deletingShowId)}
-                    className={cx("ui-pillButton ui-pillSecondary", styles.showActionButton)}
+                    className={cx(
+                      "ui-pillButton ui-pillSecondary",
+                      styles.showActionButton,
+                    )}
                   >
                     {archivingShowId === show.id ? "Archiving…" : "Archive"}
                   </button>
@@ -465,8 +484,14 @@ export default function ShowTrackerFeature({
                 <button
                   type="button"
                   onClick={() => handleDelete(show)}
-                  disabled={Boolean((isArchived ? restoringShowId : archivingShowId) || deletingShowId)}
-                  className={cx("ui-pillButton ui-pillDanger", styles.showActionButton)}
+                  disabled={Boolean(
+                    (isArchived ? restoringShowId : archivingShowId) ||
+                    deletingShowId,
+                  )}
+                  className={cx(
+                    "ui-pillButton ui-pillDanger",
+                    styles.showActionButton,
+                  )}
                 >
                   {deletingShowId === show.id ? "Deleting…" : "Delete"}
                 </button>
@@ -474,7 +499,7 @@ export default function ShowTrackerFeature({
             </div>
           </div>
         </div>
-        </div>
+      </div>
     );
   }
 
