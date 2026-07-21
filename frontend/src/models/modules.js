@@ -96,8 +96,6 @@ export class BaseModule {
   }
 }
 
-MODULE_CLASS_BY_TYPE.events = EventModule
-
 export function createModule(feedItem) {
   const ModuleClass = MODULE_CLASS_BY_TYPE[feedItem.type] ?? BaseModule
   return new ModuleClass(feedItem)
