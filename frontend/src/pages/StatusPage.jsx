@@ -50,7 +50,8 @@ export default function StatusPage() {
 
   const [roommates, setRoommates] = useState([]);
   const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [statusLoadedGroupId, setStatusLoadedGroupId] = useState(null);
+  const [feedLoadedGroupId, setFeedLoadedGroupId] = useState(null);
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
   const [transitioningId, setTransitioningId] = useState(null);
@@ -62,6 +63,11 @@ export default function StatusPage() {
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [groupsError, setGroupsError] = useState("");
+  const activeGroupIdRef = useRef(user.activeGroupId);
+
+  // Ignore a response for a group the user has already left. This keeps an
+  // older, slower request from replacing the newly selected household's data.
+  activeGroupIdRef.current = user.activeGroupId;
 
   const loadGroups = useCallback(async () => {
     try {
@@ -94,20 +100,32 @@ export default function StatusPage() {
   }, [loadGroups]);
 
   const loadRoommates = useCallback(async () => {
+    const groupId = user.activeGroupId;
     try {
-      setRoommates(await getRoommates(user.id, user.activeGroupId));
-      setError("");
+      const nextRoommates = await getRoommates(user.id, groupId);
+      if (activeGroupIdRef.current === groupId) {
+        setRoommates(nextRoommates);
+        setError("");
+      }
     } catch {
-      setError("Could not load roommate statuses.");
+      if (activeGroupIdRef.current === groupId) {
+        setError("Could not load roommate statuses.");
+      }
     }
   }, [user.activeGroupId, user.id]);
 
   const loadActivities = useCallback(async () => {
+    const groupId = user.activeGroupId;
     try {
-      setActivities(await getActivities(user.id, user.activeGroupId));
-      setLiveError("");
+      const nextActivities = await getActivities(user.id, groupId);
+      if (activeGroupIdRef.current === groupId) {
+        setActivities(nextActivities);
+        setLiveError("");
+      }
     } catch {
-      setLiveError("Could not load household events.");
+      if (activeGroupIdRef.current === groupId) {
+        setLiveError("Could not load household events.");
+      }
     }
   }, [user.activeGroupId, user.id]);
 
@@ -116,8 +134,14 @@ export default function StatusPage() {
   }, [loadActivities, loadRoommates]);
 
   useEffect(() => {
-    loadAll().finally(() => setLoading(false));
-  }, [loadAll]);
+    let isCurrent = true;
+    loadAll().finally(() => {
+      if (isCurrent) setStatusLoadedGroupId(user.activeGroupId);
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [loadAll, user.activeGroupId]);
 
   useEffect(() => {
     let pollId = null;
@@ -183,6 +207,10 @@ export default function StatusPage() {
   const showBanner = freeCount >= AVAILABLE_THRESHOLD;
   const liveEvents = activities.filter((activity) => activity.isLive);
   const selectedGroup = groups.find((group) => group.groupId === user.activeGroupId) ?? groups[0];
+  const groupDataLoading =
+    groupsLoading ||
+    statusLoadedGroupId !== user.activeGroupId ||
+    feedLoadedGroupId !== user.activeGroupId;
 
   useEffect(() => {
     if (!me || searchParams.get("updateStatus") !== "1") return;
@@ -248,6 +276,24 @@ export default function StatusPage() {
     feedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  const handleGroupFeedLoadStateChange = useCallback((groupId, isLoading) => {
+    if (isLoading) {
+      setFeedLoadedGroupId((loadedGroupId) =>
+        loadedGroupId === groupId ? null : loadedGroupId,
+      );
+      return;
+    }
+    setFeedLoadedGroupId(groupId);
+  }, []);
+
+  const handleGroupSelect = useCallback((groupId) => {
+    setGroupDrawerOpen(false);
+    if (groupId === user.activeGroupId) return;
+    setStatusLoadedGroupId(null);
+    setFeedLoadedGroupId(null);
+    selectGroup(groupId);
+  }, [selectGroup, user.activeGroupId]);
+
   async function handleJoinGroup(code) {
     const joined = await joinGroup(code);
     const { groups: memberships } = await getGroups(joined.id);
@@ -277,10 +323,7 @@ export default function StatusPage() {
         loading={groupsLoading}
         error={groupsError}
         onClose={() => setGroupDrawerOpen(false)}
-        onSelect={(groupId) => {
-          selectGroup(groupId);
-          setGroupDrawerOpen(false);
-        }}
+        onSelect={handleGroupSelect}
         onJoin={handleJoinGroup}
         onCreate={handleCreateGroup}
       />
@@ -296,16 +339,21 @@ export default function StatusPage() {
           <button
             type="button"
             onClick={() => setGroupDrawerOpen(true)}
-            className={styles.brandmarkButton}
-            aria-label="Open your groups"
+            className={styles.groupSwitcherButton}
+            aria-label={`Open group switcher. Current group: ${selectedGroup?.name || "unknown"}`}
+            aria-haspopup="dialog"
+            aria-expanded={groupDrawerOpen}
           >
             <Brandmark
               className={styles.brandmark}
               iconClassName={styles.brandmarkIcon}
             />
+            <span className={styles.groupSwitcherLabel}>Groups</span>
+            <span className={styles.groupSwitcherChevron} aria-hidden="true">⌄</span>
           </button>
           <div className={styles.headerText}>
-            <h1 className={styles.title}>{selectedGroup?.name || "Roomie"} Status</h1>
+            <p className={styles.currentGroupLabel}>Current group</p>
+            <h1 className={styles.title}>{selectedGroup?.name || "Your group"}</h1>
             <p className={styles.subtitle}>{whenLabel()}</p>
           </div>
           <button
@@ -325,10 +373,14 @@ export default function StatusPage() {
           <p className={cx("ui-errorBox", styles.pageError)}>{error}</p>
         )}
 
-        {loading ? (
-          <p className={styles.loading}>Loading the shire…</p>
-        ) : (
-          <main>
+        {groupDataLoading && (
+          <div className={styles.groupLoading} role="status" aria-live="polite">
+            <span className={styles.loadingSpinner} aria-hidden="true" />
+            <p>Loading {selectedGroup?.name || "your group"}…</p>
+          </div>
+        )}
+
+        <main hidden={groupDataLoading}>
             {liveError && (
               <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
             )}
@@ -390,14 +442,14 @@ export default function StatusPage() {
                 />
               ))}
             </div>
-          </main>
-        )}
+        </main>
 
-        {!loading && (
-          <div ref={feedRef}>
-            <GroupFeed roommates={displayedRoommates} />
-          </div>
-        )}
+        <div ref={feedRef} hidden={groupDataLoading}>
+          <GroupFeed
+            roommates={displayedRoommates}
+            onLoadStateChange={handleGroupFeedLoadStateChange}
+          />
+        </div>
 
         {settingsOpen && (
           <ModalShell

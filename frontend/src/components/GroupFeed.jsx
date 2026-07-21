@@ -171,7 +171,7 @@ function ModuleFeedItem({
 // The group feed, rendered inline below the status section. Owns its own feed
 // polling and create/filter UI; `roommates` come from the parent status page so
 // we don't double-fetch the household.
-export default function GroupFeed({ roommates }) {
+export default function GroupFeed({ roommates, onLoadStateChange }) {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -198,8 +198,19 @@ export default function GroupFeed({ roommates }) {
   }, [user.activeGroupId, user.id]);
 
   useEffect(() => {
-    loadFeed().finally(() => setLoading(false));
-  }, [loadFeed]);
+    let isCurrent = true;
+    const groupId = user.activeGroupId;
+    setLoading(true);
+    onLoadStateChange?.(groupId, true);
+    loadFeed().finally(() => {
+      if (!isCurrent) return;
+      setLoading(false);
+      onLoadStateChange?.(groupId, false);
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [loadFeed, onLoadStateChange, user.activeGroupId]);
 
   useEffect(() => {
     let pollId = null;
