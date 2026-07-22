@@ -646,6 +646,20 @@ def create_app() -> Flask:
             return jsonify({"error": error}), 409 if error.startswith("This meeting") else 400
         return jsonify({"summary": summary})
 
+    @app.post("/api/book-club/next-book")
+    def start_book_club_next_book():
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
+            return jsonify({"error": "Only a group admin can start the next book."}), 403
+        summary, error = book_club.start_next_book(
+            viewer["groupId"], db.get_all(viewer["groupId"]), request.get_json(silent=True) or {}
+        )
+        if error:
+            return jsonify({"error": error}), 409 if error.startswith("The active book") else 400
+        return jsonify({"summary": summary}), 201
+
     @app.post("/api/book-club/sessions/<session_id>/notify")
     def notify_book_club_meeting(session_id: str):
         """Send every group member a reminder for the configured next meeting."""

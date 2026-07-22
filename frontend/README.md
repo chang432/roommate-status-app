@@ -81,6 +81,7 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
 | `updateGroupDisplay`            | `PUT /api/groups/display?userId=:id`                       |
 | `getCompletedBookClubBooks`     | `GET /api/book-club/books/completed?userId=:id`            |
+| `startNextBook`                 | `POST /api/book-club/next-book?userId=:id`                 |
 | `notifyBookClubMeeting`         | `POST /api/book-club/sessions/:id/notify?userId=:id`       |
 | `getRoommates`                  | `GET /api/roommates?userId=:id`                            |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |

@@ -5,6 +5,7 @@ import {
   getCompletedBookClubBooks,
   notifyBookClubMeeting,
   setBookClubResponse,
+  startNextBook,
   updateBookClubNextSession,
 } from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -32,6 +33,8 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   const [booksLoading, setBooksLoading] = useState(false);
   const [setup, setSetup] = useState({ title: "", author: "", readingTarget: "" });
   const [editing, setEditing] = useState(false);
+  const [startingNextBook, setStartingNextBook] = useState(false);
+  const [nextBook, setNextBook] = useState({ title: "", author: "", readingTarget: "" });
   const [draft, setDraft] = useState({
     title: "", author: "", readingTarget: "", recommendedById: "", snackDutyUserId: "", meetingOffset: 0,
   });
@@ -108,6 +111,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
       snackDutyUserId: summary?.nextSession?.snackDutyUserId || roommates[0]?.id || "",
       meetingOffset: 0,
     });
+    setStartingNextBook(false);
     setEditing(true);
   }
 
@@ -133,6 +137,28 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
       setEditing(false);
     } catch (err) {
       setError(err.message || "Could not update the next meeting.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function beginNextBook() {
+    setNextBook({ title: "", author: "", readingTarget: "" });
+    setEditing(false);
+    setStartingNextBook(true);
+  }
+
+  async function submitNextBook(event) {
+    event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const { summary: nextSummary } = await startNextBook(user.id, nextBook);
+      setSummary(nextSummary);
+      setStartingNextBook(false);
+    } catch (err) {
+      setError(err.message || "Could not start the next book.");
     } finally {
       setSaving(false);
     }
@@ -207,10 +233,23 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
           <div className={styles.dynamicField}><strong>Chapter goal:</strong><span>{summary.nextSession.readingTarget || "To be set"}</span></div>
           <div className={styles.dynamicField}><strong>Next meeting:</strong><span>{EASTERN_FORMAT.format(summary.nextSession.scheduledAt)}</span></div>
           <div className={styles.dynamicField}><strong>Snack duty:</strong><button type="button" className={styles.valueButton} onClick={() => setOpenPopup("snacks")}>{summary.nextSession.snackDutyName}</button></div>
-          {canAdminister && !editing && (
+          {canAdminister && !editing && !startingNextBook && (
             <div className={styles.adminActions}>
+              <button type="button" className={styles.startBookButton} onClick={beginNextBook}>Start next book</button>
               <button type="button" className={styles.editButton} onClick={startEditing}>Edit upcoming meeting</button>
             </div>
+          )}
+          {canAdminister && startingNextBook && (
+            <form className={styles.setup} onSubmit={submitNextBook}>
+              <p>Complete the current book and begin a new one for the upcoming meeting.</p>
+              <label>Book title<input required value={nextBook.title} onChange={(event) => setNextBook({ ...nextBook, title: event.target.value })} /></label>
+              <label>Author<input required value={nextBook.author} onChange={(event) => setNextBook({ ...nextBook, author: event.target.value })} /></label>
+              <label>Chapter goal<input required placeholder="Read through Chapter 1" value={nextBook.readingTarget} onChange={(event) => setNextBook({ ...nextBook, readingTarget: event.target.value })} /></label>
+              <div className={styles.editorActions}>
+                <button type="submit" disabled={saving}>{saving ? "Starting…" : "Start next book"}</button>
+                <button type="button" className={styles.cancelButton} disabled={saving} onClick={() => setStartingNextBook(false)}>Cancel</button>
+              </div>
+            </form>
           )}
           {canAdminister && editing && (
             <form className={styles.setup} onSubmit={saveNextSession}>

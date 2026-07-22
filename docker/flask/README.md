@@ -17,6 +17,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `GET  /api/groups/current`                                   | `?userId=<id>`                             | selected group metadata, including `viewerIsAdmin`      |
 | `PUT  /api/groups/display`                                   | `?userId=<id>` + `{ showRoster, showFeed, showBookClub }` | updated admin-managed group display settings |
 | `POST /api/book-club/sessions/<id>/notify`                    | `?userId=<id>` | sends every subscribed group member a next-meeting reminder with its book, chapter goal, and snack-duty member |
+| `POST /api/book-club/next-book`                                | `?userId=<id>` + `{ title, author, readingTarget }` | admin completes the active book and starts a new one for the upcoming meeting |
 | `GET  /api/roommates`                                        | `?userId=<id>`                             | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |

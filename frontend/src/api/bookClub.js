@@ -29,6 +29,13 @@ export function updateBookClubNextSession(userId, settings) {
   });
 }
 
+export function startNextBook(userId, book) {
+  return request(withQuery("/book-club/next-book", { userId }), {
+    method: "POST",
+    body: JSON.stringify(book),
+  });
+}
+
 export function notifyBookClubMeeting(userId, sessionId) {
   return request(withQuery(`/book-club/sessions/${encodeURIComponent(sessionId)}/notify`, { userId }), {
     method: "POST",

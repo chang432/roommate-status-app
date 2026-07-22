@@ -414,6 +414,76 @@ def update_next_session(group_id: str, members: list[dict], body: dict) -> tuple
     return summary(group_id, members), None
 
 
+def start_next_book(group_id: str, members: list[dict], body: dict) -> tuple[dict | None, str | None]:
+    """Complete the active book and use the upcoming meeting for a new one."""
+    title, error = _validate_text(body.get("title"), "Book title")
+    if error:
+        return None, error
+    author, error = _validate_text(body.get("author"), "Book author")
+    if error:
+        return None, error
+    reading_target, error = _validate_text(body.get("readingTarget"), "Chapter goal")
+    if error:
+        return None, error
+
+    config = _fetch(group_id, CONFIG_ID)
+    session = _fetch(group_id, config.get("nextSessionId", "")) if config else None
+    active_book_id = config.get("activeBookId") if config else None
+    active_book = _fetch(group_id, f"book#{active_book_id}") if active_book_id else None
+    if session is None or session.get("status") != "scheduled" or int(session["scheduledAt"]) <= _now():
+        return None, "No scheduled future session exists."
+    if active_book is None or active_book.get("status") != "active":
+        return None, "No active book is available to complete."
+
+    member_by_id = {member["id"]: member for member in members}
+    book_rotation = config.get("bookRotationUserIds", [])
+    if not _valid_rotations(book_rotation, set(member_by_id)):
+        return None, "Book rotation must contain current group members."
+    next_cursor = (int(config.get("bookRotationCursor", 0)) + 1) % len(book_rotation)
+    recommender = member_by_id[book_rotation[next_cursor]]
+    now = _now()
+    next_book_id = uuid.uuid4().hex
+    next_book = {
+        "groupId": group_id, "id": f"book#{next_book_id}", "bookId": next_book_id,
+        "title": title, "author": author, "recommendedById": recommender["id"],
+        "recommendedByName": recommender["name"], "status": "active", "selectedAt": now,
+        "createdAt": now, "updatedAt": now,
+    }
+    table = _get_table()
+    try:
+        # This condition prevents a double-submit from completing the same book
+        # twice while retaining its history exactly once.
+        table.update_item(
+            Key={"groupId": group_id, "id": active_book["id"]},
+            UpdateExpression="SET #status = :completed, completedAt = :now, updatedAt = :now",
+            ConditionExpression="#status = :active",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={":active": "active", ":completed": "completed", ":now": now},
+        )
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None, "The active book has already changed. Refresh and try again."
+        raise
+
+    table.put_item(Item=next_book)
+    table.update_item(
+        Key={"groupId": group_id, "id": session["id"]},
+        UpdateExpression="SET bookId = :bookId, bookTitle = :title, readingTarget = :target, updatedAt = :now",
+        ExpressionAttributeValues={":bookId": next_book_id, ":title": title, ":target": reading_target, ":now": now},
+    )
+    # Attendance and reading progress belong to the old book's plan; the new
+    # selection starts the upcoming meeting with fresh member responses.
+    for response in query_group(table, group_id, consistent=True):
+        if response.get("sessionId") == session["id"]:
+            table.delete_item(Key={"groupId": group_id, "id": response["id"]})
+    table.update_item(
+        Key={"groupId": group_id, "id": CONFIG_ID},
+        UpdateExpression="SET activeBookId = :bookId, bookRotationCursor = :cursor, updatedAt = :now",
+        ExpressionAttributeValues={":bookId": next_book_id, ":cursor": next_cursor, ":now": now},
+    )
+    return summary(group_id, members), None
+
+
 def complete_book(group_id: str, session_id: str) -> str | None:
     config = _fetch(group_id, CONFIG_ID)
     session = _fetch(group_id, session_id)

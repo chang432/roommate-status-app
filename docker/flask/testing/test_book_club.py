@@ -139,6 +139,54 @@ def test_book_club_read_advances_due_meeting_to_admin_placeholder(client, monkey
     assert next(item for item in next_summary["nextSession"]["responses"] if item["userId"] == TEST_USER_ID)["attendanceStatus"] == "maybe"
 
 
+def test_admin_can_start_next_book_and_preserve_the_completed_book(client):
+    configured = client.post(
+        grouped_path("/api/book-club/config"),
+        json={"title": "First Book", "author": "First Author", "readingTarget": "Chapter 4"},
+    )
+    first_summary = configured.get_json()["summary"]
+    first_book_id = first_summary["activeBook"]["id"]
+    next_recommender_id = first_summary["configuration"]["bookRotationUserIds"][1]
+    session_id = first_summary["nextSession"]["id"]
+    response = client.put(
+        grouped_path(f"/api/book-club/sessions/{session_id.replace('#', '%23')}/response"),
+        json={"attendanceStatus": "attending", "chaptersReadThrough": 4},
+    )
+    assert response.status_code == 200
+
+    started = client.post(
+        grouped_path("/api/book-club/next-book"),
+        json={"title": "Second Book", "author": "Second Author", "readingTarget": "Chapter 2"},
+    )
+
+    assert started.status_code == 201
+    summary = started.get_json()["summary"]
+    assert summary["activeBook"]["id"] != first_book_id
+    assert summary["activeBook"]["title"] == "Second Book"
+    assert summary["activeBook"]["recommendedById"] == next_recommender_id
+    assert summary["nextSession"]["bookId"] == summary["activeBook"]["id"]
+    assert summary["nextSession"]["readingTarget"] == "Chapter 2"
+    assert all(item["attendanceStatus"] == "not_attending" for item in summary["nextSession"]["responses"])
+    assert all(item["chaptersReadThrough"] == 0 for item in summary["nextSession"]["responses"])
+
+    completed = client.get(grouped_path("/api/book-club/books/completed"))
+    assert completed.get_json()["books"][0]["title"] == "First Book"
+
+
+def test_book_club_rejects_non_admin_starting_the_next_book(client):
+    client.post(
+        grouped_path("/api/book-club/config"),
+        json={"title": "First Book", "author": "First Author", "readingTarget": "Chapter 4"},
+    )
+
+    response = client.post(
+        grouped_path("/api/book-club/next-book", user_id="sheryl"),
+        json={"title": "Second Book", "author": "Second Author", "readingTarget": "Chapter 2"},
+    )
+
+    assert response.status_code == 403
+
+
 def test_local_seed_groups_isolate_book_club_component(client):
     seed.seed_local_groups()
 
