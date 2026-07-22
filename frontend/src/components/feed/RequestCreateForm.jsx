@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { createRequest } from '../../api/client.js'
+import { createRequest } from '../../api/requests.js'
 import { cx } from '../../utils/classNames.js'
 import styles from './RequestCreateForm.module.css'
 

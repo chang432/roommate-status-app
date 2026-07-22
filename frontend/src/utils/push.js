@@ -1,6 +1,6 @@
 // Web Push helpers: register the service worker, then (on a user gesture)
 // request permission and subscribe this device with the backend.
-import { getVapidPublicKey, savePushSubscription } from '../api/client.js'
+import { getVapidPublicKey, savePushSubscription } from '../api/push.js'
 
 // Push needs a service worker + the Push API + the Notifications API. iOS only
 // exposes these inside an installed (Add to Home Screen) PWA, so an ordinary

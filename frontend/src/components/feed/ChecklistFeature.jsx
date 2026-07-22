@@ -10,7 +10,7 @@ import {
   restoreChecklist,
   toggleChecklistItem,
   updateChecklistItem,
-} from "../../api/client.js";
+} from "../../api/checklists.js";
 import { initialOf } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
 import { relativeTime } from "../../utils/time.js";

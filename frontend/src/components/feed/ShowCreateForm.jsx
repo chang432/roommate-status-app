@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { createShow } from "../../api/client.js";
+import { createShow } from "../../api/shows.js";
 import { cx } from "../../utils/classNames.js";
 import styles from "./ShowCreateForm.module.css";
 

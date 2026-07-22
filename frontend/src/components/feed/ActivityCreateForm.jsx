@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { proposeActivity } from '../../api/client.js'
+import { proposeActivity } from '../../api/activities.js'
 import { fromDateTimeLocal } from '../../utils/time.js'
 import { cx } from '../../utils/classNames.js'
 import styles from './ActivityCreateForm.module.css'

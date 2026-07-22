@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { endJam, shareJam } from '../../api/client.js'
+import { endJam, shareJam } from '../../api/jam.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { cx } from '../../utils/classNames.js'
 import { relativeTime } from '../../utils/time.js'

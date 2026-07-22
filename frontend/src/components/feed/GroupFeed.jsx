@@ -19,7 +19,8 @@ import ShowCreateForm from "./ShowCreateForm.jsx";
 import ShowTrackerFeature from "./ShowTrackerFeature.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
-import { endActivity, getFeed, startActivity } from "../../api/client.js";
+import { endActivity, startActivity } from "../../api/activities.js";
+import { getFeed } from "../../api/feed.js";
 import {
   MODULE_TYPES,
   MODULE_DEFINITIONS,

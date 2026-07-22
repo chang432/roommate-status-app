@@ -7,7 +7,7 @@ import {
   notifyRoommatesToUpdateStatus,
   pokeRoommate,
   updateStatus,
-} from "../../api/client.js";
+} from "../../api/roommates.js";
 import { avatarColor } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
 import styles from "./HouseholdRoster.module.css";

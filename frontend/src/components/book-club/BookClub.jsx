@@ -6,7 +6,7 @@ import {
   notifyBookClubMeeting,
   setBookClubResponse,
   updateBookClubNextSession,
-} from "../../api/client.js";
+} from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { isAdminIn } from "../../utils/roles.js";
 import ModalShell from "../ui/ModalShell.jsx";
@@ -20,7 +20,7 @@ const EASTERN_FORMAT = new Intl.DateTimeFormat("en-US", {
 // This intentionally owns only the Book Club card. Its group-level visibility
 // remains the responsibility of StatusPage, so disabling the toggle removes
 // this whole feature without affecting its stored history.
-export default function BookClub({ roommates = [], groupId }) {
+export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) {
   const { user } = useAuth();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +53,7 @@ export default function BookClub({ roommates = [], groupId }) {
     return () => { cancelled = true; };
   }, [user.id]);
 
-  useEffect(() => loadSummary(), [groupId, loadSummary]);
+  useEffect(() => loadSummary(), [groupId, loadSummary, refreshToken]);
 
   useEffect(() => {
     const scheduledAt = summary?.nextSession?.scheduledAt;
@@ -87,7 +87,7 @@ export default function BookClub({ roommates = [], groupId }) {
       const { summary: nextSummary } = await setBookClubResponse(
         user.id,
         summary.nextSession.id,
-        changes.attendanceStatus ?? response.attendanceStatus ?? "attending",
+        changes.attendanceStatus ?? response.attendanceStatus ?? "not_attending",
         changes.chaptersReadThrough ?? response.chaptersReadThrough ?? 0,
       );
       setSummary(nextSummary);
@@ -266,11 +266,11 @@ export default function BookClub({ roommates = [], groupId }) {
               return <div className={styles.response} key={response.userId}>
                 <span>{response.userName}</span>
                 {mine ? <span className={styles.responseControls}>
-                  <select aria-label="Your attendance" value={response.attendanceStatus || ""} disabled={saving} onChange={(event) => updateResponse(response, { attendanceStatus: event.target.value })}>
-                    <option value="" disabled>Not responded</option><option value="attending">Attending</option><option value="maybe">Maybe</option><option value="not_attending">Not attending</option>
+                  <select aria-label="Your attendance" value={response.attendanceStatus || "not_attending"} disabled={saving} onChange={(event) => updateResponse(response, { attendanceStatus: event.target.value })}>
+                    <option value="attending">Attending</option><option value="maybe">Maybe</option><option value="not_attending">Not attending</option>
                   </select>
                   <input aria-label="Chapters read through" type="number" min="0" defaultValue={response.chaptersReadThrough ?? ""} disabled={saving} placeholder="Chapters" onBlur={(event) => event.target.value !== "" && updateResponse(response, { chaptersReadThrough: Number(event.target.value) })} />
-                </span> : <span className={styles.muted}>{response.attendanceStatus ? `${response.attendanceStatus.replace("_", " ")} · through chapter ${response.chaptersReadThrough}` : "Not responded"}</span>}
+                </span> : <span className={styles.muted}>{response.attendanceStatus.replace("_", " ")} · through chapter ${response.chaptersReadThrough}</span>}
               </div>;
             })}
           </div>

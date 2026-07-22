@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { updateModule } from '../../api/client.js'
+import { updateModule } from '../../api/feed.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { MODULE_DEFINITIONS } from '../../models/modules.js'
 import { cx } from '../../utils/classNames.js'

@@ -76,6 +76,13 @@ def _shift_session_at(scheduled_at: int, two_week_steps: int) -> int:
     return int((local + timedelta(days=14 * two_week_steps)).timestamp() * 1000)
 
 
+def meeting_label(scheduled_at: int) -> str:
+    """Return the concise Eastern-time meeting label used in push reminders."""
+    local = datetime.fromtimestamp(scheduled_at / 1000, ZoneInfo(TIMEZONE))
+    hour = local.strftime("%I").lstrip("0") or "0"
+    return f"{local:%a}, {local:%b} {local.day}, {hour}:{local:%M %p} ET"
+
+
 def _fetch(group_id: str, item_id: str, consistent: bool = True) -> dict | None:
     return _get_table().get_item(
         Key={"groupId": group_id, "id": item_id}, ConsistentRead=consistent
@@ -117,10 +124,12 @@ def _project_session(item: dict | None, members: list[dict] | None = None) -> di
         projected["responses"] = [
             {
                 "userId": member["id"], "userName": member["name"],
-                "attendanceStatus": responses.get(member["id"], {}).get("attendanceStatus"),
+                # No response defaults to not attending; the UI no longer
+                # presents a separate, ambiguous "not responded" state.
+                "attendanceStatus": responses.get(member["id"], {}).get("attendanceStatus", "not_attending"),
                 "chaptersReadThrough": (
                     int(responses[member["id"]]["chaptersReadThrough"])
-                    if member["id"] in responses else None
+                    if member["id"] in responses else 0
                 ),
             }
             for member in members
@@ -130,6 +139,30 @@ def _project_session(item: dict | None, members: list[dict] | None = None) -> di
 
 def _valid_rotations(rotations: list[str], member_ids: set[str]) -> bool:
     return bool(rotations) and all(isinstance(user_id, str) and user_id in member_ids for user_id in rotations)
+
+
+def add_member_to_snack_rotation(group_id: str, user_id: str) -> None:
+    """Append a joiner to an existing club rotation without changing who is next."""
+    config = _fetch(group_id, CONFIG_ID)
+    if config is None or user_id in config.get("snackRotationUserIds", []):
+        return
+    try:
+        _get_table().update_item(
+            Key={"groupId": group_id, "id": CONFIG_ID},
+            UpdateExpression=(
+                "SET snackRotationUserIds = list_append(snackRotationUserIds, :member), "
+                "updatedAt = :now"
+            ),
+            ConditionExpression="attribute_exists(id) AND NOT contains(snackRotationUserIds, :userId)",
+            ExpressionAttributeValues={
+                ":member": [user_id], ":userId": user_id, ":now": _now(),
+            },
+        )
+    except ClientError as exc:
+        # A concurrent join may have already added the member, which is the
+        # desired end state. Surface any other DynamoDB failure to the route.
+        if exc.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
 
 
 def _validate_text(value, label: str, maximum: int = 160) -> tuple[str | None, str | None]:

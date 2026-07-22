@@ -9,7 +9,7 @@ import {
   commentOnActivity,
   restoreActivity,
   setCommentLiked,
-} from "../../api/client.js";
+} from "../../api/activities.js";
 import FeedComments from "../comments/FeedComments.jsx";
 import { activityTimeLabel, relativeTime } from "../../utils/time.js";
 import { cx } from "../../utils/classNames.js";

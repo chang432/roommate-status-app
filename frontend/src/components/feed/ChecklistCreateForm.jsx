@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { createChecklist } from "../../api/client.js";
+import { createChecklist } from "../../api/checklists.js";
 import { cx } from "../../utils/classNames.js";
 import styles from "./ChecklistCreateForm.module.css";
 

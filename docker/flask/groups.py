@@ -11,6 +11,7 @@ import time
 from botocore.exceptions import ClientError
 
 import db
+import book_club
 
 GROUPS_TABLE = os.environ.get("GROUPS_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-groups"
@@ -258,6 +259,9 @@ def join_group(user_id: str, code: str) -> tuple[dict | None, str | None]:
         return None, "already_member"
     if db.create_membership(account["id"], group["groupId"], account["name"]) is None:
         return None, "already_member"
+    # Existing clubs retain their current assignment and append new members at
+    # the end, so a join never skips whoever is already due for snacks.
+    book_club.add_member_to_snack_rotation(group["groupId"], account["id"])
     # The client switches to the group it just joined, even if lexical group
     # ordering would make a different membership appear first on the account.
     return {**db.get_account_by_id(account["id"]), "groupId": group["groupId"]}, None

@@ -11,7 +11,7 @@ import {
   restoreShow,
   setProgress,
   startWatchparty,
-} from "../../api/client.js";
+} from "../../api/shows.js";
 import ModalShell from "../ui/ModalShell.jsx";
 import { initialOf } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";

@@ -8,7 +8,7 @@ import {
   respondToRequest,
   restoreRequest,
   setRequestCommentLiked,
-} from "../../api/client.js";
+} from "../../api/requests.js";
 import FeedComments from "../comments/FeedComments.jsx";
 import { relativeTime } from "../../utils/time.js";
 import { cx } from "../../utils/classNames.js";

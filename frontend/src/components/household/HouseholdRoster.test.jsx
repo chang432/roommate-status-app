@@ -7,7 +7,7 @@ import {
   notifyRoommatesToUpdateStatus,
   pokeRoommate,
   updateStatus,
-} from "../../api/client.js";
+} from "../../api/roommates.js";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
   useAuth: () => ({
@@ -15,7 +15,7 @@ vi.mock("../../context/AuthContext.jsx", () => ({
   }),
 }));
 
-vi.mock("../../api/client.js", async (importOriginal) => {
+vi.mock("../../api/roommates.js", async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,

@@ -69,8 +69,8 @@ name as username (for example `andre`) with the demo password **`roomie`**.
 
 ## Backend / API
 
-All backend calls live in `src/api/client.js`, which targets the Flask server
-(`../docker/flask`) under `/api`:
+Backend calls live in domain modules under `src/api/`, which share a request
+helper and target the Flask server (`../docker/flask`) under `/api`:
 
 | Function                        | Method & path                                              |
 | ------------------------------- | ---------------------------------------------------------- |

@@ -1,5 +1,7 @@
 """Book Club API tests."""
 
+from datetime import datetime, timezone
+
 from testing.support import *  # noqa: F403
 
 def test_book_club_summary_setup_and_member_response(client):
@@ -21,7 +23,8 @@ def test_book_club_summary_setup_and_member_response(client):
     assert summary["activeBook"]["recommendedById"] == TEST_USER_ID
     assert summary["nextSession"]["snackDutyUserId"] == TEST_USER_ID
     assert summary["configuration"]["snackRotationCursor"] == 0
-    assert all(response["attendanceStatus"] is None for response in summary["nextSession"]["responses"])
+    assert all(response["attendanceStatus"] == "not_attending" for response in summary["nextSession"]["responses"])
+    assert all(response["chaptersReadThrough"] == 0 for response in summary["nextSession"]["responses"])
 
     session_id = summary["nextSession"]["id"]
     response = client.put(
@@ -43,9 +46,13 @@ def test_book_club_rejects_non_admin_configuration(client):
 
 
 def test_book_club_member_can_notify_everyone_about_the_next_meeting(client, monkeypatch):
+    scheduled_at = int(datetime(2030, 8, 7, 23, 30, tzinfo=timezone.utc).timestamp() * 1000)
     configured = client.post(
         grouped_path("/api/book-club/config"),
-        json={"title": "A Book", "author": "An Author", "readingTarget": "Chapter 1"},
+        json={
+            "title": "A Book", "author": "An Author", "readingTarget": "Chapter 1",
+            "scheduledAt": scheduled_at,
+        },
     )
     session_id = configured.get_json()["summary"]["nextSession"]["id"]
     notifications = []
@@ -71,10 +78,7 @@ def test_book_club_member_can_notify_everyone_about_the_next_meeting(client, mon
         TEST_GROUP_ID,
         {
             "title": "Book Club reminder",
-            "body": (
-                "Sheryl reminded everyone about the next Book Club meeting: "
-                "Book: A Book. Goal: Chapter 1. Snacks: Andre."
-            ),
+            "body": "Wed, Aug 7, 7:30 PM ET · A Book\nGoal: Chapter 1 · Snacks: Andre",
             "url": "/",
             "event_type": "book-club-reminder",
         },

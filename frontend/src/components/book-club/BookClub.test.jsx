@@ -2,13 +2,13 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import BookClub from "./BookClub.jsx";
-import { getBookClub, getCompletedBookClubBooks, notifyBookClubMeeting } from "../../api/client.js";
+import { getBookClub, getCompletedBookClubBooks, notifyBookClubMeeting } from "../../api/bookClub.js";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { id: "andre", name: "Andre" } }),
 }));
 
-vi.mock("../../api/client.js", async (importOriginal) => ({
+vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   ...(await importOriginal()),
   getBookClub: vi.fn(),
   getCompletedBookClubBooks: vi.fn(),
@@ -108,5 +108,55 @@ describe("BookClub", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Notify everyone about next meeting" }));
     expect(notifyBookClubMeeting).toHaveBeenCalledWith("andre", "session#future");
     expect(screen.queryByText(/simulate meeting time/i)).toBeNull();
+  });
+
+  it("defaults unanswered attendance to not attending without a not-responded option", async () => {
+    getBookClub.mockReset();
+    getBookClub.mockResolvedValue({
+      summary: {
+        activeBook: { title: "A Book", author: "An Author" },
+        nextSession: {
+          id: "session#future",
+          scheduledAt: Date.UTC(2026, 7, 5, 23, 30),
+          readingTarget: "Chapter 1",
+          snackDutyName: "Andre",
+          responses: [{
+            userId: "andre", userName: "Andre", attendanceStatus: "not_attending", chaptersReadThrough: 0,
+          }],
+        },
+      },
+    });
+
+    render(<BookClub roommates={[{ id: "andre", name: "Andre" }]} groupId="book-club" />);
+
+    const attendance = await screen.findByRole("combobox", { name: "Your attendance" });
+    expect(attendance).toHaveValue("not_attending");
+    expect(screen.queryByRole("option", { name: "Not responded" })).toBeNull();
+  });
+
+  it("reloads its summary when the page refreshes", async () => {
+    getBookClub.mockReset();
+    getBookClub
+      .mockResolvedValueOnce({ summary: null })
+      .mockResolvedValueOnce({
+        summary: {
+          activeBook: { title: "Fresh Book", author: "An Author" },
+          nextSession: {
+            id: "session#future",
+            scheduledAt: Date.UTC(2026, 7, 5, 23, 30),
+            readingTarget: "Chapter 1",
+            snackDutyName: "Andre",
+            responses: [],
+          },
+        },
+      });
+    const { rerender } = render(
+      <BookClub roommates={[{ id: "andre", name: "Andre" }]} groupId="book-club" refreshToken={0} />,
+    );
+
+    await waitFor(() => expect(screen.getByText(/has not configured/i)).toBeInTheDocument());
+    rerender(<BookClub roommates={[{ id: "andre", name: "Andre" }]} groupId="book-club" refreshToken={1} />);
+
+    expect(await screen.findByRole("button", { name: /Fresh Book/i })).toBeInTheDocument();
   });
 });

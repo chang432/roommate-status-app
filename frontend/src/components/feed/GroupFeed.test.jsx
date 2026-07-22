@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import GroupFeed from "./GroupFeed.jsx";
-import { getFeed, updateModule } from "../../api/client.js";
+import { getFeed, updateModule } from "../../api/feed.js";
 import { LONG_PRESS_MS } from "../../utils/useLongPress.js";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
@@ -25,7 +25,7 @@ vi.mock("../../context/AuthContext.jsx", () => ({
   }),
 }));
 
-vi.mock("../../api/client.js", async (importOriginal) => {
+vi.mock("../../api/feed.js", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, getFeed: vi.fn(), updateModule: vi.fn() };
 });

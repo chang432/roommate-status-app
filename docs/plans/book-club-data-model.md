@@ -20,8 +20,8 @@ progress for an upcoming session without redesigning the data later.
 - A book may span multiple sessions. A session's reading target is free text,
   such as `Read through Chapter 8`.
 - For each upcoming session, every member can update their own attendance plan
-  and the chapter number they have read through. A missing response means the
-  member has not responded yet.
+  and the chapter number they have read through. A missing response defaults to
+  `not_attending` with zero chapters read.
 - A completed book can receive one editable integer rating from 1 through 5
   from each group member.
 - Discussion is a flat chronological set of posts within a selected chapter;
@@ -179,7 +179,8 @@ list shared by the entire group. All responses for a session are read with an
 Only the responding member can create or update their response, and only while
 the session is scheduled and in the future. The group can see all responses;
 admins do not edit another member's response. Deleting no response item is not
-needed: the absence of an item communicates `not responded`.
+needed: the absence of an item projects as `not_attending` with zero chapters
+read.
 
 #### `rating#<bookId>#<userId>`
 
@@ -243,8 +244,8 @@ configuration's next-session data together with the active book. It displays:
 - an admin editor that chooses the recommender from the current member list.
 - a bell above meeting plans that any group member can use to send a reminder
   for the next meeting to the group.
-- each member's attendance plan and chapters-read-through value, with an
-  explicit `not responded` state when their response item is absent.
+- each member's attendance plan and chapters-read-through value, defaulting to
+  `not attending` and zero when their response item is absent.
 
 Admin-only commands create or edit the configuration, rotations, and next
 session. All commands
@@ -277,7 +278,7 @@ posts.
   recommender once, independently.
 - Each group member can independently record `attending`, `maybe`, or
   `not_attending` plus a non-negative chapter count for a scheduled future
-  session; missing responses display as `not responded`.
+  session; missing responses default to `not_attending` with zero chapters.
 - Groups cannot read or mutate one another’s records; non-admin members cannot
   administer Book Club data, but they can update their own session response.
 - Completed books retain their recommender, sessions, individual ratings, and

@@ -663,10 +663,10 @@ def create_app() -> Flask:
             viewer["groupId"],
             title="Book Club reminder",
             body=(
-                f"{viewer['name']} reminded everyone about the next Book Club meeting: "
-                f"Book: {session.get('bookTitle') or 'the current book'}. "
-                f"Goal: {session.get('readingTarget') or 'To be set'}. "
-                f"Snacks: {session.get('snackDutyName') or 'To be assigned'}."
+                f"{book_club.meeting_label(session['scheduledAt'])} · "
+                f"{session.get('bookTitle') or 'Current book'}\n"
+                f"Goal: {session.get('readingTarget') or 'To be set'} · "
+                f"Snacks: {session.get('snackDutyName') or 'To be assigned'}"
             ),
             url="/",
             event_type="book-club-reminder",

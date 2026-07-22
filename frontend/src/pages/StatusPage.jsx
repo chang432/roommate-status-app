@@ -13,16 +13,11 @@ import NotificationBanner from "../components/ui/NotificationBanner.jsx";
 import ProfileSettings from "../components/profile/ProfileSettings.jsx";
 import PullToRefreshIndicator from "../components/ui/PullToRefreshIndicator.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import {
-  endActivity,
-  endWatchparty,
-  getActivities,
-  getGroups,
-  getJam,
-  getRoommates,
-  getShows,
-  startActivity,
-} from "../api/client.js";
+import { endActivity, getActivities, startActivity } from "../api/activities.js";
+import { getGroups } from "../api/groups.js";
+import { getJam } from "../api/jam.js";
+import { getRoommates } from "../api/roommates.js";
+import { endWatchparty, getShows } from "../api/shows.js";
 import { cx } from "../utils/classNames.js";
 import { usePullToRefresh } from "../utils/usePullToRefresh.js";
 import {
@@ -55,6 +50,7 @@ export default function StatusPage() {
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [groupsError, setGroupsError] = useState("");
+  const [bookClubRefreshToken, setBookClubRefreshToken] = useState(0);
   const activeGroupIdRef = useRef(user.activeGroupId);
 
   // Ignore a response for a group the user has already left. This keeps an
@@ -152,6 +148,9 @@ export default function StatusPage() {
       loadJam(),
       loadShows(),
     ]);
+    // Book Club owns its fetch so it can advance an overdue meeting. Bump this
+    // token after each page refresh to include it in pull-to-refresh as well.
+    setBookClubRefreshToken((token) => token + 1);
   }, [loadActivities, loadJam, loadRoommates, loadShows]);
 
   useEffect(() => {
@@ -447,7 +446,11 @@ export default function StatusPage() {
         )}
 
         {showBookClub && !groupDataLoading && (
-          <BookClub roommates={displayedRoommates} groupId={user.activeGroupId} />
+          <BookClub
+            roommates={displayedRoommates}
+            groupId={user.activeGroupId}
+            refreshToken={bookClubRefreshToken}
+          />
         )}
 
         {showFeed && (

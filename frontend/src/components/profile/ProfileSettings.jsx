@@ -4,7 +4,7 @@ import {
   removeGroupMember,
   setGroupMemberRole,
   updateGroupDisplay,
-} from '../../api/client.js'
+} from '../../api/groups.js'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import { THEME_DEFINITIONS, themeDefinition } from '../../models/themes.js'
 import { cx } from '../../utils/classNames.js'

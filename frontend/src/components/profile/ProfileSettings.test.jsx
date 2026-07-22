@@ -8,9 +8,9 @@ import {
   removeGroupMember,
   setGroupMemberRole,
   updateGroupDisplay,
-} from "../../api/client.js";
+} from "../../api/groups.js";
 
-vi.mock("../../api/client.js", async (importOriginal) => {
+vi.mock("../../api/groups.js", async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
