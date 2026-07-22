@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import Brandmark from "../components/Brandmark.jsx";
-import BookClub from "../components/BookClub.jsx";
-import EnableNotifications from "../components/EnableNotifications.jsx";
-import GroupFeed from "../components/GroupFeed.jsx";
-import JamWidget, { JamShareForm } from "../components/JamWidget.jsx";
-import GroupSwitcherDrawer from "../components/GroupSwitcherDrawer.jsx";
-import HouseholdRoster from "../components/HouseholdRoster.jsx";
-import LiveEventBanner from "../components/LiveEventBanner.jsx";
-import ModalShell from "../components/ModalShell.jsx";
-import NotificationBanner from "../components/NotificationBanner.jsx";
-import ProfileSettings from "../components/ProfileSettings.jsx";
-import PullToRefreshIndicator from "../components/PullToRefreshIndicator.jsx";
+import Brandmark from "../components/ui/Brandmark.jsx";
+import BookClub from "../components/book-club/BookClub.jsx";
+import EnableNotifications from "../components/profile/EnableNotifications.jsx";
+import GroupFeed from "../components/feed/GroupFeed.jsx";
+import JamWidget, { JamShareForm } from "../components/jam/JamWidget.jsx";
+import GroupSwitcherDrawer from "../components/groups/GroupSwitcherDrawer.jsx";
+import HouseholdRoster from "../components/household/HouseholdRoster.jsx";
+import LiveEventBanner from "../components/feed/LiveEventBanner.jsx";
+import ModalShell from "../components/ui/ModalShell.jsx";
+import NotificationBanner from "../components/ui/NotificationBanner.jsx";
+import ProfileSettings from "../components/profile/ProfileSettings.jsx";
+import PullToRefreshIndicator from "../components/ui/PullToRefreshIndicator.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   endActivity,
