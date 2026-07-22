@@ -270,7 +270,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
                     <option value="attending">Attending</option><option value="maybe">Maybe</option><option value="not_attending">Not attending</option>
                   </select>
                   <input aria-label="Chapters read through" type="number" min="0" defaultValue={response.chaptersReadThrough ?? ""} disabled={saving} placeholder="Chapters" onBlur={(event) => event.target.value !== "" && updateResponse(response, { chaptersReadThrough: Number(event.target.value) })} />
-                </span> : <span className={styles.muted}>{response.attendanceStatus.replace("_", " ")} · through chapter ${response.chaptersReadThrough}</span>}
+                </span> : <span className={styles.muted}>{response.attendanceStatus.replace("_", " ")} · through chapter {response.chaptersReadThrough}</span>}
               </div>;
             })}
           </div>

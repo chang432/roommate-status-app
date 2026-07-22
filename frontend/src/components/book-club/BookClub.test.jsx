@@ -120,18 +120,20 @@ describe("BookClub", () => {
           scheduledAt: Date.UTC(2026, 7, 5, 23, 30),
           readingTarget: "Chapter 1",
           snackDutyName: "Andre",
-          responses: [{
-            userId: "andre", userName: "Andre", attendanceStatus: "not_attending", chaptersReadThrough: 0,
-          }],
+          responses: [
+            { userId: "andre", userName: "Andre", attendanceStatus: "not_attending", chaptersReadThrough: 0 },
+            { userId: "kayla", userName: "Kayla", attendanceStatus: "not_attending", chaptersReadThrough: 0 },
+          ],
         },
       },
     });
 
-    render(<BookClub roommates={[{ id: "andre", name: "Andre" }]} groupId="book-club" />);
+    render(<BookClub roommates={[{ id: "andre", name: "Andre" }, { id: "kayla", name: "Kayla" }]} groupId="book-club" />);
 
     const attendance = await screen.findByRole("combobox", { name: "Your attendance" });
     expect(attendance).toHaveValue("not_attending");
     expect(screen.queryByRole("option", { name: "Not responded" })).toBeNull();
+    expect(screen.getByText("not attending · through chapter 0")).toBeInTheDocument();
   });
 
   it("reloads its summary when the page refreshes", async () => {
