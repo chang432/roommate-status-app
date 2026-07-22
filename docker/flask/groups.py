@@ -212,9 +212,11 @@ def create_group(user_id: str, name: str) -> tuple[dict | None, dict | None, str
             "name": display_name,
             "joinCode": join_code,
             "createdAt": int(time.time() * 1000),
-            "showRoster": True,
-            "showFeed": True,
-            "showBookClub": True,
+            # New households start with no shared modules visible. An admin
+            # explicitly enables the sections they want from group settings.
+            "showRoster": False,
+            "showFeed": False,
+            "showBookClub": False,
         }
         try:
             table.put_item(

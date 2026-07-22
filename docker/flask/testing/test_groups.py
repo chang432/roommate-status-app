@@ -52,6 +52,9 @@ def test_create_group_adds_creator_and_returns_an_invite_code(client):
     assert group["groupId"].startswith("friday-cabin-")
     assert len(group["joinCode"]) == 8
     assert group["joinCode"].isalnum()
+    assert group["showRoster"] is False
+    assert group["showFeed"] is False
+    assert group["showBookClub"] is False
     assert payload["user"]["groupId"] == group["groupId"]
 
     roster = client.get(
@@ -123,7 +126,7 @@ def test_plain_member_cannot_change_group_display(client):
 
     assert updated.status_code == 403
     assert "Only a group admin" in updated.get_json()["error"]
-    assert groups.get_group_by_id(group_id)["showRoster"] is True
+    assert groups.get_group_by_id(group_id)["showRoster"] is False
 
 
 def test_existing_group_defaults_display_sections_to_visible(client):
