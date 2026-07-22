@@ -26,6 +26,32 @@ Folders/files starting with `_` are ignored, so `_template/` never runs. Dated
 `YYYY-MM-DD-NN` prefixes sort into apply order; `NN` disambiguates same-day
 migrations.
 
+## Retiring a migration
+
+A migration is **deleted**, folder and all, once both of these hold:
+
+1. it is `applied` on dev *and* prod (check with `--status`, not `status.md`), and
+2. a table it reads has since been dropped from
+   `../dynamodb-table-{dev,main}.yaml`.
+
+At that point it can never run again meaningfully: the environments that needed
+it have it, and a freshly provisioned one has neither the source table nor any
+legacy rows to move. Keeping it would mean carrying a step that only ever
+crashes on `ResourceNotFoundException` — the replay it appears to offer is an
+illusion, because the tables it replays *from* are gone. Deleting is the honest
+option, and git history keeps the record.
+
+Delete the whole folder: `discover()` requires both `migrate.py` and
+`revert.py`, so a docs-only folder is a hard error, and an emptied folder that
+still matches `YYYY-MM-DD-NN-slug` fails the same way. (Watch for a leftover
+`__pycache__` keeping a directory alive after `git rm`.)
+
+Their ledger rows stay behind — the table is the source of truth and is never
+rewritten — so `--status` lists them under *"Ledger rows with no matching
+folder"*. That is expected, and every one of them should read `applied`; a
+retired migration showing `failed` means it never actually completed on that
+environment and the retirement was premature.
+
 ## Authoring
 
 1. `cp -r _template <YYYY-MM-DD-NN-slug>` and fill in `migrate.py::run`,

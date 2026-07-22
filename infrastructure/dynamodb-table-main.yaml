@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   DynamoDB tables for the "main" (production) deployment of the Yorkshire Roomie
-  Status app — one table per concern, all keyed by a string id (groups keyed by
-  groupId): RoommateStatus-main (roommates/accounts), plus the -pushsubs,
-  -activities, -requests, -spotify-jam, -shows, -checklists, -comment-likes,
-  -groups, -memberships, and -migrations tables. See the matching Flask modules in
-  docker/flask/ for each table's shape. Table names are fixed per template so the
+  Status app — one table per concern: RoommateStatus-main (roommates/accounts),
+  plus the -pushsubs, -spotify-jam, -groups, -memberships, and -migrations
+  tables, and the group-partitioned -activities-v2, -requests-v2,
+  -checklists-v2, -shows-v2, and -comment-likes-v2 feed tables. See the matching
+  Flask modules in docker/flask/ for each table's shape. Table names are fixed per template so the
   dev and main deployments can never accidentally share data (see
   dynamodb-table-dev.yaml for the dev half).
 
@@ -78,108 +78,6 @@ Resources:
         - Key: Environment
           Value: main
 
-  # Proposed activities for the production deployment. Separate table; one item
-  # per proposal, keyed by a generated id. The app shows only the most recent few.
-  ActivitiesTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      TableName: RoommateStatus-main-activities
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      SSESpecification:
-        SSEEnabled: true
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      Tags:
-        - Key: Application
-          Value: roomie-status
-        - Key: Environment
-          Value: main
-
-  # TV shows for the production deployment. Separate table; one item per show,
-  # keyed by a generated id, with watchers embedded.
-  ShowsTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      TableName: RoommateStatus-main-shows
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      SSESpecification:
-        SSEEnabled: true
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      Tags:
-        - Key: Application
-          Value: roomie-status
-        - Key: Environment
-          Value: main
-
-  # Household checklists for the production deployment. Separate table; one item
-  # per checklist, keyed by a generated id, with items embedded (see
-  # docker/flask/household_checklists.py).
-  ChecklistsTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      TableName: RoommateStatus-main-checklists
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      SSESpecification:
-        SSEEnabled: true
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      Tags:
-        - Key: Application
-          Value: roomie-status
-        - Key: Environment
-          Value: main
-
-  # Household requests for the production deployment. Separate table; one item
-  # per request, keyed by a generated id, with comments embedded (see
-  # docker/flask/household_requests.py).
-  RequestsTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      TableName: RoommateStatus-main-requests
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      SSESpecification:
-        SSEEnabled: true
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      Tags:
-        - Key: Application
-          Value: roomie-status
-        - Key: Environment
-          Value: main
-
   # Spotify Jam for the production deployment. Separate table; a single
   # activeJam#<group> item per group (absent means no active Jam), see
   # docker/flask/jam.py.
@@ -206,44 +104,20 @@ Resources:
         - Key: Environment
           Value: main
 
-  # Comment likes for the production deployment. Separate table; one row per
-  # user per liked comment, written by activities.py and household_requests.py.
-  # Each row self-describes its parent via activityId or requestId.
-  CommentLikesTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      TableName: RoommateStatus-main-comment-likes
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      SSESpecification:
-        SSEEnabled: true
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      Tags:
-        - Key: Application
-          Value: roomie-status
-        - Key: Environment
-          Value: main
-
-  # --- Group-partitioned feed tables (v2) ---------------------------------
-  # The five feed tables below supersede the single-`id`-keyed tables above.
+  # --- Group-partitioned feed tables ---------------------------------------
   # Every feed read is "give me one group's rows", so groupId is the partition
   # key and id the sort key: a Query replaces a whole-table Scan, the group
   # filter is enforced by the key instead of by Python, and — unlike a GSI —
   # a base-table Query still supports ConsistentRead, which the routes rely on
   # to return the caller's own write immediately.
   #
-  # A key schema cannot be altered in place, so these are new tables; the
-  # 2026-07-21-01 migration copies the rows across. The superseded tables are
-  # left defined (and Retained) until that migration has run on both
-  # environments, so `runner.py --revert` has somewhere to put the data back.
+  # The `-v2` suffix is historical: a key schema cannot be altered in place, so
+  # these replaced id-keyed tables of the same name. A data migration copied the
+  # rows across, and the originals were removed from this template once that was
+  # confirmed applied on both environments (see git history). Because they
+  # carried DeletionPolicy: Retain, those original tables still exist in AWS,
+  # unmanaged by CloudFormation, and must be deleted by hand if the data is no
+  # longer wanted.
   ActivitiesV2Table:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
@@ -499,54 +373,6 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-PushTableArn"
 
-  ActivitiesTableName:
-    Description: Name of the proposed-activities DynamoDB table.
-    Value: !Ref ActivitiesTable
-    Export:
-      Name: !Sub "${AWS::StackName}-ActivitiesTableName"
-
-  ActivitiesTableArn:
-    Description: ARN of the proposed-activities DynamoDB table.
-    Value: !GetAtt ActivitiesTable.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-ActivitiesTableArn"
-
-  ShowsTableName:
-    Description: Name of the TV shows DynamoDB table.
-    Value: !Ref ShowsTable
-    Export:
-      Name: !Sub "${AWS::StackName}-ShowsTableName"
-
-  ShowsTableArn:
-    Description: ARN of the TV shows DynamoDB table.
-    Value: !GetAtt ShowsTable.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-ShowsTableArn"
-
-  ChecklistsTableName:
-    Description: Name of the household checklists DynamoDB table.
-    Value: !Ref ChecklistsTable
-    Export:
-      Name: !Sub "${AWS::StackName}-ChecklistsTableName"
-
-  ChecklistsTableArn:
-    Description: ARN of the household checklists DynamoDB table.
-    Value: !GetAtt ChecklistsTable.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-ChecklistsTableArn"
-
-  RequestsTableName:
-    Description: Name of the household-requests DynamoDB table.
-    Value: !Ref RequestsTable
-    Export:
-      Name: !Sub "${AWS::StackName}-RequestsTableName"
-
-  RequestsTableArn:
-    Description: ARN of the household-requests DynamoDB table.
-    Value: !GetAtt RequestsTable.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-RequestsTableArn"
-
   SpotifyJamTableName:
     Description: Name of the Spotify Jam DynamoDB table.
     Value: !Ref SpotifyJamTable
@@ -558,18 +384,6 @@ Outputs:
     Value: !GetAtt SpotifyJamTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-SpotifyJamTableArn"
-
-  CommentLikesTableName:
-    Description: Name of the comment-likes DynamoDB table.
-    Value: !Ref CommentLikesTable
-    Export:
-      Name: !Sub "${AWS::StackName}-CommentLikesTableName"
-
-  CommentLikesTableArn:
-    Description: ARN of the comment-likes DynamoDB table.
-    Value: !GetAtt CommentLikesTable.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-CommentLikesTableArn"
 
   ActivitiesV2TableName:
     Description: Name of the group-partitioned proposed-activities DynamoDB table.
