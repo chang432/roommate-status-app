@@ -257,6 +257,46 @@ def test_book_club_rejects_non_admin_configuration(client):
     assert response.status_code == 403
 
 
+def test_book_club_read_advances_due_meeting_to_admin_placeholder(client, monkeypatch):
+    now = book_club._now()
+    configured = client.post(
+        grouped_path("/api/book-club/config"),
+        json={
+            "title": "A Book",
+            "author": "An Author",
+            "readingTarget": "Chapter 1",
+            "scheduledAt": now + 1_000,
+        },
+    )
+    assert configured.status_code == 201
+    first = configured.get_json()["summary"]["nextSession"]
+
+    # The first read after the scheduled time is the scheduler: no background
+    # process is required for a local Flask deployment.
+    monkeypatch.setattr(book_club, "_now", lambda: now + 2_000)
+    advanced = client.get(grouped_path("/api/book-club")).get_json()["summary"]
+    assert advanced["activeBook"] is None
+    assert advanced["nextSession"]["id"] != first["id"]
+    assert advanced["nextSession"]["bookId"] is None
+    assert advanced["nextSession"]["readingTarget"] is None
+    assert advanced["nextSession"]["snackDutyUserId"] != first["snackDutyUserId"]
+
+    edited = client.put(
+        grouped_path("/api/book-club/next-session"),
+        json={
+            "title": "The Next Book",
+            "author": "Another Author",
+            "readingTarget": "Read Chapter 2",
+            "recommendedById": "kayla",
+        },
+    )
+    assert edited.status_code == 200
+    next_summary = edited.get_json()["summary"]
+    assert next_summary["activeBook"]["title"] == "The Next Book"
+    assert next_summary["activeBook"]["recommendedById"] == "kayla"
+    assert next_summary["nextSession"]["readingTarget"] == "Read Chapter 2"
+
+
 def test_create_account_stores_password_hash_and_waits_for_group(client):
     res = client.post(
         "/api/accounts",

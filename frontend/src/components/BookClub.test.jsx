@@ -24,4 +24,28 @@ describe("BookClub", () => {
     );
     await waitFor(() => expect(screen.getByText(/has not configured/i)).toBeInTheDocument());
   });
+
+  it("uses the requested four-line meeting summary without a title banner", async () => {
+    getBookClub.mockResolvedValue({
+      summary: {
+        activeBook: { title: "Parable of the Sower", author: "Octavia E. Butler" },
+        nextSession: {
+          id: "session#future",
+          scheduledAt: Date.UTC(2026, 7, 5, 23, 30),
+          readingTarget: "Read through Chapter 6",
+          snackDutyName: "Kayla",
+          responses: [],
+        },
+      },
+    });
+
+    render(<BookClub roommates={[]} groupId="book-club" />);
+
+    await waitFor(() => expect(screen.getByText(/Book:/)).toBeInTheDocument());
+    expect(screen.getByText(/Next meeting:/)).toBeInTheDocument();
+    expect(screen.getByText(/Chapter goal:/)).toBeInTheDocument();
+    expect(screen.getByText(/Snack duty:/)).toBeInTheDocument();
+    expect(screen.queryByText("Book Club")).toBeNull();
+    expect(screen.queryByText("Eastern time")).toBeNull();
+  });
 });

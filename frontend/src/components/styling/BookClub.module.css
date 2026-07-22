@@ -2,22 +2,18 @@
   @apply mx-auto mt-6 w-full max-w-[720px] rounded-md border border-line bg-card p-4;
 }
 
-.title {
-  @apply text-[18px] font-black text-ink;
-}
-
-.heading { @apply flex items-center justify-between gap-3; }
-.timezone { @apply text-xs font-bold uppercase tracking-wide text-ink-soft; }
 .muted { @apply text-sm text-ink-soft; }
 .setup { @apply mt-3 grid gap-3 text-sm text-ink-soft; }
 .setup label { @apply grid gap-1 font-bold text-ink; }
 .setup input { @apply rounded border border-line bg-surface-muted px-3 py-2 font-normal text-ink; }
 .setup button { @apply w-fit rounded bg-accent px-3 py-2 font-bold text-on-strong disabled:opacity-60; }
 .summary { @apply mt-3 grid gap-2; }
-.meeting { @apply text-sm font-bold text-accent; }
-.details { @apply grid grid-cols-2 gap-3 rounded border border-line bg-surface-muted p-3 text-sm; }
-.details dt { @apply font-bold text-ink-soft; }
-.details dd { @apply mt-1 text-ink; }
+.editButton { @apply w-fit rounded border border-line px-3 py-1.5 text-sm font-bold text-ink hover:bg-surface-muted; }
+.recommender { @apply grid gap-1 text-sm font-bold text-ink; }
+.recommender > div { @apply flex items-center gap-3; }
+.recommender button { @apply grid h-8 w-8 place-items-center rounded border border-line text-lg text-ink hover:bg-surface-muted disabled:opacity-60; }
+.editorActions { @apply flex gap-2; }
+.cancelButton { @apply border border-line bg-card text-ink; }
 .responses { @apply mt-1 grid gap-2; }
 .responsesTitle { @apply text-sm font-bold text-ink; }
 .response { @apply flex items-center justify-between gap-3 border-b border-line py-2 text-sm text-ink; }

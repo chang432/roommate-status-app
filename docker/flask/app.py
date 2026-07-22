@@ -631,6 +631,21 @@ def create_app() -> Flask:
             viewer["groupId"], db.get_all(viewer["groupId"])
         )})
 
+    @app.put("/api/book-club/next-session")
+    def update_book_club_next_session():
+        """Let an admin fill or revise the upcoming meeting placeholder."""
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
+            return jsonify({"error": "Only a group admin can edit the next meeting."}), 403
+        summary, error = book_club.update_next_session(
+            viewer["groupId"], db.get_all(viewer["groupId"]), request.get_json(silent=True) or {}
+        )
+        if error:
+            return jsonify({"error": error}), 409 if error.startswith("This meeting") else 400
+        return jsonify({"summary": summary})
+
     @app.post("/api/book-club/sessions/<session_id>/complete")
     def complete_book_club_session(session_id: str):
         viewer, error = group_member_from_query()

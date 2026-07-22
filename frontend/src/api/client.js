@@ -248,6 +248,13 @@ export async function setBookClubResponse(userId, sessionId, attendanceStatus, c
   })
 }
 
+export async function updateBookClubNextSession(userId, settings) {
+  return request(withQuery('/book-club/next-session', { userId }), {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  })
+}
+
 // GET /api/activities — current activities followed by expired history.
 export async function getActivities(userId, groupId) {
   return request(withQuery('/activities', { userId }), {

@@ -95,8 +95,8 @@ def _project_session(item: dict | None, members: list[dict] | None = None) -> di
     if item is None:
         return None
     projected = {
-        "id": item["id"], "scheduledAt": int(item["scheduledAt"]), "bookId": item["bookId"],
-        "bookTitle": item["bookTitle"], "readingTarget": item["readingTarget"],
+        "id": item["id"], "scheduledAt": int(item["scheduledAt"]), "bookId": item.get("bookId"),
+        "bookTitle": item.get("bookTitle"), "readingTarget": item.get("readingTarget"),
         "snackDutyUserId": item["snackDutyUserId"], "snackDutyName": item["snackDutyName"],
         "status": item["status"],
         "completedAt": int(item["completedAt"]) if item.get("completedAt") is not None else None,
@@ -194,11 +194,16 @@ def configure(group_id: str, members: list[dict], body: dict) -> tuple[dict | No
 
 
 def summary(group_id: str, members: list[dict]) -> dict | None:
-    config = _fetch(group_id, CONFIG_ID, consistent=False)
+    config = _fetch(group_id, CONFIG_ID, consistent=True)
     if config is None:
         return None
-    book = _fetch(group_id, f"book#{config['activeBookId']}", consistent=False) if config.get("activeBookId") else None
-    session = _fetch(group_id, config.get("nextSessionId", ""), consistent=False)
+    # DynamoDB has no scheduler. Reading the card is the durable trigger that
+    # advances an overdue meeting, whether it happens on the exact minute or
+    # when the first member opens the app afterwards.
+    if _advance_if_due(group_id, members, config):
+        config = _fetch(group_id, CONFIG_ID, consistent=True)
+    book = _fetch(group_id, f"book#{config['activeBookId']}", consistent=True) if config.get("activeBookId") else None
+    session = _fetch(group_id, config.get("nextSessionId", ""), consistent=True)
     return {
         "configuration": {
             "timezone": config["timezone"], "frequency": config["frequency"], "weekday": config["weekday"],
@@ -240,6 +245,28 @@ def complete_session(group_id: str, members: list[dict], session_id: str) -> tup
         return None, "Unknown current session."
     if session.get("status") != "scheduled":
         return None, "This session is no longer scheduled."
+    _advance_session(group_id, members, config, session)
+    return summary(group_id, members), None
+
+
+def _advance_if_due(group_id: str, members: list[dict], config: dict) -> bool:
+    """Advance the configured meeting after its scheduled instant has passed."""
+    session = _fetch(group_id, config.get("nextSessionId", ""), consistent=True)
+    if session is None or session.get("status") != "scheduled":
+        return False
+    if int(session["scheduledAt"]) > _now():
+        return False
+    _advance_session(group_id, members, config, session)
+    return True
+
+
+def _advance_session(group_id: str, members: list[dict], config: dict, session: dict) -> None:
+    """Finish one meeting and create a blank admin-owned next-session card.
+
+    A completed session is historical. The upcoming session deliberately omits
+    book and reading fields until an admin enters its new plan; snack duty is
+    the one value that can advance independently and is assigned immediately.
+    """
     member_by_id = {member["id"]: member for member in members}
     snacks = config["snackRotationUserIds"]
     next_cursor = (int(config["snackRotationCursor"]) + 1) % len(snacks)
@@ -249,15 +276,59 @@ def complete_session(group_id: str, members: list[dict], session_id: str) -> tup
     next_id = _session_id(next_at)
     now = _now()
     next_session = {
-        "groupId": group_id, "id": next_id, "scheduledAt": next_at, "bookId": session["bookId"],
-        "bookTitle": session["bookTitle"], "readingTarget": session["readingTarget"],
+        "groupId": group_id, "id": next_id, "scheduledAt": next_at,
         "snackDutyUserId": snacks[next_cursor], "snackDutyName": member_by_id[snacks[next_cursor]]["name"],
         "status": "scheduled", "createdAt": now, "updatedAt": now,
     }
     table = _get_table()
-    table.update_item(Key={"groupId": group_id, "id": session_id}, UpdateExpression="SET #status = :completed, completedAt = :now, updatedAt = :now", ExpressionAttributeNames={"#status": "status"}, ExpressionAttributeValues={":completed": "completed", ":now": now})
+    table.update_item(Key={"groupId": group_id, "id": session["id"]}, UpdateExpression="SET #status = :completed, completedAt = :now, updatedAt = :now", ExpressionAttributeNames={"#status": "status"}, ExpressionAttributeValues={":completed": "completed", ":now": now})
     table.put_item(Item=next_session, ConditionExpression="attribute_not_exists(id)")
-    table.update_item(Key={"groupId": group_id, "id": CONFIG_ID}, UpdateExpression="SET nextSessionAt = :nextAt, nextSessionId = :nextId, snackRotationCursor = :cursor, updatedAt = :now", ExpressionAttributeValues={":nextAt": next_at, ":nextId": next_id, ":cursor": next_cursor, ":now": now})
+    values = {":nextAt": next_at, ":nextId": next_id, ":cursor": next_cursor, ":now": now}
+    update = "REMOVE activeBookId SET nextSessionAt = :nextAt, nextSessionId = :nextId, snackRotationCursor = :cursor, updatedAt = :now"
+    if config.get("activeBookId"):
+        active_book = _fetch(group_id, f"book#{config['activeBookId']}")
+        if active_book is not None and active_book.get("status") == "active":
+            table.update_item(Key={"groupId": group_id, "id": active_book["id"]}, UpdateExpression="SET #status = :completed, completedAt = :now, updatedAt = :now", ExpressionAttributeNames={"#status": "status"}, ExpressionAttributeValues={":completed": "completed", ":now": now})
+        values[":bookCursor"] = (int(config["bookRotationCursor"]) + 1) % len(config["bookRotationUserIds"])
+        update = update.replace("updatedAt = :now", "bookRotationCursor = :bookCursor, updatedAt = :now")
+    table.update_item(Key={"groupId": group_id, "id": CONFIG_ID}, UpdateExpression=update, ExpressionAttributeValues=values)
+
+
+def update_next_session(group_id: str, members: list[dict], body: dict) -> tuple[dict | None, str | None]:
+    """Let an admin replace the upcoming placeholder with its meeting plan."""
+    title, error = _validate_text(body.get("title"), "Book title")
+    if error:
+        return None, error
+    author, error = _validate_text(body.get("author"), "Book author")
+    if error:
+        return None, error
+    reading_target, error = _validate_text(body.get("readingTarget"), "Chapter goal")
+    if error:
+        return None, error
+    recommender_id = body.get("recommendedById")
+    member_by_id = {member["id"]: member for member in members}
+    if recommender_id not in member_by_id:
+        return None, "Choose a current group member as the recommender."
+    config = _fetch(group_id, CONFIG_ID)
+    session = _fetch(group_id, config.get("nextSessionId", "")) if config else None
+    if config is None or session is None or session.get("status") != "scheduled":
+        return None, "No scheduled next session exists."
+    if int(session["scheduledAt"]) <= _now():
+        return None, "This meeting has already started. Refresh to advance it."
+    now = _now()
+    book_id = config.get("activeBookId") or uuid.uuid4().hex
+    book = _fetch(group_id, f"book#{book_id}")
+    recommender = member_by_id[recommender_id]
+    book_item = {
+        "groupId": group_id, "id": f"book#{book_id}", "bookId": book_id, "title": title,
+        "author": author, "recommendedById": recommender_id, "recommendedByName": recommender["name"],
+        "status": "active", "selectedAt": book.get("selectedAt", now) if book else now,
+        "createdAt": book.get("createdAt", now) if book else now, "updatedAt": now,
+    }
+    table = _get_table()
+    table.put_item(Item=book_item)
+    table.update_item(Key={"groupId": group_id, "id": session["id"]}, UpdateExpression="SET bookId = :bookId, bookTitle = :title, readingTarget = :target, updatedAt = :now", ExpressionAttributeValues={":bookId": book_id, ":title": title, ":target": reading_target, ":now": now})
+    table.update_item(Key={"groupId": group_id, "id": CONFIG_ID}, UpdateExpression="SET activeBookId = :bookId, updatedAt = :now", ExpressionAttributeValues={":bookId": book_id, ":now": now})
     return summary(group_id, members), None
 
 
