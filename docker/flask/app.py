@@ -13,11 +13,10 @@ Implements the endpoints the frontend calls (see frontend/src/api/client.js):
     POST /api/roommates/notify         -> { "sent", "pruned", "failed" }
     POST /api/roommates/<id>/poke      -> { "sent", "pruned", "failed" }
 
-Plus the Web Push (PoC) endpoints:
+Plus the Web Push endpoints:
 
     GET  /api/push/public-key          -> { "publicKey": <VAPID public key> }
     POST /api/push/subscribe           -> { "ok": true }  (stores a user-owned subscription)
-    POST /api/push/test                -> { "sent", "pruned", "failed" }
 
 And the proposed-activities feed:
 
@@ -36,7 +35,6 @@ And the proposed-activities feed:
 
 And the shire request feed:
 
-    GET  /api/requests                 -> recent requests
     POST /api/requests                 -> the updated recent request list
     POST /api/requests/<id>/responses  -> the updated recent request list
     POST /api/requests/<id>/archive    -> the updated recent request list
@@ -48,7 +46,6 @@ And the shire request feed:
 
 And the shire checklist feed:
 
-    GET  /api/checklists               -> recent active checklists
     POST /api/checklists               -> the updated recent checklist list
     POST /api/checklists/<id>/notify   -> push a checklist reminder to everyone else
     POST /api/checklists/<id>/items    -> the updated recent checklist list
@@ -582,22 +579,6 @@ def create_app() -> Flask:
         push.save_subscription(subscription, user_id)
         return jsonify({"ok": True})
 
-    @app.post("/api/push/test")
-    def push_test():
-        """Send a test notification to every subscribed device (PoC helper)."""
-        viewer, error = group_member_from_query()
-        if error:
-            return error
-        if not push.is_configured():
-            return jsonify({"error": "Push is not configured on the server."}), 503
-        result = notify_group(
-            viewer["groupId"],
-            title="Roomie Status test",
-            body="If you can see this, push notifications work 🎉",
-            url="/",
-        )
-        return jsonify(result)
-
     # --- Spotify Jam --------------------------------------------------------
     @app.get("/api/jam")
     def get_jam():
@@ -1061,14 +1042,6 @@ def create_app() -> Flask:
         return jsonify(activities.list_recent(roommate["groupId"], consistent=True))
 
     # --- Requests -----------------------------------------------------------
-    @app.get("/api/requests")
-    def get_requests():
-        """Return recent household requests, newest first."""
-        viewer, error = group_member_from_query()
-        if error:
-            return error
-        return jsonify(household_requests.list_recent(viewer["groupId"]))
-
     @app.post("/api/requests")
     def create_request():
         """Create a targeted request and notify the requested roommates."""
@@ -1354,14 +1327,6 @@ def create_app() -> Flask:
         return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
 
     # --- Checklists ---------------------------------------------------------
-    @app.get("/api/checklists")
-    def get_checklists():
-        """Return recent active household checklists, newest first."""
-        viewer, error = group_member_from_query()
-        if error:
-            return error
-        return jsonify(household_checklists.list_recent(viewer["groupId"]))
-
     @app.post("/api/checklists")
     def create_checklist():
         """Create a household checklist and return the refreshed list."""

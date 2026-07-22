@@ -95,7 +95,6 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `startActivity`                 | `POST /api/activities/:id/start`                           |
 | `endActivity`                   | `POST /api/activities/:id/end`                             |
 | `setCommentLiked`               | `PUT/DELETE /api/activities/:id/comments/:commentId/likes` |
-| `getRequests`                   | `GET /api/requests?userId=:id`                             |
 | `createRequest`                 | `POST /api/requests`                                       |
 | `respondToRequest`              | `POST /api/requests/:id/responses`                         |
 | `archiveRequest`                | `POST /api/requests/:id/archive`                           |
@@ -103,7 +102,6 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `deleteRequest`                 | `DELETE /api/requests/:id`                                 |
 | `commentOnRequest`              | `POST /api/requests/:id/comments`                          |
 | `setRequestCommentLiked`        | `PUT/DELETE /api/requests/:id/comments/:commentId/likes`   |
-| `getChecklists`                 | `GET /api/checklists?userId=:id`                           |
 | `createChecklist`               | `POST /api/checklists`                                     |
 | `notifyChecklist`               | `POST /api/checklists/:id/notify`                          |
 | `addChecklistItem`              | `POST /api/checklists/:id/items`                           |

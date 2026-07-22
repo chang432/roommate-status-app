@@ -316,11 +316,6 @@ export async function setCommentLiked(id, commentId, userId, liked) {
   })
 }
 
-// GET /api/requests — recent household requests, newest first.
-export async function getRequests(userId) {
-  return request(withQuery('/requests', { userId }))
-}
-
 // POST /api/requests — create a targeted request for specific roommates.
 // Returns the refreshed request list.
 export async function createRequest(text, requesterId, requestedIds) {
@@ -378,11 +373,6 @@ export async function setRequestCommentLiked(id, commentId, userId, liked) {
     method: liked ? 'PUT' : 'DELETE',
     body: JSON.stringify({ userId }),
   })
-}
-
-// GET /api/checklists — recent active household checklists.
-export async function getChecklists(userId) {
-  return request(withQuery('/checklists', { userId }))
 }
 
 // POST /api/checklists — create a checklist with an initial set of items.

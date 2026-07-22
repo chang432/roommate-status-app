@@ -993,11 +993,6 @@ def test_user_triggered_broadcast_skips_actor_and_unowned_legacy_subscription(
     assert sent_endpoints == ["https://push/kayla"]
 
 
-def test_push_test_unconfigured(client):
-    res = client.post(grouped_path("/api/push/test"))
-    assert res.status_code == 503
-
-
 def test_share_jam_replaces_active_link_and_notifies(client, monkeypatch):
     calls = _capture_notifications(monkeypatch)
 
@@ -1445,7 +1440,6 @@ def test_create_checklist_returns_active_list_and_notifies_household(client, mon
     assert checklist["items"][0]["checkedBy"] == []
     assert checklist["isArchived"] is False
     assert client.get(grouped_path("/api/activities")).get_json() == []
-    assert client.get(grouped_path("/api/requests")).get_json() == []
     assert calls == [
         (
             "all",
