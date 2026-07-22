@@ -102,6 +102,63 @@ def ensure_default_group() -> dict:
     return _project_group(item)
 
 
+def ensure_seed_group(
+    group_id: str,
+    name: str,
+    join_code: str,
+    *,
+    show_roster: bool,
+    show_feed: bool,
+    show_book_club: bool,
+) -> dict:
+    """Create or refresh a named development seed group.
+
+    Seed groups use stable ids and join codes so repeated local starts converge
+    on the same data instead of accumulating a new random household each time.
+    This helper is called only by ``seed.py``; user-created groups still keep
+    their independently chosen display settings.
+    """
+    code = normalize_join_code(join_code)
+    if not valid_join_code(code):
+        raise ValueError("Seed group join codes must be 6-16 alphanumeric characters.")
+    table = _get_table()
+    now = int(time.time() * 1000)
+    item = {
+        "groupId": group_id,
+        "name": name,
+        "joinCode": code,
+        "createdAt": now,
+        "showRoster": show_roster,
+        "showFeed": show_feed,
+        "showBookClub": show_book_club,
+    }
+    try:
+        table.put_item(Item=item, ConditionExpression="attribute_not_exists(groupId)")
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        # Local seeds are a known fixture, so their selected sections should be
+        # restored on every restart without changing their original createdAt.
+        table.update_item(
+            Key={"groupId": group_id},
+            UpdateExpression=(
+                "SET #name = :name, joinCode = :joinCode, "
+                "showRoster = :showRoster, showFeed = :showFeed, "
+                "showBookClub = :showBookClub"
+            ),
+            ExpressionAttributeNames={"#name": "name"},
+            ExpressionAttributeValues={
+                ":name": name,
+                ":joinCode": code,
+                ":showRoster": show_roster,
+                ":showFeed": show_feed,
+                ":showBookClub": show_book_club,
+            },
+            ConditionExpression="attribute_exists(groupId)",
+        )
+    return get_group_by_id(group_id)
+
+
 def get_group_by_id(group_id: str) -> dict | None:
     if not group_id:
         return None

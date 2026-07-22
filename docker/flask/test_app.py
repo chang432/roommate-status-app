@@ -32,6 +32,7 @@ import household_shows
 import jam
 import module_models
 import push
+import seed
 from app import _activity_status_overrides, create_app, mentions_all, resolve_mentions
 
 TEST_GROUP_ID = db.DEFAULT_GROUP_ID
@@ -474,6 +475,31 @@ def test_existing_group_defaults_display_sections_to_visible(client):
     assert group["showRoster"] is True
     assert group["showFeed"] is True
     assert group["showBookClub"] is True
+
+
+def test_local_seed_groups_isolate_book_club_component(client):
+    seed.seed_local_groups()
+
+    yorkshire = groups.get_group_by_id(db.DEFAULT_GROUP_ID)
+    assert (yorkshire["showRoster"], yorkshire["showFeed"], yorkshire["showBookClub"]) == (
+        True,
+        True,
+        False,
+    )
+
+    book_club = groups.get_group_by_id(seed.BOOK_CLUB_GROUP_ID)
+    assert book_club["name"] == "Book Club"
+    assert book_club["joinCode"] == "BOOKCLUB"
+    assert (book_club["showRoster"], book_club["showFeed"], book_club["showBookClub"]) == (
+        False,
+        False,
+        True,
+    )
+    assert db.group_admin_ids(seed.BOOK_CLUB_GROUP_ID) == ["andre"]
+    assert [(member["id"], member["role"]) for member in db.get_all(seed.BOOK_CLUB_GROUP_ID)] == [
+        ("andre", "admin"),
+        ("kayla", "member"),
+    ]
 
 
 def admin_group(client, creator="andre", name="Admin House"):
