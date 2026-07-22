@@ -71,7 +71,10 @@ def test_book_club_member_can_notify_everyone_about_the_next_meeting(client, mon
         TEST_GROUP_ID,
         {
             "title": "Book Club reminder",
-            "body": "Sheryl reminded everyone about the next Book Club meeting: A Book",
+            "body": (
+                "Sheryl reminded everyone about the next Book Club meeting: "
+                "Book: A Book. Goal: Chapter 1. Snacks: Andre."
+            ),
             "url": "/",
             "event_type": "book-club-reminder",
         },

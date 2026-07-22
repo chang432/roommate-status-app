@@ -664,7 +664,9 @@ def create_app() -> Flask:
             title="Book Club reminder",
             body=(
                 f"{viewer['name']} reminded everyone about the next Book Club meeting: "
-                f"{session.get('bookTitle') or 'the current book'}"
+                f"Book: {session.get('bookTitle') or 'the current book'}. "
+                f"Goal: {session.get('readingTarget') or 'To be set'}. "
+                f"Snacks: {session.get('snackDutyName') or 'To be assigned'}."
             ),
             url="/",
             event_type="book-club-reminder",
