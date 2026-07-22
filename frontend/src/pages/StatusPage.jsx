@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Brandmark from "../components/Brandmark.jsx";
+import BookClub from "../components/BookClub.jsx";
 import EnableNotifications from "../components/EnableNotifications.jsx";
 import GroupFeed from "../components/GroupFeed.jsx";
 import JamWidget, { JamShareForm } from "../components/JamWidget.jsx";
@@ -226,6 +227,7 @@ export default function StatusPage() {
   // mean an older group record, which remains fully visible by default.
   const showRoster = selectedGroup?.showRoster !== false;
   const showFeed = selectedGroup?.showFeed !== false;
+  const showBookClub = selectedGroup?.showBookClub !== false;
   const groupDataLoading =
     groupsLoading ||
     statusLoadedGroupId !== user.activeGroupId ||
@@ -441,6 +443,8 @@ export default function StatusPage() {
             <JamWidget jam={jam} onJamChange={setJam} onReplace={openJamModal} />
           </div>
         )}
+
+        {showBookClub && !groupDataLoading && <BookClub />}
 
         {showFeed && (
           <div ref={feedRef} hidden={groupDataLoading}>

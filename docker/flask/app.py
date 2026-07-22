@@ -400,10 +400,18 @@ def create_app() -> Flask:
         body = request.get_json(silent=True) or {}
         show_roster = body.get("showRoster")
         show_feed = body.get("showFeed")
-        if not isinstance(show_roster, bool) or not isinstance(show_feed, bool):
+        show_book_club = body.get("showBookClub")
+        if not all(
+            isinstance(value, bool)
+            for value in (show_roster, show_feed, show_book_club)
+        ):
             return jsonify({"error": "Display settings must be true or false."}), 400
         group, error = groups.set_display_options(
-            actor["id"], actor["groupId"], show_roster, show_feed
+            actor["id"],
+            actor["groupId"],
+            show_roster,
+            show_feed,
+            show_book_club,
         )
         if error == "forbidden":
             return jsonify({"error": "Only a group admin can change display settings."}), 403

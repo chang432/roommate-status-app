@@ -1,0 +1,7 @@
+.section {
+  @apply mx-auto mt-6 w-full max-w-[720px] rounded-md border border-line bg-card p-4;
+}
+
+.title {
+  @apply text-[18px] font-black text-ink;
+}

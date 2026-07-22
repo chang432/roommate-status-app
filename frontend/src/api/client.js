@@ -116,10 +116,15 @@ export async function getCurrentGroup(userId) {
 }
 
 // PUT /api/groups/display — admin-only shared roster/feed visibility settings.
-export async function updateGroupDisplay(userId, showRoster, showFeed) {
+export async function updateGroupDisplay(
+  userId,
+  showRoster,
+  showFeed,
+  showBookClub,
+) {
   return request(withQuery('/groups/display', { userId }), {
     method: 'PUT',
-    body: JSON.stringify({ showRoster, showFeed }),
+    body: JSON.stringify({ showRoster, showFeed, showBookClub }),
   })
 }
 

@@ -1,4 +1,4 @@
-"TABLE RoommateStatus-main-groups - households / groups (one item per household). The JoinCodeIndex GSI (partition key joinCode, ProjectionType ALL) powers join-by-code lookups. showRoster and showFeed are group-wide admin controls; absent values on pre-existing rows are read as true. The seeded default group is yorkshire / YORKSHIRE."
-groupId (S),joinCode (S),name (S),createdAt (N),showRoster (BOOL),showFeed (BOOL)
-yorkshire,YORKSHIRE,Yorkshire,1720200000000,true,true
-cedar-house,CEDAR7X,Cedar House,1720260000000,true,false
+"TABLE RoommateStatus-main-groups - households / groups (one item per household). The JoinCodeIndex GSI (partition key joinCode, ProjectionType ALL) powers join-by-code lookups. showRoster, showFeed, and showBookClub are group-wide admin controls; absent values on pre-existing rows are read as true. The seeded default group is yorkshire / YORKSHIRE."
+groupId (S),joinCode (S),name (S),createdAt (N),showRoster (BOOL),showFeed (BOOL),showBookClub (BOOL)
+yorkshire,YORKSHIRE,Yorkshire,1720200000000,true,true,true
+cedar-house,CEDAR7X,Cedar House,1720260000000,true,false,true

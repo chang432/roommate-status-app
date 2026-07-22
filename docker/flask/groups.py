@@ -55,6 +55,7 @@ def _project_group(item: dict | None) -> dict | None:
         # visible so deploying this change never hides a household by default.
         "showRoster": item.get("showRoster", True),
         "showFeed": item.get("showFeed", True),
+        "showBookClub": item.get("showBookClub", True),
     }
 
 
@@ -75,6 +76,7 @@ def ensure_default_group() -> dict:
                 "createdAt": created_at,
                 "showRoster": True,
                 "showFeed": True,
+                "showBookClub": True,
             },
             ConditionExpression="attribute_not_exists(groupId)",
         )
@@ -155,6 +157,7 @@ def create_group(user_id: str, name: str) -> tuple[dict | None, dict | None, str
             "createdAt": int(time.time() * 1000),
             "showRoster": True,
             "showFeed": True,
+            "showBookClub": True,
         }
         try:
             table.put_item(
@@ -202,7 +205,11 @@ def join_group(user_id: str, code: str) -> tuple[dict | None, str | None]:
 
 
 def set_display_options(
-    actor_id: str, group_id: str, show_roster: bool, show_feed: bool
+    actor_id: str,
+    group_id: str,
+    show_roster: bool,
+    show_feed: bool,
+    show_book_club: bool,
 ) -> tuple[dict | None, str | None]:
     """Update one household's shared section visibility for a group admin."""
     if not db.is_group_admin(actor_id, group_id):
@@ -210,10 +217,14 @@ def set_display_options(
     try:
         _get_table().update_item(
             Key={"groupId": group_id},
-            UpdateExpression="SET showRoster = :showRoster, showFeed = :showFeed",
+            UpdateExpression=(
+                "SET showRoster = :showRoster, showFeed = :showFeed, "
+                "showBookClub = :showBookClub"
+            ),
             ExpressionAttributeValues={
                 ":showRoster": show_roster,
                 ":showFeed": show_feed,
+                ":showBookClub": show_book_club,
             },
             ConditionExpression="attribute_exists(groupId)",
         )

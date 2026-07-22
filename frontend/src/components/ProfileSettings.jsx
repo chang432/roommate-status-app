@@ -112,6 +112,7 @@ export default function ProfileSettings({
     const nextSettings = {
       showRoster: group.showRoster !== false,
       showFeed: group.showFeed !== false,
+      showBookClub: group.showBookClub !== false,
       [field]: checked,
     }
     try {
@@ -119,6 +120,7 @@ export default function ProfileSettings({
         user.id,
         nextSettings.showRoster,
         nextSettings.showFeed,
+        nextSettings.showBookClub,
       )
       setGroup(updatedGroup)
       onGroupChange?.(updatedGroup)
@@ -199,6 +201,18 @@ export default function ProfileSettings({
                 checked={group.showFeed !== false}
                 disabled={updatingDisplay}
                 onChange={(event) => handleDisplayChange('showFeed', event.target.checked)}
+              />
+            </label>
+            <label className={styles.displayOption}>
+              <span>
+                <strong>Book Club</strong>
+                <small>Show the group Book Club section.</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={group.showBookClub !== false}
+                disabled={updatingDisplay}
+                onChange={(event) => handleDisplayChange('showBookClub', event.target.checked)}
               />
             </label>
           </div>

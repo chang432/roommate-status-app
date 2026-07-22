@@ -361,7 +361,7 @@ def test_admin_updates_group_display_for_every_member(client):
     updated = client.put(
         "/api/groups/display?userId=andre",
         headers=headers,
-        json={"showRoster": False, "showFeed": False},
+        json={"showRoster": False, "showFeed": False, "showBookClub": False},
     )
 
     assert updated.status_code == 200
@@ -372,6 +372,7 @@ def test_admin_updates_group_display_for_every_member(client):
         "createdAt": updated.get_json()["group"]["createdAt"],
         "showRoster": False,
         "showFeed": False,
+        "showBookClub": False,
         "viewerIsAdmin": True,
     }
     member_view = client.get(
@@ -379,6 +380,7 @@ def test_admin_updates_group_display_for_every_member(client):
     ).get_json()["group"]
     assert member_view["showRoster"] is False
     assert member_view["showFeed"] is False
+    assert member_view["showBookClub"] is False
     assert member_view["viewerIsAdmin"] is False
 
     admin_view = client.get(
@@ -394,7 +396,7 @@ def test_plain_member_cannot_change_group_display(client):
     updated = client.put(
         "/api/groups/display?userId=sheryl",
         headers=headers,
-        json={"showRoster": False, "showFeed": True},
+        json={"showRoster": False, "showFeed": True, "showBookClub": True},
     )
 
     assert updated.status_code == 403
@@ -416,6 +418,7 @@ def test_existing_group_defaults_display_sections_to_visible(client):
 
     assert group["showRoster"] is True
     assert group["showFeed"] is True
+    assert group["showBookClub"] is True
 
 
 def admin_group(client, creator="andre", name="Admin House"):

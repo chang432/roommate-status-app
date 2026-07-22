@@ -12,8 +12,8 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Profile settings** keep account actions in one place, including sign out,
   account deletion, System/Light/Dark/Forest appearance preferences, and the
   current household invite code for grouped users. Group admins can also choose
-  whether the household roster and group feed are shown to everyone in that
-  group. Theme choices are stored on the current device.
+  whether the household roster, Book Club, and group feed are shown to everyone
+  in that group. Theme choices are stored on the current device.
 - **View** the whole household's current statuses at a glance.
 - **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.

@@ -127,6 +127,7 @@ describe("ProfileSettings member administration", () => {
       joinCode: "SHIRE12",
       showRoster: false,
       showFeed: true,
+      showBookClub: true,
     };
     updateGroupDisplay.mockResolvedValue({ group: updatedGroup });
     const { onGroupChange } = renderPanel(roster("admin"));
@@ -136,7 +137,7 @@ describe("ProfileSettings member administration", () => {
     );
 
     await waitFor(() =>
-      expect(updateGroupDisplay).toHaveBeenCalledWith("andre", false, true),
+      expect(updateGroupDisplay).toHaveBeenCalledWith("andre", false, true, true),
     );
     expect(onGroupChange).toHaveBeenCalledWith(updatedGroup);
   });
@@ -146,6 +147,7 @@ describe("ProfileSettings member administration", () => {
 
     expect(screen.queryByRole("checkbox", { name: /Household roster/i })).toBeNull();
     expect(screen.queryByRole("checkbox", { name: /Group feed/i })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Book Club/i })).toBeNull();
   });
 
   it("uses the current group permission while the roster is still refreshing", async () => {
@@ -162,5 +164,25 @@ describe("ProfileSettings member administration", () => {
     expect(
       await screen.findByRole("checkbox", { name: /Household roster/i }),
     ).toBeInTheDocument();
+  });
+
+  it("lets an admin hide the shared Book Club section", async () => {
+    updateGroupDisplay.mockResolvedValue({
+      group: {
+        groupId: "shire",
+        name: "Shire",
+        joinCode: "SHIRE12",
+        showRoster: true,
+        showFeed: true,
+        showBookClub: false,
+      },
+    });
+    renderPanel(roster("admin"));
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Book Club/i }));
+
+    await waitFor(() =>
+      expect(updateGroupDisplay).toHaveBeenCalledWith("andre", true, true, false),
+    );
   });
 });
