@@ -5,7 +5,8 @@
 Give each group a Book Club summary that shows the next meeting, its reading
 target, the active book and its recommender, and the snack-duty member. The
 model must also support a completed-book history, one rating per member per
-book, and discussions separated by chapter without redesigning the data later.
+book, chapter-separated discussions, and each member's attendance and reading
+progress for an upcoming session without redesigning the data later.
 
 ## Decisions
 
@@ -17,6 +18,9 @@ book, and discussions separated by chapter without redesigning the data later.
   member rotations.
 - A book may span multiple sessions. A session's reading target is free text,
   such as `Read through Chapter 8`.
+- For each upcoming session, every member can update their own attendance plan
+  and the chapter number they have read through. A missing response means the
+  member has not responded yet.
 - A completed book can receive one editable integer rating from 1 through 5
   from each group member.
 - Discussion is a flat chronological set of posts within a selected chapter;
@@ -30,12 +34,30 @@ Add a dedicated group-partitioned table named
 | Key or index | Fields | Purpose |
 | --- | --- | --- |
 | Primary key | `groupId (S)` + `id (S)` | Isolates all Book Club records to one group. |
-| `BookIdIndex` GSI | `bookId (S)` + `id (S)` | Retrieves a book's ratings and chapter discussion without scanning the group. |
+| `BookIdIndex` GSI | `bookId (S)` + `id (S)` | Retrieves a book's sessions, ratings, and chapter discussion without scanning the group. |
 
 The new table follows the existing on-demand, encrypted, point-in-time
 recovery, retained-table settings used by the other group-partitioned tables.
-Items without a `bookId` (the configuration item and sessions) are not present
-in `BookIdIndex`.
+Items without a `bookId` (the configuration item and per-session member
+responses) are not present in `BookIdIndex`. Session records do have `bookId`
+and intentionally appear in the index as part of a book's history.
+
+### Logical attribute schema
+
+These are the attributes the application writes for each item type; DynamoDB
+only declares the primary-key and index attributes in CloudFormation, while
+the other attributes remain schemaless. `S`, `N`, and `L of S` mean string,
+number, and a list of strings, respectively. Required attributes are always
+present; optional attributes are absent when inapplicable.
+
+| Item type / `id` pattern | Required attributes | Optional attributes |
+| --- | --- | --- |
+| Configuration `config#book-club` | `groupId (S)`, `id (S)`, `timezone (S)`, `frequency (S)`, `weekday (S)`, `localTime (S)`, `nextSessionAt (N)`, `nextSessionId (S)`, `snackRotationUserIds (L of S)`, `snackRotationCursor (N)`, `bookRotationUserIds (L of S)`, `bookRotationCursor (N)`, `createdAt (N)`, `updatedAt (N)` | `activeBookId (S)` |
+| Book `book#<bookId>` | `groupId (S)`, `id (S)`, `bookId (S)`, `title (S)`, `author (S)`, `recommendedById (S)`, `recommendedByName (S)`, `status (S)`, `selectedAt (N)`, `createdAt (N)`, `updatedAt (N)` | `completedAt (N)` |
+| Session `session#<UTC ISO timestamp>` | `groupId (S)`, `id (S)`, `scheduledAt (N)`, `bookId (S)`, `bookTitle (S)`, `readingTarget (S)`, `snackDutyUserId (S)`, `snackDutyName (S)`, `status (S)`, `createdAt (N)`, `updatedAt (N)` | `completedAt (N)` |
+| Session member response `session-member#<UTC ISO timestamp>#<userId>` | `groupId (S)`, `id (S)`, `sessionId (S)`, `userId (S)`, `userName (S)`, `attendanceStatus (S)`, `chaptersReadThrough (N)`, `createdAt (N)`, `updatedAt (N)` | none |
+| Rating `rating#<bookId>#<userId>` | `groupId (S)`, `id (S)`, `bookId (S)`, `userId (S)`, `userName (S)`, `rating (N)`, `createdAt (N)`, `updatedAt (N)` | none |
+| Chapter post `post#<bookId>#<chapterKey>#<timestamp>#<postId>` | `groupId (S)`, `id (S)`, `bookId (S)`, `chapterKey (S)`, `chapterLabel (S)`, `authorId (S)`, `authorName (S)`, `body (S)`, `createdAt (N)`, `updatedAt (N)` | `parentPostId (S)` for a future reply feature |
 
 ### Item shapes
 
@@ -129,6 +151,34 @@ next-session fields atomically. Completing the book additionally marks the
 book complete, clears `activeBookId`, and advances the book-recommender cursor
 once; selecting the next book uses that recommender.
 
+#### `session-member#<UTC ISO timestamp>#<userId>`
+
+One response per member and upcoming session. The deterministic ID means an
+update replaces only that member's response rather than rewriting an embedded
+list shared by the entire group. All responses for a session are read with an
+`id` prefix query.
+
+```json
+{
+  "groupId": "yorkshire",
+  "id": "session-member#2026-07-22T23:30:00.000Z#andre",
+  "sessionId": "session#2026-07-22T23:30:00.000Z",
+  "userId": "andre",
+  "userName": "Andre",
+  "attendanceStatus": "attending",
+  "chaptersReadThrough": 6,
+  "createdAt": 1783553400000,
+  "updatedAt": 1783553400000
+}
+```
+
+`attendanceStatus` is exactly `attending`, `maybe`, or `not_attending`.
+`chaptersReadThrough` is a non-negative integer, where `0` means none read.
+Only the responding member can create or update their response, and only while
+the session is scheduled and in the future. The group can see all responses;
+admins do not edit another member's response. Deleting no response item is not
+needed: the absence of an item communicates `not responded`.
+
 #### `rating#<bookId>#<userId>`
 
 One per book and member. The deterministic ID prevents duplicate ratings and
@@ -185,12 +235,16 @@ configuration's next-session data together with the active book. It displays:
 - active book title and author;
 - `recommendedByName` from the active book;
 - `readingTarget` and `snackDutyName` from the next session.
+- each member's attendance plan and chapters-read-through value, with an
+  explicit `not responded` state when their response item is absent.
 
 Admin-only commands create or edit the configuration, rotations, active book,
 and next session; complete/cancel a session; and complete a book. All commands
-verify group membership and use stable user IDs for assignments. Member-facing
-future endpoints list completed books, create or replace a personal rating,
-list posts for a book/chapter, and create/edit/delete the caller's posts.
+verify group membership and use stable user IDs for assignments. Any group
+member may create or replace only their own upcoming-session response. Other
+member-facing endpoints list completed books, create or replace a personal
+rating, list posts for a book/chapter, and create/edit/delete the caller's
+posts.
 
 ## Implementation notes
 
@@ -213,7 +267,10 @@ list posts for a book/chapter, and create/edit/delete the caller's posts.
 - A book can remain active across any number of sessions.
 - Completing a session advances snack duty once; completing a book advances the
   recommender once, independently.
+- Each group member can independently record `attending`, `maybe`, or
+  `not_attending` plus a non-negative chapter count for a scheduled future
+  session; missing responses display as `not responded`.
 - Groups cannot read or mutate one another’s records; non-admin members cannot
-  administer Book Club data.
+  administer Book Club data, but they can update their own session response.
 - Completed books retain their recommender, sessions, individual ratings, and
   chapter-specific discussions.
