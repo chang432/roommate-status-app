@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import ActivityCreateForm from "./ActivityCreateForm.jsx";
 import ChecklistCreateForm from "./ChecklistCreateForm.jsx";
@@ -97,6 +104,10 @@ function ModuleNav({
 }) {
   const navRef = useRef(null);
   const dragPointerRef = useRef(null);
+  const dragTypeRef = useRef(null);
+  const lastDropTypeRef = useRef(null);
+  const editRowRefs = useRef(new Map());
+  const rowPositionsBeforeReorderRef = useRef(null);
   const [allDropdownOpen, setAllDropdownOpen] = useState(false);
   const [draggingType, setDraggingType] = useState(null);
   const counts = modules.reduce((acc, module) => {
@@ -124,18 +135,66 @@ function ModuleNav({
     );
   }
 
+  function reorderType(draggedType, targetType) {
+    if (
+      !draggedType ||
+      !targetType ||
+      draggedType === targetType ||
+      lastDropTypeRef.current === targetType
+    ) {
+      return;
+    }
+
+    // Capture each row before the order updates. The layout effect below
+    // animates it from this position into its new spot (a FLIP animation).
+    rowPositionsBeforeReorderRef.current = new Map(
+      [...editRowRefs.current].map(([typeId, row]) => [
+        typeId,
+        row.getBoundingClientRect().top,
+      ]),
+    );
+    lastDropTypeRef.current = targetType;
+    onReorderType(draggedType, targetType);
+  }
+
+  useLayoutEffect(() => {
+    const previousPositions = rowPositionsBeforeReorderRef.current;
+    rowPositionsBeforeReorderRef.current = null;
+    if (!previousPositions) return;
+
+    previousPositions.forEach((previousTop, typeId) => {
+      const row = editRowRefs.current.get(typeId);
+      if (!row) return;
+      const distance = previousTop - row.getBoundingClientRect().top;
+      if (!distance) return;
+      row.animate?.(
+        [
+          { transform: `translateY(${distance}px)` },
+          { transform: "translateY(0)" },
+        ],
+        { duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      );
+    });
+  }, [moduleTypes]);
+
   const finishEditing = useCallback(() => {
     onEditModeChange(false);
     setAllDropdownOpen(false);
     setDraggingType(null);
     dragPointerRef.current = null;
+    dragTypeRef.current = null;
+    lastDropTypeRef.current = null;
   }, [onEditModeChange]);
 
   function finishTouchDrag(event) {
     const drag = dragPointerRef.current;
     dragPointerRef.current = null;
-    setDraggingType(null);
-    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (!drag || event.pointerId !== drag.pointerId) {
+      setDraggingType(null);
+      dragTypeRef.current = null;
+      lastDropTypeRef.current = null;
+      return;
+    }
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     const dropTarget = document
       .elementFromPoint(event.clientX, event.clientY)
@@ -143,9 +202,20 @@ function ModuleNav({
     const dropType =
       dropTarget?.getAttribute("data-module-drop-type") ||
       dropTarget?.getAttribute("data-module-type");
-    if (dropType && dropType !== drag.type) {
-      onReorderType(drag.type, dropType);
-    }
+    reorderType(drag.type, dropType);
+    setDraggingType(null);
+    dragTypeRef.current = null;
+    lastDropTypeRef.current = null;
+  }
+
+  function previewTouchDrag(event) {
+    const drag = dragPointerRef.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dropType = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest("[data-module-drop-type]")
+      ?.getAttribute("data-module-drop-type");
+    reorderType(drag.type, dropType);
   }
 
   useEffect(() => {
@@ -296,6 +366,10 @@ function ModuleNav({
             return (
               <div
                 key={type.id}
+                ref={(element) => {
+                  if (element) editRowRefs.current.set(type.id, element);
+                  else editRowRefs.current.delete(type.id);
+                }}
                 data-module-drop-type={type.id}
                 className={cx(
                   styles.moduleNavEditRow,
@@ -305,15 +379,15 @@ function ModuleNav({
                 )}
                 onDragOver={(event) => {
                   event.preventDefault();
+                  reorderType(dragTypeRef.current, type.id);
                 }}
                 onDrop={(event) => {
                   event.preventDefault();
-                  const draggedId =
-                    event.dataTransfer.getData("text/plain") || draggingType;
+                  const draggedId = event.dataTransfer.getData("text/plain");
+                  reorderType(draggedId, type.id);
                   setDraggingType(null);
-                  if (draggedId && draggedId !== type.id) {
-                    onReorderType(draggedId, type.id);
-                  }
+                  dragTypeRef.current = null;
+                  lastDropTypeRef.current = null;
                 }}
               >
                 {filterButton}
@@ -329,13 +403,18 @@ function ModuleNav({
                       pointerId: event.pointerId,
                       type: type.id,
                     };
+                    dragTypeRef.current = type.id;
+                    lastDropTypeRef.current = null;
                     setDraggingType(type.id);
                     event.currentTarget.setPointerCapture?.(event.pointerId);
                   }}
+                  onPointerMove={previewTouchDrag}
                   onPointerUp={finishTouchDrag}
                   onPointerCancel={(event) => {
                     if (dragPointerRef.current?.pointerId === event.pointerId) {
                       dragPointerRef.current = null;
+                      dragTypeRef.current = null;
+                      lastDropTypeRef.current = null;
                       setDraggingType(null);
                       event.currentTarget.releasePointerCapture?.(
                         event.pointerId,
@@ -343,11 +422,17 @@ function ModuleNav({
                     }
                   }}
                   onDragStart={(event) => {
+                    dragTypeRef.current = type.id;
+                    lastDropTypeRef.current = null;
                     setDraggingType(type.id);
                     event.dataTransfer.effectAllowed = "move";
                     event.dataTransfer.setData("text/plain", type.id);
                   }}
-                  onDragEnd={() => setDraggingType(null)}
+                  onDragEnd={() => {
+                    dragTypeRef.current = null;
+                    lastDropTypeRef.current = null;
+                    setDraggingType(null);
+                  }}
                 >
                   ☰
                 </button>
