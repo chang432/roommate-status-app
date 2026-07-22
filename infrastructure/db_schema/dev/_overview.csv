@@ -32,7 +32,7 @@ RoommateStatus-dev-shows-v2,RoommateStatus-dev-shows-v2.csv,"groupId (S) + id (S
 RoommateStatus-dev-checklists-v2,RoommateStatus-dev-checklists-v2.csv,"groupId (S) + id (S)",,household_checklists.py,Household checklists
 RoommateStatus-dev-comment-likes-v2,RoommateStatus-dev-comment-likes-v2.csv,"groupId (S) + id (S)",,"activities.py, household_requests.py",Likes on activity & request comments
 RoommateStatus-dev-groups,RoommateStatus-dev-groups.csv,groupId (S),"JoinCodeIndex (HASH joinCode, ProjectionType ALL)",groups.py,Households / join-by-code groups
-RoommateStatus-dev-memberships,RoommateStatus-dev-memberships.csv,"groupId (S) + userId (S)","UserIdIndex (HASH userId, ProjectionType ALL)",db.py,Account memberships and per-group statuses
+RoommateStatus-dev-memberships,RoommateStatus-dev-memberships.csv,"groupId (S) + userId (S)","UserIdIndex (HASH userId, ProjectionType ALL)",db.py,"Account memberships, admin roles, and per-group statuses"
 RoommateStatus-dev-migrations,RoommateStatus-dev-migrations.csv,id (S),,migrations/runner.py,In-place data-migration ledger + run lock
 
 "COMMON SETTINGS (every table, from the CloudFormation template)"

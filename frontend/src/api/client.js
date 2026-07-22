@@ -115,6 +115,22 @@ export async function getCurrentGroup(userId) {
   return request(withQuery('/groups/current', { userId }))
 }
 
+// DELETE /api/groups/members/:id — admin-only removal. Returns the new roster.
+export async function removeGroupMember(actorId, userId) {
+  return request(withQuery(`/groups/members/${userId}`, { userId: actorId }), {
+    method: 'DELETE',
+  })
+}
+
+// PUT /api/groups/members/:id/role — admin-only promote/demote. Returns the
+// new roster so callers refresh roles and membership in one round trip.
+export async function setGroupMemberRole(actorId, userId, role) {
+  return request(withQuery(`/groups/members/${userId}/role`, { userId: actorId }), {
+    method: 'PUT',
+    body: JSON.stringify({ role }),
+  })
+}
+
 // GET /api/roommates — the whole household with their current statuses.
 export async function getRoommates(userId, groupId) {
   return request(withQuery('/roommates', { userId }), {

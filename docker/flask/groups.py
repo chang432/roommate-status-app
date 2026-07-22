@@ -158,7 +158,10 @@ def create_group(user_id: str, name: str) -> tuple[dict | None, dict | None, str
                 continue
             raise
 
-        membership = db.create_membership(account["id"], group_id, account["name"])
+        # Whoever creates the household administers it until they promote others.
+        membership = db.create_membership(
+            account["id"], group_id, account["name"], role=db.ROLE_ADMIN
+        )
         if membership is not None:
             return {**account, "groupId": group_id, "hasGroup": True}, _project_group(group_item), None
 
@@ -188,3 +191,51 @@ def join_group(user_id: str, code: str) -> tuple[dict | None, str | None]:
     # The client switches to the group it just joined, even if lexical group
     # ordering would make a different membership appear first on the account.
     return {**db.get_account_by_id(account["id"]), "groupId": group["groupId"]}, None
+
+
+def _authorize_admin_action(
+    actor_id: str, group_id: str, target_id: str
+) -> tuple[str | None, str | None]:
+    """Shared guard for the admin-only member actions.
+
+    Returns (target_role, error). Both actor and target must belong to the
+    group, and only an admin may act.
+    """
+    if not db.is_group_admin(actor_id, group_id):
+        return None, "forbidden"
+    target_role = db.get_membership_role(target_id, group_id)
+    if target_role is None:
+        return None, "unknown_member"
+    return target_role, None
+
+
+def remove_member(actor_id: str, group_id: str, target_id: str) -> str | None:
+    """Drop another member from the group. Returns an error code or None.
+
+    Admins are peers, so one cannot remove another; demote them first. That also
+    means the group can never lose its last admin through a removal.
+    """
+    target_role, error = _authorize_admin_action(actor_id, group_id, target_id)
+    if error:
+        return error
+    if actor_id == target_id:
+        return "self_removal"
+    if target_role == db.ROLE_ADMIN:
+        return "admin_target"
+    return None if db.delete_membership(target_id, group_id) else "unknown_member"
+
+
+def set_member_role(actor_id: str, group_id: str, target_id: str, role: str) -> str | None:
+    """Grant or revoke admin on another member. Returns an error code or None."""
+    if role not in db.VALID_ROLES:
+        return "invalid_role"
+    target_role, error = _authorize_admin_action(actor_id, group_id, target_id)
+    if error:
+        return error
+    if target_role == role:
+        return None
+    # Demoting the only admin would leave the household with nobody able to
+    # administer it, so the last admin must promote a successor first.
+    if role == db.ROLE_MEMBER and db.group_admin_ids(group_id) == [target_id]:
+        return "last_admin"
+    return None if db.set_membership_role(target_id, group_id, role) else "unknown_member"

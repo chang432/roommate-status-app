@@ -384,6 +384,51 @@ def create_app() -> Flask:
             return jsonify({"error": "That group no longer exists."}), 404
         return jsonify({"group": group})
 
+    # Admin-only member administration. Both routes resolve the actor from the
+    # request's group scope, so an admin of one household gains nothing in
+    # another. Each returns the updated roster the caller already renders.
+    MEMBER_ADMIN_ERRORS = {
+        "forbidden": ("Only a group admin can manage members.", 403),
+        "unknown_member": ("That roommate is not in this group.", 404),
+        "self_removal": ("You cannot remove yourself from the group.", 400),
+        "admin_target": ("Remove admin from that roommate before removing them.", 409),
+        "last_admin": ("Promote another admin before stepping down.", 409),
+        "invalid_role": (f"Role must be one of {sorted(db.VALID_ROLES)}.", 400),
+    }
+
+    def member_admin_response(error: str | None, group_id: str):
+        if error:
+            message, status = MEMBER_ADMIN_ERRORS.get(
+                error, ("Could not update that member.", 400)
+            )
+            return jsonify({"error": message}), status
+        return jsonify(db.get_all(group_id, consistent=True))
+
+    @app.delete("/api/groups/members/<user_id>")
+    def remove_group_member(user_id: str):
+        """Remove another roommate from the actor's current group."""
+        actor, error = group_member_from_query()
+        if error:
+            return error
+        return member_admin_response(
+            groups.remove_member(actor["id"], actor["groupId"], user_id),
+            actor["groupId"],
+        )
+
+    @app.put("/api/groups/members/<user_id>/role")
+    def update_group_member_role(user_id: str):
+        """Grant or revoke admin on another roommate in the actor's group."""
+        actor, error = group_member_from_query()
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        return member_admin_response(
+            groups.set_member_role(
+                actor["id"], actor["groupId"], user_id, body.get("role", "")
+            ),
+            actor["groupId"],
+        )
+
     @app.get("/api/roommates")
     def get_roommates():
         """Return the whole household with their current statuses."""

@@ -343,6 +343,8 @@ def test_create_group_adds_creator_and_returns_an_invite_code(client):
             "status": "busy",
             "statusText": "",
             "statusUpdatedAt": None,
+            # Whoever creates the household administers it.
+            "role": "admin",
         }
     ]
 
@@ -350,6 +352,142 @@ def test_create_group_adds_creator_and_returns_an_invite_code(client):
 def test_create_group_rejects_blank_name(client):
     created = client.post("/api/groups", json={"userId": "andre", "name": "   "})
     assert created.status_code == 400
+
+
+def admin_group(client, creator="andre", name="Admin House"):
+    """Create a group (creator becomes its admin) and return (group_id, headers)."""
+    group_id = client.post(
+        "/api/groups", json={"userId": creator, "name": name}
+    ).get_json()["group"]["groupId"]
+    return group_id, {"X-Roomie-Group-ID": group_id}
+
+
+def join_as(client, group_id, user_id):
+    """Add an existing seeded account to a group through its invite code."""
+    code = groups.get_group_by_id(group_id)["joinCode"]
+    assert client.post("/api/groups/join", json={"userId": user_id, "code": code}).status_code == 200
+
+
+def role_of(client, group_id, headers, user_id, viewer="andre"):
+    roster = client.get(f"/api/roommates?userId={viewer}", headers=headers).get_json()
+    return next((r["role"] for r in roster if r["id"] == user_id), None)
+
+
+def test_joining_a_group_makes_a_plain_member(client):
+    group_id, headers = admin_group(client)
+    join_as(client, group_id, "sheryl")
+
+    assert role_of(client, group_id, headers, "andre") == "admin"
+    assert role_of(client, group_id, headers, "sheryl") == "member"
+
+
+def test_admin_removes_a_member_and_gets_the_new_roster(client):
+    group_id, headers = admin_group(client)
+    join_as(client, group_id, "sheryl")
+
+    removed = client.delete("/api/groups/members/sheryl?userId=andre", headers=headers)
+
+    assert removed.status_code == 200
+    assert [r["id"] for r in removed.get_json()] == ["andre"]
+    # Only the membership goes; the account and its other groups survive.
+    assert client.get("/api/accounts/sheryl").status_code == 200
+    assert "yorkshire" in db.get_group_ids("sheryl")
+
+
+def test_plain_member_cannot_remove_or_promote_anyone(client):
+    group_id, headers = admin_group(client)
+    join_as(client, group_id, "sheryl")
+    join_as(client, group_id, "kayla")
+
+    removed = client.delete("/api/groups/members/kayla?userId=sheryl", headers=headers)
+    promoted = client.put(
+        "/api/groups/members/kayla/role?userId=sheryl", headers=headers, json={"role": "admin"}
+    )
+
+    assert removed.status_code == 403
+    assert promoted.status_code == 403
+    assert role_of(client, group_id, headers, "kayla") == "member"
+
+
+def test_admin_promotes_a_member_who_can_then_administer(client):
+    group_id, headers = admin_group(client)
+    join_as(client, group_id, "sheryl")
+    join_as(client, group_id, "kayla")
+
+    promoted = client.put(
+        "/api/groups/members/sheryl/role?userId=andre", headers=headers, json={"role": "admin"}
+    )
+    assert promoted.status_code == 200
+    assert role_of(client, group_id, headers, "sheryl") == "admin"
+
+    # The freshly promoted admin can now act on the group themselves.
+    removed = client.delete("/api/groups/members/kayla?userId=sheryl", headers=headers)
+    assert removed.status_code == 200
+    assert [r["id"] for r in removed.get_json()] == ["andre", "sheryl"]
+
+
+def test_admins_cannot_remove_each_other_or_themselves(client):
+    group_id, headers = admin_group(client)
+    join_as(client, group_id, "sheryl")
+    client.put(
+        "/api/groups/members/sheryl/role?userId=andre", headers=headers, json={"role": "admin"}
+    )
+
+    peer = client.delete("/api/groups/members/sheryl?userId=andre", headers=headers)
+    own = client.delete("/api/groups/members/andre?userId=andre", headers=headers)
+
+    assert peer.status_code == 409
+    assert own.status_code == 400
+    assert [r["id"] for r in client.get(
+        "/api/roommates?userId=andre", headers=headers
+    ).get_json()] == ["andre", "sheryl"]
+
+
+def test_last_admin_cannot_step_down(client):
+    group_id, headers = admin_group(client)
+    join_as(client, group_id, "sheryl")
+
+    demoted = client.put(
+        "/api/groups/members/andre/role?userId=andre", headers=headers, json={"role": "member"}
+    )
+
+    assert demoted.status_code == 409
+    assert role_of(client, group_id, headers, "andre") == "admin"
+
+    # With a successor in place the same demotion is allowed.
+    client.put(
+        "/api/groups/members/sheryl/role?userId=andre", headers=headers, json={"role": "admin"}
+    )
+    stepped_down = client.put(
+        "/api/groups/members/andre/role?userId=andre", headers=headers, json={"role": "member"}
+    )
+    assert stepped_down.status_code == 200
+    assert role_of(client, group_id, headers, "andre") == "member"
+
+
+def test_admin_rights_do_not_cross_groups(client):
+    """Admin is per-membership: administering one household grants nothing elsewhere."""
+    _, other_headers = admin_group(client, creator="sheryl", name="Cedar House")
+
+    # andre administers the seeded household (both are seeded admins there) but
+    # is a stranger to the Cedar House group sheryl just created.
+    assert db.is_group_admin("andre", db.DEFAULT_GROUP_ID)
+    res = client.delete("/api/groups/members/sheryl?userId=andre", headers=other_headers)
+
+    assert res.status_code == 400
+    assert res.get_json()["code"] == "invalid_user"
+
+
+def test_member_admin_routes_reject_unknown_targets_and_roles(client):
+    group_id, headers = admin_group(client)
+
+    missing = client.delete("/api/groups/members/ghost?userId=andre", headers=headers)
+    bad_role = client.put(
+        "/api/groups/members/andre/role?userId=andre", headers=headers, json={"role": "owner"}
+    )
+
+    assert missing.status_code == 404
+    assert bad_role.status_code == 400
 
 
 def test_get_account_unknown_user_flags_invalid_user(client):
@@ -392,7 +530,7 @@ def test_get_roommates(client):
     data = res.get_json()
     assert len(data) == 5
     # Shape the frontend relies on.
-    assert set(data[0]) == {"id", "name", "status", "statusText", "statusUpdatedAt"}
+    assert set(data[0]) == {"id", "name", "status", "statusText", "statusUpdatedAt", "role"}
     assert data[0]["statusUpdatedAt"] is None
 
 

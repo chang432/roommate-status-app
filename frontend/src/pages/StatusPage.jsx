@@ -555,6 +555,8 @@ export default function StatusPage() {
           >
             <ProfileSettings
               user={user}
+              roommates={roommates}
+              onRoommatesChange={setRoommates}
               onSignOut={logout}
               onDeleteAccount={deleteAccount}
             />
