@@ -12,17 +12,101 @@ the standard AWS config chain for region/credentials.
 
 from __future__ import annotations
 
+import os
+import time
+
+import book_club
 import db
 import groups
+
+BOOK_CLUB_GROUP_ID = "book-club"
+BOOK_CLUB_GROUP_NAME = "Book Club"
+BOOK_CLUB_GROUP_JOIN_CODE = "BOOKCLUB"
+
+
+def seed_local_groups() -> None:
+    """Seed the two local households used to exercise component visibility.
+
+    Yorkshire remains the broad household example, while Book Club isolates the
+    new card. Accounts are shared deliberately: Andre can switch between the
+    groups, and Kayla demonstrates a non-admin Book Club member.
+    """
+    groups.ensure_default_group()
+    groups.set_display_options(
+        "andre", db.DEFAULT_GROUP_ID, show_roster=True, show_feed=True, show_book_club=False
+    )
+    groups.ensure_seed_group(
+        BOOK_CLUB_GROUP_ID,
+        BOOK_CLUB_GROUP_NAME,
+        BOOK_CLUB_GROUP_JOIN_CODE,
+        show_roster=False,
+        show_feed=False,
+        show_book_club=True,
+    )
+    for user_id, role in (("andre", db.ROLE_ADMIN), ("kayla", db.ROLE_MEMBER)):
+        account = db.get_account_by_id(user_id)
+        if account is None:
+            raise RuntimeError(f"Seed account {user_id!r} is missing.")
+        db.create_membership(user_id, BOOK_CLUB_GROUP_ID, account["name"], role=role)
+        # create_membership intentionally leaves existing rows alone, so force
+        # the fixture roles on reruns (Andre must remain the sole admin).
+        db.set_membership_role(user_id, BOOK_CLUB_GROUP_ID, role)
+
+
+def seed_local_book_club() -> None:
+    """Create a small local-only history for exercising the Book Club dialogs."""
+    if not os.environ.get("DYNAMODB_ENDPOINT"):
+        return
+
+    members = db.get_all(BOOK_CLUB_GROUP_ID)
+    _summary, error = book_club.configure(
+        BOOK_CLUB_GROUP_ID,
+        members,
+        {
+            "title": "The Fifth Season",
+            "author": "N. K. Jemisin",
+            "readingTarget": "Read through Chapter 9",
+            "snackRotationUserIds": ["andre", "kayla"],
+            "bookRotationUserIds": ["kayla", "andre"],
+        },
+    )
+    if error and error != "Book Club is already configured.":
+        raise RuntimeError(f"Could not seed Book Club: {error}")
+
+    now = int(time.time() * 1000)
+    # The active book above plus this completed title make the local history
+    # dialog useful immediately, while stable ids keep repeated seeds safe.
+    book_club._get_table().put_item(Item={
+        "groupId": BOOK_CLUB_GROUP_ID,
+        "id": "book#a-psalm-for-the-wild-built",
+        "bookId": "a-psalm-for-the-wild-built",
+        "title": "A Psalm for the Wild-Built",
+        "author": "Becky Chambers",
+        "recommendedById": "andre",
+        "recommendedByName": "Andre",
+        "status": "completed",
+        "selectedAt": now - 28 * 24 * 60 * 60 * 1000,
+        "completedAt": now - 14 * 24 * 60 * 60 * 1000,
+        "createdAt": now - 28 * 24 * 60 * 60 * 1000,
+        "updatedAt": now - 14 * 24 * 60 * 60 * 1000,
+    })
 
 
 def main() -> int:
     db.seed()
-    groups.ensure_default_group()
+    seed_local_groups()
+    seed_local_book_club()
     roommates = db.get_all(db.DEFAULT_GROUP_ID)
     print(f"Table '{db.TABLE_NAME}' now has {len(roommates)} roommate(s):")
     for r in roommates:
         print(f"  - {r['id']}: {r['name']} ({r['status']})")
+    book_club_members = db.get_all(BOOK_CLUB_GROUP_ID)
+    print(
+        f"Seeded group '{BOOK_CLUB_GROUP_ID}' now has "
+        f"{len(book_club_members)} member(s):"
+    )
+    for member in book_club_members:
+        print(f"  - {member['id']}: {member['name']} ({member['role']})")
     return 0
 
 

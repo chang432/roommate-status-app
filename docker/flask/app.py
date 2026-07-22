@@ -13,11 +13,10 @@ Implements the endpoints the frontend calls (see frontend/src/api/client.js):
     POST /api/roommates/notify         -> { "sent", "pruned", "failed" }
     POST /api/roommates/<id>/poke      -> { "sent", "pruned", "failed" }
 
-Plus the Web Push (PoC) endpoints:
+Plus the Web Push endpoints:
 
     GET  /api/push/public-key          -> { "publicKey": <VAPID public key> }
     POST /api/push/subscribe           -> { "ok": true }  (stores a user-owned subscription)
-    POST /api/push/test                -> { "sent", "pruned", "failed" }
 
 And the proposed-activities feed:
 
@@ -36,7 +35,6 @@ And the proposed-activities feed:
 
 And the shire request feed:
 
-    GET  /api/requests                 -> recent requests
     POST /api/requests                 -> the updated recent request list
     POST /api/requests/<id>/responses  -> the updated recent request list
     POST /api/requests/<id>/archive    -> the updated recent request list
@@ -48,7 +46,6 @@ And the shire request feed:
 
 And the shire checklist feed:
 
-    GET  /api/checklists               -> recent active checklists
     POST /api/checklists               -> the updated recent checklist list
     POST /api/checklists/<id>/notify   -> push a checklist reminder to everyone else
     POST /api/checklists/<id>/items    -> the updated recent checklist list
@@ -82,6 +79,7 @@ from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 
 import activities
+import book_club
 import db
 import groups
 import household_checklists
@@ -382,7 +380,45 @@ def create_app() -> Flask:
         group = groups.get_group_by_id(user["groupId"])
         if group is None:
             return jsonify({"error": "That group no longer exists."}), 404
-        return jsonify({"group": group})
+        # This permission belongs to the selected membership, not the account.
+        # Returning it with the selected group lets profile controls render
+        # correctly even while the separate roster request is still in flight.
+        return jsonify(
+            {
+                "group": {
+                    **group,
+                    "viewerIsAdmin": db.is_group_admin(user["id"], user["groupId"]),
+                }
+            }
+        )
+
+    @app.put("/api/groups/display")
+    def update_group_display():
+        """Let any admin choose which shared sections their group sees."""
+        actor, error = group_member_from_query()
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        show_roster = body.get("showRoster")
+        show_feed = body.get("showFeed")
+        show_book_club = body.get("showBookClub")
+        if not all(
+            isinstance(value, bool)
+            for value in (show_roster, show_feed, show_book_club)
+        ):
+            return jsonify({"error": "Display settings must be true or false."}), 400
+        group, error = groups.set_display_options(
+            actor["id"],
+            actor["groupId"],
+            show_roster,
+            show_feed,
+            show_book_club,
+        )
+        if error == "forbidden":
+            return jsonify({"error": "Only a group admin can change display settings."}), 403
+        if error == "unknown_group" or group is None:
+            return jsonify({"error": "That group no longer exists."}), 404
+        return jsonify({"group": {**group, "viewerIsAdmin": True}})
 
     # Admin-only member administration. Both routes resolve the actor from the
     # request's group scope, so an admin of one household gains nothing in
@@ -552,21 +588,160 @@ def create_app() -> Flask:
         push.save_subscription(subscription, user_id)
         return jsonify({"ok": True})
 
-    @app.post("/api/push/test")
-    def push_test():
-        """Send a test notification to every subscribed device (PoC helper)."""
+    # --- Book Club ----------------------------------------------------------
+    # Book Club is deliberately outside the module feed: its dedicated table
+    # keeps long-lived reading history and discussion separate from ephemeral
+    # household activity cards.
+    @app.get("/api/book-club")
+    def get_book_club():
         viewer, error = group_member_from_query()
         if error:
             return error
+        return jsonify({"summary": book_club.summary(
+            viewer["groupId"], db.get_all(viewer["groupId"])
+        )})
+
+    @app.post("/api/book-club/config")
+    def configure_book_club():
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
+            return jsonify({"error": "Only a group admin can configure Book Club."}), 403
+        summary, error = book_club.configure(
+            viewer["groupId"], db.get_all(viewer["groupId"]), request.get_json(silent=True) or {}
+        )
+        if error:
+            return jsonify({"error": error}), 409 if error == "Book Club is already configured." else 400
+        return jsonify({"summary": summary}), 201
+
+    @app.put("/api/book-club/sessions/<session_id>/response")
+    def update_book_club_response(session_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        _session, error = book_club.set_response(
+            viewer["groupId"], session_id, viewer,
+            body.get("attendanceStatus"), body.get("chaptersReadThrough"),
+        )
+        if error:
+            return jsonify({"error": error}), 404 if error == "Unknown session." else 400
+        return jsonify({"summary": book_club.summary(
+            viewer["groupId"], db.get_all(viewer["groupId"])
+        )})
+
+    @app.put("/api/book-club/next-session")
+    def update_book_club_next_session():
+        """Let an admin fill or revise the upcoming meeting placeholder."""
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
+            return jsonify({"error": "Only a group admin can edit the next meeting."}), 403
+        summary, error = book_club.update_next_session(
+            viewer["groupId"], db.get_all(viewer["groupId"]), request.get_json(silent=True) or {}
+        )
+        if error:
+            return jsonify({"error": error}), 409 if error.startswith("This meeting") else 400
+        return jsonify({"summary": summary})
+
+    @app.post("/api/book-club/next-book")
+    def start_book_club_next_book():
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
+            return jsonify({"error": "Only a group admin can start the next book."}), 403
+        summary, error = book_club.start_next_book(
+            viewer["groupId"], db.get_all(viewer["groupId"]), request.get_json(silent=True) or {}
+        )
+        if error:
+            return jsonify({"error": error}), 409 if error.startswith("The active book") else 400
+        return jsonify({"summary": summary}), 201
+
+    @app.post("/api/book-club/sessions/<session_id>/notify")
+    def notify_book_club_meeting(session_id: str):
+        """Send every group member a reminder for the configured next meeting."""
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        summary = book_club.summary(viewer["groupId"], db.get_all(viewer["groupId"]))
+        if summary is None or summary["nextSession"] is None or summary["nextSession"]["id"] != session_id:
+            return jsonify({"error": "Unknown next Book Club meeting."}), 404
         if not push.is_configured():
             return jsonify({"error": "Push is not configured on the server."}), 503
+
+        session = summary["nextSession"]
         result = notify_group(
             viewer["groupId"],
-            title="Roomie Status test",
-            body="If you can see this, push notifications work 🎉",
+            title="Book Club reminder",
+            body=(
+                f"{book_club.meeting_label(session['scheduledAt'])} · "
+                f"{session.get('bookTitle') or 'Current book'}\n"
+                f"Goal: {session.get('readingTarget') or 'To be set'} · "
+                f"Snacks: {session.get('snackDutyName') or 'To be assigned'}"
+            ),
             url="/",
+            event_type="book-club-reminder",
         )
         return jsonify(result)
+
+    @app.post("/api/book-club/sessions/<session_id>/complete-book")
+    def complete_book_club_book(session_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
+            return jsonify({"error": "Only a group admin can complete books."}), 403
+        error = book_club.complete_book(viewer["groupId"], session_id)
+        if error:
+            return jsonify({"error": error}), 404
+        return jsonify({"summary": book_club.summary(
+            viewer["groupId"], db.get_all(viewer["groupId"])
+        )})
+
+    @app.get("/api/book-club/books/completed")
+    def list_completed_book_club_books():
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify({"books": book_club.list_completed(viewer["groupId"])})
+
+    @app.put("/api/book-club/books/<book_id>/rating")
+    def rate_book_club_book(book_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        error = book_club.set_rating(
+            viewer["groupId"], book_id, viewer, (request.get_json(silent=True) or {}).get("rating")
+        )
+        if error:
+            return jsonify({"error": error}), 400
+        return jsonify({"books": book_club.list_completed(viewer["groupId"])})
+
+    @app.get("/api/book-club/books/<book_id>/posts")
+    def list_book_club_posts(book_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify({"posts": book_club.list_posts(
+            viewer["groupId"], book_id, request.args.get("chapterKey")
+        )})
+
+    @app.post("/api/book-club/books/<book_id>/posts")
+    def create_book_club_post(book_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        post, error = book_club.create_post(
+            viewer["groupId"], viewer, book_id, body.get("chapterKey"),
+            body.get("chapterLabel"), body.get("body"),
+        )
+        if error:
+            return jsonify({"error": error}), 404 if error == "Unknown book." else 400
+        return jsonify({"post": post}), 201
 
     # --- Spotify Jam --------------------------------------------------------
     @app.get("/api/jam")
@@ -1031,14 +1206,6 @@ def create_app() -> Flask:
         return jsonify(activities.list_recent(roommate["groupId"], consistent=True))
 
     # --- Requests -----------------------------------------------------------
-    @app.get("/api/requests")
-    def get_requests():
-        """Return recent household requests, newest first."""
-        viewer, error = group_member_from_query()
-        if error:
-            return error
-        return jsonify(household_requests.list_recent(viewer["groupId"]))
-
     @app.post("/api/requests")
     def create_request():
         """Create a targeted request and notify the requested roommates."""
@@ -1324,14 +1491,6 @@ def create_app() -> Flask:
         return jsonify(household_requests.list_recent(roommate["groupId"], consistent=True))
 
     # --- Checklists ---------------------------------------------------------
-    @app.get("/api/checklists")
-    def get_checklists():
-        """Return recent active household checklists, newest first."""
-        viewer, error = group_member_from_query()
-        if error:
-            return error
-        return jsonify(household_checklists.list_recent(viewer["groupId"]))
-
     @app.post("/api/checklists")
     def create_checklist():
         """Create a household checklist and return the refreshed list."""

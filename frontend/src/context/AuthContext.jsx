@@ -1,13 +1,12 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import {
   createAccount as apiCreateAccount,
-  createGroup as apiCreateGroup,
   deleteAccount as apiDeleteAccount,
   getAccount as apiGetAccount,
-  joinGroup as apiJoinGroup,
   login as apiLogin,
-  setInvalidUserHandler,
-} from '../api/client.js'
+} from '../api/accounts.js'
+import { createGroup as apiCreateGroup, joinGroup as apiJoinGroup } from '../api/groups.js'
+import { setInvalidUserHandler } from '../api/request.js'
 
 // Holds the signed-in roommate and exposes login/logout. The session is kept in
 // localStorage so a refresh doesn't bounce the user back to the login page.
@@ -38,7 +37,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (username, password) => {
     const { user: signedIn } = await apiLogin(username, password)
-    return persistUser(signedIn)
+    return persistUser({ ...signedIn, activeGroupId: signedIn.groupId })
   }, [persistUser])
 
   const createAccount = useCallback(async (username, name, password) => {
@@ -67,7 +66,10 @@ export function AuthProvider({ children }) {
     const stored = readSession()
     if (!stored) return
     apiGetAccount(stored.id)
-      .then(({ user: fresh }) => persistUser({ ...fresh, activeGroupId: stored.activeGroupId }))
+      .then(({ user: fresh }) => persistUser({
+        ...fresh,
+        activeGroupId: stored.activeGroupId ?? fresh.groupId,
+      }))
       .catch(() => {})
   }, [persistUser])
 

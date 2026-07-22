@@ -67,6 +67,36 @@ create_group_table "$ROOMMATE_TABLE-checklists-v2"
 create_group_table "$ROOMMATE_TABLE-shows-v2"
 create_group_table "$ROOMMATE_TABLE-comment-likes-v2"
 
+# Book Club is group-partitioned too, with a bookId index for a book's ratings
+# and chapter discussion. The configuration and member-response rows simply
+# omit bookId, so they are not indexed.
+if aws dynamodb describe-table \
+    --table-name "$ROOMMATE_TABLE-book-club" \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then
+  echo "  table '$ROOMMATE_TABLE-book-club' already exists — leaving as-is"
+else
+  aws dynamodb create-table \
+    --table-name "$ROOMMATE_TABLE-book-club" \
+    --attribute-definitions \
+      AttributeName=groupId,AttributeType=S \
+      AttributeName=id,AttributeType=S \
+      AttributeName=bookId,AttributeType=S \
+    --key-schema AttributeName=groupId,KeyType=HASH AttributeName=id,KeyType=RANGE \
+    --global-secondary-indexes '[
+      {
+        "IndexName":"BookIdIndex",
+        "KeySchema":[
+          {"AttributeName":"bookId","KeyType":"HASH"},
+          {"AttributeName":"id","KeyType":"RANGE"}
+        ],
+        "Projection":{"ProjectionType":"ALL"}
+      }
+    ]' \
+    --billing-mode PAY_PER_REQUEST \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null
+  echo "  created table '$ROOMMATE_TABLE-book-club'"
+fi
+
 if aws dynamodb describe-table \
     --table-name "$ROOMMATE_TABLE-pushsubs" \
     --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then

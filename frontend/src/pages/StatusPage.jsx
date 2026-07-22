@@ -1,27 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import Brandmark from "../components/Brandmark.jsx";
-import EnableNotifications from "../components/EnableNotifications.jsx";
-import GroupFeed from "../components/GroupFeed.jsx";
-import JamWidget, { JamShareForm } from "../components/JamWidget.jsx";
-import GroupSwitcherDrawer from "../components/GroupSwitcherDrawer.jsx";
-import HouseholdRoster from "../components/HouseholdRoster.jsx";
-import LiveEventBanner from "../components/LiveEventBanner.jsx";
-import ModalShell from "../components/ModalShell.jsx";
-import NotificationBanner from "../components/NotificationBanner.jsx";
-import ProfileSettings from "../components/ProfileSettings.jsx";
-import PullToRefreshIndicator from "../components/PullToRefreshIndicator.jsx";
+import Brandmark from "../components/ui/Brandmark.jsx";
+import BookClub from "../components/book-club/BookClub.jsx";
+import EnableNotifications from "../components/profile/EnableNotifications.jsx";
+import GroupFeed from "../components/feed/GroupFeed.jsx";
+import JamWidget, { JamShareForm } from "../components/jam/JamWidget.jsx";
+import GroupSwitcherDrawer from "../components/groups/GroupSwitcherDrawer.jsx";
+import HouseholdRoster from "../components/household/HouseholdRoster.jsx";
+import LiveEventBanner from "../components/feed/LiveEventBanner.jsx";
+import ModalShell from "../components/ui/ModalShell.jsx";
+import NotificationBanner from "../components/ui/NotificationBanner.jsx";
+import ProfileSettings from "../components/profile/ProfileSettings.jsx";
+import PullToRefreshIndicator from "../components/ui/PullToRefreshIndicator.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import {
-  endActivity,
-  endWatchparty,
-  getActivities,
-  getGroups,
-  getJam,
-  getRoommates,
-  getShows,
-  startActivity,
-} from "../api/client.js";
+import { endActivity, getActivities, startActivity } from "../api/activities.js";
+import { getGroups } from "../api/groups.js";
+import { getJam } from "../api/jam.js";
+import { getRoommates } from "../api/roommates.js";
+import { endWatchparty, getShows } from "../api/shows.js";
 import { cx } from "../utils/classNames.js";
 import { usePullToRefresh } from "../utils/usePullToRefresh.js";
 import {
@@ -54,6 +50,7 @@ export default function StatusPage() {
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [groupsError, setGroupsError] = useState("");
+  const [bookClubRefreshToken, setBookClubRefreshToken] = useState(0);
   const activeGroupIdRef = useRef(user.activeGroupId);
 
   // Ignore a response for a group the user has already left. This keeps an
@@ -73,6 +70,8 @@ export default function StatusPage() {
         ? requestedGroupId
         : isMember(user.activeGroupId)
           ? user.activeGroupId
+          : isMember(user.groupId)
+            ? user.groupId
           : memberships[0]?.groupId;
       if (nextGroupId && nextGroupId !== user.activeGroupId)
         selectGroup(nextGroupId);
@@ -86,7 +85,7 @@ export default function StatusPage() {
     } finally {
       setGroupsLoading(false);
     }
-  }, [searchParams, selectGroup, setSearchParams, user.activeGroupId, user.id]);
+  }, [searchParams, selectGroup, setSearchParams, user.activeGroupId, user.groupId, user.id]);
 
   useEffect(() => {
     loadGroups();
@@ -149,6 +148,9 @@ export default function StatusPage() {
       loadJam(),
       loadShows(),
     ]);
+    // Book Club owns its fetch so it can advance an overdue meeting. Bump this
+    // token after each page refresh to include it in pull-to-refresh as well.
+    setBookClubRefreshToken((token) => token + 1);
   }, [loadActivities, loadJam, loadRoommates, loadShows]);
 
   useEffect(() => {
@@ -222,10 +224,15 @@ export default function StatusPage() {
   const liveWatchparties = shows.filter((show) => show.isWatchpartyLive);
   const selectedGroup =
     groups.find((group) => group.groupId === user.activeGroupId) ?? groups[0];
+  // Group controls are shared with everyone in the household. Missing fields
+  // mean an older group record, which remains fully visible by default.
+  const showRoster = selectedGroup?.showRoster !== false;
+  const showFeed = selectedGroup?.showFeed !== false;
+  const showBookClub = selectedGroup?.showBookClub !== false;
   const groupDataLoading =
     groupsLoading ||
     statusLoadedGroupId !== user.activeGroupId ||
-    feedLoadedGroupId !== user.activeGroupId;
+    (showFeed && feedLoadedGroupId !== user.activeGroupId);
 
   const handleActivitiesChange = useCallback((updated) => {
     setActivities(updated);
@@ -420,14 +427,16 @@ export default function StatusPage() {
           <EnableNotifications />
           {showBanner && <NotificationBanner count={freeCount} />}
 
-          <HouseholdRoster
-            roommates={displayedRoommates}
-            groupName={selectedGroup?.name}
-            hasJam={Boolean(jam)}
-            onShareJam={openJamModal}
-            onRoommatesChange={setRoommates}
-            onError={setError}
-          />
+          {showRoster && (
+            <HouseholdRoster
+              roommates={displayedRoommates}
+              groupName={selectedGroup?.name}
+              hasJam={Boolean(jam)}
+              onShareJam={openJamModal}
+              onRoommatesChange={setRoommates}
+              onError={setError}
+            />
+          )}
         </main>
 
         {jam && (
@@ -436,12 +445,22 @@ export default function StatusPage() {
           </div>
         )}
 
-        <div ref={feedRef} hidden={groupDataLoading}>
-          <GroupFeed
+        {showBookClub && !groupDataLoading && (
+          <BookClub
             roommates={displayedRoommates}
-            onLoadStateChange={handleGroupFeedLoadStateChange}
+            groupId={user.activeGroupId}
+            refreshToken={bookClubRefreshToken}
           />
-        </div>
+        )}
+
+        {showFeed && (
+          <div ref={feedRef} hidden={groupDataLoading}>
+            <GroupFeed
+              roommates={displayedRoommates}
+              onLoadStateChange={handleGroupFeedLoadStateChange}
+            />
+          </div>
+        )}
 
         {settingsOpen && (
           <ModalShell
@@ -453,6 +472,13 @@ export default function StatusPage() {
               user={user}
               roommates={roommates}
               onRoommatesChange={setRoommates}
+              onGroupChange={(updatedGroup) =>
+                setGroups((currentGroups) =>
+                  currentGroups.map((group) =>
+                    group.groupId === updatedGroup.groupId ? updatedGroup : group,
+                  ),
+                )
+              }
               onSignOut={logout}
               onDeleteAccount={deleteAccount}
             />

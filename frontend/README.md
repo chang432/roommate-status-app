@@ -11,8 +11,9 @@ availability to hang out. Built from the mockups in `../mockups`.
   group code assigns them to a household.
 - **Profile settings** keep account actions in one place, including sign out,
   account deletion, System/Light/Dark/Forest appearance preferences, and the
-  current household invite code for grouped users. Theme choices are stored on
-  the current device.
+  current household invite code for grouped users. Group admins can also choose
+  whether the household roster, Book Club, and group feed are shown to everyone
+  in that group. Theme choices are stored on the current device.
 - **View** the whole household's current statuses at a glance.
 - **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.
@@ -68,8 +69,8 @@ name as username (for example `andre`) with the demo password **`roomie`**.
 
 ## Backend / API
 
-All backend calls live in `src/api/client.js`, which targets the Flask server
-(`../docker/flask`) under `/api`:
+Backend calls live in domain modules under `src/api/`, which share a request
+helper and target the Flask server (`../docker/flask`) under `/api`:
 
 | Function                        | Method & path                                              |
 | ------------------------------- | ---------------------------------------------------------- |
@@ -78,6 +79,10 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `deleteAccount`                 | `DELETE /api/accounts/:id`                                 |
 | `joinGroup`                     | `POST /api/groups/join`                                    |
 | `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
+| `updateGroupDisplay`            | `PUT /api/groups/display?userId=:id`                       |
+| `getCompletedBookClubBooks`     | `GET /api/book-club/books/completed?userId=:id`            |
+| `startNextBook`                 | `POST /api/book-club/next-book?userId=:id`                 |
+| `notifyBookClubMeeting`         | `POST /api/book-club/sessions/:id/notify?userId=:id`       |
 | `getRoommates`                  | `GET /api/roommates?userId=:id`                            |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
@@ -93,7 +98,6 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `startActivity`                 | `POST /api/activities/:id/start`                           |
 | `endActivity`                   | `POST /api/activities/:id/end`                             |
 | `setCommentLiked`               | `PUT/DELETE /api/activities/:id/comments/:commentId/likes` |
-| `getRequests`                   | `GET /api/requests?userId=:id`                             |
 | `createRequest`                 | `POST /api/requests`                                       |
 | `respondToRequest`              | `POST /api/requests/:id/responses`                         |
 | `archiveRequest`                | `POST /api/requests/:id/archive`                           |
@@ -101,7 +105,6 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `deleteRequest`                 | `DELETE /api/requests/:id`                                 |
 | `commentOnRequest`              | `POST /api/requests/:id/comments`                          |
 | `setRequestCommentLiked`        | `PUT/DELETE /api/requests/:id/comments/:commentId/likes`   |
-| `getChecklists`                 | `GET /api/checklists?userId=:id`                           |
 | `createChecklist`               | `POST /api/checklists`                                     |
 | `notifyChecklist`               | `POST /api/checklists/:id/notify`                          |
 | `addChecklistItem`              | `POST /api/checklists/:id/items`                           |

@@ -14,7 +14,10 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/groups/join`                                      | `{ userId, code }`                         | `{ user, group }`                                       |
 | `POST /api/groups`                                           | `{ userId, name }`                         | newly created `{ user, group }`                         |
 | `GET  /api/groups`                                           | `?userId=<id>`                             | every selectable group                                  |
-| `GET  /api/groups/current`                                   | `?userId=<id>`                             | `{ group: { groupId, name, joinCode, createdAt } }`     |
+| `GET  /api/groups/current`                                   | `?userId=<id>`                             | selected group metadata, including `viewerIsAdmin`      |
+| `PUT  /api/groups/display`                                   | `?userId=<id>` + `{ showRoster, showFeed, showBookClub }` | updated admin-managed group display settings |
+| `POST /api/book-club/sessions/<id>/notify`                    | `?userId=<id>` | sends every subscribed group member a next-meeting reminder with its book, chapter goal, and snack-duty member |
+| `POST /api/book-club/next-book`                                | `?userId=<id>` + `{ title, author, readingTarget }` | admin completes the active book and starts a new one for the upcoming meeting |
 | `GET  /api/roommates`                                        | `?userId=<id>`                             | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
@@ -29,7 +32,6 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/activities/<id>/start`                            | `{ requesterId }`                          | full updated activity list                              |
 | `POST /api/activities/<id>/end`                              | `{ requesterId }`                          | full updated activity list                              |
 | `PUT/DELETE /api/activities/<id>/comments/<commentId>/likes` | `{ userId }`                               | full updated activity list                              |
-| `GET /api/requests`                                          | `?userId=<id>`                             | full request list                                       |
 | `POST /api/requests`                                         | `{ text, requesterId, requestedIds }`      | full updated request list                               |
 | `POST /api/requests/<id>/responses`                          | `{ userId, response }`                     | full updated request list                               |
 | `POST /api/requests/<id>/archive`                            | `{ userId }`                               | full updated request list                               |
@@ -37,7 +39,6 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `DELETE /api/requests/<id>`                                  | `{ requesterId }`                          | full updated request list                               |
 | `POST /api/requests/<id>/comments`                           | `{ authorId, text }`                       | full updated request list                               |
 | `PUT/DELETE /api/requests/<id>/comments/<commentId>/likes`   | `{ userId }`                               | full updated request list                               |
-| `GET /api/checklists`                                        | `?userId=<id>`                             | full active checklist list                              |
 | `POST /api/checklists`                                       | `{ title, createdById, items }`            | full updated checklist list                             |
 | `POST /api/checklists/<id>/notify`                           | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
 | `POST /api/checklists/<id>/items`                            | `{ userId, text }`                         | full updated checklist list                             |

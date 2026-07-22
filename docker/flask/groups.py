@@ -11,6 +11,7 @@ import time
 from botocore.exceptions import ClientError
 
 import db
+import book_club
 
 GROUPS_TABLE = os.environ.get("GROUPS_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-groups"
@@ -51,6 +52,11 @@ def _project_group(item: dict | None) -> dict | None:
         "name": item.get("name", item["groupId"]),
         "joinCode": item["joinCode"],
         "createdAt": int(item["createdAt"]) if item.get("createdAt") is not None else None,
+        # Older group rows predate display controls. Treat absent values as
+        # visible so deploying this change never hides a household by default.
+        "showRoster": item.get("showRoster", True),
+        "showFeed": item.get("showFeed", True),
+        "showBookClub": item.get("showBookClub", True),
     }
 
 
@@ -69,6 +75,9 @@ def ensure_default_group() -> dict:
                 "name": db.DEFAULT_GROUP_NAME,
                 "joinCode": join_code,
                 "createdAt": created_at,
+                "showRoster": True,
+                "showFeed": True,
+                "showBookClub": True,
             },
             ConditionExpression="attribute_not_exists(groupId)",
         )
@@ -92,6 +101,63 @@ def ensure_default_group() -> dict:
         )
     item = table.get_item(Key={"groupId": db.DEFAULT_GROUP_ID}, ConsistentRead=True).get("Item")
     return _project_group(item)
+
+
+def ensure_seed_group(
+    group_id: str,
+    name: str,
+    join_code: str,
+    *,
+    show_roster: bool,
+    show_feed: bool,
+    show_book_club: bool,
+) -> dict:
+    """Create or refresh a named development seed group.
+
+    Seed groups use stable ids and join codes so repeated local starts converge
+    on the same data instead of accumulating a new random household each time.
+    This helper is called only by ``seed.py``; user-created groups still keep
+    their independently chosen display settings.
+    """
+    code = normalize_join_code(join_code)
+    if not valid_join_code(code):
+        raise ValueError("Seed group join codes must be 6-16 alphanumeric characters.")
+    table = _get_table()
+    now = int(time.time() * 1000)
+    item = {
+        "groupId": group_id,
+        "name": name,
+        "joinCode": code,
+        "createdAt": now,
+        "showRoster": show_roster,
+        "showFeed": show_feed,
+        "showBookClub": show_book_club,
+    }
+    try:
+        table.put_item(Item=item, ConditionExpression="attribute_not_exists(groupId)")
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+        # Local seeds are a known fixture, so their selected sections should be
+        # restored on every restart without changing their original createdAt.
+        table.update_item(
+            Key={"groupId": group_id},
+            UpdateExpression=(
+                "SET #name = :name, joinCode = :joinCode, "
+                "showRoster = :showRoster, showFeed = :showFeed, "
+                "showBookClub = :showBookClub"
+            ),
+            ExpressionAttributeNames={"#name": "name"},
+            ExpressionAttributeValues={
+                ":name": name,
+                ":joinCode": code,
+                ":showRoster": show_roster,
+                ":showFeed": show_feed,
+                ":showBookClub": show_book_club,
+            },
+            ConditionExpression="attribute_exists(groupId)",
+        )
+    return get_group_by_id(group_id)
 
 
 def get_group_by_id(group_id: str) -> dict | None:
@@ -147,6 +213,11 @@ def create_group(user_id: str, name: str) -> tuple[dict | None, dict | None, str
             "name": display_name,
             "joinCode": join_code,
             "createdAt": int(time.time() * 1000),
+            # New households start with no shared modules visible. An admin
+            # explicitly enables the sections they want from group settings.
+            "showRoster": False,
+            "showFeed": False,
+            "showBookClub": False,
         }
         try:
             table.put_item(
@@ -188,9 +259,43 @@ def join_group(user_id: str, code: str) -> tuple[dict | None, str | None]:
         return None, "already_member"
     if db.create_membership(account["id"], group["groupId"], account["name"]) is None:
         return None, "already_member"
+    # Existing clubs retain their current assignment and append new members at
+    # the end, so a join never skips whoever is already due for snacks.
+    book_club.add_member_to_snack_rotation(group["groupId"], account["id"])
     # The client switches to the group it just joined, even if lexical group
     # ordering would make a different membership appear first on the account.
     return {**db.get_account_by_id(account["id"]), "groupId": group["groupId"]}, None
+
+
+def set_display_options(
+    actor_id: str,
+    group_id: str,
+    show_roster: bool,
+    show_feed: bool,
+    show_book_club: bool,
+) -> tuple[dict | None, str | None]:
+    """Update one household's shared section visibility for a group admin."""
+    if not db.is_group_admin(actor_id, group_id):
+        return None, "forbidden"
+    try:
+        _get_table().update_item(
+            Key={"groupId": group_id},
+            UpdateExpression=(
+                "SET showRoster = :showRoster, showFeed = :showFeed, "
+                "showBookClub = :showBookClub"
+            ),
+            ExpressionAttributeValues={
+                ":showRoster": show_roster,
+                ":showFeed": show_feed,
+                ":showBookClub": show_book_club,
+            },
+            ConditionExpression="attribute_exists(groupId)",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None, "unknown_group"
+        raise
+    return get_group_by_id(group_id), None
 
 
 def _authorize_admin_action(

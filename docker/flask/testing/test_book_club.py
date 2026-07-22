@@ -1,0 +1,212 @@
+"""Book Club API tests."""
+
+from datetime import datetime, timezone
+
+from testing.support import *  # noqa: F403
+
+def test_book_club_summary_setup_and_member_response(client):
+    """A group gets one isolated setup; each member owns only their response."""
+    empty = client.get(grouped_path("/api/book-club"))
+    assert empty.status_code == 200
+    assert empty.get_json() == {"summary": None}
+
+    configured = client.post(
+        grouped_path("/api/book-club/config"),
+        json={
+            "title": "The Left Hand of Darkness",
+            "author": "Ursula K. Le Guin",
+            "readingTarget": "Read through Chapter 8",
+        },
+    )
+    assert configured.status_code == 201
+    summary = configured.get_json()["summary"]
+    assert summary["activeBook"]["recommendedById"] == TEST_USER_ID
+    assert summary["nextSession"]["snackDutyUserId"] == TEST_USER_ID
+    assert summary["configuration"]["snackRotationCursor"] == 0
+    assert all(response["attendanceStatus"] == "not_attending" for response in summary["nextSession"]["responses"])
+    assert all(response["chaptersReadThrough"] == 0 for response in summary["nextSession"]["responses"])
+
+    session_id = summary["nextSession"]["id"]
+    response = client.put(
+        grouped_path(f"/api/book-club/sessions/{session_id.replace('#', '%23')}/response"),
+        json={"attendanceStatus": "attending", "chaptersReadThrough": 6},
+    )
+    assert response.status_code == 200
+    mine = next(item for item in response.get_json()["summary"]["nextSession"]["responses"] if item["userId"] == TEST_USER_ID)
+    assert mine["attendanceStatus"] == "attending"
+    assert mine["chaptersReadThrough"] == 6
+
+
+def test_book_club_rejects_non_admin_configuration(client):
+    response = client.post(
+        grouped_path("/api/book-club/config", user_id="sheryl"),
+        json={"title": "A Book", "author": "An Author", "readingTarget": "Chapter 1"},
+    )
+    assert response.status_code == 403
+
+
+def test_book_club_member_can_notify_everyone_about_the_next_meeting(client, monkeypatch):
+    scheduled_at = int(datetime(2030, 8, 7, 23, 30, tzinfo=timezone.utc).timestamp() * 1000)
+    configured = client.post(
+        grouped_path("/api/book-club/config"),
+        json={
+            "title": "A Book", "author": "An Author", "readingTarget": "Chapter 1",
+            "scheduledAt": scheduled_at,
+        },
+    )
+    session_id = configured.get_json()["summary"]["nextSession"]["id"]
+    notifications = []
+
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        "app.notify_group",
+        lambda group_id, **kwargs: notifications.append((group_id, kwargs)) or {
+            "sent": 2, "pruned": 0, "failed": 0,
+        },
+    )
+
+    response = client.post(
+        grouped_path(
+            f"/api/book-club/sessions/{session_id.replace('#', '%23')}/notify",
+            user_id="sheryl",
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"sent": 2, "pruned": 0, "failed": 0}
+    assert notifications == [(
+        TEST_GROUP_ID,
+        {
+            "title": "Book Club reminder",
+            "body": "Wed, Aug 7, 7:30 PM ET · A Book\nGoal: Chapter 1 · Snacks: Andre",
+            "url": "/",
+            "event_type": "book-club-reminder",
+        },
+    )]
+
+
+def test_book_club_read_advances_due_meeting_to_admin_placeholder(client, monkeypatch):
+    now = book_club._now()
+    configured = client.post(
+        grouped_path("/api/book-club/config"),
+        json={
+            "title": "A Book",
+            "author": "An Author",
+            "readingTarget": "Chapter 1",
+            "scheduledAt": now + 1_000,
+        },
+    )
+    assert configured.status_code == 201
+    first = configured.get_json()["summary"]["nextSession"]
+
+    # The first read after the scheduled time is the scheduler: no background
+    # process is required for a local Flask deployment.
+    monkeypatch.setattr(book_club, "_now", lambda: now + 2_000)
+    advanced = client.get(grouped_path("/api/book-club")).get_json()["summary"]
+    assert advanced["activeBook"]["title"] == "A Book"
+    assert advanced["activeBook"]["recommendedById"] == TEST_USER_ID
+    assert advanced["nextSession"]["id"] != first["id"]
+    assert advanced["nextSession"]["bookId"] == first["bookId"]
+    assert advanced["nextSession"]["readingTarget"] == "Chapter 1"
+    assert advanced["nextSession"]["snackDutyUserId"] != first["snackDutyUserId"]
+    response = client.put(
+        grouped_path(f"/api/book-club/sessions/{advanced['nextSession']['id'].replace('#', '%23')}/response"),
+        json={"attendanceStatus": "maybe", "chaptersReadThrough": 1},
+    )
+    assert response.status_code == 200
+
+    edited = client.put(
+        grouped_path("/api/book-club/next-session"),
+        json={
+            "title": "The Next Book",
+            "author": "Another Author",
+            "readingTarget": "Read Chapter 2",
+            "recommendedById": "kayla",
+            "snackDutyUserId": "kayla",
+            "meetingOffset": 1,
+        },
+    )
+    assert edited.status_code == 200
+    next_summary = edited.get_json()["summary"]
+    assert next_summary["activeBook"]["title"] == "The Next Book"
+    assert next_summary["activeBook"]["recommendedById"] == "kayla"
+    assert next_summary["nextSession"]["readingTarget"] == "Read Chapter 2"
+    assert next_summary["nextSession"]["snackDutyUserId"] == "kayla"
+    assert next_summary["nextSession"]["id"] != advanced["nextSession"]["id"]
+    assert next_summary["nextSession"]["scheduledAt"] == book_club._following_session_at(
+        advanced["nextSession"]["scheduledAt"]
+    )
+    assert next(item for item in next_summary["nextSession"]["responses"] if item["userId"] == TEST_USER_ID)["attendanceStatus"] == "maybe"
+
+
+def test_admin_can_start_next_book_and_preserve_the_completed_book(client):
+    configured = client.post(
+        grouped_path("/api/book-club/config"),
+        json={"title": "First Book", "author": "First Author", "readingTarget": "Chapter 4"},
+    )
+    first_summary = configured.get_json()["summary"]
+    first_book_id = first_summary["activeBook"]["id"]
+    next_recommender_id = first_summary["configuration"]["bookRotationUserIds"][1]
+    session_id = first_summary["nextSession"]["id"]
+    response = client.put(
+        grouped_path(f"/api/book-club/sessions/{session_id.replace('#', '%23')}/response"),
+        json={"attendanceStatus": "attending", "chaptersReadThrough": 4},
+    )
+    assert response.status_code == 200
+
+    started = client.post(
+        grouped_path("/api/book-club/next-book"),
+        json={"title": "Second Book", "author": "Second Author", "readingTarget": "Chapter 2"},
+    )
+
+    assert started.status_code == 201
+    summary = started.get_json()["summary"]
+    assert summary["activeBook"]["id"] != first_book_id
+    assert summary["activeBook"]["title"] == "Second Book"
+    assert summary["activeBook"]["recommendedById"] == next_recommender_id
+    assert summary["nextSession"]["bookId"] == summary["activeBook"]["id"]
+    assert summary["nextSession"]["readingTarget"] == "Chapter 2"
+    assert all(item["attendanceStatus"] == "not_attending" for item in summary["nextSession"]["responses"])
+    assert all(item["chaptersReadThrough"] == 0 for item in summary["nextSession"]["responses"])
+
+    completed = client.get(grouped_path("/api/book-club/books/completed"))
+    assert completed.get_json()["books"][0]["title"] == "First Book"
+
+
+def test_book_club_rejects_non_admin_starting_the_next_book(client):
+    client.post(
+        grouped_path("/api/book-club/config"),
+        json={"title": "First Book", "author": "First Author", "readingTarget": "Chapter 4"},
+    )
+
+    response = client.post(
+        grouped_path("/api/book-club/next-book", user_id="sheryl"),
+        json={"title": "Second Book", "author": "Second Author", "readingTarget": "Chapter 2"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_local_seed_groups_isolate_book_club_component(client):
+    seed.seed_local_groups()
+
+    yorkshire = groups.get_group_by_id(db.DEFAULT_GROUP_ID)
+    assert (yorkshire["showRoster"], yorkshire["showFeed"], yorkshire["showBookClub"]) == (
+        True,
+        True,
+        False,
+    )
+
+    book_club = groups.get_group_by_id(seed.BOOK_CLUB_GROUP_ID)
+    assert book_club["name"] == "Book Club"
+    assert book_club["joinCode"] == "BOOKCLUB"
+    assert (book_club["showRoster"], book_club["showFeed"], book_club["showBookClub"]) == (
+        False,
+        False,
+        True,
+    )
+    assert db.group_admin_ids(seed.BOOK_CLUB_GROUP_ID) == ["andre"]
+    assert [(member["id"], member["role"]) for member in db.get_all(seed.BOOK_CLUB_GROUP_ID)] == [
+        ("andre", "admin"),
+        ("kayla", "member"),
+    ]
