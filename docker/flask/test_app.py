@@ -275,9 +275,10 @@ def test_book_club_read_advances_due_meeting_to_admin_placeholder(client, monkey
     # process is required for a local Flask deployment.
     monkeypatch.setattr(book_club, "_now", lambda: now + 2_000)
     advanced = client.get(grouped_path("/api/book-club")).get_json()["summary"]
-    assert advanced["activeBook"] is None
+    assert advanced["activeBook"]["title"] == "A Book"
+    assert advanced["activeBook"]["recommendedById"] == TEST_USER_ID
     assert advanced["nextSession"]["id"] != first["id"]
-    assert advanced["nextSession"]["bookId"] is None
+    assert advanced["nextSession"]["bookId"] == first["bookId"]
     assert advanced["nextSession"]["readingTarget"] is None
     assert advanced["nextSession"]["snackDutyUserId"] != first["snackDutyUserId"]
 
@@ -288,6 +289,7 @@ def test_book_club_read_advances_due_meeting_to_admin_placeholder(client, monkey
             "author": "Another Author",
             "readingTarget": "Read Chapter 2",
             "recommendedById": "kayla",
+            "snackDutyUserId": "kayla",
         },
     )
     assert edited.status_code == 200
@@ -295,6 +297,7 @@ def test_book_club_read_advances_due_meeting_to_admin_placeholder(client, monkey
     assert next_summary["activeBook"]["title"] == "The Next Book"
     assert next_summary["activeBook"]["recommendedById"] == "kayla"
     assert next_summary["nextSession"]["readingTarget"] == "Read Chapter 2"
+    assert next_summary["nextSession"]["snackDutyUserId"] == "kayla"
 
 
 def test_create_account_stores_password_hash_and_waits_for_group(client):

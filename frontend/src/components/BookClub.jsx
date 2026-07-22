@@ -26,7 +26,9 @@ export default function BookClub({ roommates = [], groupId }) {
   const [saving, setSaving] = useState(false);
   const [setup, setSetup] = useState({ title: "", author: "", readingTarget: "" });
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ title: "", author: "", readingTarget: "", recommendedById: "" });
+  const [draft, setDraft] = useState({
+    title: "", author: "", readingTarget: "", recommendedById: "", snackDutyUserId: "",
+  });
 
   const canAdminister = isAdminIn(roommates, user?.id);
 
@@ -97,15 +99,16 @@ export default function BookClub({ roommates = [], groupId }) {
       author: book?.author || "",
       readingTarget: summary?.nextSession?.readingTarget || "",
       recommendedById: book?.recommendedById || roommates[0]?.id || "",
+      snackDutyUserId: summary?.nextSession?.snackDutyUserId || roommates[0]?.id || "",
     });
     setEditing(true);
   }
 
-  function rotateRecommender(direction) {
+  function rotateMember(field, direction) {
     if (!roommates.length) return;
-    const index = Math.max(0, roommates.findIndex((member) => member.id === draft.recommendedById));
+    const index = Math.max(0, roommates.findIndex((member) => member.id === draft[field]));
     const nextIndex = (index + direction + roommates.length) % roommates.length;
-    setDraft({ ...draft, recommendedById: roommates[nextIndex].id });
+    setDraft({ ...draft, [field]: roommates[nextIndex].id });
   }
 
   async function saveNextSession(event) {
@@ -144,6 +147,7 @@ export default function BookClub({ roommates = [], groupId }) {
   }
 
   const recommender = roommates.find((member) => member.id === draft.recommendedById);
+  const snackDutyMember = roommates.find((member) => member.id === draft.snackDutyUserId);
 
   return (
     <section className={styles.section} aria-label="Book Club">
@@ -162,10 +166,10 @@ export default function BookClub({ roommates = [], groupId }) {
       )}
       {summary && (
         <div className={styles.summary}>
-          <p><strong>Book:</strong> {summary.activeBook?.title || "To be chosen"} by {summary.activeBook?.author || "an admin"}</p>
-          <p><strong>Next meeting:</strong> {EASTERN_FORMAT.format(summary.nextSession.scheduledAt)}</p>
-          <p><strong>Chapter goal:</strong> {summary.nextSession.readingTarget || "To be set"}</p>
-          <p><strong>Snack duty:</strong> {summary.nextSession.snackDutyName}</p>
+          <div className={styles.dynamicField}><strong>Book:</strong><span>{summary.activeBook?.title || "To be chosen"} by {summary.activeBook?.author || "an admin"}</span></div>
+          <div className={styles.dynamicField}><strong>Next meeting:</strong><span>{EASTERN_FORMAT.format(summary.nextSession.scheduledAt)}</span></div>
+          <div className={styles.dynamicField}><strong>Chapter goal:</strong><span>{summary.nextSession.readingTarget || "To be set"}</span></div>
+          <div className={styles.dynamicField}><strong>Snack duty:</strong><span>{summary.nextSession.snackDutyName}</span></div>
           {canAdminister && !editing && (
             <div className={styles.adminActions}>
               <button type="button" className={styles.editButton} onClick={startEditing}>Edit upcoming meeting</button>
@@ -180,9 +184,17 @@ export default function BookClub({ roommates = [], groupId }) {
               <div className={styles.recommender}>
                 <span>Recommended by</span>
                 <div>
-                  <button type="button" aria-label="Previous recommender" onClick={() => rotateRecommender(-1)} disabled={saving}>←</button>
+                  <button type="button" aria-label="Previous recommender" onClick={() => rotateMember("recommendedById", -1)} disabled={saving}>←</button>
                   <strong>{recommender?.name || "Choose a member"}</strong>
-                  <button type="button" aria-label="Next recommender" onClick={() => rotateRecommender(1)} disabled={saving}>→</button>
+                  <button type="button" aria-label="Next recommender" onClick={() => rotateMember("recommendedById", 1)} disabled={saving}>→</button>
+                </div>
+              </div>
+              <div className={styles.recommender}>
+                <span>Snack duty</span>
+                <div>
+                  <button type="button" aria-label="Previous snack duty member" onClick={() => rotateMember("snackDutyUserId", -1)} disabled={saving}>←</button>
+                  <strong>{snackDutyMember?.name || "Choose a member"}</strong>
+                  <button type="button" aria-label="Next snack duty member" onClick={() => rotateMember("snackDutyUserId", 1)} disabled={saving}>→</button>
                 </div>
               </div>
               <div className={styles.editorActions}>

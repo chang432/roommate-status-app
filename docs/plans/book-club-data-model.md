@@ -54,7 +54,7 @@ present; optional attributes are absent when inapplicable.
 | --- | --- | --- |
 | Configuration `config#book-club` | `groupId (S)`, `id (S)`, `timezone (S)`, `frequency (S)`, `weekday (S)`, `localTime (S)`, `nextSessionAt (N)`, `nextSessionId (S)`, `snackRotationUserIds (L of S)`, `snackRotationCursor (N)`, `bookRotationUserIds (L of S)`, `bookRotationCursor (N)`, `createdAt (N)`, `updatedAt (N)` | `activeBookId (S)` |
 | Book `book#<bookId>` | `groupId (S)`, `id (S)`, `bookId (S)`, `title (S)`, `author (S)`, `recommendedById (S)`, `recommendedByName (S)`, `status (S)`, `selectedAt (N)`, `createdAt (N)`, `updatedAt (N)` | `completedAt (N)` |
-| Session `session#<UTC ISO timestamp>` | `groupId (S)`, `id (S)`, `scheduledAt (N)`, `snackDutyUserId (S)`, `snackDutyName (S)`, `status (S)`, `createdAt (N)`, `updatedAt (N)` | `bookId (S)`, `bookTitle (S)`, `readingTarget (S)`, `completedAt (N)` |
+| Session `session#<UTC ISO timestamp>` | `groupId (S)`, `id (S)`, `scheduledAt (N)`, `bookId (S)`, `bookTitle (S)`, `snackDutyUserId (S)`, `snackDutyName (S)`, `status (S)`, `createdAt (N)`, `updatedAt (N)` | `readingTarget (S)`, `completedAt (N)` |
 | Session member response `session-member#<UTC ISO timestamp>#<userId>` | `groupId (S)`, `id (S)`, `sessionId (S)`, `userId (S)`, `userName (S)`, `attendanceStatus (S)`, `chaptersReadThrough (N)`, `createdAt (N)`, `updatedAt (N)` | none |
 | Rating `rating#<bookId>#<userId>` | `groupId (S)`, `id (S)`, `bookId (S)`, `userId (S)`, `userName (S)`, `rating (N)`, `createdAt (N)`, `updatedAt (N)` | none |
 | Chapter post `post#<bookId>#<chapterKey>#<timestamp>#<postId>` | `groupId (S)`, `id (S)`, `bookId (S)`, `chapterKey (S)`, `chapterLabel (S)`, `authorId (S)`, `authorName (S)`, `body (S)`, `createdAt (N)`, `updatedAt (N)` | `parentPostId (S)` for a future reply feature |
@@ -147,10 +147,10 @@ meeting order within the group.
 The title and snack-duty name are display snapshots. `status` is `scheduled`,
 `completed`, or `cancelled`. Once a scheduled meeting's timestamp passes, the
 next summary read completes it, rotates snack duty once, and creates the next
-biweekly session. That new session intentionally omits `bookId`, `bookTitle`,
-and `readingTarget`: an admin must fill its book, author, recommender, and
-chapter goal before members respond. The completed active book is retained in
-history and `activeBookId` is cleared until the admin saves the new plan.
+biweekly session. That new session retains the active book and its recommender,
+but intentionally omits `readingTarget` until an admin sets the new chapter
+goal. Admins may still change the book, author, recommender, or snack duty for
+the upcoming session.
 
 #### `session-member#<UTC ISO timestamp>#<userId>`
 
@@ -240,8 +240,7 @@ configuration's next-session data together with the active book. It displays:
   explicit `not responded` state when their response item is absent.
 
 Admin-only commands create or edit the configuration, rotations, and next
-session; the next session editor creates the active book when the rollover
-placeholder is filled. All commands
+session. All commands
 verify group membership and use stable user IDs for assignments. Any group
 member may create or replace only their own upcoming-session response. Other
 member-facing endpoints list completed books, create or replace a personal
