@@ -312,8 +312,8 @@ def set_watchparty(
 ):
     """Start or end the show's live watchparty state."""
     table = _get_table()
-    item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
-    if not _in_group(item, group_id):
+    item = _fetch(show_id, group_id)
+    if item is None:
         return None
     if item.get("isArchived", False):
         return MUTATION_ARCHIVED
@@ -336,7 +336,6 @@ def set_watchparty(
                 ":name": name,
                 ":season": season,
                 ":episode": episode,
-                ":groupId": group_id,
                 ":false": False,
             },
         )
@@ -349,16 +348,15 @@ def set_watchparty(
             ),
             ExpressionAttributeValues={
                 ":now": now_ms,
-                ":groupId": group_id,
                 ":false": False,
             },
         )
 
     try:
         resp = table.update_item(
-            Key={"id": show_id},
+            Key={"groupId": group_id, "id": show_id},
             ConditionExpression=(
-                "attribute_exists(id) AND groupId = :groupId AND "
+                "attribute_exists(id) AND "
                 "(attribute_not_exists(isArchived) OR isArchived = :false)"
             ),
             ReturnValues="ALL_NEW",
