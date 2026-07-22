@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import BookClub from "./BookClub.jsx";
-import { getBookClub } from "../api/client.js";
+import { completeBookClubSession, getBookClub } from "../api/client.js";
 
 vi.mock("../context/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { id: "andre", name: "Andre" } }),
@@ -9,6 +10,7 @@ vi.mock("../context/AuthContext.jsx", () => ({
 
 vi.mock("../api/client.js", async (importOriginal) => ({
   ...(await importOriginal()),
+  completeBookClubSession: vi.fn(),
   getBookClub: vi.fn(),
   configureBookClub: vi.fn(),
   setBookClubResponse: vi.fn(),
@@ -47,5 +49,26 @@ describe("BookClub", () => {
     expect(screen.getByText(/Snack duty:/)).toBeInTheDocument();
     expect(screen.queryByText("Book Club")).toBeNull();
     expect(screen.queryByText("Eastern time")).toBeNull();
+  });
+
+  it("lets an admin simulate the due-time rollover", async () => {
+    getBookClub.mockResolvedValue({
+      summary: {
+        activeBook: { title: "A Book", author: "An Author" },
+        nextSession: {
+          id: "session#future",
+          scheduledAt: Date.UTC(2026, 7, 5, 23, 30),
+          readingTarget: "Chapter 1",
+          snackDutyName: "Andre",
+          responses: [],
+        },
+      },
+    });
+    completeBookClubSession.mockResolvedValue({ summary: null });
+
+    render(<BookClub roommates={[{ id: "andre", name: "Andre", role: "admin" }]} groupId="book-club" />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Test: simulate meeting time" }));
+    expect(completeBookClubSession).toHaveBeenCalledWith("andre", "session#future");
   });
 });

@@ -255,6 +255,14 @@ export async function updateBookClubNextSession(userId, settings) {
   })
 }
 
+// POST /api/book-club/sessions/:id/complete — admin-only manual trigger for
+// the same rollover that the server performs when a meeting becomes due.
+export async function completeBookClubSession(userId, sessionId) {
+  return request(withQuery(`/book-club/sessions/${encodeURIComponent(sessionId)}/complete`, { userId }), {
+    method: 'POST',
+  })
+}
+
 // GET /api/activities — current activities followed by expired history.
 export async function getActivities(userId, groupId) {
   return request(withQuery('/activities', { userId }), {

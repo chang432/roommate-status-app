@@ -8,7 +8,9 @@
 .setup input { @apply rounded border border-line bg-surface-muted px-3 py-2 font-normal text-ink; }
 .setup button { @apply w-fit rounded bg-accent px-3 py-2 font-bold text-on-strong disabled:opacity-60; }
 .summary { @apply mt-3 grid gap-2; }
+.adminActions { @apply flex flex-wrap gap-2; }
 .editButton { @apply w-fit rounded border border-line px-3 py-1.5 text-sm font-bold text-ink hover:bg-surface-muted; }
+.testButton { @apply w-fit rounded border border-accent px-3 py-1.5 text-sm font-bold text-accent hover:bg-accent-soft disabled:opacity-60; }
 .recommender { @apply grid gap-1 text-sm font-bold text-ink; }
 .recommender > div { @apply flex items-center gap-3; }
 .recommender button { @apply grid h-8 w-8 place-items-center rounded border border-line text-lg text-ink hover:bg-surface-muted disabled:opacity-60; }

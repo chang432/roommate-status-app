@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  completeBookClubSession,
   configureBookClub,
   getBookClub,
   setBookClubResponse,
@@ -123,6 +124,25 @@ export default function BookClub({ roommates = [], groupId }) {
     }
   }
 
+  async function simulateMeetingTime() {
+    if (saving || !summary?.nextSession) return;
+    setSaving(true);
+    setError("");
+    try {
+      // This calls the same backend transition as the due-time summary read;
+      // it is intentionally admin-only so a member cannot skip a meeting.
+      const { summary: nextSummary } = await completeBookClubSession(
+        user.id,
+        summary.nextSession.id,
+      );
+      setSummary(nextSummary);
+    } catch (err) {
+      setError(err.message || "Could not simulate the meeting time.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const recommender = roommates.find((member) => member.id === draft.recommendedById);
 
   return (
@@ -146,7 +166,12 @@ export default function BookClub({ roommates = [], groupId }) {
           <p><strong>Next meeting:</strong> {EASTERN_FORMAT.format(summary.nextSession.scheduledAt)}</p>
           <p><strong>Chapter goal:</strong> {summary.nextSession.readingTarget || "To be set"}</p>
           <p><strong>Snack duty:</strong> {summary.nextSession.snackDutyName}</p>
-          {canAdminister && !editing && <button type="button" className={styles.editButton} onClick={startEditing}>Edit upcoming meeting</button>}
+          {canAdminister && !editing && (
+            <div className={styles.adminActions}>
+              <button type="button" className={styles.editButton} onClick={startEditing}>Edit upcoming meeting</button>
+              <button type="button" className={styles.testButton} disabled={saving} onClick={simulateMeetingTime}>Test: simulate meeting time</button>
+            </div>
+          )}
           {canAdminister && editing && (
             <form className={styles.setup} onSubmit={saveNextSession}>
               <label>Book title<input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
