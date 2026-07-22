@@ -23,9 +23,14 @@ export default function LiveEventBanner({
         styles.clickable,
       )}
       data-involved={isInvolved || undefined}
+      data-type={type}
       role="button"
       tabIndex={0}
-      aria-label="Open live activity"
+      // Both banner kinds render the same shape, so name them apart for screen
+      // readers rather than announcing two different things identically.
+      aria-label={
+        type === "watchparty" ? "Open live watchparty" : "Open live activity"
+      }
       onClick={onBannerClick}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {

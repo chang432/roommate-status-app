@@ -510,7 +510,14 @@ def test_scheduled_activity_does_not_create_a_finished_status_override(client, m
     assert _activity_status_overrides(TEST_GROUP_ID, consistent=True) == {}
 
 
-def test_gather_push_waits_until_ended_activity_participant_saves_again(client, monkeypatch):
+def test_gather_push_counts_participants_again_once_their_activity_ends(client, monkeypatch):
+    """A live activity suppresses its participants; ending it releases them.
+
+    Ending used to leave a lingering "finished an activity" status that kept
+    suppressing a participant until they saved a fresh one. That concept was
+    removed from the product (the frontend's STATUS.ACTIVITY_ENDED went with
+    it), so an ended activity now stops mattering the moment it ends.
+    """
     calls = _capture_notifications(monkeypatch)
     client.put("/api/roommates/andre/status", json={"status": "available", "statusText": ""})
     client.put("/api/roommates/kayla/status", json={"status": "available", "statusText": ""})
@@ -518,9 +525,9 @@ def test_gather_push_waits_until_ended_activity_participant_saves_again(client, 
 
     created = _propose(client, "Dinner").get_json()[0]
     client.post(f"/api/activities/{created['id']}/start", json={"requesterId": "andre"})
-    client.post(f"/api/activities/{created['id']}/end", json={"requesterId": "andre"})
     calls.clear()
 
+    # andre is in the live activity, so only two roomies really count as free.
     suppressed = client.put(
         "/api/roommates/kayla/status",
         json={"status": "available", "statusText": "Still free"},
@@ -528,9 +535,13 @@ def test_gather_push_waits_until_ended_activity_participant_saves_again(client, 
     assert suppressed.status_code == 200
     assert calls == []
 
+    client.post(f"/api/activities/{created['id']}/end", json={"requesterId": "andre"})
+    calls.clear()  # the end transition pushes its own household notification
+
+    # andre needs no new status of their own: ending the activity is enough.
     resumed = client.put(
-        "/api/roommates/andre/status",
-        json={"status": "available", "statusText": "Done now"},
+        "/api/roommates/kayla/status",
+        json={"status": "available", "statusText": "Still free"},
     )
     assert resumed.status_code == 200
     assert calls == [
@@ -540,7 +551,7 @@ def test_gather_push_waits_until_ended_activity_participant_saves_again(client, 
                 "title": "Roomies are free!",
                 "body": "3 roomies are free! LETS HANG 🎉!",
                 "url": "/?groupId=yorkshire",
-                "exclude_user_ids": {"andre"},
+                "exclude_user_ids": {"kayla"},
             },
         )
     ]
