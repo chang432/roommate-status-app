@@ -156,7 +156,7 @@ def _to_account_user(item: dict) -> dict:
         "name": item["name"],
         "username": item.get("username", item["id"]),
         # groupId remains the selected membership for legacy frontend callers.
-        "groupId": group_ids[0] if group_ids else None,
+        "groupId": _preferred_group_id(group_ids),
         "hasGroup": bool(group_ids),
     }
 
@@ -213,6 +213,13 @@ def _membership_items_for_group(group_id: str, consistent: bool = False) -> list
 def get_group_ids(user_id: str) -> list[str]:
     """List every group the account belongs to, from the membership rows."""
     return sorted({item["groupId"] for item in _membership_items_for_user(user_id)})
+
+
+def _preferred_group_id(group_ids: list[str]) -> str | None:
+    """Choose Yorkshire for seeded users, otherwise preserve list ordering."""
+    if DEFAULT_GROUP_ID in group_ids:
+        return DEFAULT_GROUP_ID
+    return group_ids[0] if group_ids else None
 
 
 def get_membership(user_id: str, group_id: str) -> dict | None:
@@ -362,7 +369,7 @@ def get_group_member(user_id: str, expected_group_id: str | None = None) -> dict
     group_id = expected_group_id or _request_group_id.get()
     group_ids = get_group_ids(user_id)
     if group_id is None:
-        group_id = group_ids[0] if group_ids else None
+        group_id = _preferred_group_id(group_ids)
     if not group_id or group_id not in group_ids:
         return None
     return {**_to_account_user(item), "groupId": group_id}

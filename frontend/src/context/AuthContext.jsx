@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (username, password) => {
     const { user: signedIn } = await apiLogin(username, password)
-    return persistUser(signedIn)
+    return persistUser({ ...signedIn, activeGroupId: signedIn.groupId })
   }, [persistUser])
 
   const createAccount = useCallback(async (username, name, password) => {
@@ -67,7 +67,10 @@ export function AuthProvider({ children }) {
     const stored = readSession()
     if (!stored) return
     apiGetAccount(stored.id)
-      .then(({ user: fresh }) => persistUser({ ...fresh, activeGroupId: stored.activeGroupId }))
+      .then(({ user: fresh }) => persistUser({
+        ...fresh,
+        activeGroupId: stored.activeGroupId ?? fresh.groupId,
+      }))
       .catch(() => {})
   }, [persistUser])
 

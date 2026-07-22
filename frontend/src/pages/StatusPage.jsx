@@ -74,6 +74,8 @@ export default function StatusPage() {
         ? requestedGroupId
         : isMember(user.activeGroupId)
           ? user.activeGroupId
+          : isMember(user.groupId)
+            ? user.groupId
           : memberships[0]?.groupId;
       if (nextGroupId && nextGroupId !== user.activeGroupId)
         selectGroup(nextGroupId);
@@ -87,7 +89,7 @@ export default function StatusPage() {
     } finally {
       setGroupsLoading(false);
     }
-  }, [searchParams, selectGroup, setSearchParams, user.activeGroupId, user.id]);
+  }, [searchParams, selectGroup, setSearchParams, user.activeGroupId, user.groupId, user.id]);
 
   useEffect(() => {
     loadGroups();
