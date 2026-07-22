@@ -354,6 +354,63 @@ def test_create_group_rejects_blank_name(client):
     assert created.status_code == 400
 
 
+def test_admin_updates_group_display_for_every_member(client):
+    group_id, headers = admin_group(client)
+    join_as(client, group_id, "sheryl")
+
+    updated = client.put(
+        "/api/groups/display?userId=andre",
+        headers=headers,
+        json={"showRoster": False, "showFeed": False},
+    )
+
+    assert updated.status_code == 200
+    assert updated.get_json()["group"] == {
+        "groupId": group_id,
+        "name": "Admin House",
+        "joinCode": updated.get_json()["group"]["joinCode"],
+        "createdAt": updated.get_json()["group"]["createdAt"],
+        "showRoster": False,
+        "showFeed": False,
+    }
+    member_view = client.get(
+        "/api/groups/current?userId=sheryl", headers=headers
+    ).get_json()["group"]
+    assert member_view["showRoster"] is False
+    assert member_view["showFeed"] is False
+
+
+def test_plain_member_cannot_change_group_display(client):
+    group_id, headers = admin_group(client)
+    join_as(client, group_id, "sheryl")
+
+    updated = client.put(
+        "/api/groups/display?userId=sheryl",
+        headers=headers,
+        json={"showRoster": False, "showFeed": True},
+    )
+
+    assert updated.status_code == 403
+    assert "Only a group admin" in updated.get_json()["error"]
+    assert groups.get_group_by_id(group_id)["showRoster"] is True
+
+
+def test_existing_group_defaults_display_sections_to_visible(client):
+    groups._get_table().put_item(
+        Item={
+            "groupId": "legacy-house",
+            "name": "Legacy House",
+            "joinCode": "LEGACY77",
+            "createdAt": 1,
+        }
+    )
+
+    group = groups.get_group_by_id("legacy-house")
+
+    assert group["showRoster"] is True
+    assert group["showFeed"] is True
+
+
 def admin_group(client, creator="andre", name="Admin House"):
     """Create a group (creator becomes its admin) and return (group_id, headers)."""
     group_id = client.post(

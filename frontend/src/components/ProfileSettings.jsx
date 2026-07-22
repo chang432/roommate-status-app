@@ -3,6 +3,7 @@ import {
   getCurrentGroup,
   removeGroupMember,
   setGroupMemberRole,
+  updateGroupDisplay,
 } from '../api/client.js'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { THEME_DEFINITIONS, themeDefinition } from '../models/themes.js'
@@ -14,6 +15,7 @@ export default function ProfileSettings({
   user,
   roommates = [],
   onRoommatesChange,
+  onGroupChange,
   onSignOut,
   onDeleteAccount,
 }) {
@@ -24,6 +26,8 @@ export default function ProfileSettings({
   const [copied, setCopied] = useState(false)
   const [memberError, setMemberError] = useState('')
   const [pendingMemberId, setPendingMemberId] = useState('')
+  const [displayError, setDisplayError] = useState('')
+  const [updatingDisplay, setUpdatingDisplay] = useState(false)
 
   // Admin is per-group, so it is read off this household's roster rather than
   // off the session — the same account may be a plain member elsewhere.
@@ -101,6 +105,30 @@ export default function ProfileSettings({
     window.setTimeout(() => setCopied(false), 1500)
   }
 
+  async function handleDisplayChange(field, checked) {
+    if (!group || updatingDisplay) return
+    setDisplayError('')
+    setUpdatingDisplay(true)
+    const nextSettings = {
+      showRoster: group.showRoster !== false,
+      showFeed: group.showFeed !== false,
+      [field]: checked,
+    }
+    try {
+      const { group: updatedGroup } = await updateGroupDisplay(
+        user.id,
+        nextSettings.showRoster,
+        nextSettings.showFeed,
+      )
+      setGroup(updatedGroup)
+      onGroupChange?.(updatedGroup)
+    } catch (err) {
+      setDisplayError(err.message || 'Could not update group display settings.')
+    } finally {
+      setUpdatingDisplay(false)
+    }
+  }
+
   return (
     <div className={styles.panel}>
       <section className={styles.identityCard}>
@@ -138,6 +166,42 @@ export default function ProfileSettings({
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {viewerIsAdmin && group && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h3>Group display</h3>
+            <p>Choose which shared sections appear for everyone in this group.</p>
+          </div>
+          {displayError && <p className={cx('ui-errorBox', styles.error)}>{displayError}</p>}
+          <div className={styles.displayControls}>
+            <label className={styles.displayOption}>
+              <span>
+                <strong>Household roster</strong>
+                <small>Show roommate statuses and household actions.</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={group.showRoster !== false}
+                disabled={updatingDisplay}
+                onChange={(event) => handleDisplayChange('showRoster', event.target.checked)}
+              />
+            </label>
+            <label className={styles.displayOption}>
+              <span>
+                <strong>Group feed</strong>
+                <small>Show events, requests, checklists, and TV shows.</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={group.showFeed !== false}
+                disabled={updatingDisplay}
+                onChange={(event) => handleDisplayChange('showFeed', event.target.checked)}
+              />
+            </label>
+          </div>
         </section>
       )}
 

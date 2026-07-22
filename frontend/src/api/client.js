@@ -115,6 +115,14 @@ export async function getCurrentGroup(userId) {
   return request(withQuery('/groups/current', { userId }))
 }
 
+// PUT /api/groups/display — admin-only shared roster/feed visibility settings.
+export async function updateGroupDisplay(userId, showRoster, showFeed) {
+  return request(withQuery('/groups/display', { userId }), {
+    method: 'PUT',
+    body: JSON.stringify({ showRoster, showFeed }),
+  })
+}
+
 // DELETE /api/groups/members/:id — admin-only removal. Returns the new roster.
 export async function removeGroupMember(actorId, userId) {
   return request(withQuery(`/groups/members/${userId}`, { userId: actorId }), {

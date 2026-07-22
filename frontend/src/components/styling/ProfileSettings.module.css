@@ -90,6 +90,26 @@
   @apply rounded-sm border border-line bg-card px-4 py-[11px] text-[13px] font-black text-ink-soft transition hover:bg-surface-hover;
 }
 
+.displayControls {
+  @apply flex flex-col gap-2;
+}
+
+.displayOption {
+  @apply flex cursor-pointer items-center justify-between gap-4 rounded-sm border border-line bg-surface-muted px-3 py-3;
+}
+
+.displayOption strong {
+  @apply block text-[13px] font-black text-ink;
+}
+
+.displayOption small {
+  @apply mt-1 block text-[11.5px] font-semibold leading-4 text-ink-soft;
+}
+
+.displayOption input {
+  @apply h-5 w-5 flex-none accent-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50;
+}
+
 .memberList {
   @apply flex flex-col gap-2;
 }

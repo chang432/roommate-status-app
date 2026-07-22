@@ -384,6 +384,26 @@ def create_app() -> Flask:
             return jsonify({"error": "That group no longer exists."}), 404
         return jsonify({"group": group})
 
+    @app.put("/api/groups/display")
+    def update_group_display():
+        """Let any admin choose which shared sections their group sees."""
+        actor, error = group_member_from_query()
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        show_roster = body.get("showRoster")
+        show_feed = body.get("showFeed")
+        if not isinstance(show_roster, bool) or not isinstance(show_feed, bool):
+            return jsonify({"error": "Display settings must be true or false."}), 400
+        group, error = groups.set_display_options(
+            actor["id"], actor["groupId"], show_roster, show_feed
+        )
+        if error == "forbidden":
+            return jsonify({"error": "Only a group admin can change display settings."}), 403
+        if error == "unknown_group" or group is None:
+            return jsonify({"error": "That group no longer exists."}), 404
+        return jsonify({"group": group})
+
     # Admin-only member administration. Both routes resolve the actor from the
     # request's group scope, so an admin of one household gains nothing in
     # another. Each returns the updated roster the caller already renders.

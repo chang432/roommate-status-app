@@ -7,6 +7,7 @@ import {
   getCurrentGroup,
   removeGroupMember,
   setGroupMemberRole,
+  updateGroupDisplay,
 } from "../api/client.js";
 
 vi.mock("../api/client.js", async (importOriginal) => {
@@ -16,6 +17,7 @@ vi.mock("../api/client.js", async (importOriginal) => {
     getCurrentGroup: vi.fn(),
     removeGroupMember: vi.fn(),
     setGroupMemberRole: vi.fn(),
+    updateGroupDisplay: vi.fn(),
   };
 });
 
@@ -29,19 +31,20 @@ function roster(andreRole) {
   ];
 }
 
-function renderPanel(roommates, onRoommatesChange = vi.fn()) {
+function renderPanel(roommates, onRoommatesChange = vi.fn(), onGroupChange = vi.fn()) {
   render(
     <ThemeProvider>
       <ProfileSettings
         user={USER}
         roommates={roommates}
         onRoommatesChange={onRoommatesChange}
+        onGroupChange={onGroupChange}
         onSignOut={vi.fn()}
         onDeleteAccount={vi.fn()}
       />
     </ThemeProvider>,
   );
-  return onRoommatesChange;
+  return { onRoommatesChange, onGroupChange };
 }
 
 describe("ProfileSettings member administration", () => {
@@ -75,7 +78,7 @@ describe("ProfileSettings member administration", () => {
     const next = [{ id: "andre", name: "Andre", role: "admin" }];
     removeGroupMember.mockResolvedValue(next);
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    const onRoommatesChange = renderPanel(roster("admin"));
+    const { onRoommatesChange } = renderPanel(roster("admin"));
 
     await userEvent.click(screen.getByRole("button", { name: "Remove" }));
 
@@ -107,7 +110,7 @@ describe("ProfileSettings member administration", () => {
     setGroupMemberRole.mockRejectedValue(
       new Error("Promote another admin before stepping down."),
     );
-    const onRoommatesChange = renderPanel(roster("admin"));
+    const { onRoommatesChange } = renderPanel(roster("admin"));
 
     await userEvent.click(screen.getAllByRole("button", { name: "Revoke admin" })[0]);
 
@@ -115,5 +118,33 @@ describe("ProfileSettings member administration", () => {
       await screen.findByText("Promote another admin before stepping down."),
     ).toBeInTheDocument();
     expect(onRoommatesChange).not.toHaveBeenCalled();
+  });
+
+  it("lets every admin change the shared roster and feed visibility", async () => {
+    const updatedGroup = {
+      groupId: "shire",
+      name: "Shire",
+      joinCode: "SHIRE12",
+      showRoster: false,
+      showFeed: true,
+    };
+    updateGroupDisplay.mockResolvedValue({ group: updatedGroup });
+    const { onGroupChange } = renderPanel(roster("admin"));
+
+    await userEvent.click(
+      await screen.findByRole("checkbox", { name: /Household roster/i }),
+    );
+
+    await waitFor(() =>
+      expect(updateGroupDisplay).toHaveBeenCalledWith("andre", false, true),
+    );
+    expect(onGroupChange).toHaveBeenCalledWith(updatedGroup);
+  });
+
+  it("hides group display controls from plain members", () => {
+    renderPanel(roster("member"));
+
+    expect(screen.queryByRole("checkbox", { name: /Household roster/i })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Group feed/i })).toBeNull();
   });
 });

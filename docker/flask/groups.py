@@ -51,6 +51,10 @@ def _project_group(item: dict | None) -> dict | None:
         "name": item.get("name", item["groupId"]),
         "joinCode": item["joinCode"],
         "createdAt": int(item["createdAt"]) if item.get("createdAt") is not None else None,
+        # Older group rows predate display controls. Treat absent values as
+        # visible so deploying this change never hides a household by default.
+        "showRoster": item.get("showRoster", True),
+        "showFeed": item.get("showFeed", True),
     }
 
 
@@ -69,6 +73,8 @@ def ensure_default_group() -> dict:
                 "name": db.DEFAULT_GROUP_NAME,
                 "joinCode": join_code,
                 "createdAt": created_at,
+                "showRoster": True,
+                "showFeed": True,
             },
             ConditionExpression="attribute_not_exists(groupId)",
         )
@@ -147,6 +153,8 @@ def create_group(user_id: str, name: str) -> tuple[dict | None, dict | None, str
             "name": display_name,
             "joinCode": join_code,
             "createdAt": int(time.time() * 1000),
+            "showRoster": True,
+            "showFeed": True,
         }
         try:
             table.put_item(
@@ -191,6 +199,29 @@ def join_group(user_id: str, code: str) -> tuple[dict | None, str | None]:
     # The client switches to the group it just joined, even if lexical group
     # ordering would make a different membership appear first on the account.
     return {**db.get_account_by_id(account["id"]), "groupId": group["groupId"]}, None
+
+
+def set_display_options(
+    actor_id: str, group_id: str, show_roster: bool, show_feed: bool
+) -> tuple[dict | None, str | None]:
+    """Update one household's shared section visibility for a group admin."""
+    if not db.is_group_admin(actor_id, group_id):
+        return None, "forbidden"
+    try:
+        _get_table().update_item(
+            Key={"groupId": group_id},
+            UpdateExpression="SET showRoster = :showRoster, showFeed = :showFeed",
+            ExpressionAttributeValues={
+                ":showRoster": show_roster,
+                ":showFeed": show_feed,
+            },
+            ConditionExpression="attribute_exists(groupId)",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None, "unknown_group"
+        raise
+    return get_group_by_id(group_id), None
 
 
 def _authorize_admin_action(

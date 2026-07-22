@@ -11,8 +11,9 @@ availability to hang out. Built from the mockups in `../mockups`.
   group code assigns them to a household.
 - **Profile settings** keep account actions in one place, including sign out,
   account deletion, System/Light/Dark/Forest appearance preferences, and the
-  current household invite code for grouped users. Theme choices are stored on
-  the current device.
+  current household invite code for grouped users. Group admins can also choose
+  whether the household roster and group feed are shown to everyone in that
+  group. Theme choices are stored on the current device.
 - **View** the whole household's current statuses at a glance.
 - **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.
@@ -78,6 +79,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `deleteAccount`                 | `DELETE /api/accounts/:id`                                 |
 | `joinGroup`                     | `POST /api/groups/join`                                    |
 | `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
+| `updateGroupDisplay`            | `PUT /api/groups/display?userId=:id`                       |
 | `getRoommates`                  | `GET /api/roommates?userId=:id`                            |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |

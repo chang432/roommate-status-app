@@ -222,10 +222,14 @@ export default function StatusPage() {
   const liveWatchparties = shows.filter((show) => show.isWatchpartyLive);
   const selectedGroup =
     groups.find((group) => group.groupId === user.activeGroupId) ?? groups[0];
+  // Group controls are shared with everyone in the household. Missing fields
+  // mean an older group record, which remains fully visible by default.
+  const showRoster = selectedGroup?.showRoster !== false;
+  const showFeed = selectedGroup?.showFeed !== false;
   const groupDataLoading =
     groupsLoading ||
     statusLoadedGroupId !== user.activeGroupId ||
-    feedLoadedGroupId !== user.activeGroupId;
+    (showFeed && feedLoadedGroupId !== user.activeGroupId);
 
   const handleActivitiesChange = useCallback((updated) => {
     setActivities(updated);
@@ -420,14 +424,16 @@ export default function StatusPage() {
           <EnableNotifications />
           {showBanner && <NotificationBanner count={freeCount} />}
 
-          <HouseholdRoster
-            roommates={displayedRoommates}
-            groupName={selectedGroup?.name}
-            hasJam={Boolean(jam)}
-            onShareJam={openJamModal}
-            onRoommatesChange={setRoommates}
-            onError={setError}
-          />
+          {showRoster && (
+            <HouseholdRoster
+              roommates={displayedRoommates}
+              groupName={selectedGroup?.name}
+              hasJam={Boolean(jam)}
+              onShareJam={openJamModal}
+              onRoommatesChange={setRoommates}
+              onError={setError}
+            />
+          )}
         </main>
 
         {jam && (
@@ -436,12 +442,14 @@ export default function StatusPage() {
           </div>
         )}
 
-        <div ref={feedRef} hidden={groupDataLoading}>
-          <GroupFeed
-            roommates={displayedRoommates}
-            onLoadStateChange={handleGroupFeedLoadStateChange}
-          />
-        </div>
+        {showFeed && (
+          <div ref={feedRef} hidden={groupDataLoading}>
+            <GroupFeed
+              roommates={displayedRoommates}
+              onLoadStateChange={handleGroupFeedLoadStateChange}
+            />
+          </div>
+        )}
 
         {settingsOpen && (
           <ModalShell
@@ -453,6 +461,13 @@ export default function StatusPage() {
               user={user}
               roommates={roommates}
               onRoommatesChange={setRoommates}
+              onGroupChange={(updatedGroup) =>
+                setGroups((currentGroups) =>
+                  currentGroups.map((group) =>
+                    group.groupId === updatedGroup.groupId ? updatedGroup : group,
+                  ),
+                )
+              }
               onSignOut={logout}
               onDeleteAccount={deleteAccount}
             />
