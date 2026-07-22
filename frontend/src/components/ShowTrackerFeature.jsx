@@ -319,7 +319,10 @@ export default function ShowTrackerFeature({
   function handleWatchpartySubmit(event) {
     event.preventDefault();
     if (!watchpartyPrompt) return;
-    const season = Math.max(1, Number.parseInt(watchpartyDraft.season, 10) || 1);
+    const season = Math.max(
+      1,
+      Number.parseInt(watchpartyDraft.season, 10) || 1,
+    );
     const episode = Math.max(
       1,
       Number.parseInt(watchpartyDraft.episode, 10) || 1,
@@ -393,7 +396,7 @@ export default function ShowTrackerFeature({
           }
         }}
         className={cx(
-          activity.isLive ? styles.activeCard : styles.card,
+          show.isWatchpartyLive ? styles.activeCard : styles.card,
           isArchived ? styles.completedCard : "",
         )}
       >
@@ -556,7 +559,7 @@ export default function ShowTrackerFeature({
 
       {watchpartyPrompt && (
         <ModalShell
-          title="Start watchparty"
+          title="Start Watchparty"
           ariaLabel={`Start ${watchpartyPrompt.title} watchparty`}
           onClose={() => setWatchpartyPrompt(null)}
           widthClassName={styles.watchpartyDialog}
@@ -602,14 +605,20 @@ export default function ShowTrackerFeature({
               <button
                 type="button"
                 onClick={() => setWatchpartyPrompt(null)}
-                className="ui-pillButton ui-pillSecondary"
+                className={cx(
+                  "ui-pillButton ui-pillSecondary",
+                  styles.showActionButton,
+                )}
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={watchpartyShowId === watchpartyPrompt.id}
-                className="ui-pillButton ui-pillPrimary"
+                className={cx(
+                  "ui-pillButton ui-pillPrimary",
+                  styles.showActionButton,
+                )}
               >
                 {watchpartyShowId === watchpartyPrompt.id
                   ? "Starting…"
