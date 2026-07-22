@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  completeBookClubSession,
   configureBookClub,
   getBookClub,
+  notifyBookClubMeeting,
   setBookClubResponse,
   updateBookClubNextSession,
 } from "../../api/client.js";
@@ -24,6 +24,7 @@ export default function BookClub({ roommates = [], groupId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [notifying, setNotifying] = useState(false);
   const [setup, setSetup] = useState({ title: "", author: "", readingTarget: "" });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
@@ -132,22 +133,19 @@ export default function BookClub({ roommates = [], groupId }) {
     }
   }
 
-  async function simulateMeetingTime() {
-    if (saving || !summary?.nextSession) return;
-    setSaving(true);
+  async function notifyNextMeeting() {
+    if (notifying || !summary?.nextSession) return;
+    setNotifying(true);
     setError("");
     try {
-      // This calls the same backend transition as the due-time summary read;
-      // it is intentionally admin-only so a member cannot skip a meeting.
-      const { summary: nextSummary } = await completeBookClubSession(
+      await notifyBookClubMeeting(
         user.id,
         summary.nextSession.id,
       );
-      setSummary(nextSummary);
     } catch (err) {
-      setError(err.message || "Could not simulate the meeting time.");
+      setError(err.message || "Could not send the meeting reminder.");
     } finally {
-      setSaving(false);
+      setNotifying(false);
     }
   }
 
@@ -181,7 +179,6 @@ export default function BookClub({ roommates = [], groupId }) {
           {canAdminister && !editing && (
             <div className={styles.adminActions}>
               <button type="button" className={styles.editButton} onClick={startEditing}>Edit upcoming meeting</button>
-              <button type="button" className={styles.testButton} disabled={saving} onClick={simulateMeetingTime}>Test: simulate meeting time</button>
             </div>
           )}
           {canAdminister && editing && (
@@ -220,7 +217,19 @@ export default function BookClub({ roommates = [], groupId }) {
             </form>
           )}
           <div className={styles.responses}>
-            <p className={styles.responsesTitle}>Meeting plans</p>
+            <div className={styles.responsesHeader}>
+              <p className={styles.responsesTitle}>Meeting plans</p>
+              <button
+                type="button"
+                className={styles.notifyButton}
+                disabled={notifying}
+                onClick={notifyNextMeeting}
+                aria-label="Notify everyone about next meeting"
+                title="Notify everyone about next meeting"
+              >
+                <img src="/bell.png" alt="" className={styles.notifyIcon} />
+              </button>
+            </div>
             {summary.nextSession.responses.map((response) => {
               const mine = response.userId === user.id;
               return <div className={styles.response} key={response.userId}>

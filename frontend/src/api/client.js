@@ -255,10 +255,10 @@ export async function updateBookClubNextSession(userId, settings) {
   })
 }
 
-// POST /api/book-club/sessions/:id/complete — admin-only manual trigger for
-// the same rollover that the server performs when a meeting becomes due.
-export async function completeBookClubSession(userId, sessionId) {
-  return request(withQuery(`/book-club/sessions/${encodeURIComponent(sessionId)}/complete`, { userId }), {
+// POST /api/book-club/sessions/:id/notify — any member can remind the group
+// about its currently scheduled meeting.
+export async function notifyBookClubMeeting(userId, sessionId) {
+  return request(withQuery(`/book-club/sessions/${encodeURIComponent(sessionId)}/notify`, { userId }), {
     method: 'POST',
   })
 }

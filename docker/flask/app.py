@@ -646,19 +646,30 @@ def create_app() -> Flask:
             return jsonify({"error": error}), 409 if error.startswith("This meeting") else 400
         return jsonify({"summary": summary})
 
-    @app.post("/api/book-club/sessions/<session_id>/complete")
-    def complete_book_club_session(session_id: str):
+    @app.post("/api/book-club/sessions/<session_id>/notify")
+    def notify_book_club_meeting(session_id: str):
+        """Send every group member a reminder for the configured next meeting."""
         viewer, error = group_member_from_query()
         if error:
             return error
-        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
-            return jsonify({"error": "Only a group admin can complete sessions."}), 403
-        summary, error = book_club.complete_session(
-            viewer["groupId"], db.get_all(viewer["groupId"]), session_id
+        summary = book_club.summary(viewer["groupId"], db.get_all(viewer["groupId"]))
+        if summary is None or summary["nextSession"] is None or summary["nextSession"]["id"] != session_id:
+            return jsonify({"error": "Unknown next Book Club meeting."}), 404
+        if not push.is_configured():
+            return jsonify({"error": "Push is not configured on the server."}), 503
+
+        session = summary["nextSession"]
+        result = notify_group(
+            viewer["groupId"],
+            title="Book Club reminder",
+            body=(
+                f"{viewer['name']} reminded everyone about the next Book Club meeting: "
+                f"{session.get('bookTitle') or 'the current book'}"
+            ),
+            url="/",
+            event_type="book-club-reminder",
         )
-        if error:
-            return jsonify({"error": error}), 404 if error.startswith("Unknown") else 409
-        return jsonify({"summary": summary})
+        return jsonify(result)
 
     @app.post("/api/book-club/sessions/<session_id>/complete-book")
     def complete_book_club_book(session_id: str):

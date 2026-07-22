@@ -244,17 +244,6 @@ def set_response(group_id: str, session_id: str, member: dict, attendance: str, 
     return _project_session(session), None
 
 
-def complete_session(group_id: str, members: list[dict], session_id: str) -> tuple[dict | None, str | None]:
-    config = _fetch(group_id, CONFIG_ID)
-    session = _fetch(group_id, session_id)
-    if config is None or session is None or config.get("nextSessionId") != session_id:
-        return None, "Unknown current session."
-    if session.get("status") != "scheduled":
-        return None, "This session is no longer scheduled."
-    _advance_session(group_id, members, config, session)
-    return summary(group_id, members), None
-
-
 def _advance_if_due(group_id: str, members: list[dict], config: dict) -> bool:
     """Advance the configured meeting after its scheduled instant has passed."""
     session = _fetch(group_id, config.get("nextSessionId", ""), consistent=True)

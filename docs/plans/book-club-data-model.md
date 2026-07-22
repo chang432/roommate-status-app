@@ -13,7 +13,8 @@ progress for an upcoming session without redesigning the data later.
 - Meetings occur every two weeks on Wednesday at 7:30 PM in
   `America/New_York`.
 - Group admins manage the Book Club configuration, sessions, books, and
-  assignments. Other group members have read-only access at first.
+  assignments. Any group member can send a push reminder for the next meeting;
+  other Book Club administration remains admin-only.
 - Snack duty and book recommendations use separate, admin-configured ordered
   member rotations.
 - A book may span multiple sessions. A session's reading target is free text,
@@ -236,6 +237,8 @@ configuration's next-session data together with the active book. It displays:
 - `Book: <title> by <author>`;
 - next meeting, chapter goal, and snack duty as separate lines;
 - an admin editor that chooses the recommender from the current member list.
+- a bell above meeting plans that any group member can use to send a reminder
+  for the next meeting to the group.
 - each member's attendance plan and chapters-read-through value, with an
   explicit `not responded` state when their response item is absent.
 

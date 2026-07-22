@@ -80,6 +80,7 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `joinGroup`                     | `POST /api/groups/join`                                    |
 | `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
 | `updateGroupDisplay`            | `PUT /api/groups/display?userId=:id`                       |
+| `notifyBookClubMeeting`         | `POST /api/book-club/sessions/:id/notify?userId=:id`       |
 | `getRoommates`                  | `GET /api/roommates?userId=:id`                            |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |

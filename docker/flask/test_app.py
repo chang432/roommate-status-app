@@ -257,6 +257,42 @@ def test_book_club_rejects_non_admin_configuration(client):
     assert response.status_code == 403
 
 
+def test_book_club_member_can_notify_everyone_about_the_next_meeting(client, monkeypatch):
+    configured = client.post(
+        grouped_path("/api/book-club/config"),
+        json={"title": "A Book", "author": "An Author", "readingTarget": "Chapter 1"},
+    )
+    session_id = configured.get_json()["summary"]["nextSession"]["id"]
+    notifications = []
+
+    monkeypatch.setattr(push, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        "app.notify_group",
+        lambda group_id, **kwargs: notifications.append((group_id, kwargs)) or {
+            "sent": 2, "pruned": 0, "failed": 0,
+        },
+    )
+
+    response = client.post(
+        grouped_path(
+            f"/api/book-club/sessions/{session_id.replace('#', '%23')}/notify",
+            user_id="sheryl",
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"sent": 2, "pruned": 0, "failed": 0}
+    assert notifications == [(
+        TEST_GROUP_ID,
+        {
+            "title": "Book Club reminder",
+            "body": "Sheryl reminded everyone about the next Book Club meeting: A Book",
+            "url": "/",
+            "event_type": "book-club-reminder",
+        },
+    )]
+
+
 def test_book_club_read_advances_due_meeting_to_admin_placeholder(client, monkeypatch):
     now = book_club._now()
     configured = client.post(

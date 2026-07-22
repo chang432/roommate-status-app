@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import BookClub from "./BookClub.jsx";
-import { completeBookClubSession, getBookClub } from "../../api/client.js";
+import { getBookClub, notifyBookClubMeeting } from "../../api/client.js";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { id: "andre", name: "Andre" } }),
@@ -10,8 +10,8 @@ vi.mock("../../context/AuthContext.jsx", () => ({
 
 vi.mock("../../api/client.js", async (importOriginal) => ({
   ...(await importOriginal()),
-  completeBookClubSession: vi.fn(),
   getBookClub: vi.fn(),
+  notifyBookClubMeeting: vi.fn(),
   configureBookClub: vi.fn(),
   setBookClubResponse: vi.fn(),
 }));
@@ -51,7 +51,7 @@ describe("BookClub", () => {
     expect(screen.queryByText("Eastern time")).toBeNull();
   });
 
-  it("lets an admin simulate the due-time rollover", async () => {
+  it("lets any member notify the group about the upcoming meeting", async () => {
     getBookClub.mockResolvedValue({
       summary: {
         activeBook: { title: "A Book", author: "An Author" },
@@ -64,11 +64,12 @@ describe("BookClub", () => {
         },
       },
     });
-    completeBookClubSession.mockResolvedValue({ summary: null });
+    notifyBookClubMeeting.mockResolvedValue({ sent: 1, pruned: 0, failed: 0 });
 
-    render(<BookClub roommates={[{ id: "andre", name: "Andre", role: "admin" }]} groupId="book-club" />);
+    render(<BookClub roommates={[{ id: "andre", name: "Andre", role: "member" }]} groupId="book-club" />);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Test: simulate meeting time" }));
-    expect(completeBookClubSession).toHaveBeenCalledWith("andre", "session#future");
+    await userEvent.click(await screen.findByRole("button", { name: "Notify everyone about next meeting" }));
+    expect(notifyBookClubMeeting).toHaveBeenCalledWith("andre", "session#future");
+    expect(screen.queryByText(/simulate meeting time/i)).toBeNull();
   });
 });
