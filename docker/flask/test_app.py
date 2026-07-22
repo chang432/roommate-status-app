@@ -372,12 +372,19 @@ def test_admin_updates_group_display_for_every_member(client):
         "createdAt": updated.get_json()["group"]["createdAt"],
         "showRoster": False,
         "showFeed": False,
+        "viewerIsAdmin": True,
     }
     member_view = client.get(
         "/api/groups/current?userId=sheryl", headers=headers
     ).get_json()["group"]
     assert member_view["showRoster"] is False
     assert member_view["showFeed"] is False
+    assert member_view["viewerIsAdmin"] is False
+
+    admin_view = client.get(
+        "/api/groups/current?userId=andre", headers=headers
+    ).get_json()["group"]
+    assert admin_view["viewerIsAdmin"] is True
 
 
 def test_plain_member_cannot_change_group_display(client):

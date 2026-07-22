@@ -29,9 +29,9 @@ export default function ProfileSettings({
   const [displayError, setDisplayError] = useState('')
   const [updatingDisplay, setUpdatingDisplay] = useState(false)
 
-  // Admin is per-group, so it is read off this household's roster rather than
-  // off the session — the same account may be a plain member elsewhere.
-  const viewerIsAdmin = isAdminIn(roommates, user?.id)
+  // Admin is per-group. Prefer the current-group response so profile controls
+  // do not disappear while the independently loaded roster is refreshing.
+  const viewerIsAdmin = group?.viewerIsAdmin ?? isAdminIn(roommates, user?.id)
 
   useEffect(() => {
     let cancelled = false

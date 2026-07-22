@@ -382,7 +382,17 @@ def create_app() -> Flask:
         group = groups.get_group_by_id(user["groupId"])
         if group is None:
             return jsonify({"error": "That group no longer exists."}), 404
-        return jsonify({"group": group})
+        # This permission belongs to the selected membership, not the account.
+        # Returning it with the selected group lets profile controls render
+        # correctly even while the separate roster request is still in flight.
+        return jsonify(
+            {
+                "group": {
+                    **group,
+                    "viewerIsAdmin": db.is_group_admin(user["id"], user["groupId"]),
+                }
+            }
+        )
 
     @app.put("/api/groups/display")
     def update_group_display():
@@ -402,7 +412,7 @@ def create_app() -> Flask:
             return jsonify({"error": "Only a group admin can change display settings."}), 403
         if error == "unknown_group" or group is None:
             return jsonify({"error": "That group no longer exists."}), 404
-        return jsonify({"group": group})
+        return jsonify({"group": {**group, "viewerIsAdmin": True}})
 
     # Admin-only member administration. Both routes resolve the actor from the
     # request's group scope, so an admin of one household gains nothing in

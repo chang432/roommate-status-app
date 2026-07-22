@@ -14,7 +14,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/groups/join`                                      | `{ userId, code }`                         | `{ user, group }`                                       |
 | `POST /api/groups`                                           | `{ userId, name }`                         | newly created `{ user, group }`                         |
 | `GET  /api/groups`                                           | `?userId=<id>`                             | every selectable group                                  |
-| `GET  /api/groups/current`                                   | `?userId=<id>`                             | `{ group: { groupId, name, joinCode, createdAt } }`     |
+| `GET  /api/groups/current`                                   | `?userId=<id>`                             | selected group metadata, including `viewerIsAdmin`      |
 | `PUT  /api/groups/display`                                   | `?userId=<id>` + `{ showRoster, showFeed }` | updated admin-managed group display settings             |
 | `GET  /api/roommates`                                        | `?userId=<id>`                             | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |

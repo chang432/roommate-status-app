@@ -147,4 +147,20 @@ describe("ProfileSettings member administration", () => {
     expect(screen.queryByRole("checkbox", { name: /Household roster/i })).toBeNull();
     expect(screen.queryByRole("checkbox", { name: /Group feed/i })).toBeNull();
   });
+
+  it("uses the current group permission while the roster is still refreshing", async () => {
+    getCurrentGroup.mockResolvedValue({
+      group: {
+        groupId: "shire",
+        name: "Shire",
+        joinCode: "SHIRE12",
+        viewerIsAdmin: true,
+      },
+    });
+    renderPanel(roster("member"));
+
+    expect(
+      await screen.findByRole("checkbox", { name: /Household roster/i }),
+    ).toBeInTheDocument();
+  });
 });
