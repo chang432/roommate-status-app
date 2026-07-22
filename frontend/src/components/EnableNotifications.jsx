@@ -79,9 +79,10 @@ export default function EnableNotifications() {
         type="button"
         onClick={handleClick}
         disabled={busy}
+        x
         className={styles.button}
       >
-        {busy ? "Enabling…" : "🔔 Your notifs are off??? But why? Enable me!"}
+        {busy ? "Enabling…" : "🔔 Tap to enable notifs!"}
       </button>
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
     </div>
