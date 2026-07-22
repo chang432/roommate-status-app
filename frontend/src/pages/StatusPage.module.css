@@ -78,6 +78,10 @@
   @apply mb-4 flex items-center justify-between;
 }
 
+.moduleNavHeaderActions {
+  @apply flex items-center gap-2;
+}
+
 .moduleNavEyebrow {
   @apply text-[12px] font-black uppercase tracking-[0.08em] text-ink-soft;
 }
@@ -86,12 +90,52 @@
   @apply rounded-full border border-line px-3 py-1 text-[12px] font-bold text-ink-soft lg:hidden;
 }
 
+.moduleNavEdit {
+  @apply rounded-full border border-line px-3 py-1 text-[12px] font-bold text-ink-soft transition hover:border-accent hover:text-ink;
+}
+
 .moduleNavList {
   @apply space-y-2;
 }
 
 .moduleNavItem {
   @apply flex w-full items-center justify-between rounded-sm border border-transparent px-3 py-3 text-left text-[14px] font-black text-ink-soft transition hover:border-line hover:bg-surface-hover hover:text-ink;
+}
+
+.moduleNavItemEditing {
+  @apply cursor-default hover:border-transparent hover:bg-transparent hover:text-ink-soft;
+}
+
+.moduleNavEditRow {
+  @apply grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2;
+}
+
+.moduleNavEditRowDragging {
+  @apply opacity-55;
+}
+
+.moduleNavDragHandle {
+  @apply grid h-9 w-9 touch-none select-none cursor-grab place-items-center rounded-full border border-line bg-card text-[16px] font-black leading-none text-ink-soft transition hover:border-accent hover:text-ink active:cursor-grabbing;
+}
+
+.moduleNavAllEditor {
+  @apply space-y-2;
+}
+
+.moduleNavAllDropdown {
+  @apply border-line bg-card;
+}
+
+.moduleNavAllSummary {
+  @apply flex items-center gap-2 rounded-full bg-surface-muted px-2 py-1 text-[11px] text-ink-soft;
+}
+
+.moduleNavAllMenu {
+  @apply rounded-sm border border-line bg-surface-muted p-2 shadow-soft;
+}
+
+.moduleNavAllOption {
+  @apply flex items-center gap-2 rounded-sm px-2 py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-surface-hover hover:text-ink;
 }
 
 .moduleNavItemActive {
@@ -144,7 +188,7 @@
 }
 
 .feedColumn {
-  @apply min-w-0 pb-24;
+  @apply min-w-0 touch-pan-y pb-24;
 }
 
 .ownCard {

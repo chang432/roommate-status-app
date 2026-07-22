@@ -20,6 +20,11 @@ tracking their own season and episode, so a show is a single read/write.
   "createdById": "<roommate id>",
   "createdAt":   1720200000000,          # epoch ms
   "completedAt": 1720300000000,          # epoch ms; ABSENT while active
+  "watchpartyStartedAt": 1720203600000,  # epoch ms; ABSENT when not live
+  "watchpartyStartedBy": "Sam",
+  "watchpartyStartedById": "<roommate id>",
+  "watchpartySeason": 2,
+  "watchpartyEpisode": 5,
   "members": [
     { "id": "<roommate id>", "name": "Sam", "season": 2, "episode": 5 }
   ]
@@ -29,6 +34,9 @@ tracking their own season and episode, so a show is a single read/write.
 `completedAt` is present only while a show is completed; the API projects a
 derived `completed` boolean and omits the attribute when active, so
 `attribute_not_exists(completedAt)` cleanly means "active".
+`watchpartyStartedAt`, starter identity fields, and watchparty season/episode
+fields are present only while a watchparty is live; the frontend projects them
+into the same top-of-app live banner pattern used by events.
 
 ## Backend module: `docker/flask/household_shows.py`
 
@@ -67,6 +75,8 @@ request).
 | `PUT   /api/shows/<id>/watchers/<member_id>/<field>` | roommate + integer `value` → `set_progress` |
 | `POST /api/shows/<id>/complete` | validate requester → `complete` (creator-only) |
 | `POST /api/shows/<id>/reopen` | validate requester → `reopen` (creator-only) |
+| `POST /api/shows/<id>/watchparty/start` | validate requester + season/episode → start live watchparty |
+| `POST /api/shows/<id>/watchparty/end` | validate requester → end live watchparty |
 
 Every route resolves the caller's group (`userId` on the GET query / in the
 mutation body) and passes it down, so a request can only touch shows in the

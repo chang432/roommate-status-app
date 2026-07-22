@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import ActivityCreateForm from "./ActivityCreateForm.jsx";
 import ChecklistCreateForm from "./ChecklistCreateForm.jsx";
 import ChecklistFeature from "./ChecklistFeature.jsx";
-import JamWidget, { JamShareForm } from "./JamWidget.jsx";
 import ModalShell from "./ModalShell.jsx";
 import ModuleEditForm from "./ModuleEditForm.jsx";
 import ProposeActivity from "./ProposeActivity.jsx";
@@ -32,23 +31,134 @@ import styles from "../pages/StatusPage.module.css";
 const FEED_POLL_INTERVAL_MS = 5000;
 const EDIT_HEADER_SELECTOR = "[data-module-edit-header]";
 const EDIT_KEYBOARD_SELECTOR = "[data-module-edit-keyboard]";
-const INTERACTIVE_SELECTOR = "button, a, input, textarea, select, [role='button']";
+const INTERACTIVE_SELECTOR = "button, a, input, textarea, select";
+const SWIPE_MIN_X = 64;
+const SWIPE_MAX_Y = 48;
 
 const CREATE_LABEL_BY_TYPE = {
   events: "Create an event",
   requests: "Create a request",
   checklists: "Create a checklist",
   tv: "Add a show",
-  spotify: "Share Spotify Jam",
 };
 
-function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
+function modulePreferenceKey(userId, groupId) {
+  return `roomie-module-preferences:${userId}:${groupId}`;
+}
+
+function sanitizeModuleOrder(value) {
+  const available = MODULE_TYPES.filter((type) => type.id !== "all").map(
+    (type) => type.id,
+  );
+  const seen = new Set();
+  const ordered = Array.isArray(value)
+    ? value.filter(
+        (id) => available.includes(id) && !seen.has(id) && seen.add(id),
+      )
+    : [];
+  return [...ordered, ...available.filter((id) => !seen.has(id))];
+}
+
+function sanitizeAllTypes(value, orderedTypes) {
+  const selected = Array.isArray(value)
+    ? value.filter((id) => orderedTypes.includes(id))
+    : orderedTypes;
+  return selected.length > 0 ? selected : [orderedTypes[0]].filter(Boolean);
+}
+
+function readModulePreferences(userId, groupId) {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(modulePreferenceKey(userId, groupId)) || "null",
+    );
+    const order = sanitizeModuleOrder(stored?.order);
+    return { order, allTypes: sanitizeAllTypes(stored?.allTypes, order) };
+  } catch {
+    const order = sanitizeModuleOrder(null);
+    return { order, allTypes: sanitizeAllTypes(null, order) };
+  }
+}
+
+function ModuleNav({
+  activeType,
+  modules,
+  moduleTypes,
+  drawerOpen,
+  onClose,
+  onSelect,
+  editMode,
+  onEditModeChange,
+  allTypes,
+  onAllTypesChange,
+  onReorderType,
+}) {
+  const navRef = useRef(null);
+  const dragPointerRef = useRef(null);
+  const [allDropdownOpen, setAllDropdownOpen] = useState(false);
+  const [draggingType, setDraggingType] = useState(null);
   const counts = modules.reduce((acc, module) => {
     if (module.isArchived) return acc;
     acc[module.type] = (acc[module.type] ?? 0) + 1;
-    acc.all = (acc.all ?? 0) + 1;
     return acc;
   }, {});
+  counts.all = modules.filter(
+    (module) => !module.isArchived && allTypes.includes(module.type),
+  ).length;
+  const editableTypes = moduleTypes.filter((type) => type.id !== "all");
+  const selectedAllLabels = editableTypes
+    .filter((type) => allTypes.includes(type.id))
+    .map((type) => type.shortLabel || type.label);
+
+  function handleAllTypeToggle(typeId, checked) {
+    const next = checked
+      ? [...allTypes, typeId]
+      : allTypes.filter((id) => id !== typeId);
+    onAllTypesChange(
+      sanitizeAllTypes(
+        next,
+        editableTypes.map((type) => type.id),
+      ),
+    );
+  }
+
+  const finishEditing = useCallback(() => {
+    onEditModeChange(false);
+    setAllDropdownOpen(false);
+    setDraggingType(null);
+    dragPointerRef.current = null;
+  }, [onEditModeChange]);
+
+  function finishTouchDrag(event) {
+    const drag = dragPointerRef.current;
+    dragPointerRef.current = null;
+    setDraggingType(null);
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    const dropTarget = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest("[data-module-drop-type], [data-module-type]");
+    const dropType =
+      dropTarget?.getAttribute("data-module-drop-type") ||
+      dropTarget?.getAttribute("data-module-type");
+    if (dropType && dropType !== drag.type) {
+      onReorderType(drag.type, dropType);
+    }
+  }
+
+  useEffect(() => {
+    if (!editMode) return undefined;
+    function handlePointerDown(event) {
+      if (navRef.current?.contains(event.target)) return;
+      finishEditing();
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [editMode, finishEditing]);
+
+  useEffect(() => {
+    if (drawerOpen) return;
+    finishEditing();
+  }, [drawerOpen, finishEditing]);
 
   return (
     <>
@@ -57,40 +167,190 @@ function ModuleNav({ activeType, modules, drawerOpen, onClose, onSelect }) {
           type="button"
           aria-label="Close module list"
           className={styles.drawerBackdrop}
-          onClick={onClose}
+          onClick={() => {
+            finishEditing();
+            onClose();
+          }}
         />
       ) : null}
       <aside
+        ref={navRef}
         className={cx(styles.moduleNav, drawerOpen ? styles.moduleNavOpen : "")}
         aria-label="Module types"
       >
         <div className={styles.moduleNavHeader}>
           <p className={styles.moduleNavEyebrow}>Modules</p>
-          <button
-            type="button"
-            className={styles.moduleNavClose}
-            onClick={onClose}
-          >
-            Close
-          </button>
+          <div className={styles.moduleNavHeaderActions}>
+            <button
+              type="button"
+              className={styles.moduleNavEdit}
+              onClick={() => {
+                if (editMode) finishEditing();
+                else onEditModeChange(true);
+              }}
+            >
+              {editMode ? "Done" : "Edit"}
+            </button>
+            <button
+              type="button"
+              className={styles.moduleNavClose}
+              onClick={() => {
+                finishEditing();
+                onClose();
+              }}
+            >
+              Close
+            </button>
+          </div>
         </div>
         <div className={styles.moduleNavList}>
-          {MODULE_TYPES.map((type) => (
-            <button
-              key={type.id}
-              type="button"
-              onClick={() => onSelect(type.id)}
-              data-module-type={type.id === "all" ? undefined : type.id}
-              className={cx(
-                styles.moduleNavItem,
-                type.id === "all" ? "" : styles.modulePalette,
-                activeType === type.id ? styles.moduleNavItemActive : "",
-              )}
-            >
-              <span>{type.label}</span>
-              <span className={styles.moduleNavCount}>{counts[type.id] ?? 0}</span>
-            </button>
-          ))}
+          {moduleTypes.map((type) => {
+            const filterContent = (
+              <>
+                <span>{type.label}</span>
+                <span className={styles.moduleNavCount}>
+                  {counts[type.id] ?? 0}
+                </span>
+              </>
+            );
+            const filterButton = editMode ? (
+              <div
+                key={type.id}
+                data-module-type={type.id === "all" ? undefined : type.id}
+                className={cx(
+                  styles.moduleNavItem,
+                  styles.moduleNavItemEditing,
+                  type.id === "all" ? "" : styles.modulePalette,
+                  activeType === type.id ? styles.moduleNavItemActive : "",
+                )}
+              >
+                {filterContent}
+              </div>
+            ) : (
+              <button
+                key={type.id}
+                type="button"
+                onClick={() => onSelect(type.id)}
+                data-module-type={type.id === "all" ? undefined : type.id}
+                className={cx(
+                  styles.moduleNavItem,
+                  type.id === "all" ? "" : styles.modulePalette,
+                  activeType === type.id ? styles.moduleNavItemActive : "",
+                )}
+              >
+                {filterContent}
+              </button>
+            );
+            if (!editMode) return filterButton;
+            if (type.id === "all") {
+              return (
+                <div key={type.id} className={styles.moduleNavAllEditor}>
+                  <button
+                    type="button"
+                    className={cx(
+                      styles.moduleNavItem,
+                      styles.moduleNavAllDropdown,
+                      activeType === type.id ? styles.moduleNavItemActive : "",
+                    )}
+                    onClick={() => setAllDropdownOpen((current) => !current)}
+                    aria-expanded={allDropdownOpen}
+                  >
+                    <span>{type.label}</span>
+                    <span className={styles.moduleNavAllSummary}>
+                      {selectedAllLabels.length === editableTypes.length
+                        ? "All selected"
+                        : `${selectedAllLabels.length} selected`}
+                      <span aria-hidden="true">
+                        {allDropdownOpen ? "▴" : "▾"}
+                      </span>
+                    </span>
+                  </button>
+                  {allDropdownOpen ? (
+                    <div className={styles.moduleNavAllMenu}>
+                      {editableTypes.map((option) => (
+                        <label
+                          key={option.id}
+                          className={styles.moduleNavAllOption}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={allTypes.includes(option.id)}
+                            onChange={(event) =>
+                              handleAllTypeToggle(
+                                option.id,
+                                event.target.checked,
+                              )
+                            }
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+            return (
+              <div
+                key={type.id}
+                data-module-drop-type={type.id}
+                className={cx(
+                  styles.moduleNavEditRow,
+                  draggingType === type.id
+                    ? styles.moduleNavEditRowDragging
+                    : "",
+                )}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const draggedId =
+                    event.dataTransfer.getData("text/plain") || draggingType;
+                  setDraggingType(null);
+                  if (draggedId && draggedId !== type.id) {
+                    onReorderType(draggedId, type.id);
+                  }
+                }}
+              >
+                {filterButton}
+                <button
+                  type="button"
+                  draggable
+                  className={styles.moduleNavDragHandle}
+                  aria-label={`Drag ${type.label} to reorder`}
+                  onPointerDown={(event) => {
+                    if (event.pointerType === "mouse") return;
+                    event.preventDefault();
+                    dragPointerRef.current = {
+                      pointerId: event.pointerId,
+                      type: type.id,
+                    };
+                    setDraggingType(type.id);
+                    event.currentTarget.setPointerCapture?.(event.pointerId);
+                  }}
+                  onPointerUp={finishTouchDrag}
+                  onPointerCancel={(event) => {
+                    if (dragPointerRef.current?.pointerId === event.pointerId) {
+                      dragPointerRef.current = null;
+                      setDraggingType(null);
+                      event.currentTarget.releasePointerCapture?.(
+                        event.pointerId,
+                      );
+                    }
+                  }}
+                  onDragStart={(event) => {
+                    setDraggingType(type.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", type.id);
+                  }}
+                  onDragEnd={() => setDraggingType(null)}
+                >
+                  ☰
+                </button>
+              </div>
+            );
+          })}
         </div>
       </aside>
     </>
@@ -128,7 +388,9 @@ function ModuleFeedItem({
       const header = event.target.closest?.(EDIT_HEADER_SELECTOR);
       if (!header || !event.currentTarget.contains(header)) return false;
       const interactive = event.target.closest?.(INTERACTIVE_SELECTOR);
-      return !interactive || !header.contains(interactive) || interactive === header;
+      return (
+        !interactive || !header.contains(interactive) || interactive === header
+      );
     },
     isKeyboardTarget: (event) =>
       event.target.matches?.(EDIT_KEYBOARD_SELECTOR) &&
@@ -161,7 +423,11 @@ function ModuleFeedItem({
 
   return (
     <ModuleFocusProvider intent={matchingIntent}>
-      <article ref={itemRef} className={styles.moduleItem} {...longPressHandlers}>
+      <article
+        ref={itemRef}
+        className={styles.moduleItem}
+        {...longPressHandlers}
+      >
         {children(editTrigger)}
       </article>
     </ModuleFocusProvider>
@@ -177,20 +443,50 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
 
   const [modules, setModules] = useState([]);
   const [activeType, setActiveType] = useState("all");
+  const [moduleOrder, setModuleOrder] = useState(
+    () => readModulePreferences(user.id, user.activeGroupId).order,
+  );
+  const [allTypes, setAllTypes] = useState(
+    () => readModulePreferences(user.id, user.activeGroupId).allTypes,
+  );
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [moduleNavEditing, setModuleNavEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [liveError, setLiveError] = useState("");
   const [navigationError, setNavigationError] = useState("");
   const [transitioningId, setTransitioningId] = useState(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createType, setCreateType] = useState(null);
-  const [jamModalOpen, setJamModalOpen] = useState(false);
   const [editingModule, setEditingModule] = useState(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
+  const swipeStartRef = useRef(null);
+
+  const moduleTypes = useMemo(() => {
+    const byId = new Map(MODULE_TYPES.map((type) => [type.id, type]));
+    return [
+      byId.get("all"),
+      ...moduleOrder.map((id) => byId.get(id)).filter(Boolean),
+    ].filter(Boolean);
+  }, [moduleOrder]);
+
+  useEffect(() => {
+    const nextPreferences = readModulePreferences(user.id, user.activeGroupId);
+    setModuleOrder(nextPreferences.order);
+    setAllTypes(nextPreferences.allTypes);
+  }, [user.activeGroupId, user.id]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      modulePreferenceKey(user.id, user.activeGroupId),
+      JSON.stringify({ order: moduleOrder, allTypes }),
+    );
+  }, [allTypes, moduleOrder, user.activeGroupId, user.id]);
 
   const loadFeed = useCallback(async () => {
     try {
-      setModules(createModules(await getFeed(user.id, "all", user.activeGroupId)));
+      setModules(
+        createModules(await getFeed(user.id, "all", user.activeGroupId)),
+      );
       setLiveError("");
     } catch {
       setLiveError("Could not load the group feed.");
@@ -244,7 +540,10 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     startPolling();
     window.addEventListener("focus", loadFeed);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage);
+    navigator.serviceWorker?.addEventListener(
+      "message",
+      handleServiceWorkerMessage,
+    );
 
     return () => {
       stopPolling();
@@ -260,9 +559,9 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   const visibleModules = useMemo(
     () =>
       activeType === "all"
-        ? modules
+        ? modules.filter((module) => allTypes.includes(module.type))
         : modules.filter((module) => module.type === activeType),
-    [activeType, modules],
+    [activeType, allTypes, modules],
   );
   const activeModules = useMemo(
     () => visibleModules.filter((module) => !module.isArchived),
@@ -273,9 +572,8 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     [visibleModules],
   );
 
-  // The active Spotify Jam (if any) rides along in the feed as its own module.
-  const currentJam = useMemo(
-    () => modules.find((module) => module.type === "spotify")?.payload ?? null,
+  const feedModules = useMemo(
+    () => modules.filter((module) => module.type !== "spotify"),
     [modules],
   );
 
@@ -286,9 +584,9 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   const moduleTypeIds = useMemo(
     () =>
       new Set(
-        MODULE_TYPES.filter((type) => type.id !== "all").map((type) => type.id),
+        moduleTypes.filter((type) => type.id !== "all").map((type) => type.id),
       ),
-    [],
+    [moduleTypes],
   );
 
   const consumeFocusIntent = useCallback(
@@ -310,6 +608,11 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   // refreshes therefore cannot replay expansion, scrolling, or editor resets.
   useEffect(() => {
     if (!focusIntent) return;
+    if (focusIntent.type === "spotify") {
+      setNavigationError("");
+      consumeFocusIntent(focusIntent.token);
+      return;
+    }
     if (!moduleTypeIds.has(focusIntent.type)) {
       setNavigationError("That module type is not available.");
       consumeFocusIntent(focusIntent.token);
@@ -359,8 +662,10 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   const handleActivitiesChange = useCallback(() => loadFeed(), [loadFeed]);
   const handleRequestsChange = useCallback(() => loadFeed(), [loadFeed]);
   const handleChecklistsChange = useCallback(() => loadFeed(), [loadFeed]);
-  const handleShowsChange = useCallback(() => loadFeed(), [loadFeed]);
-  const handleJamChange = useCallback(() => loadFeed(), [loadFeed]);
+  const handleShowsChange = useCallback(() => {
+    window.dispatchEvent(new Event("roomie:shows-changed"));
+    loadFeed();
+  }, [loadFeed]);
 
   async function handleLiveTransition(activity, action) {
     if (transitioningId) return;
@@ -383,6 +688,43 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     setDrawerOpen(false);
   }
 
+  function reorderModuleType(draggedType, targetType) {
+    setModuleOrder((current) => {
+      const next = [...current];
+      const fromIndex = next.indexOf(draggedType);
+      const toIndex = next.indexOf(targetType);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return current;
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }
+
+  function selectAdjacentType(direction) {
+    const ids = moduleTypes.map((type) => type.id);
+    const index = ids.indexOf(activeType);
+    const safeIndex = index >= 0 ? index : 0;
+    const nextIndex = (safeIndex + direction + ids.length) % ids.length;
+    selectModuleType(ids[nextIndex]);
+  }
+
+  function handleFeedPointerDown(event) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.target.closest?.(INTERACTIVE_SELECTOR)) return;
+    swipeStartRef.current = { x: event.clientX, y: event.clientY };
+  }
+
+  function handleFeedPointerUp(event) {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start) return;
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (Math.abs(deltaX) < SWIPE_MIN_X || Math.abs(deltaY) > SWIPE_MAX_Y)
+      return;
+    selectAdjacentType(deltaX < 0 ? 1 : -1);
+  }
+
   function openCreateModal() {
     setCreateType(activeType === "all" ? null : activeType);
     setCreateModalOpen(true);
@@ -392,17 +734,19 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     if (!createType) {
       return (
         <div className={styles.createPicker}>
-          {MODULE_TYPES.filter((type) => type.id !== "all").map((type) => (
-            <button
-              key={type.id}
-              type="button"
-              onClick={() => setCreateType(type.id)}
-              className={cx(styles.modulePalette, styles.createPickerButton)}
-              data-module-type={type.id}
-            >
-              {CREATE_LABEL_BY_TYPE[type.id]}
-            </button>
-          ))}
+          {moduleTypes
+            .filter((type) => type.id !== "all")
+            .map((type) => (
+              <button
+                key={type.id}
+                type="button"
+                onClick={() => setCreateType(type.id)}
+                className={cx(styles.modulePalette, styles.createPickerButton)}
+                data-module-type={type.id}
+              >
+                {CREATE_LABEL_BY_TYPE[type.id]}
+              </button>
+            ))}
         </div>
       );
     }
@@ -432,15 +776,6 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
           onShowsChange={handleShowsChange}
           onSuccess={() => setCreateModalOpen(false)}
           onCancel={() => setCreateModalOpen(false)}
-        />
-      );
-    }
-    if (createType === "spotify") {
-      return (
-        <JamShareForm
-          currentJam={currentJam}
-          onJamChange={handleJamChange}
-          onSuccess={() => setCreateModalOpen(false)}
         />
       );
     }
@@ -499,18 +834,6 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
         />
       );
     }
-    if (module.type === "spotify") {
-      return (
-        <JamWidget
-          jam={module.payload}
-          onJamChange={handleJamChange}
-          onReplace={() => setJamModalOpen(true)}
-          canEdit={module.isEditableBy(user.id)}
-          moduleTag={moduleTag}
-          editTrigger={editTrigger}
-        />
-      );
-    }
     return null;
   }
 
@@ -518,7 +841,7 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     ? CREATE_LABEL_BY_TYPE[createType]
     : "Create a module";
   const activeTypeLabel =
-    MODULE_TYPES.find((type) => type.id === activeType)?.label ?? "Modules";
+    moduleTypes.find((type) => type.id === activeType)?.label ?? "Modules";
   const createLabel =
     activeType === "all" ? "Create a module" : CREATE_LABEL_BY_TYPE[activeType];
 
@@ -538,13 +861,26 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
       <div className={styles.shell}>
         <ModuleNav
           activeType={activeType}
-          modules={modules}
+          modules={feedModules}
+          moduleTypes={moduleTypes}
           drawerOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           onSelect={selectModuleType}
+          editMode={moduleNavEditing}
+          onEditModeChange={setModuleNavEditing}
+          allTypes={allTypes}
+          onAllTypesChange={setAllTypes}
+          onReorderType={reorderModuleType}
         />
 
-        <main className={styles.feedColumn}>
+        <main
+          className={styles.feedColumn}
+          onPointerDown={handleFeedPointerDown}
+          onPointerUp={handleFeedPointerUp}
+          onPointerCancel={() => {
+            swipeStartRef.current = null;
+          }}
+        >
           <div className={styles.feedHeader}>
             <div>
               <p className={styles.feedEyebrow}>Group feed</p>
@@ -629,19 +965,6 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
           widthClassName={styles.createModal}
         >
           {renderCreateContent()}
-        </ModalShell>
-      )}
-      {jamModalOpen && (
-        <ModalShell
-          title={currentJam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-          onClose={() => setJamModalOpen(false)}
-          widthClassName={styles.jamModal}
-        >
-          <JamShareForm
-            currentJam={currentJam}
-            onJamChange={handleJamChange}
-            onSuccess={() => setJamModalOpen(false)}
-          />
         </ModalShell>
       )}
       {editingModule && (
