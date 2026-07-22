@@ -14,15 +14,11 @@ from __future__ import annotations
 
 import db
 import groups
-import activities
-import household_shows
 
 
 def main() -> int:
     db.seed()
     groups.ensure_default_group()
-    activities.backfill_default_group_records()
-    household_shows.backfill_default_group_records()
     roommates = db.get_all(db.DEFAULT_GROUP_ID)
     print(f"Table '{db.TABLE_NAME}' now has {len(roommates)} roommate(s):")
     for r in roommates:

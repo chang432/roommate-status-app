@@ -76,7 +76,6 @@ from __future__ import annotations
 
 import os
 import re
-import threading
 from urllib.parse import quote
 
 from flask import Flask, g, jsonify, request
@@ -102,8 +101,6 @@ MAX_COMMENT_LEN = 280
 # Number of available roommates that triggers the "gather" push (PROJECT.md:
 # "3 or more"). Override with the AVAILABLE_THRESHOLD env var.
 PUSH_THRESHOLD = int(os.environ.get("AVAILABLE_THRESHOLD", "3"))
-_group_setup_done = False
-_group_setup_lock = threading.Lock()
 
 
 def mentions_all(text: str) -> bool:
@@ -166,19 +163,6 @@ def validate_activity_schedule(body: dict) -> tuple[int | None, int | None, str 
     return start_at, end_at, None
 
 
-def ensure_group_features_ready() -> None:
-    global _group_setup_done
-    if _group_setup_done:
-        return
-    with _group_setup_lock:
-        if _group_setup_done:
-            return
-        groups.ensure_default_group()
-        activities.backfill_default_group_records()
-        household_shows.backfill_default_group_records()
-        _group_setup_done = True
-
-
 def invalid_user_response() -> tuple:
     """400 for a userId that doesn't resolve to a grouped account.
 
@@ -189,7 +173,6 @@ def invalid_user_response() -> tuple:
 
 
 def group_member_from_query() -> tuple[dict | None, tuple | None]:
-    ensure_group_features_ready()
     user_id = (request.args.get("userId") or "").strip()
     member = db.get_group_member(user_id) if user_id else None
     if member is None:
@@ -198,7 +181,6 @@ def group_member_from_query() -> tuple[dict | None, tuple | None]:
 
 
 def group_user_ids(group_id: str) -> set[str]:
-    ensure_group_features_ready()
     return set(db.get_group_user_ids(group_id, consistent=True))
 
 
@@ -288,8 +270,15 @@ def create_app() -> Flask:
 
     @app.before_request
     def ensure_group_state():
+        """Scope this request to the caller's selected household.
+
+        One-time data setup deliberately does not live here: the seeded group is
+        created on demand by groups.get_group_by_id/get_group_by_code and by
+        seed.py, and backfilling rows that predate group isolation is the
+        migration runner's job (infrastructure/migrations/2026-07-21-01-*), not
+        something every request should re-check.
+        """
         if request.path.startswith("/api/"):
-            ensure_group_features_ready()
             g.request_group_token = db.set_request_group_id(
                 request.headers.get("X-Roomie-Group-ID")
             )

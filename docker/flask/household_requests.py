@@ -1,13 +1,14 @@
 """Household request feed for the Roomie Status backend.
 
-Requests live in their own DynamoDB table (RoommateStatus-<env>-requests), one
-item per request with its comments embedded. Comment likes are stored separately
-in the comment-likes table (see comment_likes.py). A request's shape is fixed
-only by its `id` key; everything else is written by this module.
+Requests live in their own DynamoDB table (RoommateStatus-<env>-requests-v2),
+one item per request with its comments embedded. Comment likes are stored
+separately in the comment-likes table (see comment_likes.py). The table is keyed
+``(groupId HASH, id RANGE)`` — see group_tables.py for why the group is the
+partition key; everything beyond the key is written by this module.
 
 Configuration (env):
     REQUESTS_TABLE  - override the table name
-                      (default: "${ROOMMATE_TABLE}-requests")
+                      (default: "${ROOMMATE_TABLE}-requests-v2")
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from botocore.exceptions import ClientError
 # Reuse db's resource builder so every table signs requests the same way and
 # shares the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
 from db import resource
+from group_tables import query_group
 
 import activities
 import comment_likes
@@ -49,7 +51,7 @@ EDIT_READ_ONLY = "read_only"
 EDIT_CONFLICT = "conflict"
 
 TABLE_NAME = os.environ.get("REQUESTS_TABLE") or (
-    f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-requests"
+    f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-requests-v2"
 )
 
 _table = None
@@ -69,18 +71,16 @@ def _get_table():
     return _table
 
 
-def _scan_all(consistent: bool = False) -> list[dict]:
-    """Read every request row."""
-    table = _get_table()
-    resp = table.scan(ConsistentRead=consistent)
-    items = resp.get("Items", [])
-    while "LastEvaluatedKey" in resp:
-        resp = table.scan(
-            ExclusiveStartKey=resp["LastEvaluatedKey"],
-            ConsistentRead=consistent,
-        )
-        items.extend(resp.get("Items", []))
-    return items
+def _fetch(request_id: str, group_id: str, consistent: bool = True) -> dict | None:
+    """Read one request by its full key, or None when it isn't in this group.
+
+    The group is half the primary key, so an id from another household simply
+    doesn't resolve — no post-read ownership check is needed.
+    """
+    return _get_table().get_item(
+        Key={"groupId": group_id, "id": request_id},
+        ConsistentRead=consistent,
+    ).get("Item")
 
 
 def _legacy_comment_id(request_id: str, index: int) -> str:
@@ -172,13 +172,8 @@ def add_request(
 
 
 def get(request_id: str, group_id: str, consistent: bool = False) -> dict | None:
-    item = _get_table().get_item(
-        Key={"id": request_id},
-        ConsistentRead=consistent,
-    ).get("Item")
-    if not item or item.get("groupId") != group_id:
-        return None
-    return _project(item)
+    item = _fetch(request_id, group_id, consistent=consistent)
+    return _project(item) if item else None
 
 
 def edit_owned(
@@ -190,8 +185,8 @@ def edit_owned(
 ) -> dict | str:
     """Edit request definition while preserving responses for retained recipients."""
     table = _get_table()
-    item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("groupId") != group_id:
+    item = _fetch(request_id, group_id)
+    if item is None:
         return EDIT_NOT_FOUND
     if item.get("requesterId") != requester_id:
         return EDIT_FORBIDDEN
@@ -216,7 +211,7 @@ def edit_owned(
 
     try:
         response = table.update_item(
-            Key={"id": request_id},
+            Key={"groupId": group_id, "id": request_id},
             UpdateExpression=(
                 "SET #text = :text, requestedIds = :requested_ids, "
                 "requestedNamesById = :requested_names, responses = :responses, "
@@ -234,12 +229,11 @@ def edit_owned(
                     int(time.time() * 1000),
                     int(item.get("updatedAt", item["createdAt"])) + 1,
                 ),
-                ":groupId": group_id,
                 ":requester": requester_id,
                 ":false": False,
             },
             ConditionExpression=(
-                "attribute_exists(id) AND groupId = :groupId AND requesterId = :requester AND "
+                "attribute_exists(id) AND requesterId = :requester AND "
                 "requestedIds = :expected_ids AND responses = :expected_responses AND "
                 "(attribute_not_exists(isArchived) OR isArchived = :false)"
             ),
@@ -248,8 +242,8 @@ def edit_owned(
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
-        current = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("groupId") != group_id:
+        current = _fetch(request_id, group_id)
+        if current is None:
             return EDIT_NOT_FOUND
         if current.get("requesterId") != requester_id:
             return EDIT_FORBIDDEN
@@ -277,14 +271,12 @@ def add_comment(
         "mentionsAll": mentions_all,
         "createdAt": int(time.time() * 1000),
     }
-    if existing := _get_table().get_item(Key={"id": request_id}, ConsistentRead=True).get("Item"):
-        if existing.get("groupId") != group_id:
-            return None
+    if existing := _fetch(request_id, group_id):
         if existing.get("isArchived", False):
             return MUTATION_ARCHIVED
     try:
         resp = _get_table().update_item(
-            Key={"id": request_id},
+            Key={"groupId": group_id, "id": request_id},
             UpdateExpression=(
                 "SET comments = list_append(if_not_exists(comments, :empty), :c), "
                 "updatedAt = :updated_at"
@@ -293,9 +285,8 @@ def add_comment(
                 ":c": [comment],
                 ":empty": [],
                 ":updated_at": comment["createdAt"],
-                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
+            ConditionExpression="attribute_exists(id)",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -306,25 +297,23 @@ def add_comment(
 
 
 def set_response(request_id: str, user_id: str, group_id: str, response: str) -> dict | None:
-    item = _get_table().get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("groupId") != group_id:
+    item = _fetch(request_id, group_id)
+    if item is None:
         return None
     if item.get("isArchived", False):
         return MUTATION_ARCHIVED
     try:
         resp = _get_table().update_item(
-            Key={"id": request_id},
+            Key={"groupId": group_id, "id": request_id},
             UpdateExpression="SET responses.#user = :response, updatedAt = :updated_at",
             ExpressionAttributeNames={"#user": user_id},
             ExpressionAttributeValues={
                 ":user_id": user_id,
                 ":response": response,
                 ":updated_at": int(time.time() * 1000),
-                ":groupId": group_id,
             },
             ConditionExpression=(
-                "attribute_exists(id) AND groupId = :groupId AND "
-                "contains(requestedIds, :user_id)"
+                "attribute_exists(id) AND contains(requestedIds, :user_id)"
             ),
             ReturnValues="ALL_NEW",
         )
@@ -339,7 +328,7 @@ def archive(request_id: str, user_id: str, name: str, group_id: str) -> dict | N
     archived_at = int(time.time() * 1000)
     try:
         resp = _get_table().update_item(
-            Key={"id": request_id},
+            Key={"groupId": group_id, "id": request_id},
             UpdateExpression=(
                 "SET isArchived = :true, archivedAt = :archived_at, "
                 "archivedById = :user_id, archivedBy = :name, updatedAt = :archived_at"
@@ -349,9 +338,8 @@ def archive(request_id: str, user_id: str, name: str, group_id: str) -> dict | N
                 ":archived_at": archived_at,
                 ":user_id": user_id,
                 ":name": name,
-                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
+            ConditionExpression="attribute_exists(id)",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -364,7 +352,7 @@ def archive(request_id: str, user_id: str, name: str, group_id: str) -> dict | N
 def restore(request_id: str, user_id: str, name: str, group_id: str) -> dict | None:
     try:
         resp = _get_table().update_item(
-            Key={"id": request_id},
+            Key={"groupId": group_id, "id": request_id},
             UpdateExpression=(
                 "SET isArchived = :false, restoredById = :user_id, "
                 "restoredBy = :name, updatedAt = :updated_at "
@@ -375,9 +363,8 @@ def restore(request_id: str, user_id: str, name: str, group_id: str) -> dict | N
                 ":user_id": user_id,
                 ":name": name,
                 ":updated_at": int(time.time() * 1000),
-                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
+            ConditionExpression="attribute_exists(id)",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -388,36 +375,17 @@ def restore(request_id: str, user_id: str, name: str, group_id: str) -> dict | N
 
 
 def delete(request_id: str, group_id: str) -> str:
+    """Delete a request. The group is half the key, so another household's id
+    simply doesn't resolve and reports not-found."""
     table = _get_table()
-    item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("groupId") != group_id:
+    if _fetch(request_id, group_id) is None:
         return DELETE_NOT_FOUND
 
-    try:
-        table.delete_item(
-            Key={"id": request_id},
-            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
-            ExpressionAttributeValues={
-                ":groupId": group_id,
-            },
-        )
-    except ClientError as err:
-        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
-            raise
-        current = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("groupId") != group_id:
-            return DELETE_NOT_FOUND
-        return DELETE_NOT_FOUND
+    table.delete_item(Key={"groupId": group_id, "id": request_id})
 
     # A request's comment likes live in the dedicated comment-likes table; drop
     # them alongside the request.
-    likes_table = comment_likes._get_table()
-    for reaction in comment_likes._scan_all(consistent=True):
-        if (
-            reaction.get("groupId") == group_id
-            and reaction.get("requestId") == request_id
-        ):
-            likes_table.delete_item(Key={"id": reaction["id"]})
+    comment_likes.delete_for_parent(group_id, "requestId", request_id)
     return DELETE_OK
 
 
@@ -434,8 +402,8 @@ def set_comment_like(
     liked: bool,
 ) -> str:
     table = _get_table()
-    item = table.get_item(Key={"id": request_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("groupId") != group_id:
+    item = _fetch(request_id, group_id)
+    if item is None:
         return LIKE_NOT_FOUND
     if item.get("isArchived", False):
         return MUTATION_ARCHIVED
@@ -455,14 +423,13 @@ def set_comment_like(
     # The request is validated against the activities table above; the like row
     # itself lives in the dedicated comment-likes table.
     likes_table = comment_likes._get_table()
-    key = {"id": _comment_like_id(request_id, comment_id, user_id)}
+    key = {"groupId": group_id, "id": _comment_like_id(request_id, comment_id, user_id)}
     if liked:
         likes_table.put_item(
             Item={
                 **key,
                 "requestId": request_id,
                 "commentId": comment_id,
-                "groupId": group_id,
                 "userId": user_id,
             }
         )
@@ -472,19 +439,13 @@ def set_comment_like(
 
 
 def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
-    items = _scan_all(consistent=consistent)
-    likes_by_request: dict[str, dict[str, set[str]]] = {}
-    for like in comment_likes._scan_all(consistent=consistent):
-        if like.get("groupId") != group_id or not like.get("requestId"):
-            continue
-        likes_by_request.setdefault(like["requestId"], {}).setdefault(
-            like["commentId"], set()
-        ).add(like["userId"])
-
+    likes_by_request = comment_likes.likes_by_parent(
+        group_id, "requestId", consistent=consistent
+    )
     requests = [
         item
-        for item in items
-        if "createdAt" in item and item.get("groupId") == group_id
+        for item in query_group(_get_table(), group_id, consistent=consistent)
+        if "createdAt" in item
     ]
     requests.sort(key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True)
     return [

@@ -1,14 +1,16 @@
 """TV show tracker feed for the Roomie Status backend.
 
-Each show is one item in its own DynamoDB table (RoommateStatus-*-shows),
+Each show is one item in its own DynamoDB table (RoommateStatus-*-shows-v2),
 separate from the roommate and activities tables so the household scan in db.py
 and the activity/checklist feed both stay clean — the same "own table per
 concern" pattern activities.py follows. Watchers are embedded on the show item
 (like checklist items), each tracking their own season and episode, so a show is
-a single read/write.
+a single read/write. The table is keyed ``(groupId HASH, id RANGE)``; see
+group_tables.py for why the group is the partition key.
 
 Configuration (env):
-    SHOWS_TABLE  - override the table name (default: "${ROOMMATE_TABLE}-shows")
+    SHOWS_TABLE  - override the table name
+                   (default: "${ROOMMATE_TABLE}-shows-v2")
 """
 
 from __future__ import annotations
@@ -20,11 +22,10 @@ import uuid
 
 from botocore.exceptions import ClientError
 
-import db
-
 # Reuse db's resource builder so every table signs requests the same way and
 # shares the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
 from db import resource
+from group_tables import query_group
 
 RECENT_LIMIT = 20
 
@@ -41,25 +42,11 @@ EDIT_FORBIDDEN = "forbidden"
 EDIT_READ_ONLY = "read_only"
 
 TABLE_NAME = os.environ.get("SHOWS_TABLE") or (
-    f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-shows"
+    f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-shows-v2"
 )
 
 _table = None
 _table_lock = threading.Lock()
-
-
-def backfill_default_group_records() -> None:
-    """Assign the seeded group to legacy shows that predate group isolation."""
-    table = _get_table()
-    for item in _scan_all(consistent=True):
-        if item.get("groupId"):
-            continue
-        table.update_item(
-            Key={"id": item["id"]},
-            UpdateExpression="SET groupId = :groupId",
-            ExpressionAttributeValues={":groupId": db.DEFAULT_GROUP_ID},
-            ConditionExpression="attribute_exists(id) AND attribute_not_exists(groupId)",
-        )
 
 
 def _get_table():
@@ -75,19 +62,16 @@ def _get_table():
     return _table
 
 
-def _scan_all(consistent: bool = False) -> list[dict]:
-    """Return every show item, paging through the scan. The data set is tiny
-    (household scale), so a full scan + in-app sort is the right tool here."""
-    table = _get_table()
-    resp = table.scan(ConsistentRead=consistent)
-    items = resp.get("Items", [])
-    while "LastEvaluatedKey" in resp:
-        resp = table.scan(
-            ExclusiveStartKey=resp["LastEvaluatedKey"],
-            ConsistentRead=consistent,
-        )
-        items.extend(resp.get("Items", []))
-    return items
+def _fetch(show_id: str, group_id: str, consistent: bool = True) -> dict | None:
+    """Read one show by its full key, or None when it isn't in this group.
+
+    The group is half the primary key, so an id from another household simply
+    doesn't resolve — no post-read ownership check is needed.
+    """
+    return _get_table().get_item(
+        Key={"groupId": group_id, "id": show_id},
+        ConsistentRead=consistent,
+    ).get("Item")
 
 
 def _project_member(raw: dict) -> dict:
@@ -118,10 +102,6 @@ def _project(item: dict) -> dict:
     }
 
 
-def _in_group(item: dict | None, group_id: str | None) -> bool:
-    return item is not None and item.get("groupId") == group_id
-
-
 def add_show(title: str, created_by_id: str, created_by: str, group_id: str) -> dict:
     """Create a show, auto-joining the creator as the first watcher at S1 E1."""
     now_ms = int(time.time() * 1000)
@@ -142,16 +122,14 @@ def add_show(title: str, created_by_id: str, created_by: str, group_id: str) -> 
 
 
 def get(show_id: str, group_id: str, consistent: bool = False) -> dict | None:
-    item = _get_table().get_item(
-        Key={"id": show_id}, ConsistentRead=consistent
-    ).get("Item")
-    return _project(item) if _in_group(item, group_id) else None
+    item = _fetch(show_id, group_id, consistent=consistent)
+    return _project(item) if item else None
 
 
 def edit_title_owned(show_id: str, creator_id: str, group_id: str, title: str) -> dict | str:
     table = _get_table()
-    item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
-    if not _in_group(item, group_id):
+    item = _fetch(show_id, group_id)
+    if item is None:
         return EDIT_NOT_FOUND
     if item.get("createdById") != creator_id:
         return EDIT_FORBIDDEN
@@ -161,7 +139,7 @@ def edit_title_owned(show_id: str, creator_id: str, group_id: str, title: str) -
         return _project(item)
     try:
         response = table.update_item(
-            Key={"id": show_id},
+            Key={"groupId": group_id, "id": show_id},
             UpdateExpression="SET title = :title, updatedAt = :now",
             ExpressionAttributeValues={
                 ":title": title,
@@ -169,12 +147,11 @@ def edit_title_owned(show_id: str, creator_id: str, group_id: str, title: str) -
                     int(time.time() * 1000),
                     int(item.get("updatedAt", item["createdAt"])) + 1,
                 ),
-                ":groupId": group_id,
                 ":creator": creator_id,
                 ":false": False,
             },
             ConditionExpression=(
-                "attribute_exists(id) AND groupId = :groupId AND createdById = :creator AND "
+                "attribute_exists(id) AND createdById = :creator AND "
                 "(attribute_not_exists(isArchived) OR isArchived = :false)"
             ),
             ReturnValues="ALL_NEW",
@@ -194,11 +171,8 @@ def list_recent(
     sort scoped to the caller's group."""
     shows = [
         item
-        for item in _scan_all(consistent=consistent)
-        if (
-            "createdAt" in item
-            and item.get("groupId") == group_id
-        )
+        for item in query_group(_get_table(), group_id, consistent=consistent)
+        if "createdAt" in item
     ]
     shows.sort(key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True)
     return [_project(item) for item in shows[:limit]]
@@ -214,8 +188,8 @@ def _mutate_members(show_id: str, group_id: str, mutate):
     archived flag to guard against a concurrent change between read and write.
     """
     table = _get_table()
-    item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
-    if not _in_group(item, group_id):
+    item = _fetch(show_id, group_id)
+    if item is None:
         return None
     if item.get("isArchived", False):
         return MUTATION_ARCHIVED
@@ -226,17 +200,16 @@ def _mutate_members(show_id: str, group_id: str, mutate):
 
     try:
         resp = table.update_item(
-            Key={"id": show_id},
+            Key={"groupId": group_id, "id": show_id},
             UpdateExpression="SET #members = :members, updatedAt = :updated_at",
             ExpressionAttributeNames={"#members": "members"},
             ExpressionAttributeValues={
                 ":members": members,
                 ":updated_at": int(time.time() * 1000),
                 ":false": False,
-                ":groupId": group_id,
             },
             ConditionExpression=(
-                "attribute_exists(id) AND groupId = :groupId AND "
+                "attribute_exists(id) AND "
                 "(attribute_not_exists(isArchived) OR isArchived = :false)"
             ),
             ReturnValues="ALL_NEW",
@@ -312,8 +285,8 @@ def adjust_progress(show_id: str, member_id: str, field: str, delta: int, group_
 def _set_archived(show_id: str, user_id: str, name: str, group_id: str, archived: bool):
     """Archive or restore a show. Any roommate in the group may do this."""
     table = _get_table()
-    item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
-    if not _in_group(item, group_id):
+    item = _fetch(show_id, group_id)
+    if item is None:
         return None
     if archived:
         update = dict(
@@ -323,7 +296,6 @@ def _set_archived(show_id: str, user_id: str, name: str, group_id: str, archived
             ),
             ExpressionAttributeValues={
                 ":ts": int(time.time() * 1000),
-                ":groupId": group_id,
                 ":true": True,
                 ":user_id": user_id,
                 ":name": name,
@@ -337,7 +309,6 @@ def _set_archived(show_id: str, user_id: str, name: str, group_id: str, archived
             ),
             ExpressionAttributeValues={
                 ":ts": int(time.time() * 1000),
-                ":groupId": group_id,
                 ":false": False,
                 ":user_id": user_id,
                 ":name": name,
@@ -346,8 +317,8 @@ def _set_archived(show_id: str, user_id: str, name: str, group_id: str, archived
 
     try:
         resp = table.update_item(
-            Key={"id": show_id},
-            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
+            Key={"groupId": group_id, "id": show_id},
+            ConditionExpression="attribute_exists(id)",
             ReturnValues="ALL_NEW",
             **update,
         )
@@ -369,21 +340,10 @@ def restore(show_id: str, user_id: str, name: str, group_id: str):
 
 
 def delete(show_id: str, group_id: str) -> str:
+    """Delete a show. The group is half the key, so another household's id
+    simply doesn't resolve and reports not-found."""
     table = _get_table()
-    item = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
-    if not _in_group(item, group_id):
+    if _fetch(show_id, group_id) is None:
         return DELETE_NOT_FOUND
-    try:
-        table.delete_item(
-            Key={"id": show_id},
-            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
-            ExpressionAttributeValues={":groupId": group_id},
-        )
-    except ClientError as err:
-        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
-            raise
-        current = table.get_item(Key={"id": show_id}, ConsistentRead=True).get("Item")
-        if not _in_group(current, group_id):
-            return DELETE_NOT_FOUND
-        return DELETE_NOT_FOUND
+    table.delete_item(Key={"groupId": group_id, "id": show_id})
     return DELETE_OK

@@ -5,13 +5,14 @@ push notification (handled in app.py); this module just owns persistence.
 
 Stored in its own DynamoDB table — separate from the roommate table so the
 household scan in db.py stays clean — provisioned by CloudFormation alongside
-the other tables (infrastructure/dynamodb-table-{dev,main}.yaml). the shire
-data set is small, so a scan + in-app lifecycle sort is the right tool (mirrors
-db.get_all); no secondary index is needed.
+the other tables (infrastructure/dynamodb-table-{dev,main}.yaml). The table is
+keyed ``(groupId HASH, id RANGE)``, so reading a feed is a Query over one
+household's partition and every item address carries its group; see
+group_tables.py for why the group is the partition key rather than an index.
 
 Configuration (env):
     ACTIVITIES_TABLE  - override the table name
-                        (default: "${ROOMMATE_TABLE}-activities")
+                        (default: "${ROOMMATE_TABLE}-activities-v2")
 """
 
 from __future__ import annotations
@@ -25,11 +26,11 @@ import uuid
 from botocore.exceptions import ClientError
 
 import comment_likes
-import db
 
 # Reuse db's resource builder so all tables sign requests the same way and share
 # the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
 from db import resource
+from group_tables import query_group
 
 # How many of an activity's most recent comments the feed returns. Storage
 # remains unbounded; the frontend initially shows only the latest 10.
@@ -63,25 +64,11 @@ LIKE_NOT_FOUND = "not_found"
 LIKE_SELF_FORBIDDEN = "self_forbidden"
 
 TABLE_NAME = os.environ.get("ACTIVITIES_TABLE") or (
-    f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-activities"
+    f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-activities-v2"
 )
 
 _table = None
 _table_lock = threading.Lock()
-
-
-def backfill_default_group_records() -> None:
-    """Assign the seeded group to legacy records that predate group isolation."""
-    table = _get_table()
-    for item in _scan_all(consistent=True):
-        if item.get("groupId"):
-            continue
-        table.update_item(
-            Key={"id": item["id"]},
-            UpdateExpression="SET groupId = :groupId",
-            ExpressionAttributeValues={":groupId": db.DEFAULT_GROUP_ID},
-            ConditionExpression="attribute_exists(id) AND attribute_not_exists(groupId)",
-        )
 
 
 def _get_table():
@@ -97,18 +84,16 @@ def _get_table():
     return _table
 
 
-def _scan_all(consistent: bool = False) -> list[dict]:
-    """Read every activities-table item, including typed coordination records."""
-    table = _get_table()
-    resp = table.scan(ConsistentRead=consistent)
-    items = resp.get("Items", [])
-    while "LastEvaluatedKey" in resp:
-        resp = table.scan(
-            ExclusiveStartKey=resp["LastEvaluatedKey"],
-            ConsistentRead=consistent,
-        )
-        items.extend(resp.get("Items", []))
-    return items
+def _fetch(activity_id: str, group_id: str, consistent: bool = True) -> dict | None:
+    """Read one activity by its full key, or None when it isn't in this group.
+
+    The group is half the primary key, so an id from another household simply
+    doesn't resolve — no post-read ownership check is needed.
+    """
+    return _get_table().get_item(
+        Key={"groupId": group_id, "id": activity_id},
+        ConsistentRead=consistent,
+    ).get("Item")
 
 
 def _legacy_comment_id(activity_id: str, index: int) -> str:
@@ -219,10 +204,6 @@ def _project(
     }
 
 
-def _in_group(item: dict | None, group_id: str | None) -> bool:
-    return item is not None and item.get("groupId") == group_id
-
-
 def add_activity(
     text: str,
     proposed_by_id: str,
@@ -268,25 +249,23 @@ def _set_membership(
     means the activity doesn't exist.
     """
     table = _get_table()
-    existing = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if existing is None or existing.get("itemType") or not _in_group(existing, group_id):
+    existing = _fetch(activity_id, group_id)
+    if existing is None:
         return None
     if _lifecycle(existing)["isExpired"] or existing.get("isArchived", False):
         return MUTATION_EXPIRED
     try:
         resp = table.update_item(
-            Key={"id": activity_id},
+            Key={"groupId": group_id, "id": activity_id},
             UpdateExpression=f"SET updatedAt = :now {op} members :m, memberIds :i",
             ExpressionAttributeValues={
                 ":m": {name},
                 ":i": {user_id},
                 ":false": False,
                 ":now": int(time.time() * 1000),
-                ":groupId": group_id,
             },
             ConditionExpression=(
-                "attribute_exists(id) AND attribute_not_exists(itemType) AND "
-                "groupId = :groupId AND "
+                "attribute_exists(id) AND "
                 "(attribute_not_exists(isArchived) OR isArchived = :false) AND "
                 "attribute_not_exists(endedAt) AND "
                 "(attribute_not_exists(endAt) OR endAt > :now)"
@@ -295,12 +274,9 @@ def _set_membership(
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-            if (
-                current
-                and not current.get("itemType")
-                and _in_group(current, group_id)
-                and (_lifecycle(current)["isExpired"] or current.get("isArchived", False))
+            current = _fetch(activity_id, group_id)
+            if current and (
+                _lifecycle(current)["isExpired"] or current.get("isArchived", False)
             ):
                 return MUTATION_EXPIRED
             return None
@@ -336,8 +312,8 @@ def add_comment(
     otherwise) that have never been commented on.
     """
     table = _get_table()
-    existing = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if existing is None or existing.get("itemType") or not _in_group(existing, group_id):
+    existing = _fetch(activity_id, group_id)
+    if existing is None:
         return None
     if _lifecycle(existing)["isExpired"] or existing.get("isArchived", False):
         return MUTATION_EXPIRED
@@ -357,7 +333,7 @@ def add_comment(
     }
     try:
         resp = table.update_item(
-            Key={"id": activity_id},
+            Key={"groupId": group_id, "id": activity_id},
             UpdateExpression=(
                 "SET comments = list_append(if_not_exists(comments, :empty), :c), "
                 "updatedAt = :now"
@@ -367,11 +343,9 @@ def add_comment(
                 ":empty": [],
                 ":false": False,
                 ":now": int(time.time() * 1000),
-                ":groupId": group_id,
             },
             ConditionExpression=(
-                "attribute_exists(id) AND attribute_not_exists(itemType) AND "
-                "groupId = :groupId AND "
+                "attribute_exists(id) AND "
                 "(attribute_not_exists(isArchived) OR isArchived = :false) AND "
                 "attribute_not_exists(endedAt) AND "
                 "(attribute_not_exists(endAt) OR endAt > :now)"
@@ -380,12 +354,9 @@ def add_comment(
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-            if (
-                current
-                and not current.get("itemType")
-                and _in_group(current, group_id)
-                and (_lifecycle(current)["isExpired"] or current.get("isArchived", False))
+            current = _fetch(activity_id, group_id)
+            if current and (
+                _lifecycle(current)["isExpired"] or current.get("isArchived", False)
             ):
                 return MUTATION_EXPIRED
             return None
@@ -407,9 +378,8 @@ def set_comment_like(
     liked: bool,
 ) -> str:
     """Like or unlike a comment, returning a stable route-level result."""
-    table = _get_table()
-    activity = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if activity is None or activity.get("itemType") or not _in_group(activity, group_id):
+    activity = _fetch(activity_id, group_id)
+    if activity is None:
         return LIKE_NOT_FOUND
     if _lifecycle(activity)["isExpired"] or activity.get("isArchived", False):
         return MUTATION_EXPIRED
@@ -429,14 +399,13 @@ def set_comment_like(
     # The activity is validated against the activities table above; the like row
     # itself lives in the dedicated comment-likes table.
     likes_table = comment_likes._get_table()
-    key = {"id": _comment_like_id(activity_id, comment_id, user_id)}
+    key = {"groupId": group_id, "id": _comment_like_id(activity_id, comment_id, user_id)}
     if liked:
         likes_table.put_item(
             Item={
                 **key,
                 "activityId": activity_id,
                 "commentId": comment_id,
-                "groupId": group_id,
                 "userId": user_id,
             }
         )
@@ -447,11 +416,8 @@ def set_comment_like(
 
 def get(activity_id: str, group_id: str, consistent: bool = False) -> dict | None:
     """Return one proposal by id, or None if it doesn't exist."""
-    item = _get_table().get_item(
-        Key={"id": activity_id},
-        ConsistentRead=consistent,
-    ).get("Item")
-    return _project(item) if item and not item.get("itemType") and _in_group(item, group_id) else None
+    item = _fetch(activity_id, group_id, consistent=consistent)
+    return _project(item) if item else None
 
 
 def edit_owned(
@@ -465,8 +431,8 @@ def edit_owned(
 ) -> dict | str:
     """Atomically edit an active event without allowing ownership or lifecycle drift."""
     table = _get_table()
-    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") or not _in_group(item, group_id):
+    item = _fetch(activity_id, group_id)
+    if item is None:
         return EDIT_NOT_FOUND
     if item.get("proposedById") != requester_id:
         return EDIT_FORBIDDEN
@@ -485,7 +451,6 @@ def edit_owned(
     values = {
         ":text": text,
         ":now": max(int(time.time() * 1000), int(item.get("updatedAt", item["createdAt"])) + 1),
-        ":groupId": group_id,
         ":requester": requester_id,
         ":false": False,
     }
@@ -507,8 +472,7 @@ def edit_owned(
     if remove_parts:
         expression += f" REMOVE {', '.join(remove_parts)}"
     condition = (
-        "attribute_exists(id) AND groupId = :groupId AND "
-        "proposedById = :requester AND attribute_not_exists(itemType) AND "
+        "attribute_exists(id) AND proposedById = :requester AND "
         "(attribute_not_exists(isArchived) OR isArchived = :false)"
     )
     if schedule_changed:
@@ -520,7 +484,7 @@ def edit_owned(
         )
     try:
         response = table.update_item(
-            Key={"id": activity_id},
+            Key={"groupId": group_id, "id": activity_id},
             UpdateExpression=expression,
             ExpressionAttributeNames=names,
             ExpressionAttributeValues=values,
@@ -530,8 +494,8 @@ def edit_owned(
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
-        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType") or not _in_group(current, group_id):
+        current = _fetch(activity_id, group_id)
+        if current is None:
             return EDIT_NOT_FOUND
         if current.get("proposedById") != requester_id:
             return EDIT_FORBIDDEN
@@ -542,8 +506,8 @@ def edit_owned(
 def start_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     """Start an owned activity now; expired activities restart without an end."""
     table = _get_table()
-    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") or not _in_group(item, group_id):
+    item = _fetch(activity_id, group_id)
+    if item is None:
         return LIVE_NOT_FOUND
     if item.get("isArchived", False):
         return LIVE_CONFLICT
@@ -558,9 +522,7 @@ def start_owned(activity_id: str, requester_id: str, group_id: str) -> str:
         remove_fields = " REMOVE endedAt, isLive, liveStartedAt"
         if lifecycle["isExpired"]:
             remove_fields += ", endAt"
-        condition = (
-            "proposedById = :requester AND attribute_not_exists(itemType)"
-        )
+        condition = "proposedById = :requester"
         values = {
             ":started": started_at,
             ":requester": requester_id,
@@ -583,7 +545,7 @@ def start_owned(activity_id: str, requester_id: str, group_id: str) -> str:
             )
             values[":expected_start"] = lifecycle["startAt"]
         table.update_item(
-            Key={"id": activity_id},
+            Key={"groupId": group_id, "id": activity_id},
             UpdateExpression=f"SET startAt = :started, updatedAt = :started{remove_fields}",
             ConditionExpression=condition,
             ExpressionAttributeValues=values,
@@ -591,8 +553,8 @@ def start_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
-        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType") or not _in_group(current, group_id):
+        current = _fetch(activity_id, group_id)
+        if current is None:
             return LIVE_NOT_FOUND
         if current.get("proposedById") != requester_id:
             return LIVE_FORBIDDEN
@@ -603,8 +565,8 @@ def start_owned(activity_id: str, requester_id: str, group_id: str) -> str:
 def end_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     """End a live owned activity permanently."""
     table = _get_table()
-    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") or not _in_group(item, group_id):
+    item = _fetch(activity_id, group_id)
+    if item is None:
         return LIVE_NOT_FOUND
     if item.get("isArchived", False):
         return LIVE_CONFLICT
@@ -616,10 +578,10 @@ def end_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     ended_at = int(time.time() * 1000)
     try:
         table.update_item(
-            Key={"id": activity_id},
+            Key={"groupId": group_id, "id": activity_id},
             UpdateExpression="SET endedAt = :ended, updatedAt = :ended REMOVE isLive, liveStartedAt",
             ConditionExpression=(
-                "proposedById = :requester AND attribute_not_exists(itemType) AND "
+                "proposedById = :requester AND "
                 "startAt = :expected_start AND attribute_not_exists(endedAt)"
             ),
             ExpressionAttributeValues={
@@ -631,8 +593,8 @@ def end_owned(activity_id: str, requester_id: str, group_id: str) -> str:
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
-        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType") or not _in_group(current, group_id):
+        current = _fetch(activity_id, group_id)
+        if current is None:
             return LIVE_NOT_FOUND
         if current.get("proposedById") != requester_id:
             return LIVE_FORBIDDEN
@@ -643,22 +605,21 @@ def end_owned(activity_id: str, requester_id: str, group_id: str) -> str:
 def archive(activity_id: str, requester_id: str, group_id: str, requester_name: str | None = None) -> str:
     """Hide an activity from the active section without deleting it."""
     table = _get_table()
-    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") or not _in_group(item, group_id):
+    item = _fetch(activity_id, group_id)
+    if item is None:
         return ARCHIVE_NOT_FOUND
     if item.get("isArchived", False):
         return ARCHIVE_OK
 
     try:
         table.update_item(
-            Key={"id": activity_id},
+            Key={"groupId": group_id, "id": activity_id},
             UpdateExpression=(
                 "SET isArchived = :true, archivedAt = :archived, archivedById = :requester_id, "
                 "archivedBy = :requester_name, updatedAt = :archived"
             ),
             ConditionExpression=(
-                "attribute_not_exists(itemType) AND "
-                "(attribute_not_exists(isArchived) OR isArchived = :false)"
+                "attribute_not_exists(isArchived) OR isArchived = :false"
             ),
             ExpressionAttributeValues={
                 ":archived": int(time.time() * 1000),
@@ -671,8 +632,8 @@ def archive(activity_id: str, requester_id: str, group_id: str, requester_name: 
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
-        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None or current.get("itemType") or not _in_group(current, group_id):
+        current = _fetch(activity_id, group_id)
+        if current is None:
             return ARCHIVE_NOT_FOUND
         return ARCHIVE_OK
     return ARCHIVE_OK
@@ -681,8 +642,8 @@ def archive(activity_id: str, requester_id: str, group_id: str, requester_name: 
 def restore(activity_id: str, group_id: str) -> str:
     """Restore an archived or expired activity back into the active section."""
     table = _get_table()
-    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or item.get("itemType") or not _in_group(item, group_id):
+    item = _fetch(activity_id, group_id)
+    if item is None:
         return RESTORE_NOT_FOUND
 
     now_ms = int(time.time() * 1000)
@@ -700,9 +661,9 @@ def restore(activity_id: str, group_id: str) -> str:
         values = {":now": now_ms}
 
     table.update_item(
-        Key={"id": activity_id},
+        Key={"groupId": group_id, "id": activity_id},
         UpdateExpression=update_expression,
-        ConditionExpression="attribute_exists(id) AND attribute_not_exists(itemType)",
+        ConditionExpression="attribute_exists(id)",
         ExpressionAttributeValues=values,
     )
     return RESTORE_OK
@@ -711,35 +672,18 @@ def restore(activity_id: str, group_id: str) -> str:
 def delete(activity_id: str, group_id: str) -> str:
     """Delete an activity from the household feed."""
     table = _get_table()
-    item = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-    if item is None or not _in_group(item, group_id):
+    item = _fetch(activity_id, group_id)
+    if item is None:
         return DELETE_NOT_FOUND
     if _lifecycle(item)["isLive"]:
         return DELETE_LIVE
 
-    try:
-        table.delete_item(
-            Key={"id": activity_id},
-            ConditionExpression="attribute_not_exists(itemType)",
-        )
-    except ClientError as err:
-        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
-            raise
-        current = table.get_item(Key={"id": activity_id}, ConsistentRead=True).get("Item")
-        if current is None or not _in_group(current, group_id):
-            return DELETE_NOT_FOUND
-        return DELETE_LIVE if _lifecycle(current)["isLive"] else DELETE_NOT_FOUND
+    table.delete_item(Key={"groupId": group_id, "id": activity_id})
 
     # Likes are separate idempotent records (now in their own table) so
     # concurrent reactions cannot clobber the embedded comment list. Remove
     # this event's likes alongside it.
-    likes_table = comment_likes._get_table()
-    for reaction in comment_likes._scan_all(consistent=True):
-        if (
-            reaction.get("groupId") == group_id
-            and reaction.get("activityId") == activity_id
-        ):
-            likes_table.delete_item(Key={"id": reaction["id"]})
+    comment_likes.delete_for_parent(group_id, "activityId", activity_id)
     return DELETE_OK
 
 
@@ -747,24 +691,16 @@ def list_recent(group_id: str, limit: int | None = None, consistent: bool = Fals
     """Return all activities in active-then-expired display order.
 
     Pass consistent=True for the response that follows a write (propose / join /
-    leave / delete): DynamoDB scans are eventually consistent by default, so a
-    plain scan right after an update can return stale data. A strongly-consistent
+    leave / delete): DynamoDB reads are eventually consistent by default, so a
+    plain read right after an update can return stale data. A strongly-consistent
     read avoids that. The default (eventual) read is fine for the plain GET feed.
     """
-    items = _scan_all(consistent=consistent)
-    likes_by_activity: dict[str, dict[str, set[str]]] = {}
-    for like in comment_likes._scan_all(consistent=consistent):
-        if like.get("groupId") != group_id or not like.get("activityId"):
-            continue
-        likes_by_activity.setdefault(like["activityId"], {}).setdefault(
-            like["commentId"], set()
-        ).add(like["userId"])
+    items = query_group(_get_table(), group_id, consistent=consistent)
+    likes_by_activity = comment_likes.likes_by_parent(
+        group_id, "activityId", consistent=consistent
+    )
 
-    items = [
-        item
-        for item in items
-        if not item.get("itemType") and "createdAt" in item and item.get("groupId") == group_id
-    ]
+    items = [item for item in items if "createdAt" in item]
     now_ms = int(time.time() * 1000)
     active = []
     expired = []

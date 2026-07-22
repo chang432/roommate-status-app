@@ -13,7 +13,31 @@ permissions:
   contents: read
 
 jobs:
+  # Provision the DynamoDB infrastructure *before* the app is redeployed:
+  # CloudFormation owns table structure (keys, indexes), and code that reads
+  # a new table or index must not go live before that structure exists, or
+  # every affected request fails outright. A no-op when the templates are
+  # unchanged, so this runs on every merge.
+  provision:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies (boto3)
+        run: pip install -r infrastructure/requirements.txt
+      - name: Deploy DynamoDB infrastructure (prod)
+        run: python infrastructure/deploy.py --main
+
   deploy-main-vps:
+    needs: provision
     runs-on: ubuntu-latest
     steps:
       - name: Setup hcloud CLI
@@ -171,13 +195,11 @@ jobs:
             fi
             echo "Deploy succeeded; the main stack is running."
 
-  # After the app is redeployed, (1) provision the DynamoDB infrastructure so the
-  # right tables exist (CloudFormation create/update; a no-op when unchanged),
-  # then (2) apply any pending in-place data migrations against those tables. A
-  # failed migration is auto-reverted and fails this job; note the app is already
-  # live by this point, so migrations should be written backward-compatibly
-  # (deploy tolerant code first, migrate after).
-  provision-and-migrate:
+  # In-place data migrations run *after* the app is redeployed, so the live
+  # code already tolerates both the old and new row shapes by the time rows
+  # move. A failed migration is auto-reverted and fails this job, but does
+  # not roll back the deploy. The runner is a no-op when nothing is pending.
+  migrate:
     needs: deploy-main-vps
     runs-on: ubuntu-latest
     env:
@@ -193,7 +215,5 @@ jobs:
           python-version: "3.13"
       - name: Install dependencies (boto3)
         run: pip install -r infrastructure/requirements.txt
-      - name: Deploy DynamoDB infrastructure (prod)
-        run: python infrastructure/deploy.py --main
       - name: Apply pending DynamoDB migrations (prod)
         run: python infrastructure/migrations/runner.py --env prod

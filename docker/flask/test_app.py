@@ -65,22 +65,52 @@ def _dynamodb():
     """
     with mock_aws():
         ddb = boto3.resource("dynamodb")
-        for table_name in (
-            db.TABLE_NAME,
-            push.TABLE_NAME,
-            activities.TABLE_NAME,
-            comment_likes.TABLE_NAME,
-            household_requests.TABLE_NAME,
-            household_shows.TABLE_NAME,
-            household_checklists.TABLE_NAME,
-            jam.TABLE_NAME,
-        ):
+        for table_name in (db.TABLE_NAME, jam.TABLE_NAME):
             ddb.create_table(
                 TableName=table_name,
                 KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
                 AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
                 BillingMode="PAY_PER_REQUEST",
             )
+        # The feed tables partition on groupId and sort by id, so a household's
+        # rows are one Query (see docker/flask/group_tables.py).
+        for table_name in (
+            activities.TABLE_NAME,
+            comment_likes.TABLE_NAME,
+            household_requests.TABLE_NAME,
+            household_shows.TABLE_NAME,
+            household_checklists.TABLE_NAME,
+        ):
+            ddb.create_table(
+                TableName=table_name,
+                KeySchema=[
+                    {"AttributeName": "groupId", "KeyType": "HASH"},
+                    {"AttributeName": "id", "KeyType": "RANGE"},
+                ],
+                AttributeDefinitions=[
+                    {"AttributeName": "groupId", "AttributeType": "S"},
+                    {"AttributeName": "id", "AttributeType": "S"},
+                ],
+                BillingMode="PAY_PER_REQUEST",
+            )
+        # Subscriptions stay keyed by endpoint hash (one row per device) and
+        # find their owner's devices through UserIdIndex.
+        ddb.create_table(
+            TableName=push.TABLE_NAME,
+            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+            AttributeDefinitions=[
+                {"AttributeName": "id", "AttributeType": "S"},
+                {"AttributeName": "userId", "AttributeType": "S"},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    "IndexName": push.USER_ID_INDEX,
+                    "KeySchema": [{"AttributeName": "userId", "KeyType": "HASH"}],
+                    "Projection": {"ProjectionType": "ALL"},
+                }
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
         ddb.create_table(
             TableName=groups.GROUPS_TABLE,
             KeySchema=[{"AttributeName": "groupId", "KeyType": "HASH"}],
@@ -127,11 +157,12 @@ def client():
         activities._get_table(),
         comment_likes._get_table(),
         household_requests._get_table(),
-        push._get_table(),
         household_shows._get_table(),
         household_checklists._get_table(),
-        jam._get_table(),
     ):
+        for item in table.scan().get("Items", []):
+            table.delete_item(Key={"groupId": item["groupId"], "id": item["id"]})
+    for table in (push._get_table(), jam._get_table()):
         for item in table.scan().get("Items", []):
             table.delete_item(Key={"id": item["id"]})
     app = create_app()
@@ -537,7 +568,10 @@ def test_push_subscribe_stores(client):
     )
     assert res.status_code == 200
     assert res.get_json() == {"ok": True}
-    assert any(s["endpoint"] == sub["endpoint"] for s in push.list_subscriptions())
+    assert any(
+        s["endpoint"] == sub["endpoint"]
+        for s in push.list_user_subscriptions("andre")
+    )
     item = push._get_table().get_item(Key={"id": push._endpoint_id(sub["endpoint"])})["Item"]
     assert item["userId"] == "andre"
 
@@ -725,7 +759,11 @@ def test_user_triggered_broadcast_skips_actor_and_unowned_legacy_subscription(
         }
     )
 
-    push.notify_all(
+    # What app.notify_group does: address the household explicitly, minus the
+    # actor. The unowned legacy row has no userId, so UserIdIndex cannot return
+    # it for any recipient — it is unreachable rather than filtered.
+    push.notify_users(
+        user_ids=set(db.get_group_user_ids(TEST_GROUP_ID, consistent=True)),
         title="Household update",
         body="Changed",
         exclude_user_ids={"andre"},
@@ -1082,7 +1120,7 @@ def test_requester_can_delete_request_and_comment_likes(client, monkeypatch):
     assert household_requests.get(request_item["id"], TEST_GROUP_ID, consistent=True) is None
     assert not [
         like
-        for like in comment_likes._scan_all(consistent=True)
+        for like in comment_likes.list_for_group(TEST_GROUP_ID, consistent=True)
         if like.get("requestId") == request_item["id"]
     ]
     assert calls == [
@@ -1428,7 +1466,9 @@ def test_comments_return_latest_100_without_capping_storage(client):
     comments = feed[0]["comments"]
     assert [c["text"] for c in comments] == [f"msg {i}" for i in range(5, 105)]
 
-    stored = activities._get_table().get_item(Key={"id": activity_id})["Item"]
+    stored = activities._get_table().get_item(
+        Key={"groupId": TEST_GROUP_ID, "id": activity_id}
+    )["Item"]
     assert len(stored["comments"]) == 105
 
 
@@ -1571,10 +1611,6 @@ def _capture_notifications(monkeypatch):
     """
     calls = []
 
-    def fake_notify_all(**kwargs):
-        calls.append(("all", kwargs))
-        return {"sent": 0, "pruned": 0, "failed": 0}
-
     def fake_notify_users(**kwargs):
         all_group_users = set(db.get_group_user_ids(TEST_GROUP_ID, consistent=True))
         if kwargs.get("user_ids") == all_group_users:
@@ -1587,7 +1623,6 @@ def _capture_notifications(monkeypatch):
             calls.append(("users", kwargs))
         return {"sent": 0, "pruned": 0, "failed": 0}
 
-    monkeypatch.setattr(push, "notify_all", fake_notify_all)
     monkeypatch.setattr(push, "notify_users", fake_notify_users)
     return calls
 
@@ -1797,7 +1832,7 @@ def test_live_transition_survives_push_failure(client, monkeypatch):
     def fail_push(**_kwargs):
         raise RuntimeError("push unavailable")
 
-    monkeypatch.setattr(push, "notify_all", fail_push)
+    monkeypatch.setattr(push, "notify_users", fail_push)
     started = client.post(
         f"/api/activities/{created['id']}/start",
         json={"requesterId": "andre"},
@@ -1998,7 +2033,7 @@ def test_expired_activity_is_read_only_but_owner_can_restart_or_delete(
     ).status_code == 200
 
 
-def test_activity_sorting_and_typed_request_isolation(client, monkeypatch):
+def test_activity_sorting(client, monkeypatch):
     monkeypatch.setattr(activities.time, "time", lambda: 10)
     table = activities._get_table()
     for item in (
@@ -2037,13 +2072,6 @@ def test_activity_sorting_and_typed_request_isolation(client, monkeypatch):
             "createdAt": 6,
             "startAt": 1_000,
             "endAt": 9_000,
-        },
-        {
-            "id": "request-record",
-            "itemType": "request",
-            "groupId": TEST_GROUP_ID,
-            "text": "Not an activity",
-            "createdAt": 7,
         },
     ):
         table.put_item(Item=item)
@@ -2355,10 +2383,13 @@ def test_creator_can_delete_activity_and_all_embedded_data(client, monkeypatch):
 
     assert deleted.status_code == 200
     assert all(item["id"] != activity_id for item in deleted.get_json())
-    assert activities._get_table().get_item(Key={"id": activity_id}).get("Item") is None
+    assert activities._get_table().get_item(
+        Key={"groupId": TEST_GROUP_ID, "id": activity_id}
+    ).get("Item") is None
+    # The event's comment likes live in the comment-likes table and go with it.
     assert not any(
-        item.get("activityId") == activity_id
-        for item in activities._get_table().scan().get("Items", [])
+        like.get("activityId") == activity_id
+        for like in comment_likes.list_for_group(TEST_GROUP_ID, consistent=True)
     )
     assert len(calls) == 1
     audience, kwargs = calls[0]

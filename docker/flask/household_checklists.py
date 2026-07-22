@@ -1,14 +1,16 @@
 """Household checklist feed for the Roomie Status backend.
 
-Each checklist is one item in its own DynamoDB table (RoommateStatus-*-checklists),
-separate from the roommate and activities tables so every feed's scan stays clean
-— the same "own table per concern" pattern activities.py and household_shows.py
-follow. Checklist items (with their per-roommate check state) are embedded on the
-checklist item, so a checklist is a single read/write.
+Each checklist is one item in its own DynamoDB table
+(RoommateStatus-*-checklists-v2), separate from the roommate and activities
+tables so every feed's read stays clean — the same "own table per concern"
+pattern activities.py and household_shows.py follow. Checklist items (with their
+per-roommate check state) are embedded on the checklist item, so a checklist is a
+single read/write. The table is keyed ``(groupId HASH, id RANGE)``; see
+group_tables.py for why the group is the partition key.
 
 Configuration (env):
     CHECKLISTS_TABLE  - override the table name
-                        (default: "${ROOMMATE_TABLE}-checklists")
+                        (default: "${ROOMMATE_TABLE}-checklists-v2")
 """
 
 from __future__ import annotations
@@ -23,11 +25,12 @@ from botocore.exceptions import ClientError
 # Reuse db's resource builder so every table signs requests the same way and
 # shares the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
 from db import resource
+from group_tables import query_group
 
 RECENT_LIMIT = 10
 
 TABLE_NAME = os.environ.get("CHECKLISTS_TABLE") or (
-    f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-checklists"
+    f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-checklists-v2"
 )
 
 _table = None
@@ -51,23 +54,16 @@ def _get_table():
     return _table
 
 
-def _scan_all(consistent: bool = False) -> list[dict]:
-    """Return every checklist item, paging through the scan. The data set is tiny
-    (household scale), so a full scan + in-app sort is the right tool here."""
-    table = _get_table()
-    resp = table.scan(ConsistentRead=consistent)
-    items = resp.get("Items", [])
-    while "LastEvaluatedKey" in resp:
-        resp = table.scan(
-            ExclusiveStartKey=resp["LastEvaluatedKey"],
-            ConsistentRead=consistent,
-        )
-        items.extend(resp.get("Items", []))
-    return items
+def _fetch(checklist_id: str, group_id: str, consistent: bool = True) -> dict | None:
+    """Read one checklist by its full key, or None when it isn't in this group.
 
-
-def _in_group(item: dict | None, group_id: str | None) -> bool:
-    return item is not None and item.get("groupId") == group_id
+    The group is half the primary key, so an id from another household simply
+    doesn't resolve — no post-read ownership check is needed.
+    """
+    return _get_table().get_item(
+        Key={"groupId": group_id, "id": checklist_id},
+        ConsistentRead=consistent,
+    ).get("Item")
 
 
 def _clean_item_texts(item_texts: list[str]) -> list[str]:
@@ -142,19 +138,16 @@ def add_checklist(
 
 
 def get(checklist_id: str, group_id: str, consistent: bool = False) -> dict | None:
-    item = _get_table().get_item(
-        Key={"id": checklist_id},
-        ConsistentRead=consistent,
-    ).get("Item")
-    return _project(item) if _in_group(item, group_id) else None
+    item = _fetch(checklist_id, group_id, consistent=consistent)
+    return _project(item) if item else None
 
 
 def edit_title_owned(
     checklist_id: str, creator_id: str, group_id: str, title: str
 ) -> dict | str:
     table = _get_table()
-    item = table.get_item(Key={"id": checklist_id}, ConsistentRead=True).get("Item")
-    if not _in_group(item, group_id):
+    item = _fetch(checklist_id, group_id)
+    if item is None:
         return EDIT_NOT_FOUND
     if item.get("createdById") != creator_id:
         return EDIT_FORBIDDEN
@@ -164,7 +157,7 @@ def edit_title_owned(
         return _project(item)
     try:
         response = table.update_item(
-            Key={"id": checklist_id},
+            Key={"groupId": group_id, "id": checklist_id},
             UpdateExpression="SET title = :title, updatedAt = :now",
             ExpressionAttributeValues={
                 ":title": title,
@@ -172,12 +165,11 @@ def edit_title_owned(
                     int(time.time() * 1000),
                     int(item.get("updatedAt", item["createdAt"])) + 1,
                 ),
-                ":groupId": group_id,
                 ":creator": creator_id,
                 ":false": False,
             },
             ConditionExpression=(
-                "attribute_exists(id) AND groupId = :groupId AND createdById = :creator AND "
+                "attribute_exists(id) AND createdById = :creator AND "
                 "(attribute_not_exists(isArchived) OR isArchived = :false)"
             ),
             ReturnValues="ALL_NEW",
@@ -191,8 +183,8 @@ def edit_title_owned(
 
 def _mutate_items(checklist_id: str, group_id: str, mutate) -> dict | None:
     table = _get_table()
-    item = table.get_item(Key={"id": checklist_id}, ConsistentRead=True).get("Item")
-    if not _in_group(item, group_id):
+    item = _fetch(checklist_id, group_id)
+    if item is None:
         return None
     if item.get("isArchived"):
         return None
@@ -203,17 +195,16 @@ def _mutate_items(checklist_id: str, group_id: str, mutate) -> dict | None:
 
     try:
         resp = table.update_item(
-            Key={"id": checklist_id},
+            Key={"groupId": group_id, "id": checklist_id},
             UpdateExpression="SET #items = :items, updatedAt = :updated_at",
             ExpressionAttributeNames={"#items": "items"},
             ExpressionAttributeValues={
                 ":false": False,
                 ":items": items,
                 ":updated_at": int(time.time() * 1000),
-                ":groupId": group_id,
             },
             ConditionExpression=(
-                "attribute_exists(id) AND groupId = :groupId AND "
+                "attribute_exists(id) AND "
                 "(attribute_not_exists(isArchived) OR isArchived = :false)"
             ),
             ReturnValues="ALL_NEW",
@@ -294,7 +285,7 @@ def archive(checklist_id: str, user_id: str, name: str, group_id: str) -> dict |
     archived_at = int(time.time() * 1000)
     try:
         resp = _get_table().update_item(
-            Key={"id": checklist_id},
+            Key={"groupId": group_id, "id": checklist_id},
             UpdateExpression=(
                 "SET isArchived = :true, archivedAt = :archived_at, "
                 "archivedById = :user_id, archivedBy = :name, updatedAt = :archived_at"
@@ -304,9 +295,8 @@ def archive(checklist_id: str, user_id: str, name: str, group_id: str) -> dict |
                 ":archived_at": archived_at,
                 ":user_id": user_id,
                 ":name": name,
-                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
+            ConditionExpression="attribute_exists(id)",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -319,7 +309,7 @@ def archive(checklist_id: str, user_id: str, name: str, group_id: str) -> dict |
 def restore(checklist_id: str, user_id: str, name: str, group_id: str) -> dict | None:
     try:
         resp = _get_table().update_item(
-            Key={"id": checklist_id},
+            Key={"groupId": group_id, "id": checklist_id},
             UpdateExpression=(
                 "SET isArchived = :false, restoredById = :user_id, "
                 "restoredBy = :name, updatedAt = :updated_at "
@@ -330,9 +320,8 @@ def restore(checklist_id: str, user_id: str, name: str, group_id: str) -> dict |
                 ":user_id": user_id,
                 ":name": name,
                 ":updated_at": int(time.time() * 1000),
-                ":groupId": group_id,
             },
-            ConditionExpression="attribute_exists(id) AND groupId = :groupId",
+            ConditionExpression="attribute_exists(id)",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
@@ -343,18 +332,18 @@ def restore(checklist_id: str, user_id: str, name: str, group_id: str) -> dict |
 
 
 def delete(checklist_id: str, group_id: str) -> dict | None:
-    item = _get_table().get_item(Key={"id": checklist_id}, ConsistentRead=True).get("Item")
-    if not _in_group(item, group_id):
+    item = _fetch(checklist_id, group_id)
+    if item is None:
         return None
-    _get_table().delete_item(Key={"id": checklist_id})
+    _get_table().delete_item(Key={"groupId": group_id, "id": checklist_id})
     return _project(item)
 
 
 def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
     checklists = [
         item
-        for item in _scan_all(consistent=consistent)
-        if _in_group(item, group_id) and "createdAt" in item
+        for item in query_group(_get_table(), group_id, consistent=consistent)
+        if "createdAt" in item
     ]
     checklists.sort(key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True)
     return [_project(item) for item in checklists[:limit]]
