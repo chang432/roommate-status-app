@@ -39,6 +39,13 @@ from aws import resource
 # optional supplemental note in `statusText`.
 VALID_STATUSES = {"available", "busy", "sleeping", "ooh"}
 
+# Membership roles. Admins own group-level administration (currently removing
+# members and granting/revoking admin); everyone else is a plain member. A
+# group always keeps at least one admin, enforced in groups.set_member_role.
+ROLE_ADMIN = "admin"
+ROLE_MEMBER = "member"
+VALID_ROLES = {ROLE_ADMIN, ROLE_MEMBER}
+
 # Demo password used only to backfill the seeded household's password hashes.
 DEMO_PASSWORD = "roomie"
 
@@ -135,6 +142,9 @@ def _to_roommate(item: dict) -> dict:
         "statusUpdatedAt": (
             int(item["statusUpdatedAt"]) if item.get("statusUpdatedAt") is not None else None
         ),
+        # Rows written before roles existed are read as plain members; the
+        # migration backfills them, but the app must not depend on that order.
+        "role": item.get("role", ROLE_MEMBER),
     }
 
 
@@ -219,7 +229,9 @@ def get_membership(user_id: str, group_id: str) -> dict | None:
     return item or None
 
 
-def create_membership(user_id: str, group_id: str, name: str) -> dict | None:
+def create_membership(
+    user_id: str, group_id: str, name: str, role: str = ROLE_MEMBER
+) -> dict | None:
     """Create one membership with an independent initial status."""
     joined_at = int(time.time() * 1000)
     item = {
@@ -230,6 +242,7 @@ def create_membership(user_id: str, group_id: str, name: str) -> dict | None:
         "statusText": "",
         "statusUpdatedAt": None,
         "joinedAt": joined_at,
+        "role": role if role in VALID_ROLES else ROLE_MEMBER,
     }
     try:
         _get_memberships_table().put_item(
@@ -244,6 +257,65 @@ def create_membership(user_id: str, group_id: str, name: str) -> dict | None:
             return None
         raise
     return item
+
+
+def get_membership_role(user_id: str, group_id: str) -> str | None:
+    """Return a member's role in one group, or None when they don't belong."""
+    membership = get_membership(user_id, group_id)
+    return membership.get("role", ROLE_MEMBER) if membership else None
+
+
+def is_group_admin(user_id: str, group_id: str) -> bool:
+    return get_membership_role(user_id, group_id) == ROLE_ADMIN
+
+
+def group_admin_ids(group_id: str, consistent: bool = True) -> list[str]:
+    """Every admin of a group — used to keep the last admin from stepping down."""
+    return sorted(
+        item["userId"]
+        for item in _membership_items_for_group(group_id, consistent=consistent)
+        if item.get("role") == ROLE_ADMIN
+    )
+
+
+def set_membership_role(user_id: str, group_id: str, role: str) -> bool:
+    """Promote or demote an existing member. False when the row is missing."""
+    if role not in VALID_ROLES:
+        return False
+    try:
+        _get_memberships_table().update_item(
+            Key={"groupId": group_id, "userId": user_id},
+            UpdateExpression="SET #role = :role",
+            # `role` is a DynamoDB reserved word.
+            ExpressionAttributeNames={"#role": "role"},
+            ExpressionAttributeValues={":role": role},
+            ConditionExpression="attribute_exists(groupId) AND attribute_exists(userId)",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] in {
+            "ConditionalCheckFailedException",
+            "ResourceNotFoundException",
+        }:
+            return False
+        raise
+    return True
+
+
+def delete_membership(user_id: str, group_id: str) -> bool:
+    """Drop one membership row, leaving the account and its other groups intact."""
+    try:
+        _get_memberships_table().delete_item(
+            Key={"groupId": group_id, "userId": user_id},
+            ConditionExpression="attribute_exists(groupId) AND attribute_exists(userId)",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] in {
+            "ConditionalCheckFailedException",
+            "ResourceNotFoundException",
+        }:
+            return False
+        raise
+    return True
 
 
 def normalize_username(username: str) -> str:
@@ -442,7 +514,15 @@ def seed() -> None:
                 )
             else:
                 raise  # The roommate already exists — leave their data untouched.
-        create_membership(r["id"], DEFAULT_GROUP_ID, r["name"])
+        # The seeded household mirrors the role backfill (migration
+        # 2026-07-21-01), which makes andre the sole admin of pre-existing
+        # groups — so a fresh local DB matches a migrated one.
+        create_membership(
+            r["id"],
+            DEFAULT_GROUP_ID,
+            r["name"],
+            role=ROLE_ADMIN if r["id"] == "andre" else ROLE_MEMBER,
+        )
 
 
 def _scan_items(consistent: bool = False) -> list[dict]:

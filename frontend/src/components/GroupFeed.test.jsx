@@ -491,6 +491,15 @@ describe("GroupFeed module focus", () => {
       clientX: 180,
       clientY: 120,
     });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 126,
+    });
+    expect(document.querySelector('[data-feed-swipe-phase="dragging"]')).toHaveStyle(
+      { transform: "translateX(-85px)" },
+    );
     fireEvent.pointerUp(card, {
       pointerId: 1,
       pointerType: "touch",
@@ -498,7 +507,9 @@ describe("GroupFeed module focus", () => {
       clientY: 126,
     });
 
-    expect(screen.getByRole("heading", { name: "Events" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Events" }),
+    ).toBeInTheDocument();
   });
 
   it("supports touch drag ordering in filter edit mode", async () => {
@@ -510,6 +521,10 @@ describe("GroupFeed module focus", () => {
     const requestDropTarget = document.querySelector(
       '[data-module-drop-type="requests"]',
     );
+    const rowOrder = () =>
+      Array.from(document.querySelectorAll("[data-module-drop-type]")).map(
+        (row) => row.getAttribute("data-module-drop-type"),
+      );
     Object.defineProperty(document, "elementFromPoint", {
       configurable: true,
       value: vi.fn(() => requestDropTarget),
@@ -524,6 +539,13 @@ describe("GroupFeed module focus", () => {
       clientX: 230,
       clientY: 140,
     });
+    fireEvent.pointerMove(eventsHandle, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 230,
+      clientY: 188,
+    });
+    expect(rowOrder()).toEqual(["requests", "events", "checklists", "tv"]);
     fireEvent.pointerUp(eventsHandle, {
       pointerId: 1,
       pointerType: "touch",
@@ -539,6 +561,12 @@ describe("GroupFeed module focus", () => {
       clientX: 180,
       clientY: 120,
     });
+    fireEvent.pointerMove(card, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 126,
+    });
     fireEvent.pointerUp(card, {
       pointerId: 2,
       pointerType: "touch",
@@ -547,7 +575,7 @@ describe("GroupFeed module focus", () => {
     });
 
     expect(
-      screen.getByRole("heading", { name: "Requests" }),
+      await screen.findByRole("heading", { name: "Requests" }),
     ).toBeInTheDocument();
   });
 

@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react'
-import { getCurrentGroup } from '../api/client.js'
+import {
+  getCurrentGroup,
+  removeGroupMember,
+  setGroupMemberRole,
+} from '../api/client.js'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { THEME_DEFINITIONS, themeDefinition } from '../models/themes.js'
 import { cx } from '../utils/classNames.js'
+import { ROLE, ROLE_LABEL, isAdmin, isAdminIn, roleOf } from '../utils/roles.js'
 import styles from './styling/ProfileSettings.module.css'
 
 export default function ProfileSettings({
   user,
+  roommates = [],
+  onRoommatesChange,
   onSignOut,
   onDeleteAccount,
 }) {
@@ -15,6 +22,12 @@ export default function ProfileSettings({
   const [group, setGroup] = useState(null)
   const [groupError, setGroupError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [memberError, setMemberError] = useState('')
+  const [pendingMemberId, setPendingMemberId] = useState('')
+
+  // Admin is per-group, so it is read off this household's roster rather than
+  // off the session — the same account may be a plain member elsewhere.
+  const viewerIsAdmin = isAdminIn(roommates, user?.id)
 
   useEffect(() => {
     let cancelled = false
@@ -55,6 +68,32 @@ export default function ProfileSettings({
     }
   }
 
+  // Both admin actions return the updated roster, so the caller re-renders from
+  // the server's view instead of guessing at the new membership locally.
+  async function runMemberAction(memberId, action) {
+    setMemberError('')
+    setPendingMemberId(memberId)
+    try {
+      onRoommatesChange?.(await action())
+    } catch (err) {
+      setMemberError(err.message || 'Could not update that roommate.')
+    } finally {
+      setPendingMemberId('')
+    }
+  }
+
+  function handleToggleAdmin(member) {
+    const nextRole = isAdmin(member) ? ROLE.MEMBER : ROLE.ADMIN
+    return runMemberAction(member.id, () =>
+      setGroupMemberRole(user.id, member.id, nextRole),
+    )
+  }
+
+  function handleRemoveMember(member) {
+    if (!window.confirm(`Remove ${member.name} from this group?`)) return undefined
+    return runMemberAction(member.id, () => removeGroupMember(user.id, member.id))
+  }
+
   async function handleCopyCode() {
     if (!group?.joinCode) return
     await navigator.clipboard.writeText(group.joinCode)
@@ -71,6 +110,10 @@ export default function ProfileSettings({
         <div className={styles.identityText}>
           <p className={styles.name}>{user?.name || 'Roomie'}</p>
           <p className={styles.username}>@{user?.username || user?.id}</p>
+          {/* Admin is per-group, so the badge tracks the group being viewed
+              rather than the account — it disappears on switching to a group
+              this user does not administer. */}
+          {viewerIsAdmin && <p className={styles.adminBadge}>Group admin</p>}
         </div>
       </section>
 
@@ -95,6 +138,61 @@ export default function ProfileSettings({
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {user?.hasGroup && roommates.length > 0 && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h3>Members</h3>
+            <p>
+              {viewerIsAdmin
+                ? 'Admins can remove roommates and grant admin.'
+                : 'Only admins can remove roommates or change roles.'}
+            </p>
+          </div>
+          {memberError && <p className={cx('ui-errorBox', styles.error)}>{memberError}</p>}
+          <ul className={styles.memberList}>
+            {roommates.map((member) => {
+              const isSelf = member.id === user.id
+              const busy = pendingMemberId === member.id
+              return (
+                <li key={member.id} className={styles.memberRow}>
+                  <div className={styles.memberIdentity}>
+                    <span className={styles.memberName}>
+                      {member.name}
+                      {isSelf ? ' (you)' : ''}
+                    </span>
+                    <span className={styles.memberRole}>{ROLE_LABEL[roleOf(member)]}</span>
+                  </div>
+                  {viewerIsAdmin && (
+                    <div className={styles.memberActions}>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAdmin(member)}
+                        disabled={busy}
+                        className={styles.memberButton}
+                      >
+                        {isAdmin(member) ? 'Revoke admin' : 'Make admin'}
+                      </button>
+                      {/* Admins are peers: demote one before removing them, which
+                          also stops a group from losing its last admin. */}
+                      {!isSelf && !isAdmin(member) && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMember(member)}
+                          disabled={busy}
+                          className={cx(styles.memberButton, styles.memberRemove)}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
         </section>
       )}
 

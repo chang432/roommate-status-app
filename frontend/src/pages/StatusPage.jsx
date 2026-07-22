@@ -5,13 +5,12 @@ import EnableNotifications from "../components/EnableNotifications.jsx";
 import GroupFeed from "../components/GroupFeed.jsx";
 import JamWidget, { JamShareForm } from "../components/JamWidget.jsx";
 import GroupSwitcherDrawer from "../components/GroupSwitcherDrawer.jsx";
+import HouseholdRoster from "../components/HouseholdRoster.jsx";
 import LiveEventBanner from "../components/LiveEventBanner.jsx";
 import ModalShell from "../components/ModalShell.jsx";
 import NotificationBanner from "../components/NotificationBanner.jsx";
 import ProfileSettings from "../components/ProfileSettings.jsx";
 import PullToRefreshIndicator from "../components/PullToRefreshIndicator.jsx";
-import StatusCard from "../components/StatusCard.jsx";
-import YouCard from "../components/YouCard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   endActivity,
@@ -21,12 +20,8 @@ import {
   getJam,
   getRoommates,
   getShows,
-  notifyRoommatesToUpdateStatus,
-  pokeRoommate,
   startActivity,
-  updateStatus,
 } from "../api/client.js";
-import { avatarColor } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
 import { usePullToRefresh } from "../utils/usePullToRefresh.js";
 import {
@@ -42,7 +37,6 @@ export default function StatusPage() {
   const { user, logout, deleteAccount, joinGroup, createGroup, selectGroup } =
     useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const ownCardRef = useRef(null);
   const feedRef = useRef(null);
 
   const [roommates, setRoommates] = useState([]);
@@ -54,9 +48,6 @@ export default function StatusPage() {
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
   const [transitioningId, setTransitioningId] = useState(null);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [notifyingHousehold, setNotifyingHousehold] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
   const [jamModalOpen, setJamModalOpen] = useState(false);
@@ -225,15 +216,6 @@ export default function StatusPage() {
     [activities, roommates],
   );
 
-  const { me, meIndex, others } = useMemo(() => {
-    const idx = displayedRoommates.findIndex((r) => r.id === user.id);
-    return {
-      me: displayedRoommates[idx] ?? null,
-      meIndex: idx,
-      others: displayedRoommates.filter((r) => r.id !== user.id),
-    };
-  }, [displayedRoommates, user.id]);
-
   const freeCount = availableCount(displayedRoommates);
   const showBanner = freeCount >= AVAILABLE_THRESHOLD;
   const liveEvents = activities.filter((activity) => activity.isLive);
@@ -244,20 +226,6 @@ export default function StatusPage() {
     groupsLoading ||
     statusLoadedGroupId !== user.activeGroupId ||
     feedLoadedGroupId !== user.activeGroupId;
-
-  useEffect(() => {
-    if (!me || searchParams.get("updateStatus") !== "1") return;
-    setEditing(true);
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("updateStatus");
-    setSearchParams(nextParams, { replace: true });
-    window.requestAnimationFrame(() => {
-      ownCardRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    });
-  }, [me, searchParams, setSearchParams]);
 
   const handleActivitiesChange = useCallback((updated) => {
     setActivities(updated);
@@ -291,36 +259,7 @@ export default function StatusPage() {
     }
   }
 
-  async function handleSave(status, statusText) {
-    setSaving(true);
-    setError("");
-    try {
-      const updated = await updateStatus(user.id, status, statusText);
-      setRoommates(updated);
-      setEditing(false);
-    } catch {
-      setError("Could not save your status. Try again.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleNotifyHousehold() {
-    if (notifyingHousehold) return;
-    setNotifyingHousehold(true);
-    setError("");
-    try {
-      await notifyRoommatesToUpdateStatus(user.id);
-    } catch {
-      setError("Could not notify the shire. Try again.");
-    } finally {
-      setNotifyingHousehold(false);
-    }
-  }
-
-  async function handlePokeRoommate(roommateId) {
-    await pokeRoommate(roommateId, user.id);
-  }
+  const openJamModal = useCallback(() => setJamModalOpen(true), []);
 
   function scrollToFeed() {
     feedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -481,62 +420,19 @@ export default function StatusPage() {
           <EnableNotifications />
           {showBanner && <NotificationBanner count={freeCount} />}
 
-          {me && (
-            <div ref={ownCardRef} className={styles.ownCard}>
-              <YouCard
-                roommate={me}
-                avatarColor={avatarColor(meIndex)}
-                editing={editing}
-                saving={saving}
-                onEdit={() => setEditing((v) => !v)}
-                onSave={handleSave}
-                onCancel={() => setEditing(false)}
-              />
-            </div>
-          )}
-
-          <div className={styles.householdHeader}>
-            <p className={cx("ui-sectionLabel", styles.householdTitle)}>
-              {selectedGroup?.name || "Your group"}
-            </p>
-            <button
-              type="button"
-              onClick={handleNotifyHousehold}
-              disabled={notifyingHousehold}
-              aria-label="Notify all to update"
-              title="Notify all to update"
-              className={cx("ui-iconPrimary", styles.notifyButton)}
-            >
-              <img src="/megaphone.png" alt="" className={styles.notifyIcon} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setJamModalOpen(true)}
-              aria-label={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-              title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-              className={cx("ui-iconPrimary", styles.jamButton)}
-            >
-              <img src="/spotify.png" alt="" className={styles.spotifyIcon} />
-            </button>
-          </div>
-          <div className={styles.householdGrid}>
-            {others.map((roommate) => (
-              <StatusCard
-                key={roommate.id}
-                roommate={roommate}
-                onPoke={handlePokeRoommate}
-              />
-            ))}
-          </div>
+          <HouseholdRoster
+            roommates={displayedRoommates}
+            groupName={selectedGroup?.name}
+            hasJam={Boolean(jam)}
+            onShareJam={openJamModal}
+            onRoommatesChange={setRoommates}
+            onError={setError}
+          />
         </main>
 
         {jam && (
           <div hidden={groupDataLoading}>
-            <JamWidget
-              jam={jam}
-              onJamChange={setJam}
-              onReplace={() => setJamModalOpen(true)}
-            />
+            <JamWidget jam={jam} onJamChange={setJam} onReplace={openJamModal} />
           </div>
         )}
 
@@ -555,6 +451,8 @@ export default function StatusPage() {
           >
             <ProfileSettings
               user={user}
+              roommates={roommates}
+              onRoommatesChange={setRoommates}
               onSignOut={logout}
               onDeleteAccount={deleteAccount}
             />
