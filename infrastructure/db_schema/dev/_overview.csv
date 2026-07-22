@@ -5,6 +5,7 @@ Template,infrastructure/dynamodb-table-dev.yaml
 Table-name prefix,RoommateStatus-dev-
 Parallel folder,db_schema/prod — identical apart from the prefix
 Grid format,"Each CSV is a title row, a header row of attributeName (DynamoDBType), then example rows"
+-v2 suffix,"Historical: these replaced id-keyed tables of the same name, which a key schema change could not alter in place"
 
 LEGEND
 Notation,Meaning
@@ -24,16 +25,11 @@ TABLES AT A GLANCE (one CSV per table in this folder)
 Table,CSV file,Partition key,Index,Written by,Purpose
 RoommateStatus-dev,RoommateStatus-dev.csv,id (S),,db.py,Accounts
 RoommateStatus-dev-pushsubs,RoommateStatus-dev-pushsubs.csv,id (S),"UserIdIndex (HASH userId, ProjectionType ALL)",push.py,Web Push subscriptions
-RoommateStatus-dev-activities,RoommateStatus-dev-activities.csv,id (S),,activities.py,SUPERSEDED by -v2 — retained until 2026-07-21-01 is confirmed applied on dev+prod, then removable
 RoommateStatus-dev-activities-v2,RoommateStatus-dev-activities-v2.csv,"groupId (S) + id (S)",,activities.py,Proposed activities
-RoommateStatus-dev-requests,RoommateStatus-dev-requests.csv,id (S),,household_requests.py,SUPERSEDED by -v2 — retained until 2026-07-21-01 is confirmed applied on dev+prod, then removable
 RoommateStatus-dev-requests-v2,RoommateStatus-dev-requests-v2.csv,"groupId (S) + id (S)",,household_requests.py,Household requests
 RoommateStatus-dev-spotify-jam,RoommateStatus-dev-spotify-jam.csv,id (S),,jam.py,Active Spotify Jam (one per group)
-RoommateStatus-dev-shows,RoommateStatus-dev-shows.csv,id (S),,household_shows.py,SUPERSEDED by -v2 — retained until 2026-07-21-01 is confirmed applied on dev+prod, then removable
 RoommateStatus-dev-shows-v2,RoommateStatus-dev-shows-v2.csv,"groupId (S) + id (S)",,household_shows.py,TV show tracker
-RoommateStatus-dev-checklists,RoommateStatus-dev-checklists.csv,id (S),,household_checklists.py,SUPERSEDED by -v2 — retained until 2026-07-21-01 is confirmed applied on dev+prod, then removable
 RoommateStatus-dev-checklists-v2,RoommateStatus-dev-checklists-v2.csv,"groupId (S) + id (S)",,household_checklists.py,Household checklists
-RoommateStatus-dev-comment-likes,RoommateStatus-dev-comment-likes.csv,id (S),,"activities.py, household_requests.py",SUPERSEDED by -v2 — retained until 2026-07-21-01 is confirmed applied on dev+prod, then removable
 RoommateStatus-dev-comment-likes-v2,RoommateStatus-dev-comment-likes-v2.csv,"groupId (S) + id (S)",,"activities.py, household_requests.py",Likes on activity & request comments
 RoommateStatus-dev-groups,RoommateStatus-dev-groups.csv,groupId (S),"JoinCodeIndex (HASH joinCode, ProjectionType ALL)",groups.py,Households / join-by-code groups
 RoommateStatus-dev-memberships,RoommateStatus-dev-memberships.csv,"groupId (S) + userId (S)","UserIdIndex (HASH userId, ProjectionType ALL)",db.py,Account memberships and per-group statuses

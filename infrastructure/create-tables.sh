@@ -67,14 +67,6 @@ create_group_table "$ROOMMATE_TABLE-checklists-v2"
 create_group_table "$ROOMMATE_TABLE-shows-v2"
 create_group_table "$ROOMMATE_TABLE-comment-likes-v2"
 
-# The superseded id-keyed originals, so the 2026-07-21-01 migration (and its
-# revert) can be exercised against a local stack.
-create_table "$ROOMMATE_TABLE-activities" id
-create_table "$ROOMMATE_TABLE-requests" id
-create_table "$ROOMMATE_TABLE-shows" id
-create_table "$ROOMMATE_TABLE-checklists" id
-create_table "$ROOMMATE_TABLE-comment-likes" id
-
 if aws dynamodb describe-table \
     --table-name "$ROOMMATE_TABLE-pushsubs" \
     --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then

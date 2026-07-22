@@ -250,9 +250,9 @@ def create_app() -> Flask:
 
         One-time data setup deliberately does not live here: the seeded group is
         created on demand by groups.get_group_by_id/get_group_by_code and by
-        seed.py, and backfilling rows that predate group isolation is the
-        migration runner's job (infrastructure/migrations/2026-07-21-01-*), not
-        something every request should re-check.
+        seed.py, and backfilling rows that predate a schema change is the
+        migration runner's job (infrastructure/migrations/), not something every
+        request should re-check.
         """
         if request.path.startswith("/api/"):
             g.request_group_token = db.set_request_group_id(
