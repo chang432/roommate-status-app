@@ -33,16 +33,70 @@ create_table() {
   echo "  created table '$table'"
 }
 
+# Group-partitioned table: groupId partitions, id sorts. Matches the -v2 feed
+# tables in the CloudFormation templates.
+create_group_table() {
+  table=$1
+
+  if aws dynamodb describe-table \
+      --table-name "$table" \
+      --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then
+    echo "  table '$table' already exists — leaving as-is"
+    return
+  fi
+  aws dynamodb create-table \
+    --table-name "$table" \
+    --attribute-definitions \
+      AttributeName=groupId,AttributeType=S \
+      AttributeName=id,AttributeType=S \
+    --key-schema AttributeName=groupId,KeyType=HASH AttributeName=id,KeyType=RANGE \
+    --billing-mode PAY_PER_REQUEST \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null
+  echo "  created table '$table'"
+}
+
 create_table "$ROOMMATE_TABLE" id
+create_table "$ROOMMATE_TABLE-spotify-jam" id
+# Data-migration ledger, so the migration runner can be exercised locally.
+create_table "$ROOMMATE_TABLE-migrations" id
+
+# The feed tables the app reads, keyed (groupId, id).
+create_group_table "$ROOMMATE_TABLE-activities-v2"
+create_group_table "$ROOMMATE_TABLE-requests-v2"
+create_group_table "$ROOMMATE_TABLE-checklists-v2"
+create_group_table "$ROOMMATE_TABLE-shows-v2"
+create_group_table "$ROOMMATE_TABLE-comment-likes-v2"
+
+# The superseded id-keyed originals, so the 2026-07-21-01 migration (and its
+# revert) can be exercised against a local stack.
 create_table "$ROOMMATE_TABLE-activities" id
 create_table "$ROOMMATE_TABLE-requests" id
-create_table "$ROOMMATE_TABLE-spotify-jam" id
 create_table "$ROOMMATE_TABLE-shows" id
 create_table "$ROOMMATE_TABLE-checklists" id
 create_table "$ROOMMATE_TABLE-comment-likes" id
-create_table "$ROOMMATE_TABLE-pushsubs" id
-# Data-migration ledger, so the migration runner can be exercised locally.
-create_table "$ROOMMATE_TABLE-migrations" id
+
+if aws dynamodb describe-table \
+    --table-name "$ROOMMATE_TABLE-pushsubs" \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then
+  echo "  table '$ROOMMATE_TABLE-pushsubs' already exists — leaving as-is"
+else
+  aws dynamodb create-table \
+    --table-name "$ROOMMATE_TABLE-pushsubs" \
+    --attribute-definitions \
+      AttributeName=id,AttributeType=S \
+      AttributeName=userId,AttributeType=S \
+    --key-schema AttributeName=id,KeyType=HASH \
+    --global-secondary-indexes '[
+      {
+        "IndexName":"UserIdIndex",
+        "KeySchema":[{"AttributeName":"userId","KeyType":"HASH"}],
+        "Projection":{"ProjectionType":"ALL"}
+      }
+    ]' \
+    --billing-mode PAY_PER_REQUEST \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null
+  echo "  created table '$ROOMMATE_TABLE-pushsubs'"
+fi
 if aws dynamodb describe-table \
     --table-name "$ROOMMATE_TABLE-groups" \
     --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then

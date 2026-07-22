@@ -720,6 +720,11 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     if (!start) return;
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
+    // A pointer event without coordinates yields NaN deltas, and every
+    // comparison against NaN is false — so the distance guards below would fall
+    // through and `deltaX < 0` would pick the backwards direction. Treat a
+    // non-measurable gesture as no gesture.
+    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
     if (Math.abs(deltaX) < SWIPE_MIN_X || Math.abs(deltaY) > SWIPE_MAX_Y)
       return;
     selectAdjacentType(deltaX < 0 ? 1 : -1);

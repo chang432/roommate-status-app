@@ -32,7 +32,7 @@ export default function EnableNotifications() {
   if (!supported) {
     return (
       <p className={styles.note}>
-        U can't enable notifs rn...
+        U can’t enable notifs rn...
         <br /> On iPhone, tap Share → <b>Add to Home Screen</b>, then open me
         from the new icon to enable them!
       </p>

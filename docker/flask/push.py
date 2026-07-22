@@ -11,6 +11,13 @@ selection. The table is provisioned by CloudFormation alongside the roommate
 table (infrastructure/dynamodb-table-{dev,main}.yaml), so it must already exist;
 this module never creates it.
 
+The endpoint hash stays the partition key so re-subscribing one device upserts
+a single row rather than duplicating it; recipients are found through the
+UserIdIndex GSI, so sending to a few roommates reads only their devices instead
+of every subscription in the table. Unlike the feed tables, push has no
+read-your-own-write requirement — delivery is best-effort and already
+asynchronous — so the index's eventual consistency costs nothing here.
+
 Configuration (env):
     VAPID_PUBLIC_KEY   - base64url application server public key (sent to browser)
     VAPID_PRIVATE_KEY  - base64url raw EC P-256 private scalar (server-only)
@@ -29,6 +36,7 @@ import logging
 import os
 import threading
 
+from boto3.dynamodb.conditions import Key
 from pywebpush import WebPushException, webpush
 
 # Reuse db's resource builder so push and roommate data sign requests the same
@@ -47,6 +55,10 @@ VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:andre888chang@gmail.com"
 TABLE_NAME = os.environ.get("PUSH_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-pushsubs"
 )
+
+# GSI that maps a roommate to their devices, so a notify reads only the
+# recipients' rows instead of scanning every stored subscription.
+USER_ID_INDEX = "UserIdIndex"
 
 _table = None
 _table_lock = threading.Lock()
@@ -100,34 +112,54 @@ def _delete_by_id(item_id: str) -> None:
     _get_table().delete_item(Key={"id": item_id})
 
 
+def _rows_for_user(user_id: str) -> list[dict]:
+    """Return one roommate's stored subscription rows via UserIdIndex."""
+    if not user_id:
+        return []
+    table = _get_table()
+    kwargs = {
+        "IndexName": USER_ID_INDEX,
+        "KeyConditionExpression": Key("userId").eq(user_id),
+    }
+    rows: list[dict] = []
+    while True:
+        response = table.query(**kwargs)
+        rows.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            return rows
+        kwargs["ExclusiveStartKey"] = last_key
+
+
+def _rows_for_users(user_ids: set[str]) -> list[dict]:
+    """Return the subscription rows owned by any of the given roommates.
+
+    Deduplicated by row id: one roommate can have several devices, and a device
+    that somehow appears under two queries must still only be sent to once.
+    """
+    by_id: dict[str, dict] = {}
+    for user_id in user_ids:
+        for row in _rows_for_user(user_id):
+            by_id[row["id"]] = row
+    return list(by_id.values())
+
+
 def delete_user_subscriptions(user_id: str) -> int:
     """Remove all stored browser subscriptions owned by a deleted account."""
-    if not user_id:
-        return 0
-    table = _get_table()
-    resp = table.scan()
-    items = resp.get("Items", [])
-    while "LastEvaluatedKey" in resp:
-        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
-        items.extend(resp.get("Items", []))
-
     deleted = 0
-    for item in items:
-        if item.get("userId") == user_id:
-            table.delete_item(Key={"id": item["id"]})
-            deleted += 1
+    for row in _rows_for_user(user_id):
+        _delete_by_id(row["id"])
+        deleted += 1
     return deleted
 
 
-def list_subscriptions() -> list[dict]:
-    """Return every stored PushSubscription as a dict."""
-    table = _get_table()
-    resp = table.scan()
-    items = resp.get("Items", [])
-    while "LastEvaluatedKey" in resp:
-        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
-        items.extend(resp.get("Items", []))
-    return [json.loads(i["subscription"]) for i in items if "subscription" in i]
+def list_user_subscriptions(user_id: str) -> list[dict]:
+    """Return one roommate's stored PushSubscriptions as dicts."""
+    return [
+        json.loads(row["subscription"])
+        for row in _rows_for_user(user_id)
+        if "subscription" in row
+    ]
 
 
 # --- Sending ----------------------------------------------------------------
@@ -145,7 +177,7 @@ def _notify(
     bad subscription — one expired endpoint shouldn't stop the others.
     """
     if not is_configured():
-        log.warning("Push not configured (VAPID keys missing); skipping notify_all.")
+        log.warning("Push not configured (VAPID keys missing); skipping notify.")
         return {"sent": 0, "pruned": 0, "failed": 0}
 
     payload = {"title": title, "body": body, "url": url}
@@ -154,23 +186,11 @@ def _notify(
     payload = json.dumps(payload)
     sent = pruned = failed = 0
 
-    table = _get_table()
-    resp = table.scan()
-    items = resp.get("Items", [])
-    while "LastEvaluatedKey" in resp:
-        resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
-        items.extend(resp.get("Items", []))
-
-    excluded = exclude_user_ids or set()
-    for item in items:
-        item_user_id = item.get("userId")
-        if user_ids is not None and item_user_id not in user_ids:
-            continue
-        if item_user_id in excluded:
-            continue
-        # An old unowned subscription cannot prove it is not the actor.
-        if excluded and not item_user_id:
-            continue
+    # Recipients are resolved through UserIdIndex, so excluded roommates are
+    # never fetched and a subscription with no owner is unreachable by design —
+    # it can't prove it isn't the actor, and now it can't be queried either.
+    recipients = (user_ids or set()) - (exclude_user_ids or set())
+    for item in _rows_for_users(recipients):
         raw = item.get("subscription")
         if not raw:
             continue
@@ -204,23 +224,6 @@ def _notify(
 
     log.info("notify: sent=%d pruned=%d failed=%d", sent, pruned, failed)
     return {"sent": sent, "pruned": pruned, "failed": failed}
-
-
-def notify_all(
-    title: str,
-    body: str,
-    url: str = "/",
-    event_type: str | None = None,
-    exclude_user_ids: set[str] | None = None,
-) -> dict:
-    """Send to every associated device except explicitly excluded actors."""
-    return _notify(
-        title,
-        body,
-        url,
-        event_type=event_type,
-        exclude_user_ids=exclude_user_ids,
-    )
 
 
 def notify_users(

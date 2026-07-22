@@ -42,7 +42,11 @@ Resources:
 
   # Web Push subscriptions for the dev deployment. Separate table (not the
   # roommate table) so the shire scan stays clean. Keyed by a hash of the
-  # push endpoint; the subscription JSON lives in a non-key attribute.
+  # push endpoint — that stays the partition key so re-subscribing the same
+  # device upserts one row instead of duplicating it. UserIdIndex lets a notify
+  # fetch only the recipients' devices rather than scanning every subscription;
+  # push delivery is best-effort and has no read-your-own-write requirement, so
+  # the index's eventual consistency is fine here.
   PushSubscriptionsTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
@@ -53,9 +57,18 @@ Resources:
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIdIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
       SSESpecification:
         SSEEnabled: true
       PointInTimeRecoverySpecification:
@@ -210,6 +223,153 @@ Resources:
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
+  # --- Group-partitioned feed tables (v2) ---------------------------------
+  # The five feed tables below supersede the single-`id`-keyed tables above.
+  # Every feed read is "give me one group's rows", so groupId is the partition
+  # key and id the sort key: a Query replaces a whole-table Scan, the group
+  # filter is enforced by the key instead of by Python, and — unlike a GSI —
+  # a base-table Query still supports ConsistentRead, which the routes rely on
+  # to return the caller's own write immediately.
+  #
+  # A key schema cannot be altered in place, so these are new tables; the
+  # 2026-07-21-01 migration copies the rows across. The superseded tables are
+  # left defined (and Retained) until that migration has run on both
+  # environments, so `runner.py --revert` has somewhere to put the data back.
+  ActivitiesV2Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-activities-v2
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+        - AttributeName: id
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
+  RequestsV2Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-requests-v2
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+        - AttributeName: id
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
+  ChecklistsV2Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-checklists-v2
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+        - AttributeName: id
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
+  ShowsV2Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-shows-v2
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+        - AttributeName: id
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
+  CommentLikesV2Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-comment-likes-v2
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+        - AttributeName: id
+          KeyType: RANGE
       SSESpecification:
         SSEEnabled: true
       PointInTimeRecoverySpecification:
@@ -413,6 +573,66 @@ Outputs:
     Value: !GetAtt CommentLikesTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-CommentLikesTableArn"
+
+  ActivitiesV2TableName:
+    Description: Name of the group-partitioned proposed-activities DynamoDB table.
+    Value: !Ref ActivitiesV2Table
+    Export:
+      Name: !Sub "${AWS::StackName}-ActivitiesV2TableName"
+
+  ActivitiesV2TableArn:
+    Description: ARN of the group-partitioned proposed-activities DynamoDB table.
+    Value: !GetAtt ActivitiesV2Table.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ActivitiesV2TableArn"
+
+  RequestsV2TableName:
+    Description: Name of the group-partitioned household-requests DynamoDB table.
+    Value: !Ref RequestsV2Table
+    Export:
+      Name: !Sub "${AWS::StackName}-RequestsV2TableName"
+
+  RequestsV2TableArn:
+    Description: ARN of the group-partitioned household-requests DynamoDB table.
+    Value: !GetAtt RequestsV2Table.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RequestsV2TableArn"
+
+  ChecklistsV2TableName:
+    Description: Name of the group-partitioned household-checklists DynamoDB table.
+    Value: !Ref ChecklistsV2Table
+    Export:
+      Name: !Sub "${AWS::StackName}-ChecklistsV2TableName"
+
+  ChecklistsV2TableArn:
+    Description: ARN of the group-partitioned household-checklists DynamoDB table.
+    Value: !GetAtt ChecklistsV2Table.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ChecklistsV2TableArn"
+
+  ShowsV2TableName:
+    Description: Name of the group-partitioned TV shows DynamoDB table.
+    Value: !Ref ShowsV2Table
+    Export:
+      Name: !Sub "${AWS::StackName}-ShowsV2TableName"
+
+  ShowsV2TableArn:
+    Description: ARN of the group-partitioned TV shows DynamoDB table.
+    Value: !GetAtt ShowsV2Table.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ShowsV2TableArn"
+
+  CommentLikesV2TableName:
+    Description: Name of the group-partitioned comment-likes DynamoDB table.
+    Value: !Ref CommentLikesV2Table
+    Export:
+      Name: !Sub "${AWS::StackName}-CommentLikesV2TableName"
+
+  CommentLikesV2TableArn:
+    Description: ARN of the group-partitioned comment-likes DynamoDB table.
+    Value: !GetAtt CommentLikesV2Table.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CommentLikesV2TableArn"
 
   GroupsTableName:
     Description: Name of the groups DynamoDB table.

@@ -151,27 +151,13 @@ def _to_account_user(item: dict) -> dict:
     }
 
 
-def _scan_items(consistent: bool = False) -> list[dict]:
-    """Return every account item, including users not yet in a group."""
-    table = _get_table()
-    resp = table.scan(ConsistentRead=consistent)
-    items = resp.get("Items", [])
-    while "LastEvaluatedKey" in resp:
-        resp = table.scan(
-            ExclusiveStartKey=resp["LastEvaluatedKey"],
-            ConsistentRead=consistent,
-        )
-        items.extend(resp.get("Items", []))
-    return items
-
-
 def _query_memberships(**kwargs) -> list[dict]:
     table = _get_memberships_table()
     try:
         response = table.query(**kwargs)
     except ClientError as err:
-        # The app rolls out before CloudFormation provisions this new table.
-        # Legacy account fields keep existing users readable during that gap.
+        # The table is owned by CloudFormation; treat "not provisioned yet" as
+        # an empty roster rather than a 500 on every request.
         if err.response["Error"]["Code"] == "ResourceNotFoundException":
             return []
         raise
@@ -183,6 +169,12 @@ def _query_memberships(**kwargs) -> list[dict]:
 
 
 def _membership_items_for_user(user_id: str) -> list[dict]:
+    """Look a user's memberships up through UserIdIndex.
+
+    No consistent-read option: this is a global secondary index, and DynamoDB
+    only serves those eventually. Callers that must see their own write read the
+    group's partition on the base table instead (_membership_items_for_group).
+    """
     if not user_id:
         return []
     return _query_memberships(
@@ -192,25 +184,25 @@ def _membership_items_for_user(user_id: str) -> list[dict]:
     )
 
 
-def _membership_items_for_group(group_id: str) -> list[dict]:
+def _membership_items_for_group(group_id: str, consistent: bool = False) -> list[dict]:
+    """Read one group's membership rows from the base table's partition.
+
+    Pass consistent=True for the read that follows a status write, so the caller
+    sees their own change; a base-table query supports it, unlike the index
+    above.
+    """
     if not group_id:
         return []
     return _query_memberships(
         KeyConditionExpression="groupId = :groupId",
         ExpressionAttributeValues={":groupId": group_id},
+        ConsistentRead=consistent,
     )
 
 
 def get_group_ids(user_id: str) -> list[str]:
-    """List a user's memberships, falling back only until the migration runs."""
-    memberships = _membership_items_for_user(user_id)
-    if memberships:
-        return sorted({item["groupId"] for item in memberships})
-
-    # The application deploys before its data migration. This read-only bridge
-    # keeps existing single-group accounts usable until their rows are copied.
-    item = _get_table().get_item(Key={"id": user_id}, ConsistentRead=True).get("Item")
-    return [item["groupId"]] if item and item.get("groupId") else []
+    """List every group the account belongs to, from the membership rows."""
+    return sorted({item["groupId"] for item in _membership_items_for_user(user_id)})
 
 
 def get_membership(user_id: str, group_id: str) -> dict | None:
@@ -224,22 +216,7 @@ def get_membership(user_id: str, group_id: str) -> dict | None:
         if err.response["Error"]["Code"] != "ResourceNotFoundException":
             raise
         item = None
-    if item:
-        return item
-
-    # See get_group_ids: legacy rows are read, never written, during rollout.
-    account = _get_table().get_item(Key={"id": user_id}, ConsistentRead=True).get("Item")
-    if account and account.get("groupId") == group_id:
-        return {
-            "groupId": group_id,
-            "userId": user_id,
-            "name": account["name"],
-            "status": account.get("status", "busy"),
-            "statusText": account.get("statusText", ""),
-            "statusUpdatedAt": account.get("statusUpdatedAt"),
-            "_legacy": True,
-        }
-    return None
+    return item or None
 
 
 def create_membership(user_id: str, group_id: str, name: str) -> dict | None:
@@ -280,19 +257,17 @@ def validate_username(username: str) -> bool:
 def get_all(group_id: str, consistent: bool = False) -> list[dict]:
     """Return one group's roommates and their current status, sorted by name.
 
-    Sorting gives the frontend a stable order (DynamoDB scans are unordered).
-    The table is tiny (one household), so a scan is the right tool here. Pass
-    consistent=True immediately after a write so the response includes it.
+    The membership table is partitioned by group, so this reads only this
+    household's rows. Sorting gives the frontend a stable order, since DynamoDB
+    orders a query by sort key (userId) rather than by display name.
     """
     if not group_id:
         return []
-    items = {item["userId"]: item for item in _membership_items_for_group(group_id)}
-    # Keep legacy records visible while the resumable migration is in progress.
-    for account in _scan_items(consistent=consistent):
-        if account.get("groupId") == group_id and account["id"] not in items:
-            items[account["id"]] = {**account, "userId": account["id"]}
     return sorted(
-        (_to_roommate({**item, "id": item.get("userId", item.get("id"))}) for item in items.values()),
+        (
+            _to_roommate({**item, "id": item["userId"]})
+            for item in _membership_items_for_group(group_id, consistent=consistent)
+        ),
         key=lambda r: r["name"].lower(),
     )
 
@@ -325,11 +300,9 @@ def get_group_user_ids(group_id: str, consistent: bool = False) -> list[str]:
     """Return every account id that belongs to the given group."""
     if not group_id:
         return []
-    user_ids = {item["userId"] for item in _membership_items_for_group(group_id)}
-    user_ids.update(
-        item["id"] for item in _scan_items(consistent=consistent) if item.get("groupId") == group_id
+    return sorted(
+        {item["userId"] for item in _membership_items_for_group(group_id, consistent=consistent)}
     )
-    return sorted(user_ids)
 
 
 def authenticate(username: str, password: str) -> dict | None:
@@ -407,8 +380,8 @@ def update_status(
     — enforced with a conditional write so we don't silently create a roommate
     that doesn't exist.
     """
+    updated_at = int(time.time() * 1000)
     try:
-        updated_at = int(time.time() * 1000)
         _get_memberships_table().update_item(
             Key={"groupId": group_id, "userId": roommate_id},
             # `status` is a DynamoDB reserved word, so reference it via a name
@@ -424,23 +397,8 @@ def update_status(
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            # Only legacy accounts can take this branch during the deploy window.
-            legacy = get_membership(roommate_id, group_id)
-            if not legacy or not legacy.get("_legacy"):
-                return None
-            _get_table().update_item(
-                Key={"id": roommate_id},
-                UpdateExpression="SET #s = :s, statusText = :t, statusUpdatedAt = :u",
-                ExpressionAttributeNames={"#s": "status"},
-                ExpressionAttributeValues={
-                    ":s": status,
-                    ":t": status_text,
-                    ":u": int(time.time() * 1000),
-                    ":groupId": group_id,
-                },
-                ConditionExpression="attribute_exists(id) AND groupId = :groupId",
-            )
-            return get_all(group_id, consistent=True)
+            # No membership row for this roommate in this group.
+            return None
         raise
     return get_all(group_id, consistent=True)
 
@@ -485,6 +443,21 @@ def seed() -> None:
             else:
                 raise  # The roommate already exists — leave their data untouched.
         create_membership(r["id"], DEFAULT_GROUP_ID, r["name"])
+
+
+def _scan_items(consistent: bool = False) -> list[dict]:
+    """Return every account item. Only reset() needs a whole-table read; the
+    request paths all address accounts by id or query memberships by group."""
+    table = _get_table()
+    resp = table.scan(ConsistentRead=consistent)
+    items = resp.get("Items", [])
+    while "LastEvaluatedKey" in resp:
+        resp = table.scan(
+            ExclusiveStartKey=resp["LastEvaluatedKey"],
+            ConsistentRead=consistent,
+        )
+        items.extend(resp.get("Items", []))
+    return items
 
 
 def reset() -> None:

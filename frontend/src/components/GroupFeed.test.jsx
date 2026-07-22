@@ -444,14 +444,12 @@ describe("GroupFeed module focus", () => {
       clientX: 20,
       clientY: 20,
     });
-    fireEvent(
-      header,
-      new MouseEvent("pointermove", {
-        bubbles: true,
-        clientX: 45,
-        clientY: 20,
-      }),
-    );
+    fireEvent.pointerMove(header, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 45,
+      clientY: 20,
+    });
     await act(
       () => new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 20)),
     );
