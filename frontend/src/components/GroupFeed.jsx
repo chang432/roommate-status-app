@@ -31,8 +31,7 @@ import styles from "../pages/StatusPage.module.css";
 const FEED_POLL_INTERVAL_MS = 5000;
 const EDIT_HEADER_SELECTOR = "[data-module-edit-header]";
 const EDIT_KEYBOARD_SELECTOR = "[data-module-edit-keyboard]";
-const INTERACTIVE_SELECTOR =
-  "button, a, input, textarea, select, [role='button']";
+const INTERACTIVE_SELECTOR = "button, a, input, textarea, select";
 const SWIPE_MIN_X = 64;
 const SWIPE_MAX_Y = 48;
 
@@ -94,6 +93,7 @@ function ModuleNav({
   onReorderType,
 }) {
   const navRef = useRef(null);
+  const dragPointerRef = useRef(null);
   const [allDropdownOpen, setAllDropdownOpen] = useState(false);
   const [draggingType, setDraggingType] = useState(null);
   const counts = modules.reduce((acc, module) => {
@@ -125,7 +125,25 @@ function ModuleNav({
     onEditModeChange(false);
     setAllDropdownOpen(false);
     setDraggingType(null);
+    dragPointerRef.current = null;
   }, [onEditModeChange]);
+
+  function finishTouchDrag(event) {
+    const drag = dragPointerRef.current;
+    dragPointerRef.current = null;
+    setDraggingType(null);
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    const dropTarget = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest("[data-module-drop-type], [data-module-type]");
+    const dropType =
+      dropTarget?.getAttribute("data-module-drop-type") ||
+      dropTarget?.getAttribute("data-module-type");
+    if (dropType && dropType !== drag.type) {
+      onReorderType(drag.type, dropType);
+    }
+  }
 
   useEffect(() => {
     if (!editMode) return undefined;
@@ -275,6 +293,7 @@ function ModuleNav({
             return (
               <div
                 key={type.id}
+                data-module-drop-type={type.id}
                 className={cx(
                   styles.moduleNavEditRow,
                   draggingType === type.id
@@ -300,6 +319,26 @@ function ModuleNav({
                   draggable
                   className={styles.moduleNavDragHandle}
                   aria-label={`Drag ${type.label} to reorder`}
+                  onPointerDown={(event) => {
+                    if (event.pointerType === "mouse") return;
+                    event.preventDefault();
+                    dragPointerRef.current = {
+                      pointerId: event.pointerId,
+                      type: type.id,
+                    };
+                    setDraggingType(type.id);
+                    event.currentTarget.setPointerCapture?.(event.pointerId);
+                  }}
+                  onPointerUp={finishTouchDrag}
+                  onPointerCancel={(event) => {
+                    if (dragPointerRef.current?.pointerId === event.pointerId) {
+                      dragPointerRef.current = null;
+                      setDraggingType(null);
+                      event.currentTarget.releasePointerCapture?.(
+                        event.pointerId,
+                      );
+                    }
+                  }}
                   onDragStart={(event) => {
                     setDraggingType(type.id);
                     event.dataTransfer.effectAllowed = "move";

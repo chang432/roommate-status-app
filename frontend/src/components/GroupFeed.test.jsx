@@ -482,6 +482,77 @@ describe("GroupFeed module focus", () => {
     expect(screen.queryByText("Schedule")).not.toBeInTheDocument();
   });
 
+  it("switches filters when swiping directly on a module card", async () => {
+    renderFeed("/", [feedItem("events"), feedItem("requests")]);
+
+    await screen.findByText("Movie night");
+    const card = cardForText("Movie night");
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 120,
+    });
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 126,
+    });
+
+    expect(screen.getByRole("heading", { name: "Events" })).toBeInTheDocument();
+  });
+
+  it("supports touch drag ordering in filter edit mode", async () => {
+    renderFeed("/", [feedItem("events"), feedItem("requests")]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Movie night");
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const requestDropTarget = document.querySelector(
+      '[data-module-drop-type="requests"]',
+    );
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: vi.fn(() => requestDropTarget),
+    });
+
+    const eventsHandle = screen.getByRole("button", {
+      name: "Drag Events to reorder",
+    });
+    fireEvent.pointerDown(eventsHandle, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 230,
+      clientY: 140,
+    });
+    fireEvent.pointerUp(eventsHandle, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 230,
+      clientY: 188,
+    });
+
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    const card = cardForText("Movie night");
+    fireEvent.pointerDown(card, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 120,
+    });
+    fireEvent.pointerUp(card, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 126,
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "Requests" }),
+    ).toBeInTheDocument();
+  });
+
   it("preserves an open edit draft across polling and saves through the generic API", async () => {
     const module = feedItem("requests");
     renderFeed("/", [module]);

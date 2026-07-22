@@ -115,7 +115,7 @@
 }
 
 .moduleNavDragHandle {
-  @apply grid h-9 w-9 cursor-grab place-items-center rounded-full border border-line bg-card text-[16px] font-black leading-none text-ink-soft transition hover:border-accent hover:text-ink active:cursor-grabbing;
+  @apply grid h-9 w-9 touch-none select-none cursor-grab place-items-center rounded-full border border-line bg-card text-[16px] font-black leading-none text-ink-soft transition hover:border-accent hover:text-ink active:cursor-grabbing;
 }
 
 .moduleNavAllEditor {
@@ -188,7 +188,7 @@
 }
 
 .feedColumn {
-  @apply min-w-0 pb-24;
+  @apply min-w-0 touch-pan-y pb-24;
 }
 
 .ownCard {
