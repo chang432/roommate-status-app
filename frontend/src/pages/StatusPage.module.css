@@ -204,38 +204,6 @@
   transition: none;
 }
 
-.ownCard {
-  @apply mb-[26px] mt-[22px];
-}
-
-.householdHeader {
-  @apply mb-3 flex items-center justify-start gap-2;
-}
-
-.householdTitle {
-  @apply mb-0;
-}
-
-.notifyButton {
-  @apply h-9 w-9;
-}
-
-.jamButton {
-  @apply h-9 max-w-9 text-[11px] font-black uppercase tracking-[0.02em];
-}
-
-.notifyIcon {
-  @apply h-5 w-5 object-contain;
-}
-
-.spotifyIcon {
-  @apply h-[100%] w-[100%] object-contain;
-}
-
-.householdGrid {
-  @apply grid grid-cols-2 gap-[14px];
-}
-
 .feedSection {
   @apply mt-7;
 }
