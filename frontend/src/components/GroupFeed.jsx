@@ -34,6 +34,9 @@ const EDIT_KEYBOARD_SELECTOR = "[data-module-edit-keyboard]";
 const INTERACTIVE_SELECTOR = "button, a, input, textarea, select";
 const SWIPE_MIN_X = 64;
 const SWIPE_MAX_Y = 48;
+const SWIPE_DRAG_RESISTANCE = 0.85;
+const FEED_SWIPE_TRANSITION_MS = 220;
+const FEED_SWIPE_CLICK_SUPPRESSION_MS = FEED_SWIPE_TRANSITION_MS * 2;
 
 const CREATE_LABEL_BY_TYPE = {
   events: "Create an event",
@@ -460,6 +463,11 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   const [editingModule, setEditingModule] = useState(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const swipeStartRef = useRef(null);
+  const swipeTimersRef = useRef([]);
+  const swipeFrameRef = useRef(null);
+  const swipeClickBlockUntilRef = useRef(0);
+  const [feedSwipeOffset, setFeedSwipeOffset] = useState(0);
+  const [feedSwipePhase, setFeedSwipePhase] = useState("idle");
 
   const moduleTypes = useMemo(() => {
     const byId = new Map(MODULE_TYPES.map((type) => [type.id, type]));
@@ -657,6 +665,17 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [drawerOpen]);
 
+  useEffect(
+    () => () => {
+      swipeTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      swipeTimersRef.current = [];
+      if (swipeFrameRef.current !== null) {
+        window.cancelAnimationFrame(swipeFrameRef.current);
+      }
+    },
+    [],
+  );
+
   // Every mutation surfaces through the unified feed, so each change handler
   // just refreshes it.
   const handleActivitiesChange = useCallback(() => loadFeed(), [loadFeed]);
@@ -700,34 +719,109 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     });
   }
 
-  function selectAdjacentType(direction) {
-    const ids = moduleTypes.map((type) => type.id);
-    const index = ids.indexOf(activeType);
-    const safeIndex = index >= 0 ? index : 0;
-    const nextIndex = (safeIndex + direction + ids.length) % ids.length;
-    selectModuleType(ids[nextIndex]);
+  function scheduleFeedSwipe(callback, delay) {
+    const timerId = window.setTimeout(() => {
+      swipeTimersRef.current = swipeTimersRef.current.filter(
+        (currentId) => currentId !== timerId,
+      );
+      callback();
+    }, delay);
+    swipeTimersRef.current.push(timerId);
+  }
+
+  function resetFeedSwipe() {
+    if (feedSwipePhase === "idle") return;
+    setFeedSwipePhase("settling");
+    setFeedSwipeOffset(0);
+    scheduleFeedSwipe(() => setFeedSwipePhase("idle"), FEED_SWIPE_TRANSITION_MS);
+  }
+
+  function handleFeedClickCapture(event) {
+    if (Date.now() >= swipeClickBlockUntilRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   function handleFeedPointerDown(event) {
+    if (feedSwipePhase !== "idle") return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     if (event.target.closest?.(INTERACTIVE_SELECTOR)) return;
-    swipeStartRef.current = { x: event.clientX, y: event.clientY };
+    swipeStartRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      width: event.currentTarget.getBoundingClientRect().width,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handleFeedPointerMove(event) {
+    const start = swipeStartRef.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
+
+    // Let vertical movement remain native page scrolling; only a horizontal
+    // gesture moves the feed panel with the finger.
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 10) {
+      swipeStartRef.current = null;
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
+    if (Math.abs(deltaX) < 4) return;
+
+    setFeedSwipePhase("dragging");
+    setFeedSwipeOffset(deltaX * SWIPE_DRAG_RESISTANCE);
   }
 
   function handleFeedPointerUp(event) {
     const start = swipeStartRef.current;
     swipeStartRef.current = null;
-    if (!start) return;
+    if (!start || start.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
     // A pointer event without coordinates yields NaN deltas, and every
     // comparison against NaN is false — so the distance guards below would fall
     // through and `deltaX < 0` would pick the backwards direction. Treat a
     // non-measurable gesture as no gesture.
-    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
-    if (Math.abs(deltaX) < SWIPE_MIN_X || Math.abs(deltaY) > SWIPE_MAX_Y)
+    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) {
+      resetFeedSwipe();
       return;
-    selectAdjacentType(deltaX < 0 ? 1 : -1);
+    }
+    if (Math.abs(deltaX) < SWIPE_MIN_X || Math.abs(deltaY) > SWIPE_MAX_Y) {
+      resetFeedSwipe();
+      return;
+    }
+
+    const direction = deltaX < 0 ? 1 : -1;
+    const ids = moduleTypes.map((type) => type.id);
+    const activeIndex = ids.indexOf(activeType);
+    const nextType = ids[(activeIndex + direction + ids.length) % ids.length];
+    const travelDistance = Math.max(start.width, 1);
+
+    // Suppress the synthetic click mobile browsers send after a completed
+    // swipe, otherwise the departing card could open as it leaves the screen.
+    swipeClickBlockUntilRef.current =
+      Date.now() + FEED_SWIPE_CLICK_SUPPRESSION_MS;
+    setFeedSwipePhase("exiting");
+    setFeedSwipeOffset(direction * -travelDistance);
+    scheduleFeedSwipe(() => {
+      setActiveType(nextType);
+      setNavigationError("");
+      setFeedSwipePhase("preparing");
+      setFeedSwipeOffset(direction * travelDistance);
+      swipeFrameRef.current = window.requestAnimationFrame(() => {
+        swipeFrameRef.current = null;
+        setFeedSwipePhase("entering");
+        setFeedSwipeOffset(0);
+        scheduleFeedSwipe(
+          () => setFeedSwipePhase("idle"),
+          FEED_SWIPE_TRANSITION_MS,
+        );
+      });
+    }, FEED_SWIPE_TRANSITION_MS);
   }
 
   function openCreateModal() {
@@ -881,36 +975,51 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
         <main
           className={styles.feedColumn}
           onPointerDown={handleFeedPointerDown}
+          onPointerMove={handleFeedPointerMove}
           onPointerUp={handleFeedPointerUp}
+          onClickCapture={handleFeedClickCapture}
           onPointerCancel={() => {
             swipeStartRef.current = null;
+            resetFeedSwipe();
           }}
         >
-          <div className={styles.feedHeader}>
-            <div>
-              <p className={styles.feedEyebrow}>Group feed</p>
-              <h2 className={styles.feedTitle}>{activeTypeLabel}</h2>
-            </div>
-            <div className={styles.feedHeaderActions}>
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(true)}
-                className={styles.feedFilterButton}
-                aria-label="Filter modules"
-              >
-                Filter
-              </button>
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className={styles.createInlineButton}
-                aria-label={createLabel}
-                title={createLabel}
-              >
-                +
-              </button>
-            </div>
-          </div>
+          <div className={styles.feedViewport}>
+            <div
+              className={cx(
+                styles.feedSlide,
+                feedSwipePhase === "dragging" ||
+                  feedSwipePhase === "preparing"
+                  ? styles.feedSlideDirect
+                  : "",
+              )}
+              style={{ transform: `translateX(${feedSwipeOffset}px)` }}
+              data-feed-swipe-phase={feedSwipePhase}
+            >
+              <div className={styles.feedHeader}>
+                <div>
+                  <p className={styles.feedEyebrow}>Group feed</p>
+                  <h2 className={styles.feedTitle}>{activeTypeLabel}</h2>
+                </div>
+                <div className={styles.feedHeaderActions}>
+                  <button
+                    type="button"
+                    onClick={() => setDrawerOpen(true)}
+                    className={styles.feedFilterButton}
+                    aria-label="Filter modules"
+                  >
+                    Filter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openCreateModal}
+                    className={styles.createInlineButton}
+                    aria-label={createLabel}
+                    title={createLabel}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
 
           <div className={styles.feedList}>
             {activeModules.length === 0 ? (
@@ -960,6 +1069,8 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
               )}
             </div>
           )}
+            </div>
+          </div>
         </main>
       </div>
 

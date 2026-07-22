@@ -191,6 +191,19 @@
   @apply min-w-0 touch-pan-y pb-24;
 }
 
+.feedViewport {
+  @apply overflow-hidden;
+}
+
+.feedSlide {
+  @apply will-change-transform;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.feedSlideDirect {
+  transition: none;
+}
+
 .ownCard {
   @apply mb-[26px] mt-[22px];
 }
