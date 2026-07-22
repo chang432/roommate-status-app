@@ -12,6 +12,10 @@ the standard AWS config chain for region/credentials.
 
 from __future__ import annotations
 
+import os
+import time
+
+import book_club
 import db
 import groups
 
@@ -49,9 +53,49 @@ def seed_local_groups() -> None:
         db.set_membership_role(user_id, BOOK_CLUB_GROUP_ID, role)
 
 
+def seed_local_book_club() -> None:
+    """Create a small local-only history for exercising the Book Club dialogs."""
+    if not os.environ.get("DYNAMODB_ENDPOINT"):
+        return
+
+    members = db.get_all(BOOK_CLUB_GROUP_ID)
+    _summary, error = book_club.configure(
+        BOOK_CLUB_GROUP_ID,
+        members,
+        {
+            "title": "The Fifth Season",
+            "author": "N. K. Jemisin",
+            "readingTarget": "Read through Chapter 9",
+            "snackRotationUserIds": ["andre", "kayla"],
+            "bookRotationUserIds": ["kayla", "andre"],
+        },
+    )
+    if error and error != "Book Club is already configured.":
+        raise RuntimeError(f"Could not seed Book Club: {error}")
+
+    now = int(time.time() * 1000)
+    # The active book above plus this completed title make the local history
+    # dialog useful immediately, while stable ids keep repeated seeds safe.
+    book_club._get_table().put_item(Item={
+        "groupId": BOOK_CLUB_GROUP_ID,
+        "id": "book#a-psalm-for-the-wild-built",
+        "bookId": "a-psalm-for-the-wild-built",
+        "title": "A Psalm for the Wild-Built",
+        "author": "Becky Chambers",
+        "recommendedById": "andre",
+        "recommendedByName": "Andre",
+        "status": "completed",
+        "selectedAt": now - 28 * 24 * 60 * 60 * 1000,
+        "completedAt": now - 14 * 24 * 60 * 60 * 1000,
+        "createdAt": now - 28 * 24 * 60 * 60 * 1000,
+        "updatedAt": now - 14 * 24 * 60 * 60 * 1000,
+    })
+
+
 def main() -> int:
     db.seed()
     seed_local_groups()
+    seed_local_book_club()
     roommates = db.get_all(db.DEFAULT_GROUP_ID)
     print(f"Table '{db.TABLE_NAME}' now has {len(roommates)} roommate(s):")
     for r in roommates:
