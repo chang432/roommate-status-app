@@ -5,16 +5,18 @@ import {
   adjustProgress,
   archiveShow,
   deleteShow,
+  endWatchparty,
   joinShow,
   leaveShow,
   restoreShow,
   setProgress,
+  startWatchparty,
 } from "../api/client.js";
+import ModalShell from "./ModalShell.jsx";
 import { initialOf } from "../utils/avatar.js";
 import { cx } from "../utils/classNames.js";
 import { LONG_PRESS_MS } from "../utils/useLongPress.js";
 import { relativeTime } from "../utils/time.js";
-import SwipeActionRow from "./SwipeActionRow.jsx";
 import styles from "./styling/ShowTrackerFeature.module.css";
 
 // A single progress chip: tapping increments immediately, while a long press
@@ -100,7 +102,11 @@ function CounterChip({
             type="button"
             disabled={busy || readOnly}
             className={readOnly ? styles.counterStatic : styles.counterChip}
-            title={readOnly ? `${label} ${value}` : `Tap to advance ${noun}; long-press to edit`}
+            title={
+              readOnly
+                ? `${label} ${value}`
+                : `Tap to advance ${noun}; long-press to edit`
+            }
             onPointerDown={startPress}
             onPointerUp={cancelPress}
             onPointerLeave={cancelPress}
@@ -128,7 +134,14 @@ function CounterChip({
 // Edits are open to everyone, so no ownership check gates the controls. A
 // completed show renders read-only, so its watchers show progress without the
 // increment/edit/remove controls.
-function WatcherRow({ member, busy, readOnly, onAdjust, onSetProgress, onRemove }) {
+function WatcherRow({
+  member,
+  busy,
+  readOnly,
+  onAdjust,
+  onSetProgress,
+  onRemove,
+}) {
   return (
     <li className={styles.watcher}>
       <div className={styles.watcherHead}>
@@ -193,6 +206,12 @@ export default function ShowTrackerFeature({
   const [archivingShowId, setArchivingShowId] = useState(null);
   const [restoringShowId, setRestoringShowId] = useState(null);
   const [deletingShowId, setDeletingShowId] = useState(null);
+  const [watchpartyShowId, setWatchpartyShowId] = useState(null);
+  const [watchpartyPrompt, setWatchpartyPrompt] = useState(null);
+  const [watchpartyDraft, setWatchpartyDraft] = useState({
+    season: "1",
+    episode: "1",
+  });
   useExpandOnModuleFocus(setExpandedId);
 
   function toggleExpanded(id) {
@@ -263,12 +282,62 @@ export default function ShowTrackerFeature({
     }
   }
 
+  function openWatchpartyPrompt(show) {
+    const members = show.members || [];
+    const ownProgress = members.find((member) => member.id === user.id);
+    const fallbackProgress = members[0] || { season: 1, episode: 1 };
+    const progress = ownProgress || fallbackProgress;
+    setWatchpartyDraft({
+      season: String(Math.max(1, Number.parseInt(progress.season, 10) || 1)),
+      episode: String(Math.max(1, Number.parseInt(progress.episode, 10) || 1)),
+    });
+    setWatchpartyPrompt(show);
+  }
+
+  async function handleWatchparty(show, episodeOverride = null) {
+    if (watchpartyShowId) return;
+    setWatchpartyShowId(show.id);
+    setError("");
+    try {
+      const action = show.isWatchpartyLive ? endWatchparty : startWatchparty;
+      onShowsChange(
+        await action(
+          show.id,
+          user.id,
+          episodeOverride?.season,
+          episodeOverride?.episode,
+        ),
+      );
+      setWatchpartyPrompt(null);
+    } catch (err) {
+      setError(err.message || "Could not update the watchparty. Try again.");
+    } finally {
+      setWatchpartyShowId(null);
+    }
+  }
+
+  function handleWatchpartySubmit(event) {
+    event.preventDefault();
+    if (!watchpartyPrompt) return;
+    const season = Math.max(
+      1,
+      Number.parseInt(watchpartyDraft.season, 10) || 1,
+    );
+    const episode = Math.max(
+      1,
+      Number.parseInt(watchpartyDraft.episode, 10) || 1,
+    );
+    handleWatchparty(watchpartyPrompt, { season, episode });
+  }
+
   async function handleAdjust(show, member, field, delta) {
     if (busyMemberIds.includes(member.id)) return;
     markMemberBusy(member.id);
     setError("");
     try {
-      onShowsChange(await adjustProgress(show.id, member.id, field, delta, user.id));
+      onShowsChange(
+        await adjustProgress(show.id, member.id, field, delta, user.id),
+      );
     } catch (err) {
       setError(err.message || `Could not update the ${field}. Try again.`);
     } finally {
@@ -281,7 +350,9 @@ export default function ShowTrackerFeature({
     markMemberBusy(member.id);
     setError("");
     try {
-      onShowsChange(await setProgress(show.id, member.id, field, value, user.id));
+      onShowsChange(
+        await setProgress(show.id, member.id, field, value, user.id),
+      );
     } catch (err) {
       setError(err.message || `Could not update the ${field}. Try again.`);
     } finally {
@@ -307,58 +378,28 @@ export default function ShowTrackerFeature({
     const isArchived = show.isArchived;
     // Only non-watchers see the Join button; clicking it adds them.
     const isMember = show.members.some((member) => member.id === user.id);
-    // Furthest-along watchers first: sort by season, then episode, descending.
-    // Copied so we never mutate the show list's member array in place.
-    const orderedMembers = [...show.members].sort(
-      (a, b) => b.season - a.season || b.episode - a.episode,
+    const orderedMembers = [...show.members].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
     );
-    const swipeActions = isArchived
-      ? [
-          {
-            label: restoringShowId === show.id ? "Restoring…" : "Restore",
-            pendingLabel: restoringShowId === show.id ? "Restoring…" : "Restore",
-            disabled: Boolean(restoringShowId || deletingShowId),
-            onClick: () => handleRestore(show),
-          },
-          {
-            label: deletingShowId === show.id ? "Deleting…" : "Delete",
-            pendingLabel: deletingShowId === show.id ? "Deleting…" : "Delete",
-            tone: "danger",
-            disabled: Boolean(restoringShowId || deletingShowId),
-            onClick: () => handleDelete(show),
-          },
-        ]
-      : [
-          {
-            label: archivingShowId === show.id ? "Archiving…" : "Archive",
-            pendingLabel: archivingShowId === show.id ? "Archiving…" : "Archive",
-            disabled: Boolean(archivingShowId || deletingShowId),
-            onClick: () => handleArchive(show),
-          },
-          {
-            label: deletingShowId === show.id ? "Deleting…" : "Delete",
-            pendingLabel: deletingShowId === show.id ? "Deleting…" : "Delete",
-            tone: "danger",
-            disabled: Boolean(archivingShowId || deletingShowId),
-            onClick: () => handleDelete(show),
-          },
-        ];
     return (
-      <SwipeActionRow key={show.id} actions={swipeActions} disabled={expanded}>
-        <div
-          role="button"
-          tabIndex={0}
-          aria-expanded={expanded}
-          {...editTrigger.keyboardProps}
-          onClick={() => toggleExpanded(show.id)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              toggleExpanded(show.id);
-            }
-          }}
-          className={cx(styles.card, isArchived ? styles.completedCard : "")}
-        >
+      <div
+        key={show.id}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        {...editTrigger.keyboardProps}
+        onClick={() => toggleExpanded(show.id)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleExpanded(show.id);
+          }
+        }}
+        className={cx(
+          show.isWatchpartyLive ? styles.activeCard : styles.card,
+          isArchived ? styles.completedCard : "",
+        )}
+      >
         <div className={styles.summary} {...editTrigger.headerProps}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
@@ -367,6 +408,9 @@ export default function ShowTrackerFeature({
               {isArchived && (
                 <span className={styles.completedChip}>Archived</span>
               )}
+              {show.isWatchpartyLive && (
+                <span className={styles.liveChip}>Live</span>
+              )}
             </div>
             <p className={styles.meta}>
               {show.members.length}{" "}
@@ -374,6 +418,31 @@ export default function ShowTrackerFeature({
               {relativeTime(show.createdAt)}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (show.isWatchpartyLive) {
+                handleWatchparty(show);
+              } else {
+                openWatchpartyPrompt(show);
+              }
+            }}
+            disabled={watchpartyShowId === show.id}
+            className={cx(
+              "ui-pillButton",
+              show.isWatchpartyLive ? "ui-pillDanger" : "ui-pillPrimary",
+              styles.showActionButton,
+            )}
+          >
+            {watchpartyShowId === show.id
+              ? show.isWatchpartyLive
+                ? "Ending…"
+                : "Starting…"
+              : show.isWatchpartyLive
+                ? "End"
+                : "Start"}
+          </button>
           {!isArchived && !isMember && (
             <button
               type="button"
@@ -429,17 +498,136 @@ export default function ShowTrackerFeature({
                   ))}
                 </ul>
               )}
+              <div
+                className={styles.showActions}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <span className={styles.showActionText}>
+                  {isArchived ? "Archived show" : "Show actions"}
+                </span>
+                {isArchived ? (
+                  <button
+                    type="button"
+                    onClick={() => handleRestore(show)}
+                    disabled={Boolean(restoringShowId || deletingShowId)}
+                    className={cx(
+                      "ui-pillButton ui-pillSecondary",
+                      styles.showActionButton,
+                    )}
+                  >
+                    {restoringShowId === show.id ? "Restoring…" : "Restore"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleArchive(show)}
+                    disabled={Boolean(archivingShowId || deletingShowId)}
+                    className={cx(
+                      "ui-pillButton ui-pillSecondary",
+                      styles.showActionButton,
+                    )}
+                  >
+                    {archivingShowId === show.id ? "Archiving…" : "Archive"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleDelete(show)}
+                  disabled={Boolean(
+                    (isArchived ? restoringShowId : archivingShowId) ||
+                    deletingShowId,
+                  )}
+                  className={cx(
+                    "ui-pillButton ui-pillDanger",
+                    styles.showActionButton,
+                  )}
+                >
+                  {deletingShowId === show.id ? "Deleting…" : "Delete"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
-        </div>
-      </SwipeActionRow>
+      </div>
     );
   }
 
   return (
     <div className={styles.wrap}>
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
+
+      {watchpartyPrompt && (
+        <ModalShell
+          title="Start Watchparty"
+          ariaLabel={`Start ${watchpartyPrompt.title} watchparty`}
+          onClose={() => setWatchpartyPrompt(null)}
+          widthClassName={styles.watchpartyDialog}
+        >
+          <form
+            className={styles.watchpartyForm}
+            onSubmit={handleWatchpartySubmit}
+          >
+            <p className={styles.watchpartyTitle}>{watchpartyPrompt.title}</p>
+            <div className={styles.watchpartyFields}>
+              <label className={styles.watchpartyField}>
+                <span>Season</span>
+                <input
+                  type="number"
+                  min="1"
+                  inputMode="numeric"
+                  value={watchpartyDraft.season}
+                  onChange={(event) =>
+                    setWatchpartyDraft((current) => ({
+                      ...current,
+                      season: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className={styles.watchpartyField}>
+                <span>Episode</span>
+                <input
+                  type="number"
+                  min="1"
+                  inputMode="numeric"
+                  value={watchpartyDraft.episode}
+                  onChange={(event) =>
+                    setWatchpartyDraft((current) => ({
+                      ...current,
+                      episode: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+            <div className={styles.watchpartyModalActions}>
+              <button
+                type="button"
+                onClick={() => setWatchpartyPrompt(null)}
+                className={cx(
+                  "ui-pillButton ui-pillSecondary",
+                  styles.showActionButton,
+                )}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={watchpartyShowId === watchpartyPrompt.id}
+                className={cx(
+                  "ui-pillButton ui-pillPrimary",
+                  styles.showActionButton,
+                )}
+              >
+                {watchpartyShowId === watchpartyPrompt.id
+                  ? "Starting…"
+                  : "Start"}
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
 
       <div className={styles.list}>
         {shows.length === 0 ? (

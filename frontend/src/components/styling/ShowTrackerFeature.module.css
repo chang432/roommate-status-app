@@ -43,6 +43,10 @@
   @apply rounded-full bg-solid-neutral px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-on-strong;
 }
 
+.liveChip {
+  @apply rounded-full bg-solid-danger px-[8px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] text-on-strong;
+}
+
 .meta {
   @apply mt-[2px] text-[12px] text-ink-soft;
 }
@@ -135,6 +139,46 @@
 
 .watcherRemove {
   @apply grid h-[24px] w-[24px] flex-none place-items-center rounded-full border border-transparent bg-transparent text-[16px] leading-none text-ink-soft transition hover:border-line hover:bg-surface-hover hover:text-status-red disabled:opacity-60;
+}
+
+.showActions {
+  @apply mt-[14px] flex flex-wrap items-center justify-end gap-2 border-t border-line pt-[12px];
+}
+
+.showActionText {
+  @apply mr-auto text-[12.5px] font-semibold text-ink-soft max-[430px]:w-full;
+}
+
+.showActionButton {
+  @apply px-[13px] py-[7px] text-[12.5px];
+}
+
+.watchpartyDialog {
+  @apply max-w-[360px];
+}
+
+.watchpartyForm {
+  @apply space-y-4;
+}
+
+.watchpartyTitle {
+  @apply truncate text-[14px] font-semibold text-ink;
+}
+
+.watchpartyFields {
+  @apply grid grid-cols-2 gap-3;
+}
+
+.watchpartyField {
+  @apply space-y-1 text-[12px] font-semibold text-ink-soft;
+}
+
+.watchpartyField input {
+  @apply h-[40px] w-full rounded-sm border border-line bg-surface-hover px-3 text-[15px] font-semibold tabular-nums text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft;
+}
+
+.watchpartyModalActions {
+  @apply flex justify-end gap-2;
 }
 
 /* Collapsible section that hides completed shows, mirroring the activities'

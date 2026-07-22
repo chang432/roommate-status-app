@@ -18,7 +18,6 @@ const STATUS_CLASS = {
   [STATUS.SLEEPING]: styles.sleeping,
   [STATUS.OOH]: styles.ooh,
   [STATUS.ACTIVITY_LIVE]: styles.activityLive,
-  [STATUS.ACTIVITY_ENDED]: styles.activityEnded,
 }
 
 function maskStyle(src) {

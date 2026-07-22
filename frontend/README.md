@@ -29,14 +29,14 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Comment likes**: roommates can like or unlike other people’s comments and
   see their own reaction state, the total like count, and a popover listing
   who liked each comment.
-- **Module feed**: `/feed` contains events, requests, checklists, TV shows, and
-  the active Spotify Jam in one chronological group feed. Material updates bump
-  the module instance to the bottom, and the side drawer/rail filters by module
-  type. Module notifications use `/?module=<type>&item=<id>` links that select
-  the matching filter, reveal archived items, and focus each target once without
-  replaying during feed polling. Horizontal swipes alternate between the status
-  page and feed, the feed hamburger opens module filters, and the floating `+`
-  creates modules.
+- **Module feed**: `/feed` contains events, requests, checklists, and TV shows
+  in one chronological group feed. Material updates bump the module instance to
+  the bottom, and the side drawer/rail filters by module type. Module
+  notifications use `/?module=<type>&item=<id>` links that select the matching
+  filter, reveal archived items, and focus each target once without replaying
+  during feed polling. Swiping the feed switches between the ordered filters,
+  the filter drawer can edit that order and the contents of All, and the
+  floating `+` creates modules.
 - **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, archive or restore requests, and open
   module notifications directly to the expanded request card.
@@ -109,6 +109,8 @@ All backend calls live in `src/api/client.js`, which targets the Flask server
 | `updateChecklistItem`           | `PATCH /api/checklists/:id/items/:itemId`                  |
 | `deleteChecklistItem`           | `DELETE /api/checklists/:id/items/:itemId`                 |
 | `archiveChecklist`              | `POST /api/checklists/:id/archive`                         |
+| `startWatchparty`               | `POST /api/shows/:id/watchparty/start`                     |
+| `endWatchparty`                 | `POST /api/shows/:id/watchparty/end`                       |
 | `restoreChecklist`              | `POST /api/checklists/:id/restore`                         |
 | `deleteChecklist`               | `DELETE /api/checklists/:id`                               |
 

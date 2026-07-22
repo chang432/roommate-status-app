@@ -209,11 +209,7 @@ def group_url(group_id: str, url: str = "/") -> str:
 
 
 def _activity_status_overrides(group_id: str, consistent: bool = False) -> dict[str, dict]:
-    """Return the latest live/ended activity-driven status per participant.
-
-    Live activities always win over ended ones. Ended activities persist only
-    until that roommate manually saves a newer normal status.
-    """
+    """Return the latest live activity-driven status per participant."""
     overrides: dict[str, dict] = {}
     for activity in activities.list_recent(group_id, consistent=consistent):
         member_ids = activity.get("memberIds") or []
@@ -223,21 +219,6 @@ def _activity_status_overrides(group_id: str, consistent: bool = False) -> dict[
                 current = overrides.get(user_id)
                 if current is None or current["kind"] != "live" or timestamp > current["timestamp"]:
                     overrides[user_id] = {"kind": "live", "timestamp": timestamp}
-            continue
-
-        # Scheduled events already have an endAt, but must not suppress a
-        # participant's availability until their lifecycle has actually ended.
-        if not activity.get("isExpired"):
-            continue
-        timestamp = activity.get("endedAt") or activity.get("endAt")
-        if timestamp is None:
-            continue
-        for user_id in member_ids:
-            current = overrides.get(user_id)
-            if current and current["kind"] == "live":
-                continue
-            if current is None or timestamp > current["timestamp"]:
-                overrides[user_id] = {"kind": "ended", "timestamp": timestamp}
     return overrides
 
 
@@ -251,11 +232,6 @@ def effective_available_count(group_id: str, roommates: list[dict]) -> int:
         override = overrides.get(roommate["id"])
         if override is None:
             available += 1
-            continue
-        if override["kind"] == "ended":
-            updated_at = roommate.get("statusUpdatedAt")
-            if updated_at is not None and updated_at >= override["timestamp"]:
-                available += 1
     return available
 
 
@@ -1530,6 +1506,8 @@ def create_app() -> Flask:
             return jsonify({"error": "Unknown show or watcher."}), 404
         if result == household_shows.MUTATION_ARCHIVED:
             return jsonify({"error": "Archived shows are read-only."}), 409
+        if result == household_shows.WATCHPARTY_EMPTY:
+            return jsonify({"error": "Add at least one watcher before starting a watchparty."}), 409
         return jsonify(household_shows.list_recent(group_id, consistent=True))
 
     @app.get("/api/shows")
@@ -1648,6 +1626,74 @@ def create_app() -> Flask:
         if result == household_shows.DELETE_NOT_FOUND:
             return jsonify({"error": f"Unknown show: {show_id}"}), 404
         return jsonify(household_shows.list_recent(requester["groupId"], consistent=True))
+
+    def _set_show_watchparty(show_id: str, live: bool):
+        body = request.get_json(silent=True) or {}
+        requester_id = (body.get("requesterId") or "").strip()
+        requester = db.get_group_member(requester_id) if requester_id else None
+        if requester is None:
+            return invalid_user_response()
+        season = body.get("season")
+        episode = body.get("episode")
+        if live:
+            if not isinstance(season, int) or isinstance(season, bool):
+                return jsonify({"error": "A whole-number season is required."}), 400
+            if not isinstance(episode, int) or isinstance(episode, bool):
+                return jsonify({"error": "A whole-number episode is required."}), 400
+
+        show = household_shows.get(show_id, requester["groupId"], consistent=True)
+        action = household_shows.start_watchparty if live else household_shows.end_watchparty
+        if live:
+            result = action(
+                show_id,
+                requester["id"],
+                requester["name"],
+                requester["groupId"],
+                season,
+                episode,
+            )
+        else:
+            result = action(
+                show_id,
+                requester["id"],
+                requester["name"],
+                requester["groupId"],
+            )
+        if result is None:
+            return jsonify({"error": f"Unknown show: {show_id}"}), 404
+        if result == household_shows.MUTATION_ARCHIVED:
+            return jsonify({"error": "Archived shows are read-only."}), 409
+        if result == household_shows.WATCHPARTY_EMPTY:
+            return jsonify({"error": "Add at least one watcher before starting a watchparty."}), 409
+
+        watcher_ids = {member["id"] for member in show.get("members", []) if member.get("id")} if show else set()
+        try:
+            push.notify_users(
+                user_ids=watcher_ids,
+                exclude_user_ids={requester["id"]},
+                title="Watchparty started" if live else "Watchparty ended",
+                body=(
+                    f"{requester['name']} started watching {result['title']} "
+                    f"S{result['watchpartySeason']} E{result['watchpartyEpisode']}"
+                    if live
+                    else f"{requester['name']} ended the {result['title']} watchparty"
+                ),
+                url=group_url(requester["groupId"], module_models.module_url("tv", show_id)),
+                event_type="shows-changed",
+            )
+        except Exception:  # noqa: BLE001 - watchparty state must remain successful
+            app.logger.exception("Failed to send show watchparty notification")
+        return jsonify(household_shows.list_recent(requester["groupId"], consistent=True))
+
+    @app.post("/api/shows/<show_id>/watchparty/start")
+    def start_show_watchparty(show_id: str):
+        """Mark a show's watcher group as actively watching."""
+        return _set_show_watchparty(show_id, True)
+
+    @app.post("/api/shows/<show_id>/watchparty/end")
+    def end_show_watchparty(show_id: str):
+        """End the live watchparty state for a show."""
+        return _set_show_watchparty(show_id, False)
 
     def _toggle_show_archive(show_id, action, verb):
         body = request.get_json(silent=True) or {}

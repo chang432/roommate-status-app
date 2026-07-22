@@ -494,6 +494,21 @@ export async function deleteShow(id, requesterId) {
   })
 }
 
+// POST /api/shows/:id/watchparty/start|end — set a show watchparty live state.
+export async function startWatchparty(id, requesterId, season, episode) {
+  return request(`/shows/${id}/watchparty/start`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId, season, episode }),
+  })
+}
+
+export async function endWatchparty(id, requesterId) {
+  return request(`/shows/${id}/watchparty/end`, {
+    method: 'POST',
+    body: JSON.stringify({ requesterId }),
+  })
+}
+
 // PATCH /api/shows/:id/watchers/:memberId/:field — bump one watcher's season or
 // episode by delta (+1 / -1). Any roommate in the show's group may edit any
 // watcher's number; userId identifies the caller's group.

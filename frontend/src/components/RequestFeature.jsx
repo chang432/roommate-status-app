@@ -10,7 +10,6 @@ import {
   setRequestCommentLiked,
 } from "../api/client.js";
 import FeedComments from "./FeedComments.jsx";
-import SwipeActionRow from "./SwipeActionRow.jsx";
 import { relativeTime } from "../utils/time.js";
 import { cx } from "../utils/classNames.js";
 import styles from "./styling/RequestFeature.module.css";
@@ -173,56 +172,25 @@ export default function RequestFeature({
             );
             const isArchived = requestItem.isArchived;
             const showRequesterIcons = !isArchived;
-            const swipeActions = isArchived
-              ? [
-                  {
-                    label: restoringId === requestItem.id ? "Restoring…" : "Restore",
-                    pendingLabel: restoringId === requestItem.id ? "Restoring…" : "Restore",
-                    disabled: Boolean(restoringId || deletingId),
-                    onClick: () => handleRestore(requestItem),
-                  },
-                  {
-                    label: deletingId === requestItem.id ? "Deleting…" : "Delete",
-                    pendingLabel: deletingId === requestItem.id ? "Deleting…" : "Delete",
-                    tone: "danger",
-                    disabled: Boolean(restoringId || deletingId),
-                    onClick: () => handleDelete(requestItem),
-                  },
-                ]
-              : [
-                  {
-                    label: archivingId === requestItem.id ? "Archiving…" : "Archive",
-                    pendingLabel: archivingId === requestItem.id ? "Archiving…" : "Archive",
-                    disabled: Boolean(archivingId || deletingId),
-                    onClick: () => handleArchive(requestItem),
-                  },
-                  {
-                    label: deletingId === requestItem.id ? "Deleting…" : "Delete",
-                    pendingLabel: deletingId === requestItem.id ? "Deleting…" : "Delete",
-                    tone: "danger",
-                    disabled: Boolean(archivingId || deletingId),
-                    onClick: () => handleDelete(requestItem),
-                  },
-                ];
             return (
-              <SwipeActionRow key={requestItem.id} actions={swipeActions} disabled={expanded}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={expanded}
-                  {...editTrigger.keyboardProps}
-                  onClick={() => toggleExpanded(requestItem.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      toggleExpanded(requestItem.id);
-                    }
-                  }}
-                  className={cx(
-                    styles.card,
-                    isArchived ? styles.completedCard : "",
-                  )}
-                >
+              <div
+                key={requestItem.id}
+                role="button"
+                tabIndex={0}
+                aria-expanded={expanded}
+                {...editTrigger.keyboardProps}
+                onClick={() => toggleExpanded(requestItem.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    toggleExpanded(requestItem.id);
+                  }
+                }}
+                className={cx(
+                  styles.card,
+                  isArchived ? styles.completedCard : "",
+                )}
+              >
                   <div className={styles.summary} {...editTrigger.headerProps}>
                     <div className={styles.summaryText}>
                       <div className={styles.titleRow}>
@@ -341,18 +309,48 @@ export default function RequestFeature({
                           readOnly={isArchived}
                         />
 
-                        {isArchived ? (
-                          <div className={styles.requestActions}>
-                            <span className={styles.completedText}>
-                              Archived{requestItem.archivedBy ? ` by ${requestItem.archivedBy}` : ""}
-                            </span>
-                          </div>
-                        ) : null}
+                        <div
+                          className={styles.requestActions}
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <span className={styles.completedText}>
+                            {isArchived
+                              ? `Archived${requestItem.archivedBy ? ` by ${requestItem.archivedBy}` : ""}`
+                              : "Request actions"}
+                          </span>
+                          {isArchived ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRestore(requestItem)}
+                              disabled={Boolean(restoringId || deletingId)}
+                              className={cx("ui-pillButton ui-pillSecondary", styles.requestActionButton)}
+                            >
+                              {restoringId === requestItem.id ? "Restoring…" : "Restore"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleArchive(requestItem)}
+                              disabled={Boolean(archivingId || deletingId)}
+                              className={cx("ui-pillButton ui-pillSecondary", styles.requestActionButton)}
+                            >
+                              {archivingId === requestItem.id ? "Archiving…" : "Archive"}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(requestItem)}
+                            disabled={Boolean((isArchived ? restoringId : archivingId) || deletingId)}
+                            className={cx("ui-pillButton ui-pillDanger", styles.requestActionButton)}
+                          >
+                            {deletingId === requestItem.id ? "Deleting…" : "Delete"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </SwipeActionRow>
+              </div>
             );
           })
         )}

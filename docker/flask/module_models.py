@@ -78,7 +78,7 @@ class EventModule(BaseModule):
             created_at=int(item["createdAt"]),
             updated_at=int(item.get("updatedAt", item["createdAt"])),
             title=item.get("text", "Event"),
-            subtitle="Live event" if item.get("isLive") else "Event",
+            subtitle="Event",
             actor=item.get("proposedBy", "Someone"),
             payload=item,
         )

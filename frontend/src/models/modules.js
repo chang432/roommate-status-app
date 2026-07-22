@@ -56,8 +56,10 @@ export const MODULE_DEFINITIONS = {
 }
 
 export const MODULE_TYPES = [
-  { id: 'all', label: 'All modules', shortLabel: 'All' },
-  ...Object.values(MODULE_DEFINITIONS).map(({ id, label, shortLabel }) => ({
+  { id: 'all', label: 'All', shortLabel: 'All' },
+  ...Object.values(MODULE_DEFINITIONS)
+    .filter(({ id }) => id !== 'spotify')
+    .map(({ id, label, shortLabel }) => ({
     id,
     label,
     shortLabel,
@@ -93,14 +95,6 @@ export class BaseModule {
     return !this.isArchived && this.ownerId === userId
   }
 }
-
-export class EventModule extends BaseModule {
-  get typeLabel() {
-    return this.payload.isLive ? 'Live event' : 'Event'
-  }
-}
-
-MODULE_CLASS_BY_TYPE.events = EventModule
 
 export function createModule(feedItem) {
   const ModuleClass = MODULE_CLASS_BY_TYPE[feedItem.type] ?? BaseModule

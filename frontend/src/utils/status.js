@@ -9,7 +9,6 @@ export const STATUS = {
   SLEEPING: 'sleeping',
   OOH: 'ooh',
   ACTIVITY_LIVE: 'activity_live',
-  ACTIVITY_ENDED: 'activity_ended',
 }
 
 // Display order for the status options. The editor renders one panel per entry
@@ -23,7 +22,6 @@ export const STATUS_LABEL = {
   [STATUS.SLEEPING]: 'Sleeping',
   [STATUS.OOH]: 'OOH (Out Of House)',
   [STATUS.ACTIVITY_LIVE]: 'In an activity',
-  [STATUS.ACTIVITY_ENDED]: 'Finished an activity',
 }
 
 // Number of available roommates that triggers the "gather!" banner + push
@@ -32,12 +30,7 @@ export const STATUS_LABEL = {
 export const AVAILABLE_THRESHOLD = 3
 
 export function isActivityStatus(status) {
-  return status === STATUS.ACTIVITY_LIVE || status === STATUS.ACTIVITY_ENDED
-}
-
-function activityEndedAt(activity) {
-  const endedAt = activity.endedAt ?? activity.endAt
-  return typeof endedAt === 'number' ? endedAt : null
+  return status === STATUS.ACTIVITY_LIVE
 }
 
 function upsertActivityStatus(current, next) {
@@ -46,7 +39,6 @@ function upsertActivityStatus(current, next) {
     if (current.status !== STATUS.ACTIVITY_LIVE) return next
     return next.timestamp > current.timestamp ? next : current
   }
-  if (current.status === STATUS.ACTIVITY_LIVE) return current
   return next.timestamp > current.timestamp ? next : current
 }
 
@@ -65,27 +57,8 @@ function activityStatusByUser(activities) {
       })
       return
     }
-
-    // A scheduled event retains its end time before it happens. Only lifecycle
-    // state, not the presence of that timestamp, makes a participant finished.
-    if (!activity.isExpired) return
-    const timestamp = activityEndedAt(activity)
-    if (timestamp === null) return
-    memberIds.forEach((userId) => {
-      byUser[userId] = upsertActivityStatus(byUser[userId], {
-        status: STATUS.ACTIVITY_ENDED,
-        timestamp,
-        title: activity.text,
-      })
-    })
   })
   return byUser
-}
-
-function activityStatusLabel(activityStatus) {
-  return activityStatus.status === STATUS.ACTIVITY_LIVE
-    ? `In ${activityStatus.title}`
-    : `Finished ${activityStatus.title}`
 }
 
 export function decorateRoommatesWithActivityStatus(roommates, activities) {
@@ -103,21 +76,6 @@ export function decorateRoommatesWithActivityStatus(roommates, activities) {
       }
     }
 
-    const updatedAt = roommate.statusUpdatedAt
-    if (
-      overlay.status === STATUS.ACTIVITY_ENDED &&
-      updatedAt !== null &&
-      updatedAt !== undefined &&
-      updatedAt >= overlay.timestamp
-    ) {
-      return {
-        ...roommate,
-        baseStatus,
-        baseStatusText,
-        isActivityStatus: false,
-      }
-    }
-
     return {
       ...roommate,
       baseStatus,
@@ -125,7 +83,7 @@ export function decorateRoommatesWithActivityStatus(roommates, activities) {
       status: overlay.status,
       statusText: '',
       statusUpdatedAt: overlay.timestamp,
-      statusLabelOverride: activityStatusLabel(overlay),
+      statusLabelOverride: `In ${overlay.title}`,
       statusNoteOverride: '',
       isActivityStatus: true,
       activityStatusTitle: overlay.title,
