@@ -32,9 +32,9 @@ export default function EnableNotifications() {
   if (!supported) {
     return (
       <p className={styles.note}>
-        Your notifs are off??? But why? <br /> On iPhone, tap Share →{" "}
-        <b>Add to Home Screen</b>, then open this app from the new icon to
-        enable notifications.
+        U can't enable notifs rn...
+        <br /> On iPhone, tap Share → <b>Add to Home Screen</b>, then open me
+        from the new icon to enable them!
       </p>
     );
   }
@@ -81,7 +81,7 @@ export default function EnableNotifications() {
         disabled={busy}
         className={styles.button}
       >
-        {busy ? "Enabling…" : "🔔 Enable notifications on this device"}
+        {busy ? "Enabling…" : "🔔 Your notifs are off??? But why? Enable me!"}
       </button>
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
     </div>
