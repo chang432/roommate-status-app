@@ -1,4 +1,4 @@
-"TABLE RoommateStatus-main-book-club - group-scoped Book Club configuration, books, sessions, member responses, ratings, and chapter posts. Keyed (groupId HASH, id RANGE), so groups cannot address each other's Book Club data. BookIdIndex (HASH bookId, RANGE id, ProjectionType ALL) retrieves book history, ratings, and discussion; configuration and session-member rows omit bookId and are not indexed. Newly rolled-over sessions retain the active book and omit only readingTarget until an admin sets it."
+"TABLE RoommateStatus-main-book-club - group-scoped Book Club configuration, books, sessions, member responses, ratings, and chapter posts. Keyed (groupId HASH, id RANGE), so groups cannot address each other's Book Club data. BookIdIndex (HASH bookId, RANGE id, ProjectionType ALL) retrieves book history, ratings, and discussion; configuration and session-member rows omit bookId and are not indexed. Newly rolled-over sessions retain the active book and chapter goal until an admin changes either value."
 groupId (S),id (S),timezone (S),frequency (S),weekday (S),localTime (S),nextSessionAt (N),nextSessionId (S),activeBookId (S),snackRotationUserIds (L of S),snackRotationCursor (N),bookRotationUserIds (L of S),bookRotationCursor (N),createdAt (N),updatedAt (N)
 yorkshire,config#book-club,America/New_York,biweekly,wednesday,19:30,1784763000000,session#2026-07-22T23:30:00.000Z,book-uuid,"[""andre"", ""sam"", ""riley""]",1,"[""riley"", ""andre"", ""sam""]",2,1783553400000,1783553400000
 
@@ -7,7 +7,7 @@ yorkshire,book#book-uuid,book-uuid,The Left Hand of Darkness,Ursula K. Le Guin,r
 
 groupId (S),id (S),scheduledAt (N),bookId (S),bookTitle (S),readingTarget (S),snackDutyUserId (S),snackDutyName (S),status (S),completedAt (N),createdAt (N),updatedAt (N)
 yorkshire,session#2026-07-22T23:30:00.000Z,1784763000000,book-uuid,The Left Hand of Darkness,Read through Chapter 8,sam,Sam,scheduled,,1783553400000,1783553400000
-yorkshire,session#2026-08-05T23:30:00.000Z,1785972600000,book-uuid,The Left Hand of Darkness,,andre,Andre,scheduled,,1784763000000,1784763000000
+yorkshire,session#2026-08-05T23:30:00.000Z,1785972600000,book-uuid,The Left Hand of Darkness,Read through Chapter 8,andre,Andre,scheduled,,1784763000000,1784763000000
 
 groupId (S),id (S),sessionId (S),userId (S),userName (S),attendanceStatus (S),chaptersReadThrough (N),createdAt (N),updatedAt (N)
 yorkshire,session-member#2026-07-22T23:30:00.000Z#andre,session#2026-07-22T23:30:00.000Z,andre,Andre,attending,6,1783553400000,1783553400000

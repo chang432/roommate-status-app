@@ -279,8 +279,13 @@ def test_book_club_read_advances_due_meeting_to_admin_placeholder(client, monkey
     assert advanced["activeBook"]["recommendedById"] == TEST_USER_ID
     assert advanced["nextSession"]["id"] != first["id"]
     assert advanced["nextSession"]["bookId"] == first["bookId"]
-    assert advanced["nextSession"]["readingTarget"] is None
+    assert advanced["nextSession"]["readingTarget"] == "Chapter 1"
     assert advanced["nextSession"]["snackDutyUserId"] != first["snackDutyUserId"]
+    response = client.put(
+        grouped_path(f"/api/book-club/sessions/{advanced['nextSession']['id'].replace('#', '%23')}/response"),
+        json={"attendanceStatus": "maybe", "chaptersReadThrough": 1},
+    )
+    assert response.status_code == 200
 
     edited = client.put(
         grouped_path("/api/book-club/next-session"),
@@ -290,6 +295,7 @@ def test_book_club_read_advances_due_meeting_to_admin_placeholder(client, monkey
             "readingTarget": "Read Chapter 2",
             "recommendedById": "kayla",
             "snackDutyUserId": "kayla",
+            "meetingOffset": 1,
         },
     )
     assert edited.status_code == 200
@@ -298,6 +304,11 @@ def test_book_club_read_advances_due_meeting_to_admin_placeholder(client, monkey
     assert next_summary["activeBook"]["recommendedById"] == "kayla"
     assert next_summary["nextSession"]["readingTarget"] == "Read Chapter 2"
     assert next_summary["nextSession"]["snackDutyUserId"] == "kayla"
+    assert next_summary["nextSession"]["id"] != advanced["nextSession"]["id"]
+    assert next_summary["nextSession"]["scheduledAt"] == book_club._following_session_at(
+        advanced["nextSession"]["scheduledAt"]
+    )
+    assert next(item for item in next_summary["nextSession"]["responses"] if item["userId"] == TEST_USER_ID)["attendanceStatus"] == "maybe"
 
 
 def test_create_account_stores_password_hash_and_waits_for_group(client):

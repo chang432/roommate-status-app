@@ -70,6 +70,12 @@ def _following_session_at(scheduled_at: int) -> int:
     return int((local + timedelta(days=14)).timestamp() * 1000)
 
 
+def _shift_session_at(scheduled_at: int, two_week_steps: int) -> int:
+    """Move a meeting by calendar fortnights in Eastern time, preserving 7:30 PM."""
+    local = datetime.fromtimestamp(scheduled_at / 1000, ZoneInfo(TIMEZONE))
+    return int((local + timedelta(days=14 * two_week_steps)).timestamp() * 1000)
+
+
 def _fetch(group_id: str, item_id: str, consistent: bool = True) -> dict | None:
     return _get_table().get_item(
         Key={"groupId": group_id, "id": item_id}, ConsistentRead=consistent
@@ -261,11 +267,11 @@ def _advance_if_due(group_id: str, members: list[dict], config: dict) -> bool:
 
 
 def _advance_session(group_id: str, members: list[dict], config: dict, session: dict) -> None:
-    """Finish one meeting and create the next session with a blank chapter goal.
+    """Finish one meeting and carry its active plan into the next session.
 
     Book selection and its recommender remain stable across sessions, allowing
-    a group to keep reading the same book. Snack duty advances independently;
-    the next chapter goal is intentionally blank for an admin to set.
+    a group to keep reading the same book. Snack duty advances independently,
+    while the existing chapter goal continues until an admin changes it.
     """
     member_by_id = {member["id"]: member for member in members}
     snacks = config["snackRotationUserIds"]
@@ -279,6 +285,7 @@ def _advance_session(group_id: str, members: list[dict], config: dict, session: 
         "groupId": group_id, "id": next_id, "scheduledAt": next_at,
         "bookId": session.get("bookId", config.get("activeBookId")),
         "bookTitle": session.get("bookTitle"),
+        "readingTarget": session.get("readingTarget"),
         "snackDutyUserId": snacks[next_cursor], "snackDutyName": member_by_id[snacks[next_cursor]]["name"],
         "status": "scheduled", "createdAt": now, "updatedAt": now,
     }
@@ -298,7 +305,7 @@ def _advance_session(group_id: str, members: list[dict], config: dict, session: 
 
 
 def update_next_session(group_id: str, members: list[dict], body: dict) -> tuple[dict | None, str | None]:
-    """Let an admin replace the upcoming placeholder with its meeting plan."""
+    """Let an admin edit the next meeting, including its calendar fortnight."""
     title, error = _validate_text(body.get("title"), "Book title")
     if error:
         return None, error
@@ -316,7 +323,11 @@ def update_next_session(group_id: str, members: list[dict], body: dict) -> tuple
     session = _fetch(group_id, config.get("nextSessionId", "")) if config else None
     if config is None or session is None or session.get("status") != "scheduled":
         return None, "No scheduled next session exists."
-    if int(session["scheduledAt"]) <= _now():
+    meeting_offset = body.get("meetingOffset", 0)
+    if isinstance(meeting_offset, bool) or not isinstance(meeting_offset, int) or abs(meeting_offset) > 26:
+        return None, "Meeting time can move by up to 26 two-week increments."
+    scheduled_at = _shift_session_at(int(session["scheduledAt"]), meeting_offset)
+    if scheduled_at <= _now():
         return None, "This meeting has already started. Refresh to advance it."
     snack_duty_user_id = body.get("snackDutyUserId", session.get("snackDutyUserId"))
     if snack_duty_user_id not in member_by_id:
@@ -333,23 +344,49 @@ def update_next_session(group_id: str, members: list[dict], body: dict) -> tuple
     }
     table = _get_table()
     table.put_item(Item=book_item)
-    table.update_item(
-        Key={"groupId": group_id, "id": session["id"]},
-        UpdateExpression=(
-            "SET bookId = :bookId, bookTitle = :title, readingTarget = :target, "
-            "snackDutyUserId = :snackDutyUserId, snackDutyName = :snackDutyName, updatedAt = :now"
-        ),
-        ExpressionAttributeValues={
-            ":bookId": book_id, ":title": title, ":target": reading_target,
-            ":snackDutyUserId": snack_duty_user_id,
-            ":snackDutyName": member_by_id[snack_duty_user_id]["name"], ":now": now,
-        },
-    )
-    config_values = {":bookId": book_id, ":now": now}
-    config_update = "SET activeBookId = :bookId, updatedAt = :now"
+    session_values = {
+        "bookId": book_id, "bookTitle": title, "readingTarget": reading_target,
+        "snackDutyUserId": snack_duty_user_id,
+        "snackDutyName": member_by_id[snack_duty_user_id]["name"], "updatedAt": now,
+    }
+    next_session_id = session["id"]
+    if meeting_offset:
+        # The session id embeds its UTC time. Re-key the session (and the
+        # deterministic response rows) instead of letting its id lie after a
+        # calendar edit; prior attendance plans follow the rescheduled meeting.
+        next_session_id = _session_id(scheduled_at)
+        moved_session = {**session, **session_values, "id": next_session_id, "scheduledAt": scheduled_at}
+        table.put_item(Item=moved_session, ConditionExpression="attribute_not_exists(id)")
+        for response in query_group(table, group_id, consistent=True):
+            if response.get("sessionId") != session["id"]:
+                continue
+            moved_response = {
+                **response,
+                "id": f"session-member#{next_session_id[8:]}#{response['userId']}",
+                "sessionId": next_session_id,
+                "updatedAt": now,
+            }
+            table.put_item(Item=moved_response)
+            table.delete_item(Key={"groupId": group_id, "id": response["id"]})
+        table.delete_item(Key={"groupId": group_id, "id": session["id"]})
+    else:
+        table.update_item(
+            Key={"groupId": group_id, "id": session["id"]},
+            UpdateExpression=(
+                "SET bookId = :bookId, bookTitle = :title, readingTarget = :target, "
+                "snackDutyUserId = :snackDutyUserId, snackDutyName = :snackDutyName, updatedAt = :now"
+            ),
+            ExpressionAttributeValues={
+                ":bookId": book_id, ":title": title, ":target": reading_target,
+                ":snackDutyUserId": snack_duty_user_id,
+                ":snackDutyName": member_by_id[snack_duty_user_id]["name"], ":now": now,
+            },
+        )
+    config_values = {":bookId": book_id, ":now": now, ":nextAt": scheduled_at, ":nextId": next_session_id}
+    config_update = "SET activeBookId = :bookId, nextSessionAt = :nextAt, nextSessionId = :nextId, updatedAt = :now"
     if snack_duty_user_id in config["snackRotationUserIds"]:
         config_values[":snackCursor"] = config["snackRotationUserIds"].index(snack_duty_user_id)
-        config_update = "SET activeBookId = :bookId, snackRotationCursor = :snackCursor, updatedAt = :now"
+        config_update = "SET activeBookId = :bookId, nextSessionAt = :nextAt, nextSessionId = :nextId, snackRotationCursor = :snackCursor, updatedAt = :now"
     table.update_item(Key={"groupId": group_id, "id": CONFIG_ID}, UpdateExpression=config_update, ExpressionAttributeValues=config_values)
     return summary(group_id, members), None
 

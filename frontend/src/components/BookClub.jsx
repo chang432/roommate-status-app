@@ -27,7 +27,7 @@ export default function BookClub({ roommates = [], groupId }) {
   const [setup, setSetup] = useState({ title: "", author: "", readingTarget: "" });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
-    title: "", author: "", readingTarget: "", recommendedById: "", snackDutyUserId: "",
+    title: "", author: "", readingTarget: "", recommendedById: "", snackDutyUserId: "", meetingOffset: 0,
   });
 
   const canAdminister = isAdminIn(roommates, user?.id);
@@ -100,6 +100,7 @@ export default function BookClub({ roommates = [], groupId }) {
       readingTarget: summary?.nextSession?.readingTarget || "",
       recommendedById: book?.recommendedById || roommates[0]?.id || "",
       snackDutyUserId: summary?.nextSession?.snackDutyUserId || roommates[0]?.id || "",
+      meetingOffset: 0,
     });
     setEditing(true);
   }
@@ -109,6 +110,10 @@ export default function BookClub({ roommates = [], groupId }) {
     const index = Math.max(0, roommates.findIndex((member) => member.id === draft[field]));
     const nextIndex = (index + direction + roommates.length) % roommates.length;
     setDraft({ ...draft, [field]: roommates[nextIndex].id });
+  }
+
+  function rotateMeetingTime(direction) {
+    setDraft({ ...draft, meetingOffset: draft.meetingOffset + direction });
   }
 
   async function saveNextSession(event) {
@@ -148,6 +153,9 @@ export default function BookClub({ roommates = [], groupId }) {
 
   const recommender = roommates.find((member) => member.id === draft.recommendedById);
   const snackDutyMember = roommates.find((member) => member.id === draft.snackDutyUserId);
+  const editedMeetingTime = summary?.nextSession
+    ? summary.nextSession.scheduledAt + draft.meetingOffset * 14 * 24 * 60 * 60 * 1000
+    : null;
 
   return (
     <section className={styles.section} aria-label="Book Club">
@@ -181,6 +189,14 @@ export default function BookClub({ roommates = [], groupId }) {
               <label>Book title<input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
               <label>Author<input required value={draft.author} onChange={(event) => setDraft({ ...draft, author: event.target.value })} /></label>
               <label>Chapter goal<input required value={draft.readingTarget} onChange={(event) => setDraft({ ...draft, readingTarget: event.target.value })} /></label>
+              <div className={styles.recommender}>
+                <span>Meeting time</span>
+                <div>
+                  <button type="button" aria-label="Previous meeting time" onClick={() => rotateMeetingTime(-1)} disabled={saving || draft.meetingOffset <= -26}>←</button>
+                  <strong>{editedMeetingTime && EASTERN_FORMAT.format(editedMeetingTime)}</strong>
+                  <button type="button" aria-label="Next meeting time" onClick={() => rotateMeetingTime(1)} disabled={saving || draft.meetingOffset >= 26}>→</button>
+                </div>
+              </div>
               <div className={styles.recommender}>
                 <span>Recommended by</span>
                 <div>
