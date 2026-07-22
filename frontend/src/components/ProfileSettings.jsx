@@ -110,6 +110,10 @@ export default function ProfileSettings({
         <div className={styles.identityText}>
           <p className={styles.name}>{user?.name || 'Roomie'}</p>
           <p className={styles.username}>@{user?.username || user?.id}</p>
+          {/* Admin is per-group, so the badge tracks the group being viewed
+              rather than the account — it disappears on switching to a group
+              this user does not administer. */}
+          {viewerIsAdmin && <p className={styles.adminBadge}>Group admin</p>}
         </div>
       </section>
 

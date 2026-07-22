@@ -54,6 +54,15 @@ describe("ProfileSettings member administration", () => {
 
   afterEach(cleanup);
 
+  it("badges the identity card only when you administer this group", () => {
+    renderPanel(roster("admin"));
+    expect(screen.getByText("Group admin")).toBeInTheDocument();
+
+    cleanup();
+    renderPanel(roster("member"));
+    expect(screen.queryByText("Group admin")).toBeNull();
+  });
+
   it("hides every member action from a plain member", () => {
     renderPanel(roster("member"));
 
