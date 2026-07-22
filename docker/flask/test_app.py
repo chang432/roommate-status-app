@@ -236,6 +236,7 @@ def test_book_club_summary_setup_and_member_response(client):
     summary = configured.get_json()["summary"]
     assert summary["activeBook"]["recommendedById"] == TEST_USER_ID
     assert summary["nextSession"]["snackDutyUserId"] == TEST_USER_ID
+    assert summary["configuration"]["snackRotationCursor"] == 0
     assert all(response["attendanceStatus"] is None for response in summary["nextSession"]["responses"])
 
     session_id = summary["nextSession"]["id"]

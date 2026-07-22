@@ -11,6 +11,7 @@
 .dynamicField { @apply grid grid-cols-[minmax(7rem,auto)_minmax(0,1fr)] items-center gap-2 text-sm text-ink; }
 .dynamicField strong { @apply text-xs uppercase tracking-wide text-accent-deep; }
 .dynamicField span { @apply rounded border border-accent-soft bg-accent-soft px-3 py-2; }
+.valueButton { @apply min-w-0 rounded border border-accent-soft bg-accent-soft px-3 py-2 text-left text-ink transition hover:border-accent hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent; }
 .adminActions { @apply flex flex-wrap gap-2; }
 .editButton { @apply w-fit rounded border border-line px-3 py-1.5 text-sm font-bold text-ink hover:bg-surface-muted; }
 .recommender { @apply grid gap-1 text-sm font-bold text-ink; }
@@ -26,3 +27,10 @@
 .response { @apply flex items-center justify-between gap-3 border-b border-line py-2 text-sm text-ink; }
 .responseControls { @apply flex items-center gap-2; }
 .responseControls select, .responseControls input { @apply max-w-32 rounded border border-line bg-surface-muted px-2 py-1 text-sm text-ink; }
+.popupContent { @apply max-h-[min(60vh,440px)] overflow-y-auto pr-1; }
+.popupList { @apply grid gap-2; }
+.popupItem { @apply flex items-center justify-between gap-4 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
+.popupItem > div { @apply grid gap-0.5; }
+.popupItem > div > span { @apply text-ink-soft; }
+.popupMeta { @apply grid justify-items-end gap-1 text-right text-xs text-ink-soft; }
+.currentBadge { @apply rounded-full bg-accent-soft px-2 py-0.5 font-bold text-accent-deep; }

@@ -234,6 +234,10 @@ export async function getBookClub(userId) {
   return request(withQuery('/book-club', { userId }))
 }
 
+export async function getCompletedBookClubBooks(userId) {
+  return request(withQuery('/book-club/books/completed', { userId }))
+}
+
 export async function configureBookClub(userId, settings) {
   return request(withQuery('/book-club/config', { userId }), {
     method: 'POST',

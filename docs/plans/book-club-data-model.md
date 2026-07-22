@@ -236,6 +236,10 @@ configuration's next-session data together with the active book. It displays:
 - the local next-meeting date and time;
 - `Book: <title> by <author>`;
 - next meeting, chapter goal, and snack duty as separate lines;
+- a tappable book value that opens a newest-first history, including the
+  current book, with each book's recommender;
+- a tappable snack-duty value that opens the current-first snack rotation and
+  identifies each upcoming member;
 - an admin editor that chooses the recommender from the current member list.
 - a bell above meeting plans that any group member can use to send a reminder
   for the next meeting to the group.

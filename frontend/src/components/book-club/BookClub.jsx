@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import {
   configureBookClub,
   getBookClub,
+  getCompletedBookClubBooks,
   notifyBookClubMeeting,
   setBookClubResponse,
   updateBookClubNextSession,
 } from "../../api/client.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { isAdminIn } from "../../utils/roles.js";
+import ModalShell from "../ui/ModalShell.jsx";
 import styles from "./BookClub.module.css";
 
 const EASTERN_FORMAT = new Intl.DateTimeFormat("en-US", {
@@ -25,6 +27,9 @@ export default function BookClub({ roommates = [], groupId }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [notifying, setNotifying] = useState(false);
+  const [openPopup, setOpenPopup] = useState(null);
+  const [completedBooks, setCompletedBooks] = useState([]);
+  const [booksLoading, setBooksLoading] = useState(false);
   const [setup, setSetup] = useState({ title: "", author: "", readingTarget: "" });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
@@ -149,11 +154,37 @@ export default function BookClub({ roommates = [], groupId }) {
     }
   }
 
+  async function openBookHistory() {
+    setOpenPopup("books");
+    setBooksLoading(true);
+    setError("");
+    try {
+      const { books } = await getCompletedBookClubBooks(user.id);
+      setCompletedBooks(books);
+    } catch (err) {
+      setError(err.message || "Could not load book history.");
+    } finally {
+      setBooksLoading(false);
+    }
+  }
+
   const recommender = roommates.find((member) => member.id === draft.recommendedById);
   const snackDutyMember = roommates.find((member) => member.id === draft.snackDutyUserId);
   const editedMeetingTime = summary?.nextSession
     ? summary.nextSession.scheduledAt + draft.meetingOffset * 14 * 24 * 60 * 60 * 1000
     : null;
+  const snackRotation = summary?.configuration?.snackRotationUserIds ?? [];
+  const snackRotationCursor = summary?.configuration?.snackRotationCursor ?? 0;
+  const snackRotationMembers = snackRotation.map((memberId, index) => {
+    const rotationIndex = (snackRotationCursor + index) % snackRotation.length;
+    const userId = snackRotation[rotationIndex];
+    return {
+      userId,
+      name: roommates.find((member) => member.id === userId)?.name || "Former member",
+      position: index,
+    };
+  });
+  const booksForHistory = [summary?.activeBook, ...completedBooks].filter(Boolean);
 
   return (
     <section className={styles.section} aria-label="Book Club">
@@ -172,10 +203,10 @@ export default function BookClub({ roommates = [], groupId }) {
       )}
       {summary && (
         <div className={styles.summary}>
-          <div className={styles.dynamicField}><strong>Book:</strong><span>{summary.activeBook?.title || "To be chosen"} by {summary.activeBook?.author || "an admin"}</span></div>
-          <div className={styles.dynamicField}><strong>Next meeting:</strong><span>{EASTERN_FORMAT.format(summary.nextSession.scheduledAt)}</span></div>
+          <div className={styles.dynamicField}><strong>Book:</strong><button type="button" className={styles.valueButton} onClick={openBookHistory}>{summary.activeBook?.title || "To be chosen"} by {summary.activeBook?.author || "an admin"}</button></div>
           <div className={styles.dynamicField}><strong>Chapter goal:</strong><span>{summary.nextSession.readingTarget || "To be set"}</span></div>
-          <div className={styles.dynamicField}><strong>Snack duty:</strong><span>{summary.nextSession.snackDutyName}</span></div>
+          <div className={styles.dynamicField}><strong>Next meeting:</strong><span>{EASTERN_FORMAT.format(summary.nextSession.scheduledAt)}</span></div>
+          <div className={styles.dynamicField}><strong>Snack duty:</strong><button type="button" className={styles.valueButton} onClick={() => setOpenPopup("snacks")}>{summary.nextSession.snackDutyName}</button></div>
           {canAdminister && !editing && (
             <div className={styles.adminActions}>
               <button type="button" className={styles.editButton} onClick={startEditing}>Edit upcoming meeting</button>
@@ -244,6 +275,40 @@ export default function BookClub({ roommates = [], groupId }) {
             })}
           </div>
         </div>
+      )}
+      {openPopup === "books" && (
+        <ModalShell title="Book history" onClose={() => setOpenPopup(null)} contentClassName={styles.popupContent}>
+          {booksLoading ? <p className={styles.muted}>Loading books…</p> : (
+            <ol className={styles.popupList}>
+              {booksForHistory.map((book, index) => (
+                <li className={styles.popupItem} key={book.id}>
+                  <div>
+                    <strong>{book.title}</strong>
+                    <span>{book.author}</span>
+                  </div>
+                  <div className={styles.popupMeta}>
+                    {index === 0 && summary.activeBook?.id === book.id ? <span className={styles.currentBadge}>Current book</span> : null}
+                    <span>Recommended by {book.recommendedByName}</span>
+                  </div>
+                </li>
+              ))}
+              {!booksForHistory.length && <li className={styles.muted}>No books have been selected yet.</li>}
+            </ol>
+          )}
+        </ModalShell>
+      )}
+      {openPopup === "snacks" && (
+        <ModalShell title="Snack-duty rotation" onClose={() => setOpenPopup(null)} contentClassName={styles.popupContent}>
+          <ol className={styles.popupList}>
+            {snackRotationMembers.map((member) => (
+              <li className={styles.popupItem} key={`${member.userId}-${member.position}`}>
+                <strong>{member.name}</strong>
+                <span className={styles.popupMeta}>{member.position === 0 ? "Current snack duty" : `Coming up #${member.position}`}</span>
+              </li>
+            ))}
+            {!snackRotationMembers.length && <li className={styles.muted}>No snack-duty rotation has been configured.</li>}
+          </ol>
+        </ModalShell>
       )}
     </section>
   );

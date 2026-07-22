@@ -215,6 +215,7 @@ def summary(group_id: str, members: list[dict]) -> dict | None:
             "timezone": config["timezone"], "frequency": config["frequency"], "weekday": config["weekday"],
             "localTime": config["localTime"], "nextSessionAt": int(config["nextSessionAt"]),
             "snackRotationUserIds": list(config["snackRotationUserIds"]),
+            "snackRotationCursor": int(config["snackRotationCursor"]),
             "bookRotationUserIds": list(config["bookRotationUserIds"]),
         },
         "activeBook": _project_book(book),

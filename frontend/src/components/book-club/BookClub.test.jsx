@@ -1,8 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import BookClub from "./BookClub.jsx";
-import { getBookClub, notifyBookClubMeeting } from "../../api/client.js";
+import { getBookClub, getCompletedBookClubBooks, notifyBookClubMeeting } from "../../api/client.js";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { id: "andre", name: "Andre" } }),
@@ -11,10 +11,13 @@ vi.mock("../../context/AuthContext.jsx", () => ({
 vi.mock("../../api/client.js", async (importOriginal) => ({
   ...(await importOriginal()),
   getBookClub: vi.fn(),
+  getCompletedBookClubBooks: vi.fn(),
   notifyBookClubMeeting: vi.fn(),
   configureBookClub: vi.fn(),
   setBookClubResponse: vi.fn(),
 }));
+
+afterEach(() => cleanup());
 
 describe("BookClub", () => {
   it("renders an empty state while a group has no configured club", async () => {
@@ -27,10 +30,11 @@ describe("BookClub", () => {
     await waitFor(() => expect(screen.getByText(/has not configured/i)).toBeInTheDocument());
   });
 
-  it("uses the requested four-line meeting summary without a title banner", async () => {
+  it("places the chapter goal above the next meeting and opens the book history", async () => {
     getBookClub.mockResolvedValue({
       summary: {
-        activeBook: { title: "Parable of the Sower", author: "Octavia E. Butler" },
+        activeBook: { id: "current", title: "Parable of the Sower", author: "Octavia E. Butler" },
+        configuration: { snackRotationUserIds: ["andre", "kayla"], snackRotationCursor: 0 },
         nextSession: {
           id: "session#future",
           scheduledAt: Date.UTC(2026, 7, 5, 23, 30),
@@ -40,15 +44,48 @@ describe("BookClub", () => {
         },
       },
     });
+    getCompletedBookClubBooks.mockResolvedValue({
+      books: [{ id: "older", title: "Kindred", author: "Octavia E. Butler", recommendedByName: "Kayla" }],
+    });
 
-    render(<BookClub roommates={[]} groupId="book-club" />);
+    render(<BookClub roommates={[{ id: "andre", name: "Andre" }, { id: "kayla", name: "Kayla" }]} groupId="book-club" />);
 
     await waitFor(() => expect(screen.getByText(/Book:/)).toBeInTheDocument());
-    expect(screen.getByText(/Next meeting:/)).toBeInTheDocument();
-    expect(screen.getByText(/Chapter goal:/)).toBeInTheDocument();
+    const summaryRows = screen.getAllByText(/Book:|Chapter goal:|Next meeting:|Snack duty:/).map((element) => element.textContent);
+    expect(summaryRows).toEqual(["Book:", "Chapter goal:", "Next meeting:", "Snack duty:"]);
     expect(screen.getByText(/Snack duty:/)).toBeInTheDocument();
     expect(screen.queryByText("Book Club")).toBeNull();
     expect(screen.queryByText("Eastern time")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: /Parable of the Sower/i }));
+    expect(await screen.findByRole("dialog", { name: "Book history" })).toHaveTextContent("Current book");
+    expect(screen.getByRole("dialog", { name: "Book history" })).toHaveTextContent("Recommended by Kayla");
+  });
+
+  it("shows the current snack-duty member followed by the upcoming rotation", async () => {
+    getBookClub.mockResolvedValue({
+      summary: {
+        activeBook: { id: "current", title: "A Book", author: "An Author" },
+        configuration: { snackRotationUserIds: ["andre", "kayla", "sheryl"], snackRotationCursor: 1 },
+        nextSession: {
+          id: "session#future",
+          scheduledAt: Date.UTC(2026, 7, 5, 23, 30),
+          readingTarget: "Chapter 1",
+          snackDutyName: "Kayla",
+          responses: [],
+        },
+      },
+    });
+
+    render(<BookClub roommates={[
+      { id: "andre", name: "Andre" }, { id: "kayla", name: "Kayla" }, { id: "sheryl", name: "Sheryl" },
+    ]} groupId="book-club" />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Kayla" }));
+    const dialog = screen.getByRole("dialog", { name: "Snack-duty rotation" });
+    expect(dialog).toHaveTextContent("KaylaCurrent snack duty");
+    expect(dialog).toHaveTextContent("SherylComing up #1");
+    expect(dialog).toHaveTextContent("AndreComing up #2");
   });
 
   it("lets any member notify the group about the upcoming meeting", async () => {
