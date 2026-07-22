@@ -255,6 +255,47 @@ Resources:
         - Key: Environment
           Value: dev
 
+  # Book Club keeps long-lived books, sessions, responses, ratings, and
+  # chapter posts out of group metadata and the household feed. BookIdIndex
+  # reads one book's related records without scanning its group partition.
+  BookClubTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-book-club
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: bookId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+        - AttributeName: id
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: BookIdIndex
+          KeySchema:
+            - AttributeName: bookId
+              KeyType: HASH
+            - AttributeName: id
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
   # Groups for the dev deployment. Group attributes remain schemaless beyond
   # the stable groupId partition key.
   GroupsTable:
@@ -448,6 +489,18 @@ Outputs:
     Value: !GetAtt CommentLikesV2Table.Arn
     Export:
       Name: !Sub "${AWS::StackName}-CommentLikesV2TableArn"
+
+  BookClubTableName:
+    Description: Name of the group-partitioned Book Club table.
+    Value: !Ref BookClubTable
+    Export:
+      Name: !Sub "${AWS::StackName}-BookClubTableName"
+
+  BookClubTableArn:
+    Description: ARN of the group-partitioned Book Club table.
+    Value: !GetAtt BookClubTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-BookClubTableArn"
 
   GroupsTableName:
     Description: Name of the groups DynamoDB table.

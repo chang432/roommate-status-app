@@ -22,6 +22,7 @@ import pytest
 from moto import mock_aws
 
 import activities
+import book_club
 import comment_likes
 import db
 import groups
@@ -76,21 +77,35 @@ def _dynamodb():
         # rows are one Query (see docker/flask/group_tables.py).
         for table_name in (
             activities.TABLE_NAME,
+            book_club.TABLE_NAME,
             comment_likes.TABLE_NAME,
             household_requests.TABLE_NAME,
             household_shows.TABLE_NAME,
             household_checklists.TABLE_NAME,
         ):
+            definitions = [
+                {"AttributeName": "groupId", "AttributeType": "S"},
+                {"AttributeName": "id", "AttributeType": "S"},
+            ]
+            indexes = []
+            if table_name == book_club.TABLE_NAME:
+                definitions.append({"AttributeName": "bookId", "AttributeType": "S"})
+                indexes = [{
+                    "IndexName": book_club.BOOK_ID_INDEX,
+                    "KeySchema": [
+                        {"AttributeName": "bookId", "KeyType": "HASH"},
+                        {"AttributeName": "id", "KeyType": "RANGE"},
+                    ],
+                    "Projection": {"ProjectionType": "ALL"},
+                }]
             ddb.create_table(
                 TableName=table_name,
                 KeySchema=[
                     {"AttributeName": "groupId", "KeyType": "HASH"},
                     {"AttributeName": "id", "KeyType": "RANGE"},
                 ],
-                AttributeDefinitions=[
-                    {"AttributeName": "groupId", "AttributeType": "S"},
-                    {"AttributeName": "id", "AttributeType": "S"},
-                ],
+                AttributeDefinitions=definitions,
+                **({"GlobalSecondaryIndexes": indexes} if indexes else {}),
                 BillingMode="PAY_PER_REQUEST",
             )
         # Subscriptions stay keyed by endpoint hash (one row per device) and
@@ -155,6 +170,7 @@ def client():
     # Clear mutable tables so each test starts with no activities/subscriptions.
     for table in (
         activities._get_table(),
+        book_club._get_table(),
         comment_likes._get_table(),
         household_requests._get_table(),
         household_shows._get_table(),
@@ -199,6 +215,45 @@ def test_login_bad_password(client):
 def test_login_unknown_username(client):
     res = client.post("/api/login", json={"username": "ghost", "password": "roomie"})
     assert res.status_code == 401
+
+
+def test_book_club_summary_setup_and_member_response(client):
+    """A group gets one isolated setup; each member owns only their response."""
+    empty = client.get(grouped_path("/api/book-club"))
+    assert empty.status_code == 200
+    assert empty.get_json() == {"summary": None}
+
+    configured = client.post(
+        grouped_path("/api/book-club/config"),
+        json={
+            "title": "The Left Hand of Darkness",
+            "author": "Ursula K. Le Guin",
+            "readingTarget": "Read through Chapter 8",
+        },
+    )
+    assert configured.status_code == 201
+    summary = configured.get_json()["summary"]
+    assert summary["activeBook"]["recommendedById"] == TEST_USER_ID
+    assert summary["nextSession"]["snackDutyUserId"] == TEST_USER_ID
+    assert all(response["attendanceStatus"] is None for response in summary["nextSession"]["responses"])
+
+    session_id = summary["nextSession"]["id"]
+    response = client.put(
+        grouped_path(f"/api/book-club/sessions/{session_id.replace('#', '%23')}/response"),
+        json={"attendanceStatus": "attending", "chaptersReadThrough": 6},
+    )
+    assert response.status_code == 200
+    mine = next(item for item in response.get_json()["summary"]["nextSession"]["responses"] if item["userId"] == TEST_USER_ID)
+    assert mine["attendanceStatus"] == "attending"
+    assert mine["chaptersReadThrough"] == 6
+
+
+def test_book_club_rejects_non_admin_configuration(client):
+    response = client.post(
+        grouped_path("/api/book-club/config", user_id="sheryl"),
+        json={"title": "A Book", "author": "An Author", "readingTarget": "Chapter 1"},
+    )
+    assert response.status_code == 403
 
 
 def test_create_account_stores_password_hash_and_waits_for_group(client):

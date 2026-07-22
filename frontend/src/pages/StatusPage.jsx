@@ -444,7 +444,9 @@ export default function StatusPage() {
           </div>
         )}
 
-        {showBookClub && !groupDataLoading && <BookClub />}
+        {showBookClub && !groupDataLoading && (
+          <BookClub roommates={displayedRoommates} groupId={user.activeGroupId} />
+        )}
 
         {showFeed && (
           <div ref={feedRef} hidden={groupDataLoading}>

@@ -79,6 +79,7 @@ from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 
 import activities
+import book_club
 import db
 import groups
 import household_checklists
@@ -586,6 +587,119 @@ def create_app() -> Flask:
             return invalid_user_response()
         push.save_subscription(subscription, user_id)
         return jsonify({"ok": True})
+
+    # --- Book Club ----------------------------------------------------------
+    # Book Club is deliberately outside the module feed: its dedicated table
+    # keeps long-lived reading history and discussion separate from ephemeral
+    # household activity cards.
+    @app.get("/api/book-club")
+    def get_book_club():
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify({"summary": book_club.summary(
+            viewer["groupId"], db.get_all(viewer["groupId"])
+        )})
+
+    @app.post("/api/book-club/config")
+    def configure_book_club():
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
+            return jsonify({"error": "Only a group admin can configure Book Club."}), 403
+        summary, error = book_club.configure(
+            viewer["groupId"], db.get_all(viewer["groupId"]), request.get_json(silent=True) or {}
+        )
+        if error:
+            return jsonify({"error": error}), 409 if error == "Book Club is already configured." else 400
+        return jsonify({"summary": summary}), 201
+
+    @app.put("/api/book-club/sessions/<session_id>/response")
+    def update_book_club_response(session_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        _session, error = book_club.set_response(
+            viewer["groupId"], session_id, viewer,
+            body.get("attendanceStatus"), body.get("chaptersReadThrough"),
+        )
+        if error:
+            return jsonify({"error": error}), 404 if error == "Unknown session." else 400
+        return jsonify({"summary": book_club.summary(
+            viewer["groupId"], db.get_all(viewer["groupId"])
+        )})
+
+    @app.post("/api/book-club/sessions/<session_id>/complete")
+    def complete_book_club_session(session_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
+            return jsonify({"error": "Only a group admin can complete sessions."}), 403
+        summary, error = book_club.complete_session(
+            viewer["groupId"], db.get_all(viewer["groupId"]), session_id
+        )
+        if error:
+            return jsonify({"error": error}), 404 if error.startswith("Unknown") else 409
+        return jsonify({"summary": summary})
+
+    @app.post("/api/book-club/sessions/<session_id>/complete-book")
+    def complete_book_club_book(session_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
+            return jsonify({"error": "Only a group admin can complete books."}), 403
+        error = book_club.complete_book(viewer["groupId"], session_id)
+        if error:
+            return jsonify({"error": error}), 404
+        return jsonify({"summary": book_club.summary(
+            viewer["groupId"], db.get_all(viewer["groupId"])
+        )})
+
+    @app.get("/api/book-club/books/completed")
+    def list_completed_book_club_books():
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify({"books": book_club.list_completed(viewer["groupId"])})
+
+    @app.put("/api/book-club/books/<book_id>/rating")
+    def rate_book_club_book(book_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        error = book_club.set_rating(
+            viewer["groupId"], book_id, viewer, (request.get_json(silent=True) or {}).get("rating")
+        )
+        if error:
+            return jsonify({"error": error}), 400
+        return jsonify({"books": book_club.list_completed(viewer["groupId"])})
+
+    @app.get("/api/book-club/books/<book_id>/posts")
+    def list_book_club_posts(book_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        return jsonify({"posts": book_club.list_posts(
+            viewer["groupId"], book_id, request.args.get("chapterKey")
+        )})
+
+    @app.post("/api/book-club/books/<book_id>/posts")
+    def create_book_club_post(book_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        post, error = book_club.create_post(
+            viewer["groupId"], viewer, book_id, body.get("chapterKey"),
+            body.get("chapterLabel"), body.get("body"),
+        )
+        if error:
+            return jsonify({"error": error}), 404 if error == "Unknown book." else 400
+        return jsonify({"post": post}), 201
 
     # --- Spotify Jam --------------------------------------------------------
     @app.get("/api/jam")

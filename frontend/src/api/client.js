@@ -227,6 +227,27 @@ export async function endJam(hostId) {
   })
 }
 
+// --- Book Club -----------------------------------------------------------
+// The Book Club table is deliberately separate from the module feed. Every
+// request is still scoped by the active group header added by request().
+export async function getBookClub(userId) {
+  return request(withQuery('/book-club', { userId }))
+}
+
+export async function configureBookClub(userId, settings) {
+  return request(withQuery('/book-club/config', { userId }), {
+    method: 'POST',
+    body: JSON.stringify(settings),
+  })
+}
+
+export async function setBookClubResponse(userId, sessionId, attendanceStatus, chaptersReadThrough) {
+  return request(withQuery(`/book-club/sessions/${encodeURIComponent(sessionId)}/response`, { userId }), {
+    method: 'PUT',
+    body: JSON.stringify({ attendanceStatus, chaptersReadThrough }),
+  })
+}
+
 // GET /api/activities — current activities followed by expired history.
 export async function getActivities(userId, groupId) {
   return request(withQuery('/activities', { userId }), {
