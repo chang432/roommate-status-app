@@ -514,9 +514,15 @@ def seed() -> None:
                 )
             else:
                 raise  # The roommate already exists — leave their data untouched.
-        # The seeded household mirrors the role backfill: every pre-existing
-        # member is an admin, so a fresh local DB matches a migrated one.
-        create_membership(r["id"], DEFAULT_GROUP_ID, r["name"], role=ROLE_ADMIN)
+        # The seeded household mirrors the role backfill (migration
+        # 2026-07-21-01), which makes andre the sole admin of pre-existing
+        # groups — so a fresh local DB matches a migrated one.
+        create_membership(
+            r["id"],
+            DEFAULT_GROUP_ID,
+            r["name"],
+            role=ROLE_ADMIN if r["id"] == "andre" else ROLE_MEMBER,
+        )
 
 
 def _scan_items(consistent: bool = False) -> list[dict]:

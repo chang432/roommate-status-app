@@ -373,6 +373,14 @@ def role_of(client, group_id, headers, user_id, viewer="andre"):
     return next((r["role"] for r in roster if r["id"] == user_id), None)
 
 
+def test_seeded_household_gives_andre_sole_admin(client):
+    """Mirrors migration 2026-07-21-01, so a fresh DB matches a migrated one."""
+    roster = client.get(grouped_path("/api/roommates")).get_json()
+
+    assert {r["id"] for r in roster if r["role"] == "admin"} == {"andre"}
+    assert len(roster) == 5
+
+
 def test_joining_a_group_makes_a_plain_member(client):
     group_id, headers = admin_group(client)
     join_as(client, group_id, "sheryl")
@@ -469,8 +477,8 @@ def test_admin_rights_do_not_cross_groups(client):
     """Admin is per-membership: administering one household grants nothing elsewhere."""
     _, other_headers = admin_group(client, creator="sheryl", name="Cedar House")
 
-    # andre administers the seeded household (both are seeded admins there) but
-    # is a stranger to the Cedar House group sheryl just created.
+    # andre administers the seeded household but is a stranger to the Cedar
+    # House group sheryl just created.
     assert db.is_group_admin("andre", db.DEFAULT_GROUP_ID)
     res = client.delete("/api/groups/members/sheryl?userId=andre", headers=other_headers)
 
