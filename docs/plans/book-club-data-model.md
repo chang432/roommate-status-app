@@ -3,9 +3,14 @@
 ## Product behavior
 
 - Groups with Book Club enabled show Book and Snack owner lists above the feed.
+- The current-book card appears above those owner trackers. An open meeting
+  exposes its full editor as an explicit admin action alongside reminder and
+  completion actions.
 - Index zero in each list is the current owner and the default for a new meeting.
   Neither list advances automatically. An admin selection moves that member to
   the front while preserving everyone else's relative order.
+- Meeting creation and editing use three-row vertical owner wheels that show
+  the previous, selected, and next members and loop through the stored order.
 - An admin creates, edits, and manually completes one open meeting at a time.
   The first date defaults to the next Wednesday at 7:30 PM Eastern; later dates
   default to two local calendar weeks after the prior meeting.

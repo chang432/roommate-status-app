@@ -5,7 +5,7 @@
 .ownerCard span { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
 .ownerCard strong { @apply truncate text-base text-ink; }
 .ownerCard small { @apply text-xs text-ink-soft; }
-.activeBook { @apply mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
+.activeBook { @apply mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
 .activeBook button { @apply rounded border border-accent px-3 py-1.5 text-xs font-bold text-accent-deep hover:bg-card disabled:opacity-60; }
 .popupContent { @apply max-h-[min(60vh,440px)] overflow-y-auto pr-1; }
 .popupList { @apply grid gap-2; }

@@ -491,6 +491,7 @@ function ModuleFeedItem({
   });
   const editTrigger = {
     enabled: canEdit,
+    onEdit: canEdit ? onEdit : undefined,
     headerProps: canEdit
       ? {
           "data-module-edit-header": "",

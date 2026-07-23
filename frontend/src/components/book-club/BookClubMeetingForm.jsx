@@ -13,6 +13,7 @@ export default function BookClubMeetingForm({ meeting = null, roommates, onSaved
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [openOwnerPicker, setOpenOwnerPicker] = useState(null);
 
   useEffect(() => {
     let current = true;
@@ -71,8 +72,26 @@ export default function BookClubMeetingForm({ meeting = null, roommates, onSaved
       <label><span>Author</span><input required maxLength={160} value={draft.author} onChange={(event) => setDraft({ ...draft, author: event.target.value })} /></label>
       <label><span>Reading target</span><input required maxLength={160} placeholder="Read through Chapter 8" value={draft.readingTarget} onChange={(event) => setDraft({ ...draft, readingTarget: event.target.value })} /></label>
       <label><span>Meeting date and time</span><input required type="datetime-local" value={draft.scheduledAt} onChange={(event) => setDraft({ ...draft, scheduledAt: event.target.value })} /></label>
-      <LoopingOwnerPicker label="Book owner" order={summary.configuration.bookOwnerOrderUserIds} roommates={roommates} value={draft.bookOwnerId} onChange={(bookOwnerId) => setDraft({ ...draft, bookOwnerId })} disabled={saving} />
-      <LoopingOwnerPicker label="Snack owner" order={summary.configuration.snackOwnerOrderUserIds} roommates={roommates} value={draft.snackOwnerId} onChange={(snackOwnerId) => setDraft({ ...draft, snackOwnerId })} disabled={saving} />
+      <LoopingOwnerPicker
+        label="Book owner"
+        order={summary.configuration.bookOwnerOrderUserIds}
+        roommates={roommates}
+        value={draft.bookOwnerId}
+        onChange={(bookOwnerId) => setDraft({ ...draft, bookOwnerId })}
+        disabled={saving}
+        expanded={openOwnerPicker === "book"}
+        onExpandedChange={(expanded) => setOpenOwnerPicker(expanded ? "book" : null)}
+      />
+      <LoopingOwnerPicker
+        label="Snack owner"
+        order={summary.configuration.snackOwnerOrderUserIds}
+        roommates={roommates}
+        value={draft.snackOwnerId}
+        onChange={(snackOwnerId) => setDraft({ ...draft, snackOwnerId })}
+        disabled={saving}
+        expanded={openOwnerPicker === "snack"}
+        onExpandedChange={(expanded) => setOpenOwnerPicker(expanded ? "snack" : null)}
+      />
       <div className={styles.actions}>
         <button type="submit" disabled={saving}>{saving ? "Saving…" : meeting ? "Save meeting" : "Create meeting"}</button>
         <button type="button" className={styles.cancel} disabled={saving} onClick={onCancel}>Cancel</button>

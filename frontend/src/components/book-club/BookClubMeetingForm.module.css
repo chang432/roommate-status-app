@@ -3,10 +3,17 @@
 .form input { @apply rounded border border-line bg-surface-muted px-3 py-2 font-normal text-ink; }
 .muted { @apply text-sm text-ink-soft; }
 .ownerPicker { @apply grid gap-1 rounded border border-line bg-surface-muted p-3; }
-.ownerPicker > span { @apply text-sm font-bold text-ink; }
-.ownerPicker > div { @apply flex items-center justify-between gap-3; }
-.ownerPicker button { @apply grid h-9 w-9 place-items-center rounded-full border border-accent text-xl text-accent-deep hover:bg-card disabled:opacity-50; }
-.ownerPicker strong { @apply min-w-0 flex-1 text-center text-base text-ink; }
+.ownerPickerToggle { @apply grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded px-1 py-1 text-left text-ink hover:bg-card focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50; }
+.ownerPickerToggle > span:first-child { @apply text-sm font-bold; }
+.ownerPickerToggle strong { @apply text-base text-ink; }
+.ownerPickerToggle > span:last-child { @apply text-accent-deep; }
+.wheelFrame { @apply relative mx-auto w-full max-w-72 overflow-hidden rounded border border-line bg-card; }
+.wheelFrame::after { content: ""; pointer-events: none; position: absolute; inset: 2.75rem 0; border-block: 1px solid hsl(var(--color-accent)); background: hsl(var(--color-accent-soft) / 0.35); }
+.wheelViewport { height: 8.25rem; overflow-y: auto; overscroll-behavior: contain; padding-block: 2.75rem; scroll-snap-type: y mandatory; scrollbar-width: none; }
+.wheelViewport::-webkit-scrollbar { display: none; }
+.wheelViewport:focus { @apply outline-none ring-2 ring-inset ring-accent; }
+.wheelOption { @apply relative z-10 block h-11 w-full scroll-my-0 snap-center px-3 text-center text-sm text-ink-soft transition; }
+.wheelOptionSelected { @apply text-base font-bold text-ink; }
 .ownerPicker small { @apply text-center text-xs text-ink-soft; }
 .actions { @apply mt-1 flex gap-2; }
 .actions button { @apply rounded bg-accent px-3 py-2 font-bold text-on-strong disabled:opacity-60; }

@@ -67,6 +67,16 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
       {error && <p className="ui-errorBox">{error}</p>}
       {loading ? <p className={styles.muted}>Loading owner lists…</p> : (
         <>
+          {summary?.activeBook && (
+            <div className={styles.activeBook}>
+              <span>Current book: <strong>{summary.activeBook.title}</strong></span>
+              {canAdminister && (
+                <button type="button" disabled={completingBook} onClick={completeBook}>
+                  {completingBook ? "Completing…" : "Complete book"}
+                </button>
+              )}
+            </div>
+          )}
           <div className={styles.listGrid}>
             <button type="button" className={styles.ownerCard} onClick={() => setOpenList("book")}>
               <span>Book</span>
@@ -79,16 +89,6 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
               <small>Tap to see order</small>
             </button>
           </div>
-          {summary?.activeBook && (
-            <div className={styles.activeBook}>
-              <span>Current book: <strong>{summary.activeBook.title}</strong></span>
-              {canAdminister && (
-                <button type="button" disabled={completingBook} onClick={completeBook}>
-                  {completingBook ? "Completing…" : "Complete book"}
-                </button>
-              )}
-            </div>
-          )}
         </>
       )}
       {openList && (

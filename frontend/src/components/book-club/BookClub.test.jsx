@@ -41,10 +41,15 @@ describe("BookClub owner lists", () => {
   it("shows both prior owners and their full stored order", async () => {
     render(<BookClub roommates={ROOMMATES} groupId="book-club" />);
 
-    expect(await screen.findByRole("button", { name: /Book Kayla/ })).toBeInTheDocument();
+    const bookTracker = await screen.findByRole("button", { name: /Book Kayla/ });
     expect(screen.getByRole("button", { name: /Snack Andre/ })).toBeInTheDocument();
+    const currentBook = screen.getByText(/Current book:/).closest("div");
+    expect(
+      currentBook.compareDocumentPosition(bookTracker)
+      & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
-    await userEvent.click(screen.getByRole("button", { name: /Book Kayla/ }));
+    await userEvent.click(bookTracker);
     const dialog = screen.getByRole("dialog", { name: "Book owner order" });
     expect(dialog).toHaveTextContent("KaylaCurrent and default owner");
     expect(dialog).toHaveTextContent("AndreOrder #2");

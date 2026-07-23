@@ -185,6 +185,9 @@ export default function BookClubMeetingFeature({ meetings, moduleTag, editTrigge
                 {detail.status === "scheduled" && (
                   <div className={styles.actions}>
                     <button type="button" disabled={busy} onClick={() => notify(detail)}>Send reminder</button>
+                    {editTrigger?.enabled && (
+                      <button type="button" disabled={busy} onClick={editTrigger.onEdit}>Edit</button>
+                    )}
                     {canAdminister && <button type="button" disabled={busy} onClick={() => complete(detail)}>Complete meeting</button>}
                   </div>
                 )}

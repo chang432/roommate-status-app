@@ -38,11 +38,16 @@ describe("BookClubMeetingForm", () => {
 
   it("defaults both fields to their prior owners and loops when changed", async () => {
     render(<BookClubMeetingForm roommates={ROOMMATES} onSaved={vi.fn()} onCancel={vi.fn()} />);
-    expect(await screen.findByText("Kayla")).toBeInTheDocument();
-    expect(screen.getByText("Andre")).toBeInTheDocument();
+    const bookOwner = await screen.findByRole("button", { name: /Book owner Kayla/ });
+    expect(screen.getByRole("button", { name: /Snack owner Andre/ })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Next Book owner" }));
-    expect(screen.getAllByText("Andre").length).toBeGreaterThan(1);
+    await userEvent.click(bookOwner);
+    expect(screen.getByRole("listbox", { name: "Book owner" })).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("option", { name: "Andre" })[0]);
+    expect(screen.getByRole("button", { name: /Book owner Andre/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Snack owner Andre/ }));
+    expect(screen.queryByRole("listbox", { name: "Book owner" })).not.toBeInTheDocument();
+    expect(screen.getByRole("listbox", { name: "Snack owner" })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Reading target"), "Chapter 2");
     await userEvent.click(screen.getByRole("button", { name: "Create meeting" }));
 
