@@ -17,6 +17,8 @@ import RequestCreateForm from "./RequestCreateForm.jsx";
 import RequestFeature from "./RequestFeature.jsx";
 import ShowCreateForm from "./ShowCreateForm.jsx";
 import ShowTrackerFeature from "./ShowTrackerFeature.jsx";
+import BookClubMeetingFeature from "../book-club/BookClubMeetingFeature.jsx";
+import BookClubMeetingForm from "../book-club/BookClubMeetingForm.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
 import { endActivity, startActivity } from "../../api/activities.js";
@@ -32,6 +34,7 @@ import {
   withoutModuleFocus,
 } from "../../utils/moduleFocus.js";
 import { useLongPress } from "../../utils/useLongPress.js";
+import { isAdminIn } from "../../utils/roles.js";
 // The feed shares the status page's stylesheet — it renders inline beneath the
 // status section on the same page.
 import styles from "../../pages/StatusPage.module.css";
@@ -51,6 +54,7 @@ const CREATE_LABEL_BY_TYPE = {
   requests: "Create a request",
   checklists: "Create a checklist",
   tv: "Add a show",
+  "book-club": "Create a Book Club meeting",
 };
 
 function modulePreferenceKey(userId, groupId) {
@@ -487,6 +491,7 @@ function ModuleFeedItem({
   });
   const editTrigger = {
     enabled: canEdit,
+    onEdit: canEdit ? onEdit : undefined,
     headerProps: canEdit
       ? {
           "data-module-edit-header": "",
@@ -526,7 +531,12 @@ function ModuleFeedItem({
 // The group feed, rendered inline below the status section. Owns its own feed
 // polling and create/filter UI; `roommates` come from the parent status page so
 // we don't double-fetch the household.
-export default function GroupFeed({ roommates, onLoadStateChange }) {
+export default function GroupFeed({
+  roommates,
+  onLoadStateChange,
+  showStandardModules = true,
+  showBookClub = false,
+}) {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -554,14 +564,34 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   const swipeClickBlockUntilRef = useRef(0);
   const [feedSwipeOffset, setFeedSwipeOffset] = useState(0);
   const [feedSwipePhase, setFeedSwipePhase] = useState("idle");
+  const canAdministerBookClub = isAdminIn(roommates, user.id);
+
+  const enabledTypeIds = useMemo(() => {
+    const ids = new Set();
+    if (showStandardModules) {
+      ["events", "requests", "checklists", "tv"].forEach((id) => ids.add(id));
+    }
+    if (showBookClub) ids.add("book-club");
+    return ids;
+  }, [showBookClub, showStandardModules]);
 
   const moduleTypes = useMemo(() => {
     const byId = new Map(MODULE_TYPES.map((type) => [type.id, type]));
     return [
       byId.get("all"),
-      ...moduleOrder.map((id) => byId.get(id)).filter(Boolean),
+      ...moduleOrder.map((id) => byId.get(id)).filter((type) => type && enabledTypeIds.has(type.id)),
     ].filter(Boolean);
-  }, [moduleOrder]);
+  }, [enabledTypeIds, moduleOrder]);
+
+  useEffect(() => {
+    if (!moduleTypes.some((type) => type.id === activeType)) setActiveType("all");
+  }, [activeType, moduleTypes]);
+
+  useEffect(() => {
+    if (showBookClub) {
+      setAllTypes((current) => current.includes("book-club") ? current : [...current, "book-club"]);
+    }
+  }, [showBookClub]);
 
   useEffect(() => {
     const nextPreferences = readModulePreferences(user.id, user.activeGroupId);
@@ -653,9 +683,9 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   const visibleModules = useMemo(
     () =>
       activeType === "all"
-        ? modules.filter((module) => allTypes.includes(module.type))
-        : modules.filter((module) => module.type === activeType),
-    [activeType, allTypes, modules],
+        ? modules.filter((module) => enabledTypeIds.has(module.type) && allTypes.includes(module.type))
+        : modules.filter((module) => enabledTypeIds.has(module.type) && module.type === activeType),
+    [activeType, allTypes, enabledTypeIds, modules],
   );
   const activeModules = useMemo(
     () => visibleModules.filter((module) => !module.isArchived),
@@ -667,8 +697,8 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   );
 
   const feedModules = useMemo(
-    () => modules.filter((module) => module.type !== "spotify"),
-    [modules],
+    () => modules.filter((module) => module.type !== "spotify" && enabledTypeIds.has(module.type)),
+    [enabledTypeIds, modules],
   );
 
   const focusIntent = useMemo(
@@ -911,6 +941,7 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
   }
 
   function openCreateModal() {
+    if (activeType === "book-club" && !canAdministerBookClub) return;
     setCreateType(activeType === "all" ? null : activeType);
     setCreateModalOpen(true);
   }
@@ -921,6 +952,7 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
         <div className={styles.createPicker}>
           {moduleTypes
             .filter((type) => type.id !== "all")
+            .filter((type) => type.id !== "book-club" || canAdministerBookClub)
             .map((type) => (
               <button
                 key={type.id}
@@ -960,6 +992,18 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
         <ShowCreateForm
           onShowsChange={handleShowsChange}
           onSuccess={() => setCreateModalOpen(false)}
+          onCancel={() => setCreateModalOpen(false)}
+        />
+      );
+    }
+    if (createType === "book-club") {
+      return (
+        <BookClubMeetingForm
+          roommates={roommates}
+          onSaved={async () => {
+            await loadFeed();
+            setCreateModalOpen(false);
+          }}
           onCancel={() => setCreateModalOpen(false)}
         />
       );
@@ -1019,6 +1063,17 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
         />
       );
     }
+    if (module.type === "book-club") {
+      return (
+        <BookClubMeetingFeature
+          meetings={[module.payload]}
+          moduleTag={moduleTag}
+          editTrigger={editTrigger}
+          canAdminister={canAdministerBookClub}
+          onChanged={loadFeed}
+        />
+      );
+    }
     return null;
   }
 
@@ -1029,6 +1084,7 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
     moduleTypes.find((type) => type.id === activeType)?.label ?? "Modules";
   const createLabel =
     activeType === "all" ? "Create a module" : CREATE_LABEL_BY_TYPE[activeType];
+  const canCreateModule = showStandardModules || (showBookClub && canAdministerBookClub);
 
   if (loading) {
     return <p className={styles.loading}>Loading the feed…</p>;
@@ -1095,15 +1151,17 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
                   >
                     Filter
                   </button>
-                  <button
-                    type="button"
-                    onClick={openCreateModal}
-                    className={styles.createInlineButton}
-                    aria-label={createLabel}
-                    title={createLabel}
-                  >
-                    +
-                  </button>
+                  {canCreateModule && (activeType !== "book-club" || canAdministerBookClub) && (
+                    <button
+                      type="button"
+                      onClick={openCreateModal}
+                      className={styles.createInlineButton}
+                      aria-label={createLabel}
+                      title={createLabel}
+                    >
+                      +
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1117,7 +1175,7 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
                   module={module}
                   focusIntent={focusIntent}
                   onFocusHandled={consumeFocusIntent}
-                  canEdit={module.isEditableBy(user.id)}
+                  canEdit={module.type === "book-club" ? canAdministerBookClub && !module.isArchived : module.isEditableBy(user.id)}
                   onEdit={() => setEditingModule(module)}
                 >
                   {(editTrigger) => renderModule(module, editTrigger)}
@@ -1145,7 +1203,7 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
                       module={module}
                       focusIntent={focusIntent}
                       onFocusHandled={consumeFocusIntent}
-                      canEdit={module.isEditableBy(user.id)}
+                      canEdit={module.type === "book-club" ? false : module.isEditableBy(user.id)}
                       onEdit={() => setEditingModule(module)}
                     >
                       {(editTrigger) => renderModule(module, editTrigger)}
@@ -1175,15 +1233,27 @@ export default function GroupFeed({ roommates, onLoadStateChange }) {
           onClose={() => setEditingModule(null)}
           widthClassName={styles.createModal}
         >
-          <ModuleEditForm
-            module={editingModule}
-            roommates={roommates}
-            onSaved={async () => {
-              await loadFeed();
-              setEditingModule(null);
-            }}
-            onCancel={() => setEditingModule(null)}
-          />
+          {editingModule.type === "book-club" ? (
+            <BookClubMeetingForm
+              meeting={editingModule.payload}
+              roommates={roommates}
+              onSaved={async () => {
+                await loadFeed();
+                setEditingModule(null);
+              }}
+              onCancel={() => setEditingModule(null)}
+            />
+          ) : (
+            <ModuleEditForm
+              module={editingModule}
+              roommates={roommates}
+              onSaved={async () => {
+                await loadFeed();
+                setEditingModule(null);
+              }}
+              onCancel={() => setEditingModule(null)}
+            />
+          )}
         </ModalShell>
       )}
     </section>

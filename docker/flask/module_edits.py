@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 import activities
+import book_club
 import db
 import household_checklists
 import household_requests
@@ -190,12 +191,35 @@ def _edit_jam(item_id: str, editor: dict, changes: dict) -> EditResult:
     return mapped
 
 
+def _edit_book_club_meeting(item_id: str, editor: dict, changes: dict) -> EditResult:
+    allowed = {
+        "scheduledAt", "title", "author", "readingTarget",
+        "bookOwnerId", "snackOwnerId",
+    }
+    if set(changes) != allowed:
+        return _invalid("book-club", "Every meeting field is required when editing.")
+    current = book_club.get_meeting(editor["groupId"], item_id)
+    if current is None:
+        return EditResult(EDIT_NOT_FOUND, "book-club")
+    if not db.is_group_admin(editor["id"], editor["groupId"]):
+        return EditResult(EDIT_FORBIDDEN, "book-club")
+    if current.get("status") != book_club.OPEN_STATUS:
+        return EditResult(EDIT_READ_ONLY, "book-club")
+    meeting, error = book_club.update_meeting(
+        editor["groupId"], item_id, db.get_all(editor["groupId"]), changes
+    )
+    if error:
+        return _invalid("book-club", error)
+    return EditResult(EDIT_OK, "book-club", payload=meeting)
+
+
 EDITORS: dict[str, Callable[[str, dict, dict], EditResult]] = {
     "events": _edit_event,
     "requests": _edit_request,
     "checklists": _edit_checklist,
     "tv": _edit_show,
     "spotify": _edit_jam,
+    "book-club": _edit_book_club_meeting,
 }
 
 

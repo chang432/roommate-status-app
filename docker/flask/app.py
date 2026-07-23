@@ -178,6 +178,11 @@ def group_member_from_query() -> tuple[dict | None, tuple | None]:
     return member, None
 
 
+def group_has_book_club(group_id: str) -> bool:
+    group = groups.get_group_by_id(group_id)
+    return bool(group and group.get("showBookClub", True))
+
+
 def group_user_ids(group_id: str) -> set[str]:
     return set(db.get_group_user_ids(group_id, consistent=True))
 
@@ -589,124 +594,128 @@ def create_app() -> Flask:
         return jsonify({"ok": True})
 
     # --- Book Club ----------------------------------------------------------
-    # Book Club is deliberately outside the module feed: its dedicated table
-    # keeps long-lived reading history and discussion separate from ephemeral
-    # household activity cards.
     @app.get("/api/book-club")
     def get_book_club():
         viewer, error = group_member_from_query()
         if error:
             return error
+        if not group_has_book_club(viewer["groupId"]):
+            return jsonify({"error": "Book Club is not enabled for this group."}), 404
         return jsonify({"summary": book_club.summary(
             viewer["groupId"], db.get_all(viewer["groupId"])
         )})
 
-    @app.post("/api/book-club/config")
-    def configure_book_club():
+    @app.post("/api/book-club/meetings")
+    def create_book_club_meeting():
         viewer, error = group_member_from_query()
         if error:
             return error
+        if not group_has_book_club(viewer["groupId"]):
+            return jsonify({"error": "Book Club is not enabled for this group."}), 404
         if not db.is_group_admin(viewer["id"], viewer["groupId"]):
-            return jsonify({"error": "Only a group admin can configure Book Club."}), 403
-        summary, error = book_club.configure(
-            viewer["groupId"], db.get_all(viewer["groupId"]), request.get_json(silent=True) or {}
+            return jsonify({"error": "Only a group admin can create meetings."}), 403
+        body = request.get_json(silent=True) or {}
+        if body.get("scheduledAt") is None:
+            current = book_club.summary(viewer["groupId"], db.get_all(viewer["groupId"]))
+            last_at = current["configuration"].get("lastMeetingAt")
+            body["scheduledAt"] = (
+                book_club.following_meeting_at(last_at)
+                if last_at else book_club.next_wednesday_evening()
+            )
+        meeting, error = book_club.create_meeting(
+            viewer["groupId"], db.get_all(viewer["groupId"]), viewer, body
         )
         if error:
-            return jsonify({"error": error}), 409 if error == "Book Club is already configured." else 400
-        return jsonify({"summary": summary}), 201
+            status = 409 if error.startswith("Complete the open") else 400
+            return jsonify({"error": error}), status
+        return jsonify({"meeting": meeting}), 201
 
-    @app.put("/api/book-club/sessions/<session_id>/response")
-    def update_book_club_response(session_id: str):
+    @app.get("/api/book-club/meetings/<meeting_id>")
+    def get_book_club_meeting(meeting_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        meeting = book_club.get_meeting(
+            viewer["groupId"], meeting_id, db.get_all(viewer["groupId"])
+        )
+        if meeting is None:
+            return jsonify({"error": "Unknown meeting."}), 404
+        return jsonify({"meeting": meeting})
+
+    @app.put("/api/book-club/meetings/<meeting_id>/response")
+    def update_book_club_response(meeting_id: str):
         viewer, error = group_member_from_query()
         if error:
             return error
         body = request.get_json(silent=True) or {}
-        _session, error = book_club.set_response(
-            viewer["groupId"], session_id, viewer,
+        _meeting, error = book_club.set_response(
+            viewer["groupId"], meeting_id, viewer,
             body.get("attendanceStatus"), body.get("chaptersReadThrough"),
         )
         if error:
-            return jsonify({"error": error}), 404 if error == "Unknown session." else 400
-        return jsonify({"summary": book_club.summary(
-            viewer["groupId"], db.get_all(viewer["groupId"])
+            return jsonify({"error": error}), 404 if error == "Unknown meeting." else 400
+        return jsonify({"meeting": book_club.get_meeting(
+            viewer["groupId"], meeting_id, db.get_all(viewer["groupId"])
         )})
 
-    @app.put("/api/book-club/next-session")
-    def update_book_club_next_session():
-        """Let an admin fill or revise the upcoming meeting placeholder."""
+    @app.post("/api/book-club/meetings/<meeting_id>/complete")
+    def complete_book_club_meeting(meeting_id: str):
         viewer, error = group_member_from_query()
         if error:
             return error
         if not db.is_group_admin(viewer["id"], viewer["groupId"]):
-            return jsonify({"error": "Only a group admin can edit the next meeting."}), 403
-        summary, error = book_club.update_next_session(
-            viewer["groupId"], db.get_all(viewer["groupId"]), request.get_json(silent=True) or {}
-        )
+            return jsonify({"error": "Only a group admin can complete meetings."}), 403
+        meeting, error = book_club.complete_meeting(viewer["groupId"], meeting_id, viewer)
         if error:
-            return jsonify({"error": error}), 409 if error.startswith("This meeting") else 400
-        return jsonify({"summary": summary})
+            return jsonify({"error": error}), 404 if error == "Unknown meeting." else 409
+        return jsonify({"meeting": meeting})
 
-    @app.post("/api/book-club/next-book")
-    def start_book_club_next_book():
-        viewer, error = group_member_from_query()
-        if error:
-            return error
-        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
-            return jsonify({"error": "Only a group admin can start the next book."}), 403
-        summary, error = book_club.start_next_book(
-            viewer["groupId"], db.get_all(viewer["groupId"]), request.get_json(silent=True) or {}
-        )
-        if error:
-            return jsonify({"error": error}), 409 if error.startswith("The active book") else 400
-        return jsonify({"summary": summary}), 201
-
-    @app.post("/api/book-club/sessions/<session_id>/notify")
-    def notify_book_club_meeting(session_id: str):
-        """Send every group member a reminder for the configured next meeting."""
-        viewer, error = group_member_from_query()
-        if error:
-            return error
-        summary = book_club.summary(viewer["groupId"], db.get_all(viewer["groupId"]))
-        if summary is None or summary["nextSession"] is None or summary["nextSession"]["id"] != session_id:
-            return jsonify({"error": "Unknown next Book Club meeting."}), 404
-        if not push.is_configured():
-            return jsonify({"error": "Push is not configured on the server."}), 503
-
-        session = summary["nextSession"]
-        result = notify_group(
-            viewer["groupId"],
-            title="Book Club reminder",
-            body=(
-                f"{book_club.meeting_label(session['scheduledAt'])} · "
-                f"{session.get('bookTitle') or 'Current book'}\n"
-                f"Goal: {session.get('readingTarget') or 'To be set'} · "
-                f"Snacks: {session.get('snackDutyName') or 'To be assigned'}"
-            ),
-            url="/",
-            event_type="book-club-reminder",
-        )
-        return jsonify(result)
-
-    @app.post("/api/book-club/sessions/<session_id>/complete-book")
-    def complete_book_club_book(session_id: str):
+    @app.post("/api/book-club/books/<book_id>/complete")
+    def complete_book_club_book(book_id: str):
         viewer, error = group_member_from_query()
         if error:
             return error
         if not db.is_group_admin(viewer["id"], viewer["groupId"]):
             return jsonify({"error": "Only a group admin can complete books."}), 403
-        error = book_club.complete_book(viewer["groupId"], session_id)
+        error = book_club.complete_book(viewer["groupId"], book_id)
         if error:
             return jsonify({"error": error}), 404
         return jsonify({"summary": book_club.summary(
             viewer["groupId"], db.get_all(viewer["groupId"])
         )})
 
+    @app.post("/api/book-club/meetings/<meeting_id>/notify")
+    def notify_book_club_meeting(meeting_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        meeting = book_club.get_meeting(
+            viewer["groupId"], meeting_id, db.get_all(viewer["groupId"])
+        )
+        if meeting is None or meeting.get("status") != book_club.OPEN_STATUS:
+            return jsonify({"error": "Unknown open Book Club meeting."}), 404
+        if not push.is_configured():
+            return jsonify({"error": "Push is not configured on the server."}), 503
+        result = notify_group(
+            viewer["groupId"],
+            title="Book Club reminder",
+            body=(
+                f"{book_club.meeting_label(meeting['scheduledAt'])} · "
+                f"{meeting.get('bookTitle') or 'Current book'}\n"
+                f"Goal: {meeting.get('readingTarget') or 'To be set'} · "
+                f"Snacks: {meeting.get('snackOwnerName') or 'To be assigned'}"
+            ),
+            url=module_models.module_url("book-club", meeting_id),
+            event_type="book-club-changed",
+        )
+        return jsonify(result)
+
     @app.get("/api/book-club/books/completed")
     def list_completed_book_club_books():
         viewer, error = group_member_from_query()
         if error:
             return error
-        return jsonify({"books": book_club.list_completed(viewer["groupId"])})
+        return jsonify({"books": book_club.list_completed(viewer["groupId"], viewer["id"])})
 
     @app.put("/api/book-club/books/<book_id>/rating")
     def rate_book_club_book(book_id: str):
@@ -718,7 +727,7 @@ def create_app() -> Flask:
         )
         if error:
             return jsonify({"error": error}), 400
-        return jsonify({"books": book_club.list_completed(viewer["groupId"])})
+        return jsonify({"books": book_club.list_completed(viewer["groupId"], viewer["id"])})
 
     @app.get("/api/book-club/books/<book_id>/posts")
     def list_book_club_posts(book_id: str):
@@ -811,7 +820,11 @@ def create_app() -> Flask:
         module_type = (request.args.get("type") or "all").strip()
         if module_type != "all" and module_type not in module_models.MODULE_TYPES:
             return jsonify({"error": "Unknown module type."}), 400
-        return jsonify(module_models.list_feed(viewer["groupId"], module_type))
+        return jsonify(module_models.list_feed(
+            viewer["groupId"],
+            module_type,
+            include_book_club=group_has_book_club(viewer["groupId"]),
+        ))
 
     @app.patch("/api/modules/<module_type>/<item_id>")
     def edit_module(module_type: str, item_id: str):
@@ -828,7 +841,12 @@ def create_app() -> Flask:
         if result.status == module_edits.EDIT_NOT_FOUND:
             return jsonify({"error": "That module was not found."}), 404
         if result.status == module_edits.EDIT_FORBIDDEN:
-            return jsonify({"error": "Only the module creator can edit it."}), 403
+            message = (
+                "Only a group admin can edit Book Club meetings."
+                if module_type == "book-club"
+                else "Only the module creator can edit it."
+            )
+            return jsonify({"error": message}), 403
         if result.status == module_edits.EDIT_READ_ONLY:
             return jsonify({"error": "Archived or completed modules are read-only."}), 409
         if result.status == module_edits.EDIT_CONFLICT:

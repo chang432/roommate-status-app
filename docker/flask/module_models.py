@@ -12,13 +12,14 @@ from typing import Any
 from urllib.parse import urlencode
 
 import activities
+import book_club
 import household_checklists
 import household_requests
 import household_shows
 import jam
 
 
-MODULE_TYPES = {"events", "requests", "checklists", "tv", "spotify"}
+MODULE_TYPES = {"events", "requests", "checklists", "tv", "spotify", "book-club"}
 
 
 def module_url(module_type: str, item_id: str | None = None) -> str:
@@ -162,12 +163,32 @@ class SpotifyModule(BaseModule):
         )
 
 
+class BookClubMeetingModule(BaseModule):
+    @classmethod
+    def from_payload(cls, item: dict[str, Any]) -> "BookClubMeetingModule":
+        return cls(
+            id=item["id"],
+            type="book-club",
+            created_at=int(item.get("createdAt", item["scheduledAt"])),
+            updated_at=int(item.get("updatedAt", item.get("createdAt", item["scheduledAt"]))),
+            title=item.get("bookTitle") or "Book Club meeting",
+            subtitle=book_club.meeting_label(int(item["scheduledAt"])),
+            actor=item.get("createdByName", "An admin"),
+            payload=item,
+        )
+
+    @property
+    def is_archived(self) -> bool:
+        return self.payload.get("status") == book_club.COMPLETED_STATUS
+
+
 MODULE_CLASS_BY_TYPE = {
     "events": EventModule,
     "requests": RequestModule,
     "checklists": ChecklistModule,
     "tv": TvModule,
     "spotify": SpotifyModule,
+    "book-club": BookClubMeetingModule,
 }
 
 
@@ -180,7 +201,12 @@ def module_from_payload(module_type: str, payload: dict[str, Any]) -> BaseModule
     return module_class.from_payload(payload)
 
 
-def list_feed(group_id: str, module_type: str | None = None) -> list[dict[str, Any]]:
+def list_feed(
+    group_id: str,
+    module_type: str | None = None,
+    *,
+    include_book_club: bool = False,
+) -> list[dict[str, Any]]:
     requested_types = MODULE_TYPES if not module_type or module_type == "all" else {module_type}
     if not requested_types <= MODULE_TYPES:
         return []
@@ -210,6 +236,11 @@ def list_feed(group_id: str, module_type: str | None = None) -> list[dict[str, A
         active_jam = jam.get_active(group_id)
         if active_jam:
             modules.append(module_from_payload("spotify", active_jam))
+    if "book-club" in requested_types and include_book_club:
+        modules.extend(
+            module_from_payload("book-club", item)
+            for item in book_club.list_meetings(group_id)
+        )
 
     modules.sort(key=lambda module: (module.sort_at, module.created_at, module.type, module.id))
     return [module.to_feed_item() for module in modules]

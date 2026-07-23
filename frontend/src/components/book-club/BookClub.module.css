@@ -1,37 +1,13 @@
-.section {
-  @apply mx-auto mt-6 w-full max-w-[720px] rounded-md border border-line bg-card p-4;
-}
-
+.section { @apply mx-auto mt-6 w-full max-w-[720px] rounded-md border border-line bg-card p-4; }
 .muted { @apply text-sm text-ink-soft; }
-.setup { @apply mt-3 grid gap-3 text-sm text-ink-soft; }
-.setup label { @apply grid gap-1 font-bold text-ink; }
-.setup input { @apply rounded border border-line bg-surface-muted px-3 py-2 font-normal text-ink; }
-.setup button { @apply w-fit rounded bg-accent px-3 py-2 font-bold text-on-strong disabled:opacity-60; }
-.summary { @apply mt-3 grid gap-2; }
-.dynamicField { @apply grid grid-cols-[minmax(7rem,auto)_minmax(0,1fr)] items-center gap-2 text-sm text-ink; }
-.dynamicField strong { @apply text-xs uppercase tracking-wide text-accent-deep; }
-.dynamicField span { @apply rounded border border-accent-soft bg-accent-soft px-3 py-2; }
-.valueButton { @apply min-w-0 rounded border border-accent-soft bg-accent-soft px-3 py-2 text-left text-ink transition hover:border-accent hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent; }
-.adminActions { @apply flex flex-wrap gap-2; }
-.editButton { @apply w-fit rounded border border-line px-3 py-1.5 text-sm font-bold text-ink hover:bg-surface-muted; }
-.startBookButton { @apply w-fit rounded bg-accent px-3 py-1.5 text-sm font-bold text-on-strong hover:bg-solid-accent-hover; }
-.recommender { @apply grid gap-1 text-sm font-bold text-ink; }
-.recommender > div { @apply flex items-center gap-3; }
-.recommender button { @apply grid h-8 w-8 place-items-center rounded border border-line text-lg text-ink hover:bg-surface-muted disabled:opacity-60; }
-.editorActions { @apply flex gap-2; }
-.cancelButton { @apply border border-line bg-card text-ink; }
-.responses { @apply mt-1 grid gap-2; }
-.responsesHeader { @apply flex items-center justify-between gap-3; }
-.responsesTitle { @apply text-sm font-bold text-ink; }
-.notifyButton { @apply grid h-8 w-8 flex-none place-items-center rounded-full border border-accent bg-solid-accent p-1.5 text-on-strong transition hover:bg-solid-accent-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60; }
-.notifyIcon { @apply block h-4 w-4; }
-.response { @apply flex items-center justify-between gap-3 border-b border-line py-2 text-sm text-ink; }
-.responseControls { @apply flex items-center gap-2; }
-.responseControls select, .responseControls input { @apply max-w-32 rounded border border-line bg-surface-muted px-2 py-1 text-sm text-ink; }
+.listGrid { @apply grid grid-cols-2 gap-3; }
+.ownerCard { @apply grid gap-1 rounded-md border border-accent-soft bg-accent-soft px-4 py-3 text-left transition hover:border-accent hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent; }
+.ownerCard span { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
+.ownerCard strong { @apply truncate text-base text-ink; }
+.ownerCard small { @apply text-xs text-ink-soft; }
+.activeBook { @apply mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
+.activeBook button { @apply rounded border border-accent px-3 py-1.5 text-xs font-bold text-accent-deep hover:bg-card disabled:opacity-60; }
 .popupContent { @apply max-h-[min(60vh,440px)] overflow-y-auto pr-1; }
 .popupList { @apply grid gap-2; }
 .popupItem { @apply flex items-center justify-between gap-4 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
-.popupItem > div { @apply grid gap-0.5; }
-.popupItem > div > span { @apply text-ink-soft; }
-.popupMeta { @apply grid justify-items-end gap-1 text-right text-xs text-ink-soft; }
-.currentBadge { @apply rounded-full bg-accent-soft px-2 py-0.5 font-bold text-accent-deep; }
+.popupItem span { @apply text-right text-xs text-ink-soft; }
