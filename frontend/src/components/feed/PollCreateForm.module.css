@@ -1,0 +1,19 @@
+.form {
+  @apply space-y-4;
+}
+
+.field {
+  @apply flex flex-col gap-2 text-[13px] font-semibold text-ink;
+}
+
+.optionRow {
+  @apply flex gap-2;
+}
+
+.optionRow input {
+  @apply min-w-0 flex-1;
+}
+
+.add {
+  @apply self-start px-3 py-2 text-[12px];
+}

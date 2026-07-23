@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import BookClubMeetingFeature from "./BookClubMeetingFeature.jsx";
 import { getBookClubMeeting } from "../../api/bookClub.js";
+import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { id: "andre", name: "Andre" } }),
@@ -32,6 +33,31 @@ describe("BookClubMeetingFeature", () => {
   });
   afterEach(() => cleanup());
 
+  it("keeps details mounted for the shared expand and collapse animation", async () => {
+    render(
+      <BookClubMeetingFeature
+        meetings={[MEETING]}
+        moduleTag={<span>Books</span>}
+        canAdminister={false}
+        onChanged={vi.fn()}
+      />,
+    );
+
+    const header = screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    });
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector("[inert]")).toBeInTheDocument();
+    await userEvent.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(document.querySelector("[inert]")).not.toBeInTheDocument();
+    expect(getBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");
+    await userEvent.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector("[inert]")).toBeInTheDocument();
+  });
+
   it("places the existing admin edit action beside the open-meeting actions", async () => {
     const onEdit = vi.fn();
     render(
@@ -44,7 +70,10 @@ describe("BookClubMeetingFeature", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /The Left Hand of Darkness/ }));
+    await userEvent.click(screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    }));
     const editButton = await screen.findByRole("button", { name: "Edit" });
     const reminderButton = screen.getByRole("button", { name: "Send reminder" });
     const completeButton = screen.getByRole("button", { name: "Complete meeting" });
@@ -66,8 +95,30 @@ describe("BookClubMeetingFeature", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /The Left Hand of Darkness/ }));
+    await userEvent.click(screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    }));
     expect(await screen.findByRole("button", { name: "Send reminder" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("loads full meeting details when a deep link expands the module", async () => {
+    render(
+      <ModuleFocusProvider intent={{ itemId: "meeting#1", token: "focus-1" }}>
+        <BookClubMeetingFeature
+          meetings={[MEETING]}
+          moduleTag={<span>Books</span>}
+          canAdminister={false}
+          onChanged={vi.fn()}
+        />
+      </ModuleFocusProvider>,
+    );
+
+    expect(await screen.findByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: true,
+    })).toBeInTheDocument();
+    expect(getBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");
   });
 });

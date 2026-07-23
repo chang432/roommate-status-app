@@ -1,0 +1,112 @@
+.wrap {
+  @apply min-w-0 space-y-2;
+}
+
+.card {
+  @apply rounded-sm border border-line bg-card px-[14px] py-[10px];
+}
+
+.archived {
+  @apply border-surface-expired-border bg-surface-muted;
+}
+
+.summary {
+  @apply flex w-full items-center gap-3 text-left;
+}
+
+.summaryText {
+  @apply min-w-0 flex-1;
+}
+
+.titleRow {
+  @apply flex min-w-0 flex-wrap items-center gap-2 text-[14px] text-ink;
+}
+
+.titleRow strong {
+  @apply truncate;
+}
+
+.meta,
+.empty {
+  @apply mt-1 block text-[12px] text-ink-soft;
+}
+
+.expandedRegion {
+  @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none;
+}
+
+.expanded {
+  grid-template-rows: 1fr;
+}
+
+.collapsed {
+  grid-template-rows: 0fr;
+}
+
+.expandedInner {
+  @apply min-h-0 overflow-hidden;
+}
+
+.panel {
+  @apply mt-3 border-t border-line pt-3;
+}
+
+.options {
+  @apply space-y-2;
+}
+
+.option {
+  @apply flex min-h-[40px] items-center gap-2 rounded-sm border border-line bg-card px-[9px] py-[7px] transition-colors;
+}
+
+.optionSelected {
+  @apply border-status-green bg-success-panel-strong;
+}
+
+.voteButton {
+  @apply grid h-[27px] w-[27px] flex-none place-items-center rounded-full border border-check-border bg-check-surface text-[13px] font-black leading-none text-transparent transition hover:border-accent disabled:opacity-60;
+}
+
+.voteButtonSelected {
+  @apply !border-status-green bg-solid-success text-on-strong;
+}
+
+.optionText {
+  @apply min-w-0 flex-1 text-left text-[14px] font-medium text-ink transition;
+}
+
+button.optionText {
+  @apply hover:text-accent-deep;
+}
+
+.voterTrigger {
+  @apply inline-flex flex-none items-center gap-1 rounded-full px-1 py-0.5 text-[11px] font-semibold text-ink-soft transition hover:bg-surface-hover disabled:cursor-default;
+}
+
+.voteCount {
+  @apply min-w-[1ch] text-center;
+}
+
+.voterAvatars {
+  @apply flex -space-x-1;
+}
+
+.optionEditor {
+  @apply flex min-w-0 flex-1 flex-wrap items-center gap-2;
+}
+
+.optionEditorInput {
+  @apply min-w-[180px] flex-1 px-[11px] py-[8px] text-[13.5px];
+}
+
+.iconAction {
+  @apply grid h-[34px] w-[34px] place-items-center text-[14px];
+}
+
+.addOption {
+  @apply mt-3 flex flex-wrap gap-2;
+}
+
+.addOption input {
+  @apply min-w-[180px] flex-1;
+}

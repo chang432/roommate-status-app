@@ -87,6 +87,16 @@ function feedItem(type, id = `${type}-1`, isArchived = false) {
       updatedAt: 1,
       isArchived,
     },
+    polls: {
+      id,
+      title: "Dinner?",
+      createdBy: "Andre",
+      createdById: "andre",
+      options: [],
+      createdAt: 1,
+      updatedAt: 1,
+      isArchived,
+    },
     tv: {
       id,
       title: "Severance",
@@ -189,7 +199,7 @@ describe("GroupFeed module focus", () => {
   });
 
   it("adds theme hooks to tags, create cards, and typed filters", async () => {
-    const items = ["events", "requests", "checklists", "tv", "spotify"].map(
+    const items = ["events", "requests", "checklists", "polls", "tv", "spotify"].map(
       (type) => feedItem(type),
     );
     renderFeed("/", items);
@@ -198,7 +208,7 @@ describe("GroupFeed module focus", () => {
     await screen.findByText("Movie night");
     await user.click(screen.getByRole("button", { name: "Create a module" }));
 
-    const themedTypes = ["events", "requests", "checklists", "tv"];
+    const themedTypes = ["events", "requests", "checklists", "polls", "tv"];
     themedTypes.forEach((type) => {
       expect(
         document.querySelectorAll(`[data-module-type="${type}"]`),
@@ -225,6 +235,22 @@ describe("GroupFeed module focus", () => {
     expect(screen.queryByRole("button", { name: /Events/ })).not.toBeInTheDocument();
   });
 
+  it("makes polls available in a Book Club-only group", async () => {
+    renderFeed(
+      "/",
+      [feedItem("events"), feedItem("polls"), feedItem("book-club")],
+      { showStandardModules: false, showBookClub: true },
+    );
+
+    expect(await screen.findByText("Dinner?")).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("Module types")).getByRole("button", {
+        name: /^Polls/,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Movie night")).not.toBeInTheDocument();
+  });
+
   it("upgrades legacy All preferences to include Book Club", async () => {
     localStorage.setItem(
       MODULE_PREFERENCE_KEY,
@@ -244,8 +270,9 @@ describe("GroupFeed module focus", () => {
     ).toBeInTheDocument();
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(MODULE_PREFERENCE_KEY));
-      expect(stored.version).toBe(2);
+      expect(stored.version).toBe(3);
       expect(stored.allTypes).toContain("book-club");
+      expect(stored.allTypes).toContain("polls");
     });
   });
 
@@ -263,7 +290,7 @@ describe("GroupFeed module focus", () => {
     expect(screen.queryByText("The Left Hand of Darkness")).not.toBeInTheDocument();
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(MODULE_PREFERENCE_KEY));
-      expect(stored.version).toBe(2);
+      expect(stored.version).toBe(3);
       expect(stored.allTypes).not.toContain("book-club");
     });
 
@@ -386,6 +413,7 @@ describe("GroupFeed module focus", () => {
   it.each([
     ["events", "Movie night"],
     ["requests", "Pick up milk"],
+    ["polls", "Dinner?"],
   ])(
     "opens and reopens %s cards at the latest comment without snapping on refresh",
     async (type, label) => {
@@ -614,7 +642,7 @@ describe("GroupFeed module focus", () => {
       clientX: 230,
       clientY: 188,
     });
-    expect(rowOrder()).toEqual(["requests", "events", "checklists", "tv"]);
+    expect(rowOrder()).toEqual(["requests", "events", "checklists", "polls", "tv"]);
     fireEvent.pointerUp(eventsHandle, {
       pointerId: 1,
       pointerType: "touch",

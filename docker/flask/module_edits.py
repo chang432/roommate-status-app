@@ -9,6 +9,7 @@ import activities
 import book_club
 import db
 import household_checklists
+import household_polls
 import household_requests
 import household_shows
 import jam
@@ -167,6 +168,12 @@ def _edit_checklist(item_id: str, editor: dict, changes: dict) -> EditResult:
     )
 
 
+def _edit_poll(item_id: str, editor: dict, changes: dict) -> EditResult:
+    return _edit_title(
+        "polls", item_id, editor, changes, household_polls.edit_title_owned
+    )
+
+
 def _edit_show(item_id: str, editor: dict, changes: dict) -> EditResult:
     return _edit_title("tv", item_id, editor, changes, household_shows.edit_title_owned)
 
@@ -217,6 +224,7 @@ EDITORS: dict[str, Callable[[str, dict, dict], EditResult]] = {
     "events": _edit_event,
     "requests": _edit_request,
     "checklists": _edit_checklist,
+    "polls": _edit_poll,
     "tv": _edit_show,
     "spotify": _edit_jam,
     "book-club": _edit_book_club_meeting,
