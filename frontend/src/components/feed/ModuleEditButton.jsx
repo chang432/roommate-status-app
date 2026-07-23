@@ -1,3 +1,5 @@
+import { cx } from "../../utils/classNames.js";
+
 export default function ModuleEditButton({
   onEdit,
   disabled = false,
@@ -9,7 +11,10 @@ export default function ModuleEditButton({
     <button
       type="button"
       disabled={disabled}
-      className={className}
+      className={cx(
+        "ui-pillButton ui-pillSecondary ui-moduleActionButton",
+        className,
+      )}
       onClick={(event) => {
         event.stopPropagation();
         onEdit();

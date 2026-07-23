@@ -114,19 +114,19 @@ export default function ModuleEditForm({ module, roommates, onSaved, onCancel })
       ) : null}
 
       {error ? <p className={cx('ui-errorText', styles.error)}>{error}</p> : null}
-      <div className={styles.actions}>
+      <div className="ui-formActions">
         <button
           type="button"
           onClick={onCancel}
           disabled={saving}
-          className={cx('ui-secondaryButton', styles.actionButton)}
+          className="ui-secondaryButton ui-formActionButton"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={saving || !value.trim() || (editDefinition.recipients && !selectedIds.length)}
-          className={cx('ui-primaryButton', styles.actionButton)}
+          className="ui-primaryButton ui-formActionButton"
         >
           {saving ? 'Saving…' : 'Save changes'}
         </button>

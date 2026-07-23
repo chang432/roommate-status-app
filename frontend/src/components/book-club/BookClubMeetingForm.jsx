@@ -92,9 +92,22 @@ export default function BookClubMeetingForm({ meeting = null, roommates, onSaved
         expanded={openOwnerPicker === "snack"}
         onExpandedChange={(expanded) => setOpenOwnerPicker(expanded ? "snack" : null)}
       />
-      <div className={styles.actions}>
-        <button type="submit" disabled={saving}>{saving ? "Saving…" : meeting ? "Save meeting" : "Create meeting"}</button>
-        <button type="button" className={styles.cancel} disabled={saving} onClick={onCancel}>Cancel</button>
+      <div className="ui-formActions">
+        <button
+          type="button"
+          className="ui-secondaryButton ui-formActionButton"
+          disabled={saving}
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="ui-primaryButton ui-formActionButton"
+          disabled={saving}
+        >
+          {saving ? "Saving…" : meeting ? "Save meeting" : "Create meeting"}
+        </button>
       </div>
     </form>
   );

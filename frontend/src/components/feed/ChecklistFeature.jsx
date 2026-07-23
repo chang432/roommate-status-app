@@ -418,7 +418,7 @@ export default function ChecklistFeature({
                             </button>
                           ))}
                         <div
-                          className={styles.actions}
+                          className="ui-moduleActionRow"
                           onClick={(event) => event.stopPropagation()}
                           onKeyDown={(event) => event.stopPropagation()}
                         >
@@ -429,17 +429,13 @@ export default function ChecklistFeature({
                               || archivingId
                               || deletingChecklistId
                             )}
-                            className={cx(
-                              "ui-pillButton ui-pillSecondary",
-                              styles.archiveButton,
-                            )}
                           />
                           {isArchived ? (
                             <button
                               type="button"
                               onClick={() => handleRestore(checklist)}
                               disabled={Boolean(restoringId || deletingChecklistId)}
-                              className={cx("ui-pillButton ui-pillSecondary", styles.archiveButton)}
+                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                             >
                               {restoringId === checklist.id ? "Restoring…" : "Restore"}
                             </button>
@@ -448,7 +444,7 @@ export default function ChecklistFeature({
                               type="button"
                               onClick={() => handleArchive(checklist)}
                               disabled={Boolean(archivingId || deletingChecklistId)}
-                              className={cx("ui-pillButton ui-pillSecondary", styles.archiveButton)}
+                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                             >
                               {archivingId === checklist.id ? "Archiving…" : "Archive"}
                             </button>
@@ -457,7 +453,7 @@ export default function ChecklistFeature({
                             type="button"
                             onClick={() => handleDeleteChecklist(checklist)}
                             disabled={Boolean((isArchived ? restoringId : archivingId) || deletingChecklistId)}
-                            className={cx("ui-pillButton ui-pillDanger", styles.archiveButton)}
+                            className="ui-pillButton ui-pillDanger ui-moduleActionButton"
                           >
                             {deletingChecklistId === checklist.id ? "Deleting…" : "Delete"}
                           </button>

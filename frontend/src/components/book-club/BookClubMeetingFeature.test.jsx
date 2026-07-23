@@ -45,10 +45,15 @@ describe("BookClubMeetingFeature", () => {
     );
 
     await userEvent.click(screen.getByRole("button", { name: /The Left Hand of Darkness/ }));
-    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const editButton = await screen.findByRole("button", { name: "Edit" });
+    const reminderButton = screen.getByRole("button", { name: "Send reminder" });
+    const completeButton = screen.getByRole("button", { name: "Complete meeting" });
+    expect(editButton.parentElement).toHaveClass("ui-moduleActionRow");
+    expect(editButton).toHaveClass("ui-pillSecondary", "ui-moduleActionButton");
+    expect(reminderButton).toHaveClass("ui-pillSecondary", "ui-moduleActionButton");
+    expect(completeButton).toHaveClass("ui-pillSecondary", "ui-moduleActionButton");
+    await userEvent.click(editButton);
     expect(onEdit).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Send reminder" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Complete meeting" })).toBeInTheDocument();
   });
 
   it("does not show Edit when the feed marks the meeting non-editable", async () => {

@@ -50,6 +50,22 @@
   @apply border-success-soft-border bg-success-soft text-status-green;
 }
 
+.ui-moduleActionRow {
+  @apply mt-[14px] flex flex-wrap items-center justify-end gap-2 border-t border-line pt-[12px];
+}
+
+.ui-moduleActionButton {
+  @apply px-[13px] py-[7px] text-[12.5px];
+}
+
+.ui-formActions {
+  @apply flex flex-wrap justify-end gap-2;
+}
+
+.ui-formActionButton {
+  @apply min-w-[128px] px-[18px] py-[11px] text-[14px] max-[420px]:flex-1;
+}
+
 .ui-iconPrimary {
   @apply grid flex-none place-items-center rounded-full border border-accent bg-solid-accent text-on-strong shadow-soft transition hover:bg-solid-accent-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60;
 }

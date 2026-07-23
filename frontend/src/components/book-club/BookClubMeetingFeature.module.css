@@ -13,8 +13,6 @@
 .response { @apply flex items-center justify-between gap-3 border-t border-line pt-2 text-xs; }
 .responseControls { @apply flex gap-2; }
 .responseControls select, .responseControls input { @apply max-w-32 rounded border border-line bg-surface-muted px-2 py-1 text-ink; }
-.actions { @apply flex flex-wrap justify-end gap-2 border-t border-line pt-3; }
-.actions button, .postForm button { @apply rounded bg-accent px-3 py-2 text-xs font-bold text-on-strong disabled:opacity-60; }
 .bookModal { @apply grid max-h-[70vh] gap-3 overflow-y-auto; }
 .bookMeta { @apply text-sm text-ink-soft; }
 .rating { @apply flex items-center gap-3 text-sm font-bold text-ink; }

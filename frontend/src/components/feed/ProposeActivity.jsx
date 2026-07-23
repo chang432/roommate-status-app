@@ -271,7 +271,7 @@ export default function ProposeActivity({
               />
 
               <div
-                className={styles.deleteActions}
+                className="ui-moduleActionRow"
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
               >
@@ -286,20 +286,13 @@ export default function ProposeActivity({
                     disabled={Boolean(
                       restoringId || archivingId || deletingId,
                     )}
-                    className={cx(
-                      "ui-pillButton ui-pillSecondary",
-                      styles.smallPill,
-                    )}
                   />
                   {isArchived ? (
                     <button
                       type="button"
                       onClick={() => handleRestore(activity)}
                       disabled={Boolean(restoringId || deletingId)}
-                      className={cx(
-                        "ui-pillButton ui-pillSecondary",
-                        styles.smallPill,
-                      )}
+                      className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                     >
                       {restoringId === activity.id ? "Restoring…" : "Restore"}
                     </button>
@@ -308,10 +301,7 @@ export default function ProposeActivity({
                       type="button"
                       onClick={() => handleArchive(activity)}
                       disabled={Boolean(archivingId || deletingId)}
-                      className={cx(
-                        "ui-pillButton ui-pillSecondary",
-                        styles.smallPill,
-                      )}
+                      className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                     >
                       {archivingId === activity.id ? "Archiving…" : "Archive"}
                     </button>
@@ -324,10 +314,7 @@ export default function ProposeActivity({
                       deletingId ||
                       activity.isLive,
                     )}
-                    className={cx(
-                      "ui-pillButton ui-pillDanger",
-                      styles.smallPill,
-                    )}
+                    className="ui-pillButton ui-pillDanger ui-moduleActionButton"
                   >
                     {deletingId === activity.id ? "Deleting…" : "Delete"}
                   </button>

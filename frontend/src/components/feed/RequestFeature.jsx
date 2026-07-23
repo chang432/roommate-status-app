@@ -310,7 +310,7 @@ export default function RequestFeature({
                         />
 
                         <div
-                          className={styles.requestActions}
+                          className="ui-moduleActionRow"
                           onClick={(event) => event.stopPropagation()}
                           onKeyDown={(event) => event.stopPropagation()}
                         >
@@ -324,17 +324,13 @@ export default function RequestFeature({
                             disabled={Boolean(
                               restoringId || archivingId || deletingId,
                             )}
-                            className={cx(
-                              "ui-pillButton ui-pillSecondary",
-                              styles.requestActionButton,
-                            )}
                           />
                           {isArchived ? (
                             <button
                               type="button"
                               onClick={() => handleRestore(requestItem)}
                               disabled={Boolean(restoringId || deletingId)}
-                              className={cx("ui-pillButton ui-pillSecondary", styles.requestActionButton)}
+                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                             >
                               {restoringId === requestItem.id ? "Restoring…" : "Restore"}
                             </button>
@@ -343,7 +339,7 @@ export default function RequestFeature({
                               type="button"
                               onClick={() => handleArchive(requestItem)}
                               disabled={Boolean(archivingId || deletingId)}
-                              className={cx("ui-pillButton ui-pillSecondary", styles.requestActionButton)}
+                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                             >
                               {archivingId === requestItem.id ? "Archiving…" : "Archive"}
                             </button>
@@ -352,7 +348,7 @@ export default function RequestFeature({
                             type="button"
                             onClick={() => handleDelete(requestItem)}
                             disabled={Boolean((isArchived ? restoringId : archivingId) || deletingId)}
-                            className={cx("ui-pillButton ui-pillDanger", styles.requestActionButton)}
+                            className="ui-pillButton ui-pillDanger ui-moduleActionButton"
                           >
                             {deletingId === requestItem.id ? "Deleting…" : "Delete"}
                           </button>

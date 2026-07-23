@@ -21,11 +21,3 @@
 .error {
   @apply mt-1;
 }
-
-.actions {
-  @apply flex flex-wrap justify-end gap-2;
-}
-
-.actionButton {
-  @apply min-w-[128px] px-[18px] py-[11px] text-[14px] max-[420px]:flex-1;
-}

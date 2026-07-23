@@ -182,10 +182,26 @@ export default function BookClubMeetingFeature({ meetings, moduleTag, onEdit, ca
                   );
                 })}
                 {detail.status === "scheduled" && (
-                  <div className={styles.actions}>
-                    <button type="button" disabled={busy} onClick={() => notify(detail)}>Send reminder</button>
+                  <div className="ui-moduleActionRow">
+                    <button
+                      type="button"
+                      className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                      disabled={busy}
+                      onClick={() => notify(detail)}
+                    >
+                      Send reminder
+                    </button>
                     <ModuleEditButton onEdit={onEdit} disabled={busy} />
-                    {canAdminister && <button type="button" disabled={busy} onClick={() => complete(detail)}>Complete meeting</button>}
+                    {canAdminister && (
+                      <button
+                        type="button"
+                        className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                        disabled={busy}
+                        onClick={() => complete(detail)}
+                      >
+                        Complete meeting
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -212,7 +228,15 @@ export default function BookClubMeetingFeature({ meetings, moduleTag, onEdit, ca
           <form className={styles.postForm} onSubmit={addPost}>
             <input aria-label="Chapter" required placeholder="Chapter 8" value={chapterLabel} onChange={(event) => setChapterLabel(event.target.value)} />
             <textarea aria-label="Discussion post" required placeholder="Share a thought…" value={postBody} onChange={(event) => setPostBody(event.target.value)} />
-            <button type="submit" disabled={busy}>Post</button>
+            <div className="ui-formActions">
+              <button
+                type="submit"
+                className="ui-primaryButton ui-formActionButton"
+                disabled={busy}
+              >
+                Post
+              </button>
+            </div>
           </form>
         </ModalShell>
       )}

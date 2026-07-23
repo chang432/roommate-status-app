@@ -40,6 +40,11 @@ describe("BookClubMeetingForm", () => {
     render(<BookClubMeetingForm roommates={ROOMMATES} onSaved={vi.fn()} onCancel={vi.fn()} />);
     const bookOwner = await screen.findByRole("button", { name: /Book owner Kayla/ });
     expect(screen.getByRole("button", { name: /Snack owner Andre/ })).toBeInTheDocument();
+    const cancelButton = screen.getByRole("button", { name: "Cancel" });
+    const createButton = screen.getByRole("button", { name: "Create meeting" });
+    expect(cancelButton).toHaveClass("ui-secondaryButton", "ui-formActionButton");
+    expect(createButton).toHaveClass("ui-primaryButton", "ui-formActionButton");
+    expect(cancelButton.nextElementSibling).toBe(createButton);
 
     await userEvent.click(bookOwner);
     expect(screen.getByRole("listbox", { name: "Book owner" })).toBeInTheDocument();

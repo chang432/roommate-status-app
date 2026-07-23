@@ -500,7 +500,7 @@ export default function ShowTrackerFeature({
                 </ul>
               )}
               <div
-                className={styles.showActions}
+                className="ui-moduleActionRow"
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
               >
@@ -512,20 +512,13 @@ export default function ShowTrackerFeature({
                   disabled={Boolean(
                     restoringShowId || archivingShowId || deletingShowId,
                   )}
-                  className={cx(
-                    "ui-pillButton ui-pillSecondary",
-                    styles.showActionButton,
-                  )}
                 />
                 {isArchived ? (
                   <button
                     type="button"
                     onClick={() => handleRestore(show)}
                     disabled={Boolean(restoringShowId || deletingShowId)}
-                    className={cx(
-                      "ui-pillButton ui-pillSecondary",
-                      styles.showActionButton,
-                    )}
+                    className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                   >
                     {restoringShowId === show.id ? "Restoring…" : "Restore"}
                   </button>
@@ -534,10 +527,7 @@ export default function ShowTrackerFeature({
                     type="button"
                     onClick={() => handleArchive(show)}
                     disabled={Boolean(archivingShowId || deletingShowId)}
-                    className={cx(
-                      "ui-pillButton ui-pillSecondary",
-                      styles.showActionButton,
-                    )}
+                    className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                   >
                     {archivingShowId === show.id ? "Archiving…" : "Archive"}
                   </button>
@@ -549,10 +539,7 @@ export default function ShowTrackerFeature({
                     (isArchived ? restoringShowId : archivingShowId) ||
                     deletingShowId,
                   )}
-                  className={cx(
-                    "ui-pillButton ui-pillDanger",
-                    styles.showActionButton,
-                  )}
+                  className="ui-pillButton ui-pillDanger ui-moduleActionButton"
                 >
                   {deletingShowId === show.id ? "Deleting…" : "Delete"}
                 </button>
@@ -612,24 +599,18 @@ export default function ShowTrackerFeature({
                 />
               </label>
             </div>
-            <div className={styles.watchpartyModalActions}>
+            <div className="ui-formActions">
               <button
                 type="button"
                 onClick={() => setWatchpartyPrompt(null)}
-                className={cx(
-                  "ui-pillButton ui-pillSecondary",
-                  styles.showActionButton,
-                )}
+                className="ui-secondaryButton ui-formActionButton"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={watchpartyShowId === watchpartyPrompt.id}
-                className={cx(
-                  "ui-pillButton ui-pillPrimary",
-                  styles.showActionButton,
-                )}
+                className="ui-primaryButton ui-formActionButton"
               >
                 {watchpartyShowId === watchpartyPrompt.id
                   ? "Starting…"

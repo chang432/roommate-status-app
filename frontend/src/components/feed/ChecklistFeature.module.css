@@ -125,11 +125,3 @@
 .addEditor {
   @apply mt-[12px];
 }
-
-.actions {
-  @apply mt-[14px] flex flex-wrap justify-end gap-2 border-t border-line pt-[12px];
-}
-
-.archiveButton {
-  @apply px-[13px] py-[7px] text-[12.5px];
-}

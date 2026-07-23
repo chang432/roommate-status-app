@@ -138,14 +138,6 @@
   @apply rounded-md px-[12px] py-[8px] text-[13px] font-semibold;
 }
 
-.requestActions {
-  @apply mt-[14px] flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[12px];
-}
-
-.requestActionButton {
-  @apply px-[13px] py-[7px] text-[12.5px];
-}
-
 .completedText {
   @apply mr-auto text-[12.5px] font-semibold text-ink-soft max-[430px]:w-full;
 }
