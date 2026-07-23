@@ -108,19 +108,19 @@ export default function ChecklistCreateForm({
         <p className={cx("ui-errorText", styles.error)}>{error}</p>
       ) : null}
 
-      <div className={styles.actions}>
+      <div className="ui-formActions">
         <button
           type="button"
           onClick={onCancel}
           disabled={sending}
-          className={cx("ui-secondaryButton", styles.actionButton)}
+          className="ui-secondaryButton ui-formActionButton"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={sending || !title.trim() || cleanedItems.length === 0}
-          className={cx("ui-primaryButton", styles.actionButton)}
+          className="ui-primaryButton ui-formActionButton"
         >
           {sending ? "Posting…" : "Post"}
         </button>

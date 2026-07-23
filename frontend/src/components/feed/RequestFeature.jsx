@@ -10,6 +10,7 @@ import {
   setRequestCommentLiked,
 } from "../../api/requests.js";
 import FeedComments from "../comments/FeedComments.jsx";
+import ModuleEditButton from "./ModuleEditButton.jsx";
 import { relativeTime } from "../../utils/time.js";
 import { cx } from "../../utils/classNames.js";
 import styles from "./RequestFeature.module.css";
@@ -40,7 +41,7 @@ export default function RequestFeature({
   onRequestsChange,
   roommates,
   moduleTag,
-  editTrigger,
+  onEdit,
 }) {
   const { user } = useAuth();
   const [error, setError] = useState("");
@@ -178,7 +179,6 @@ export default function RequestFeature({
                 role="button"
                 tabIndex={0}
                 aria-expanded={expanded}
-                {...editTrigger.keyboardProps}
                 onClick={() => toggleExpanded(requestItem.id)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -191,7 +191,7 @@ export default function RequestFeature({
                   isArchived ? styles.completedCard : "",
                 )}
               >
-                  <div className={styles.summary} {...editTrigger.headerProps}>
+                  <div className={styles.summary}>
                     <div className={styles.summaryText}>
                       <div className={styles.titleRow}>
                         {moduleTag}
@@ -310,7 +310,7 @@ export default function RequestFeature({
                         />
 
                         <div
-                          className={styles.requestActions}
+                          className="ui-moduleActionRow"
                           onClick={(event) => event.stopPropagation()}
                           onKeyDown={(event) => event.stopPropagation()}
                         >
@@ -319,12 +319,18 @@ export default function RequestFeature({
                               ? `Archived${requestItem.archivedBy ? ` by ${requestItem.archivedBy}` : ""}`
                               : "Request actions"}
                           </span>
+                          <ModuleEditButton
+                            onEdit={onEdit}
+                            disabled={Boolean(
+                              restoringId || archivingId || deletingId,
+                            )}
+                          />
                           {isArchived ? (
                             <button
                               type="button"
                               onClick={() => handleRestore(requestItem)}
                               disabled={Boolean(restoringId || deletingId)}
-                              className={cx("ui-pillButton ui-pillSecondary", styles.requestActionButton)}
+                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                             >
                               {restoringId === requestItem.id ? "Restoring…" : "Restore"}
                             </button>
@@ -333,7 +339,7 @@ export default function RequestFeature({
                               type="button"
                               onClick={() => handleArchive(requestItem)}
                               disabled={Boolean(archivingId || deletingId)}
-                              className={cx("ui-pillButton ui-pillSecondary", styles.requestActionButton)}
+                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                             >
                               {archivingId === requestItem.id ? "Archiving…" : "Archive"}
                             </button>
@@ -342,7 +348,7 @@ export default function RequestFeature({
                             type="button"
                             onClick={() => handleDelete(requestItem)}
                             disabled={Boolean((isArchived ? restoringId : archivingId) || deletingId)}
-                            className={cx("ui-pillButton ui-pillDanger", styles.requestActionButton)}
+                            className="ui-pillButton ui-pillDanger ui-moduleActionButton"
                           >
                             {deletingId === requestItem.id ? "Deleting…" : "Delete"}
                           </button>

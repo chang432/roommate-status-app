@@ -106,20 +106,12 @@
   @apply rounded-md bg-accent-soft px-[12px] py-[8px] text-[13px] font-semibold text-ink;
 }
 
-.deleteActions {
-  @apply mt-[14px] flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[12px];
-}
-
 .actionButtonRow {
   @apply flex flex-wrap items-center justify-end gap-[8px] ml-auto;
 }
 
 .deletePrompt {
   @apply mr-auto text-[12.5px] font-semibold text-status-red max-[400px]:w-full;
-}
-
-.smallPill {
-  @apply px-[13px] py-[7px] text-[12.5px];
 }
 
 .medPill {

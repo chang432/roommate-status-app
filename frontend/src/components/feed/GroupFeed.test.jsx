@@ -5,13 +5,13 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import GroupFeed from "./GroupFeed.jsx";
 import { getFeed, updateModule } from "../../api/feed.js";
-import { LONG_PRESS_MS } from "../../utils/useLongPress.js";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
   useAuth: () => ({
@@ -34,6 +34,7 @@ const ROOMMATES = [
   { id: "andre", name: "Andre" },
   { id: "kayla", name: "Kayla" },
 ];
+const MODULE_PREFERENCE_KEY = "roomie-module-preferences:andre:shire";
 
 function feedItem(type, id = `${type}-1`, isArchived = false) {
   const common = {
@@ -145,26 +146,16 @@ function cardForText(text) {
   return screen.getByText(text).closest('[role="button"]');
 }
 
-function editHeaderForText(text) {
-  return screen.getByText(text).closest("[data-module-edit-header]");
-}
-
-async function longPress(element) {
-  fireEvent.pointerDown(element, {
-    pointerId: 1,
-    pointerType: "touch",
-    clientX: 20,
-    clientY: 20,
+function moduleNavEditButton() {
+  return within(screen.getByLabelText("Module types")).getByRole("button", {
+    name: "Edit",
   });
-  await act(
-    () => new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 20)),
-  );
-  fireEvent.pointerUp(element, { pointerId: 1, pointerType: "touch" });
 }
 
 describe("GroupFeed module focus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     updateModule.mockResolvedValue({ module: {} });
     Element.prototype.scrollIntoView = vi.fn();
   });
@@ -232,6 +223,54 @@ describe("GroupFeed module focus", () => {
     expect(screen.queryByText("Movie night")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Book Club/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Events/ })).not.toBeInTheDocument();
+  });
+
+  it("upgrades legacy All preferences to include Book Club", async () => {
+    localStorage.setItem(
+      MODULE_PREFERENCE_KEY,
+      JSON.stringify({
+        order: ["events", "requests", "checklists", "tv"],
+        allTypes: ["events", "requests", "checklists", "tv"],
+      }),
+    );
+    renderFeed(
+      "/",
+      [feedItem("events"), feedItem("book-club")],
+      { showBookClub: true },
+    );
+
+    expect(
+      await screen.findByText("The Left Hand of Darkness"),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(MODULE_PREFERENCE_KEY));
+      expect(stored.version).toBe(2);
+      expect(stored.allTypes).toContain("book-club");
+    });
+  });
+
+  it("preserves an explicit Book Club exclusion from All after remounting", async () => {
+    const items = [feedItem("events"), feedItem("book-club")];
+    const view = renderFeed("/", items, { showBookClub: true });
+    const user = userEvent.setup();
+
+    expect(
+      await screen.findByText("The Left Hand of Darkness"),
+    ).toBeInTheDocument();
+    await user.click(moduleNavEditButton());
+    await user.click(screen.getByRole("button", { name: /^All/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Book Club" }));
+    expect(screen.queryByText("The Left Hand of Darkness")).not.toBeInTheDocument();
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(MODULE_PREFERENCE_KEY));
+      expect(stored.version).toBe(2);
+      expect(stored.allTypes).not.toContain("book-club");
+    });
+
+    view.unmount();
+    renderFeed("/", items, { showBookClub: true });
+    expect(await screen.findByText("Movie night")).toBeInTheDocument();
+    expect(screen.queryByText("The Left Hand of Darkness")).not.toBeInTheDocument();
   });
 
   it.each([
@@ -411,10 +450,12 @@ describe("GroupFeed module focus", () => {
       const user = userEvent.setup();
 
       await screen.findByText(value);
-      expect(
-        screen.queryByRole("button", { name: editLabel }),
-      ).not.toBeInTheDocument();
-      await longPress(editHeaderForText(value));
+      const card = cardForText(value);
+      const editButton = within(card).getByRole("button", { name: "Edit" });
+      expect(editButton.closest("[inert]")).toBeInTheDocument();
+      await user.click(screen.getByText(value));
+      expect(editButton.closest("[inert]")).toBeNull();
+      await user.click(editButton);
       expect(
         screen.getByRole("dialog", { name: editLabel }),
       ).toBeInTheDocument();
@@ -423,72 +464,61 @@ describe("GroupFeed module focus", () => {
     },
   );
 
-  it("opens from an expanded header without collapsing the card", async () => {
+  it("opens from the expanded bottom action without collapsing the card", async () => {
     renderFeed("/", [feedItem("requests")]);
     const user = userEvent.setup();
 
     await user.click(await screen.findByText("Pick up milk"));
-    expect(cardForText("Pick up milk")).toHaveAttribute(
+    const card = cardForText("Pick up milk");
+    expect(card).toHaveAttribute(
       "aria-expanded",
       "true",
     );
-    await longPress(editHeaderForText("Pick up milk"));
+    await user.click(within(card).getByRole("button", { name: "Edit" }));
 
     expect(
       screen.getByRole("dialog", { name: "Edit request" }),
     ).toBeInTheDocument();
-    expect(cardForText("Pick up milk")).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(card).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("uses a keyboard hold for editing while a short key press still expands", async () => {
+  it("uses keyboard activation only to expand before explicit editing", async () => {
     renderFeed("/", [feedItem("requests")]);
     await screen.findByText("Pick up milk");
     const card = cardForText("Pick up milk");
 
     fireEvent.keyDown(card, { key: "Enter" });
-    fireEvent.keyUp(card, { key: "Enter" });
     expect(card).toHaveAttribute("aria-expanded", "true");
-
-    fireEvent.keyDown(card, { key: "Enter" });
-    await act(
-      () => new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 20)),
-    );
-    fireEvent.keyUp(card, { key: "Enter" });
-
-    expect(
-      screen.getByRole("dialog", { name: "Edit request" }),
-    ).toBeInTheDocument();
-    expect(card).toHaveAttribute("aria-expanded", "true");
-  });
-
-  it("cancels a header hold when the pointer moves like a scroll or swipe", async () => {
-    renderFeed("/", [feedItem("requests")]);
-    await screen.findByText("Pick up milk");
-    const header = editHeaderForText("Pick up milk");
-
-    fireEvent.pointerDown(header, {
-      pointerId: 1,
-      pointerType: "touch",
-      clientX: 20,
-      clientY: 20,
-    });
-    fireEvent.pointerMove(header, {
-      pointerId: 1,
-      pointerType: "touch",
-      clientX: 45,
-      clientY: 20,
-    });
-    await act(
-      () => new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 20)),
-    );
-    fireEvent.pointerUp(header, { pointerId: 1, pointerType: "touch" });
-
     expect(
       screen.queryByRole("dialog", { name: "Edit request" }),
     ).not.toBeInTheDocument();
+    expect(card).not.toHaveAttribute("aria-description");
+    expect(card).not.toHaveAttribute("title", "Long-press to edit");
+  });
+
+  it("keeps the TV progress-chip hold editor", async () => {
+    const show = feedItem("tv");
+    show.payload.members = [
+      { id: "andre", name: "Andre", season: 1, episode: 2 },
+    ];
+    vi.useFakeTimers();
+    try {
+      renderFeed("/", [show]);
+      await act(async () => {});
+      fireEvent.click(screen.getByText("Severance"));
+      const seasonChip = screen.getByTitle(
+        "Tap to advance season; long-press to edit",
+      );
+
+      fireEvent.pointerDown(seasonChip);
+      act(() => vi.advanceTimersByTime(1000));
+
+      expect(
+        screen.getByRole("spinbutton", { name: "Set Andre's season" }),
+      ).toHaveValue(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not expose editing to non-creators or archived module owners", async () => {
@@ -498,9 +528,17 @@ describe("GroupFeed module focus", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Pick up milk");
-    expect(editHeaderForText("Pick up milk")).toBeNull();
+    const nonOwnerCard = cardForText("Pick up milk");
+    await user.click(screen.getByText("Pick up milk"));
+    expect(
+      within(nonOwnerCard).queryByRole("button", { name: "Edit" }),
+    ).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Archived \(1\)/ }));
-    expect(editHeaderForText("Kitchen reset")).toBeNull();
+    const archivedCard = cardForText("Kitchen reset");
+    await user.click(screen.getByText("Kitchen reset"));
+    expect(
+      within(archivedCard).queryByRole("button", { name: "Edit" }),
+    ).not.toBeInTheDocument();
   });
 
   it("removes the event-specific schedule editor", async () => {
@@ -548,7 +586,7 @@ describe("GroupFeed module focus", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Movie night");
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(moduleNavEditButton());
     const requestDropTarget = document.querySelector(
       '[data-module-drop-type="requests"]',
     );
@@ -615,8 +653,10 @@ describe("GroupFeed module focus", () => {
     renderFeed("/", [module]);
     const user = userEvent.setup();
 
-    await screen.findByText("Pick up milk");
-    await longPress(editHeaderForText("Pick up milk"));
+    await user.click(await screen.findByText("Pick up milk"));
+    await user.click(
+      within(cardForText("Pick up milk")).getByRole("button", { name: "Edit" }),
+    );
     const input = screen.getByLabelText("Request");
     await user.clear(input);
     await user.type(input, "draft request text");

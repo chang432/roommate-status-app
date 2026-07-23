@@ -15,6 +15,3 @@
 .wheelOption { @apply relative z-10 block h-11 w-full scroll-my-0 snap-center px-3 text-center text-sm text-ink-soft transition; }
 .wheelOptionSelected { @apply text-base font-bold text-ink; }
 .ownerPicker small { @apply text-center text-xs text-ink-soft; }
-.actions { @apply mt-1 flex gap-2; }
-.actions button { @apply rounded bg-accent px-3 py-2 font-bold text-on-strong disabled:opacity-60; }
-.actions .cancel { @apply border border-line bg-card text-ink; }

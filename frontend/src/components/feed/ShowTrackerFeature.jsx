@@ -13,11 +13,13 @@ import {
   startWatchparty,
 } from "../../api/shows.js";
 import ModalShell from "../ui/ModalShell.jsx";
+import ModuleEditButton from "./ModuleEditButton.jsx";
 import { initialOf } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
-import { LONG_PRESS_MS } from "../../utils/useLongPress.js";
 import { relativeTime } from "../../utils/time.js";
 import styles from "./ShowTrackerFeature.module.css";
+
+const PROGRESS_LONG_PRESS_MS = 1000;
 
 // A single progress chip: tapping increments immediately, while a long press
 // opens inline numeric editing for an exact season/episode jump.
@@ -50,7 +52,7 @@ function CounterChip({
   function startPress() {
     if (busy || readOnly) return;
     cancelPress();
-    pressTimer.current = setTimeout(beginEdit, LONG_PRESS_MS);
+    pressTimer.current = setTimeout(beginEdit, PROGRESS_LONG_PRESS_MS);
   }
 
   function cancelPress() {
@@ -194,7 +196,7 @@ export default function ShowTrackerFeature({
   shows,
   onShowsChange,
   moduleTag,
-  editTrigger,
+  onEdit,
 }) {
   const { user } = useAuth();
   const [error, setError] = useState("");
@@ -387,7 +389,6 @@ export default function ShowTrackerFeature({
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
-        {...editTrigger.keyboardProps}
         onClick={() => toggleExpanded(show.id)}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -400,7 +401,7 @@ export default function ShowTrackerFeature({
           isArchived ? styles.completedCard : "",
         )}
       >
-        <div className={styles.summary} {...editTrigger.headerProps}>
+        <div className={styles.summary}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
               {moduleTag}
@@ -499,22 +500,25 @@ export default function ShowTrackerFeature({
                 </ul>
               )}
               <div
-                className={styles.showActions}
+                className="ui-moduleActionRow"
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
               >
                 <span className={styles.showActionText}>
                   {isArchived ? "Archived show" : "Show actions"}
                 </span>
+                <ModuleEditButton
+                  onEdit={onEdit}
+                  disabled={Boolean(
+                    restoringShowId || archivingShowId || deletingShowId,
+                  )}
+                />
                 {isArchived ? (
                   <button
                     type="button"
                     onClick={() => handleRestore(show)}
                     disabled={Boolean(restoringShowId || deletingShowId)}
-                    className={cx(
-                      "ui-pillButton ui-pillSecondary",
-                      styles.showActionButton,
-                    )}
+                    className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                   >
                     {restoringShowId === show.id ? "Restoring…" : "Restore"}
                   </button>
@@ -523,10 +527,7 @@ export default function ShowTrackerFeature({
                     type="button"
                     onClick={() => handleArchive(show)}
                     disabled={Boolean(archivingShowId || deletingShowId)}
-                    className={cx(
-                      "ui-pillButton ui-pillSecondary",
-                      styles.showActionButton,
-                    )}
+                    className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                   >
                     {archivingShowId === show.id ? "Archiving…" : "Archive"}
                   </button>
@@ -538,10 +539,7 @@ export default function ShowTrackerFeature({
                     (isArchived ? restoringShowId : archivingShowId) ||
                     deletingShowId,
                   )}
-                  className={cx(
-                    "ui-pillButton ui-pillDanger",
-                    styles.showActionButton,
-                  )}
+                  className="ui-pillButton ui-pillDanger ui-moduleActionButton"
                 >
                   {deletingShowId === show.id ? "Deleting…" : "Delete"}
                 </button>
@@ -601,24 +599,18 @@ export default function ShowTrackerFeature({
                 />
               </label>
             </div>
-            <div className={styles.watchpartyModalActions}>
+            <div className="ui-formActions">
               <button
                 type="button"
                 onClick={() => setWatchpartyPrompt(null)}
-                className={cx(
-                  "ui-pillButton ui-pillSecondary",
-                  styles.showActionButton,
-                )}
+                className="ui-secondaryButton ui-formActionButton"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={watchpartyShowId === watchpartyPrompt.id}
-                className={cx(
-                  "ui-pillButton ui-pillPrimary",
-                  styles.showActionButton,
-                )}
+                className="ui-primaryButton ui-formActionButton"
               >
                 {watchpartyShowId === watchpartyPrompt.id
                   ? "Starting…"

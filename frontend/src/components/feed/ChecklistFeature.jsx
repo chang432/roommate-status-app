@@ -14,6 +14,7 @@ import {
 import { initialOf } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
 import { relativeTime } from "../../utils/time.js";
+import ModuleEditButton from "./ModuleEditButton.jsx";
 import styles from "./ChecklistFeature.module.css";
 
 function ChecklistItemEditor({
@@ -63,7 +64,7 @@ export default function ChecklistFeature({
   checklists,
   onChecklistsChange,
   moduleTag,
-  editTrigger,
+  onEdit,
 }) {
   const { user } = useAuth();
   const [error, setError] = useState("");
@@ -246,7 +247,6 @@ export default function ChecklistFeature({
                 role="button"
                 tabIndex={0}
                 aria-expanded={expanded}
-                {...editTrigger.keyboardProps}
                 onClick={() => toggleExpanded(checklist.id)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -256,7 +256,7 @@ export default function ChecklistFeature({
                 }}
                 className={cx(styles.card, isArchived ? styles.archivedCard : "")}
               >
-                  <div className={styles.summary} {...editTrigger.headerProps}>
+                  <div className={styles.summary}>
                     <div className={styles.summaryText}>
                       <div className={styles.titleRow}>
                         {moduleTag}
@@ -418,16 +418,24 @@ export default function ChecklistFeature({
                             </button>
                           ))}
                         <div
-                          className={styles.actions}
+                          className="ui-moduleActionRow"
                           onClick={(event) => event.stopPropagation()}
                           onKeyDown={(event) => event.stopPropagation()}
                         >
+                          <ModuleEditButton
+                            onEdit={onEdit}
+                            disabled={Boolean(
+                              restoringId
+                              || archivingId
+                              || deletingChecklistId
+                            )}
+                          />
                           {isArchived ? (
                             <button
                               type="button"
                               onClick={() => handleRestore(checklist)}
                               disabled={Boolean(restoringId || deletingChecklistId)}
-                              className={cx("ui-pillButton ui-pillSecondary", styles.archiveButton)}
+                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                             >
                               {restoringId === checklist.id ? "Restoring…" : "Restore"}
                             </button>
@@ -436,7 +444,7 @@ export default function ChecklistFeature({
                               type="button"
                               onClick={() => handleArchive(checklist)}
                               disabled={Boolean(archivingId || deletingChecklistId)}
-                              className={cx("ui-pillButton ui-pillSecondary", styles.archiveButton)}
+                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                             >
                               {archivingId === checklist.id ? "Archiving…" : "Archive"}
                             </button>
@@ -445,7 +453,7 @@ export default function ChecklistFeature({
                             type="button"
                             onClick={() => handleDeleteChecklist(checklist)}
                             disabled={Boolean((isArchived ? restoringId : archivingId) || deletingChecklistId)}
-                            className={cx("ui-pillButton ui-pillDanger", styles.archiveButton)}
+                            className="ui-pillButton ui-pillDanger ui-moduleActionButton"
                           >
                             {deletingChecklistId === checklist.id ? "Deleting…" : "Delete"}
                           </button>
