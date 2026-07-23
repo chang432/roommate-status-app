@@ -90,6 +90,9 @@
   --color-module-spotify-bg: 130 37% 90%;
   --color-module-spotify-border: 137 29% 49%;
   --color-module-spotify-text: 138 34% 31%;
+  --color-module-book-club-bg: 21 55% 90%;
+  --color-module-book-club-border: 17 50% 57%;
+  --color-module-book-club-text: 19 48% 30%;
   --color-avatar-1: 17 50% 57%;
   --color-avatar-2: 89 13% 54%;
   --color-avatar-3: 35 60% 60%;
@@ -188,6 +191,9 @@
   --color-module-spotify-bg: 136 27% 21%;
   --color-module-spotify-border: 136 34% 59%;
   --color-module-spotify-text: 135 48% 80%;
+  --color-module-book-club-bg: 20 30% 22%;
+  --color-module-book-club-border: 18 52% 63%;
+  --color-module-book-club-text: 20 66% 82%;
   --color-avatar-1: 17 48% 42%;
   --color-avatar-2: 89 20% 35%;
   --color-avatar-3: 36 58% 38%;
@@ -286,6 +292,9 @@
   --color-module-spotify-bg: 137 26% 20%;
   --color-module-spotify-border: 135 33% 54%;
   --color-module-spotify-text: 134 43% 80%;
+  --color-module-book-club-bg: 28 27% 21%;
+  --color-module-book-club-border: 24 47% 59%;
+  --color-module-book-club-text: 31 61% 81%;
   --color-avatar-1: 18 48% 42%;
   --color-avatar-2: 89 20% 35%;
   --color-avatar-3: 40 51% 36%;

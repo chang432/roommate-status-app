@@ -1,0 +1,27 @@
+.list { @apply grid gap-3; }
+.card { @apply rounded-sm border border-line bg-card px-4 py-3; }
+.header { @apply flex w-full items-center justify-between gap-3 text-left; }
+.headerText { @apply min-w-0 flex-1; }
+.title { @apply block truncate text-sm font-semibold text-ink; }
+.meta { @apply mt-0.5 block text-xs text-ink-soft; }
+.panel { @apply mt-3 grid gap-3 border-t border-line pt-3 text-sm text-ink; }
+.bookButton { @apply rounded border border-accent-soft bg-accent-soft px-3 py-2 text-left font-semibold hover:border-accent; }
+.details { @apply grid gap-2; }
+.details div { @apply grid grid-cols-[7rem_1fr] gap-2; }
+.details dt { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
+.details dd { @apply text-ink; }
+.response { @apply flex items-center justify-between gap-3 border-t border-line pt-2 text-xs; }
+.responseControls { @apply flex gap-2; }
+.responseControls select, .responseControls input { @apply max-w-32 rounded border border-line bg-surface-muted px-2 py-1 text-ink; }
+.actions { @apply flex flex-wrap justify-end gap-2 border-t border-line pt-3; }
+.actions button, .postForm button { @apply rounded bg-accent px-3 py-2 text-xs font-bold text-on-strong disabled:opacity-60; }
+.bookModal { @apply grid max-h-[70vh] gap-3 overflow-y-auto; }
+.bookMeta { @apply text-sm text-ink-soft; }
+.rating { @apply flex items-center gap-3 text-sm font-bold text-ink; }
+.rating select { @apply rounded border border-line bg-surface-muted px-2 py-1; }
+.posts { @apply grid gap-2; }
+.posts article { @apply rounded border border-line bg-surface-muted p-3 text-sm; }
+.posts p { @apply mt-1; }
+.postForm { @apply grid gap-2 border-t border-line pt-3; }
+.postForm input, .postForm textarea { @apply rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
+.postForm textarea { @apply min-h-24 resize-y; }

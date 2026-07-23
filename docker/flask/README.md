@@ -16,8 +16,13 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `GET  /api/groups`                                           | `?userId=<id>`                             | every selectable group                                  |
 | `GET  /api/groups/current`                                   | `?userId=<id>`                             | selected group metadata, including `viewerIsAdmin`      |
 | `PUT  /api/groups/display`                                   | `?userId=<id>` + `{ showRoster, showFeed, showBookClub }` | updated admin-managed group display settings |
-| `POST /api/book-club/sessions/<id>/notify`                    | `?userId=<id>` | sends every subscribed group member a next-meeting reminder with its book, chapter goal, and snack-duty member |
-| `POST /api/book-club/next-book`                                | `?userId=<id>` + `{ title, author, readingTarget }` | admin completes the active book and starts a new one for the upcoming meeting |
+| `GET /api/book-club`                                         | `?userId=<id>`                             | owner lists, active book, open meeting, and next suggested date |
+| `POST /api/book-club/meetings`                               | `?userId=<id>` + meeting fields            | admin-created open Book Club meeting module             |
+| `GET /api/book-club/meetings/<id>`                           | `?userId=<id>`                             | meeting detail and member responses                     |
+| `PUT /api/book-club/meetings/<id>/response`                  | `?userId=<id>` + attendance/progress       | current member's meeting response                       |
+| `POST /api/book-club/meetings/<id>/complete`                 | `?userId=<id>`                             | admin-completed meeting                                 |
+| `POST /api/book-club/books/<id>/complete`                    | `?userId=<id>`                             | admin-completed active book                             |
+| `POST /api/book-club/meetings/<id>/notify`                   | `?userId=<id>`                             | sends members a deep-linked meeting reminder            |
 | `GET  /api/roommates`                                        | `?userId=<id>`                             | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
@@ -77,7 +82,8 @@ created accounts are valid sign-in accounts but have `groupId = null`, so they
 cannot see or use household features until they join a group with a reusable
 invite code. The current seeded household uses `groupId = "yorkshire"`.
 The module feed (`/api/feed`) normalizes events, requests, checklists,
-TV shows, and the singleton Spotify Jam into `{ id, type, createdAt, updatedAt,
+TV shows, Book Club meetings for enabled groups, and the singleton Spotify Jam
+into `{ id, type, createdAt, updatedAt,
 sortAt, title, subtitle, actor, isArchived, payload }` records sorted oldest-to-newest by
 `updatedAt` (falling back to `createdAt` for legacy rows). The frontend keeps
 Spotify outside the module filter and renders it beside the household notify

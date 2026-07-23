@@ -232,7 +232,7 @@ export default function StatusPage() {
   const groupDataLoading =
     groupsLoading ||
     statusLoadedGroupId !== user.activeGroupId ||
-    (showFeed && feedLoadedGroupId !== user.activeGroupId);
+    ((showFeed || showBookClub) && feedLoadedGroupId !== user.activeGroupId);
 
   const handleActivitiesChange = useCallback((updated) => {
     setActivities(updated);
@@ -453,11 +453,13 @@ export default function StatusPage() {
           />
         )}
 
-        {showFeed && (
+        {(showFeed || showBookClub) && (
           <div ref={feedRef} hidden={groupDataLoading}>
             <GroupFeed
               roommates={displayedRoommates}
               onLoadStateChange={handleGroupFeedLoadStateChange}
+              showStandardModules={showFeed}
+              showBookClub={showBookClub}
             />
           </div>
         )}

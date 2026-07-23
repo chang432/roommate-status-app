@@ -16,9 +16,9 @@ CloudFormation + a deploy script for the app's AWS resources.
 ## DynamoDB tables
 
 There are two independent deployments, each with its own template and stack so
-dev and main can never share data. Each stack provisions **eleven** tables — the
+dev and main can never share data. Each stack provisions **twelve** tables — the
 roommate table, a groups table, a memberships table, a Web Push subscriptions
-table, a Spotify Jam table, the five group-partitioned feed tables
+table, a Spotify Jam table, a Book Club table, the five group-partitioned feed tables
 (`-activities-v2`, `-requests-v2`, `-checklists-v2`, `-shows-v2`,
 `-comment-likes-v2`), and a data-migration ledger (`-migrations`, written by
 `migrations/runner.py`, not the app):
@@ -53,7 +53,9 @@ could not be altered in place. The shows table holds one item per tracked TV
 show, with watchers (and their season / episode) embedded on the item. Activity schedules and lifecycle timestamps are
 schemaless attributes needing no secondary index or coordination record. The
 migrations ledger records which in-place data migrations have run per
-environment (see [Data migrations](#data-migrations) below). All tables use
+environment (see [Data migrations](#data-migrations) below). The Book Club
+table stores group-scoped configuration, books, meeting modules, member
+responses, ratings, and discussion posts. All tables use
 on-demand billing, encryption at rest, and point-in-time recovery, and are
 retained on stack deletion (`DeletionPolicy: Retain`).
 

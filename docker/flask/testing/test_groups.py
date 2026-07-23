@@ -181,22 +181,25 @@ def test_joining_a_group_makes_a_plain_member(client):
     assert role_of(client, group_id, headers, "sheryl") == "member"
 
 
-def test_joining_an_existing_book_club_adds_the_member_to_snack_rotation(client):
+def test_joining_an_existing_book_club_appends_both_owner_lists(client):
     group_id, headers = admin_group(client)
+    groups.set_display_options("andre", group_id, False, False, True)
     configured = client.post(
-        "/api/book-club/config?userId=andre",
+        "/api/book-club/meetings?userId=andre",
         headers=headers,
-        json={"title": "A Book", "author": "An Author", "readingTarget": "Chapter 1"},
+        json={
+            "title": "A Book", "author": "An Author", "readingTarget": "Chapter 1",
+            "scheduledAt": book_club.next_wednesday_evening(),
+        },
     )
     assert configured.status_code == 201
-    assert configured.get_json()["summary"]["configuration"]["snackRotationUserIds"] == ["andre"]
 
     join_as(client, group_id, "sheryl")
 
     summary = client.get("/api/book-club?userId=andre", headers=headers).get_json()["summary"]
-    assert summary["configuration"]["snackRotationUserIds"] == ["andre", "sheryl"]
-    assert summary["configuration"]["snackRotationCursor"] == 0
-    assert summary["nextSession"]["snackDutyUserId"] == "andre"
+    assert summary["configuration"]["bookOwnerOrderUserIds"] == ["andre", "sheryl"]
+    assert summary["configuration"]["snackOwnerOrderUserIds"] == ["andre", "sheryl"]
+    assert summary["openMeeting"]["snackOwnerId"] == "andre"
 
 
 def test_admin_removes_a_member_and_gets_the_new_roster(client):

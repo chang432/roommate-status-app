@@ -54,23 +54,26 @@ def seed_local_groups() -> None:
 
 
 def seed_local_book_club() -> None:
-    """Create a small local-only history for exercising the Book Club dialogs."""
+    """Create a local meeting and completed title for Book Club UI coverage."""
     if not os.environ.get("DYNAMODB_ENDPOINT"):
         return
 
     members = db.get_all(BOOK_CLUB_GROUP_ID)
-    _summary, error = book_club.configure(
+    creator = next(member for member in members if member["id"] == "andre")
+    _meeting, error = book_club.create_meeting(
         BOOK_CLUB_GROUP_ID,
         members,
+        creator,
         {
             "title": "The Fifth Season",
             "author": "N. K. Jemisin",
             "readingTarget": "Read through Chapter 9",
-            "snackRotationUserIds": ["andre", "kayla"],
-            "bookRotationUserIds": ["kayla", "andre"],
+            "bookOwnerId": "kayla",
+            "snackOwnerId": "andre",
+            "scheduledAt": book_club.next_wednesday_evening(),
         },
     )
-    if error and error != "Book Club is already configured.":
+    if error and not error.startswith("Complete the open meeting"):
         raise RuntimeError(f"Could not seed Book Club: {error}")
 
     now = int(time.time() * 1000)
@@ -82,8 +85,8 @@ def seed_local_book_club() -> None:
         "bookId": "a-psalm-for-the-wild-built",
         "title": "A Psalm for the Wild-Built",
         "author": "Becky Chambers",
-        "recommendedById": "andre",
-        "recommendedByName": "Andre",
+        "bookOwnerId": "andre",
+        "bookOwnerName": "Andre",
         "status": "completed",
         "selectedAt": now - 28 * 24 * 60 * 60 * 1000,
         "completedAt": now - 14 * 24 * 60 * 60 * 1000,

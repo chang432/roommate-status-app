@@ -53,6 +53,13 @@ export const MODULE_DEFINITIONS = {
       inputType: 'url',
     },
   },
+  'book-club': {
+    id: 'book-club',
+    label: 'Book Club',
+    shortLabel: 'Books',
+    ownerField: null,
+    edit: { label: 'Edit Book Club meeting' },
+  },
 }
 
 export const MODULE_TYPES = [

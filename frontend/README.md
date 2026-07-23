@@ -38,6 +38,9 @@ availability to hang out. Built from the mockups in `../mockups`.
   during feed polling. Swiping the feed switches between the ordered filters,
   the filter drawer can edit that order and the contents of All, and the
   floating `+` creates modules.
+- **Book Club meetings**: enabled groups show sticky Book and Snack owner lists
+  above the feed. Admins create and complete one meeting module at a time;
+  members can record attendance and reading progress until completion.
 - **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, archive or restore requests, and open
   module notifications directly to the expanded request card.
@@ -80,9 +83,14 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `joinGroup`                     | `POST /api/groups/join`                                    |
 | `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
 | `updateGroupDisplay`            | `PUT /api/groups/display?userId=:id`                       |
+| `getBookClubSummary`            | `GET /api/book-club?userId=:id`                            |
+| `createBookClubMeeting`         | `POST /api/book-club/meetings?userId=:id`                  |
+| `getBookClubMeeting`            | `GET /api/book-club/meetings/:id?userId=:id`               |
+| `updateBookClubMeetingResponse` | `PUT /api/book-club/meetings/:id/response?userId=:id`      |
+| `completeBookClubMeeting`       | `POST /api/book-club/meetings/:id/complete?userId=:id`     |
+| `completeBookClubBook`          | `POST /api/book-club/books/:id/complete?userId=:id`        |
 | `getCompletedBookClubBooks`     | `GET /api/book-club/books/completed?userId=:id`            |
-| `startNextBook`                 | `POST /api/book-club/next-book?userId=:id`                 |
-| `notifyBookClubMeeting`         | `POST /api/book-club/sessions/:id/notify?userId=:id`       |
+| `notifyBookClubMeeting`         | `POST /api/book-club/meetings/:id/notify?userId=:id`       |
 | `getRoommates`                  | `GET /api/roommates?userId=:id`                            |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |

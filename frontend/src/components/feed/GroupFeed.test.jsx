@@ -104,6 +104,24 @@ function feedItem(type, id = `${type}-1`, isArchived = false) {
       createdAt: 1,
       updatedAt: 1,
     },
+    "book-club": {
+      id,
+      bookId: "book-1",
+      bookTitle: "The Left Hand of Darkness",
+      bookAuthor: "Ursula K. Le Guin",
+      readingTarget: "Chapter 8",
+      bookOwnerId: "kayla",
+      bookOwnerName: "Kayla",
+      snackOwnerId: "andre",
+      snackOwnerName: "Andre",
+      scheduledAt: 1_912_375_800_000,
+      status: isArchived ? "completed" : "scheduled",
+      createdById: "andre",
+      createdByName: "Andre",
+      createdAt: 1,
+      updatedAt: 1,
+      responses: [],
+    },
   };
   return { ...common, payload: payloads[type] };
 }
@@ -113,11 +131,11 @@ function LocationProbe() {
   return <output data-testid="location">{location.search}</output>;
 }
 
-function renderFeed(initialUrl, items) {
+function renderFeed(initialUrl, items, props = {}) {
   getFeed.mockResolvedValue(items);
   return render(
     <MemoryRouter initialEntries={[initialUrl]}>
-      <GroupFeed roommates={ROOMMATES} />
+      <GroupFeed roommates={ROOMMATES} {...props} />
       <LocationProbe />
     </MemoryRouter>,
   );
@@ -201,6 +219,19 @@ describe("GroupFeed module focus", () => {
     expect(screen.getByRole("button", { name: /^All/ })).not.toHaveAttribute(
       "data-module-type",
     );
+  });
+
+  it("renders a Book Club-only group without leaking standard modules", async () => {
+    renderFeed(
+      "/",
+      [feedItem("events"), feedItem("book-club")],
+      { showStandardModules: false, showBookClub: true },
+    );
+
+    expect(await screen.findByText("The Left Hand of Darkness")).toBeInTheDocument();
+    expect(screen.queryByText("Movie night")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Book Club/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Events/ })).not.toBeInTheDocument();
   });
 
   it.each([

@@ -176,6 +176,12 @@
   --module-text: hsl(var(--color-module-spotify-text));
 }
 
+.modulePalette[data-module-type='book-club'] {
+  --module-bg: hsl(var(--color-module-book-club-bg));
+  --module-border: hsl(var(--color-module-book-club-border));
+  --module-text: hsl(var(--color-module-book-club-text));
+}
+
 .modulePalette .moduleNavCount {
   background-color: var(--module-bg);
   color: var(--module-text);

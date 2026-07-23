@@ -1,0 +1,13 @@
+.form { @apply grid gap-3 text-sm text-ink; }
+.form label { @apply grid gap-1 font-bold; }
+.form input { @apply rounded border border-line bg-surface-muted px-3 py-2 font-normal text-ink; }
+.muted { @apply text-sm text-ink-soft; }
+.ownerPicker { @apply grid gap-1 rounded border border-line bg-surface-muted p-3; }
+.ownerPicker > span { @apply text-sm font-bold text-ink; }
+.ownerPicker > div { @apply flex items-center justify-between gap-3; }
+.ownerPicker button { @apply grid h-9 w-9 place-items-center rounded-full border border-accent text-xl text-accent-deep hover:bg-card disabled:opacity-50; }
+.ownerPicker strong { @apply min-w-0 flex-1 text-center text-base text-ink; }
+.ownerPicker small { @apply text-center text-xs text-ink-soft; }
+.actions { @apply mt-1 flex gap-2; }
+.actions button { @apply rounded bg-accent px-3 py-2 font-bold text-on-strong disabled:opacity-60; }
+.actions .cancel { @apply border border-line bg-card text-ink; }

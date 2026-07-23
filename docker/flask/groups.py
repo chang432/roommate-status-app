@@ -259,9 +259,8 @@ def join_group(user_id: str, code: str) -> tuple[dict | None, str | None]:
         return None, "already_member"
     if db.create_membership(account["id"], group["groupId"], account["name"]) is None:
         return None, "already_member"
-    # Existing clubs retain their current assignment and append new members at
-    # the end, so a join never skips whoever is already due for snacks.
-    book_club.add_member_to_snack_rotation(group["groupId"], account["id"])
+    # Existing clubs keep both current owners; joiners become later choices.
+    book_club.add_member_to_owner_lists(group["groupId"], account["id"])
     # The client switches to the group it just joined, even if lexical group
     # ordering would make a different membership appear first on the account.
     return {**db.get_account_by_id(account["id"]), "groupId": group["groupId"]}, None
@@ -327,7 +326,10 @@ def remove_member(actor_id: str, group_id: str, target_id: str) -> str | None:
         return "self_removal"
     if target_role == db.ROLE_ADMIN:
         return "admin_target"
-    return None if db.delete_membership(target_id, group_id) else "unknown_member"
+    if not db.delete_membership(target_id, group_id):
+        return "unknown_member"
+    book_club.remove_member_from_owner_lists(group_id, target_id)
+    return None
 
 
 def set_member_role(actor_id: str, group_id: str, target_id: str, role: str) -> str | None:
