@@ -11,6 +11,7 @@ import {
   setCommentLiked,
 } from "../../api/activities.js";
 import FeedComments from "../comments/FeedComments.jsx";
+import ModuleEditButton from "./ModuleEditButton.jsx";
 import { activityTimeLabel, relativeTime } from "../../utils/time.js";
 import { cx } from "../../utils/classNames.js";
 import styles from "./ProposeActivity.module.css";
@@ -22,7 +23,7 @@ export default function ProposeActivity({
   onLiveTransition,
   roommates,
   moduleTag,
-  editTrigger,
+  onEdit,
 }) {
   const { user } = useAuth();
   const [error, setError] = useState("");
@@ -152,7 +153,6 @@ export default function ProposeActivity({
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
-        {...editTrigger.keyboardProps}
         onClick={() => toggleExpanded(activity.id)}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -165,7 +165,7 @@ export default function ProposeActivity({
           isArchived ? styles.expiredCard : "",
         )}
       >
-        <div className={styles.summary} {...editTrigger.headerProps}>
+        <div className={styles.summary}>
           <div className={styles.summaryText}>
             <div className={styles.titleRow}>
               {moduleTag}
@@ -281,6 +281,16 @@ export default function ProposeActivity({
                   </span>
                 )}
                 <div className={styles.actionButtonRow}>
+                  <ModuleEditButton
+                    onEdit={onEdit}
+                    disabled={Boolean(
+                      restoringId || archivingId || deletingId,
+                    )}
+                    className={cx(
+                      "ui-pillButton ui-pillSecondary",
+                      styles.smallPill,
+                    )}
+                  />
                   {isArchived ? (
                     <button
                       type="button"

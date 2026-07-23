@@ -10,6 +10,7 @@ import {
   setRequestCommentLiked,
 } from "../../api/requests.js";
 import FeedComments from "../comments/FeedComments.jsx";
+import ModuleEditButton from "./ModuleEditButton.jsx";
 import { relativeTime } from "../../utils/time.js";
 import { cx } from "../../utils/classNames.js";
 import styles from "./RequestFeature.module.css";
@@ -40,7 +41,7 @@ export default function RequestFeature({
   onRequestsChange,
   roommates,
   moduleTag,
-  editTrigger,
+  onEdit,
 }) {
   const { user } = useAuth();
   const [error, setError] = useState("");
@@ -178,7 +179,6 @@ export default function RequestFeature({
                 role="button"
                 tabIndex={0}
                 aria-expanded={expanded}
-                {...editTrigger.keyboardProps}
                 onClick={() => toggleExpanded(requestItem.id)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -191,7 +191,7 @@ export default function RequestFeature({
                   isArchived ? styles.completedCard : "",
                 )}
               >
-                  <div className={styles.summary} {...editTrigger.headerProps}>
+                  <div className={styles.summary}>
                     <div className={styles.summaryText}>
                       <div className={styles.titleRow}>
                         {moduleTag}
@@ -319,6 +319,16 @@ export default function RequestFeature({
                               ? `Archived${requestItem.archivedBy ? ` by ${requestItem.archivedBy}` : ""}`
                               : "Request actions"}
                           </span>
+                          <ModuleEditButton
+                            onEdit={onEdit}
+                            disabled={Boolean(
+                              restoringId || archivingId || deletingId,
+                            )}
+                            className={cx(
+                              "ui-pillButton ui-pillSecondary",
+                              styles.requestActionButton,
+                            )}
+                          />
                           {isArchived ? (
                             <button
                               type="button"

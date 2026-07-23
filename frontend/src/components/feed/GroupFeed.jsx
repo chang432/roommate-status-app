@@ -33,15 +33,13 @@ import {
   moduleFocusFromSearchParams,
   withoutModuleFocus,
 } from "../../utils/moduleFocus.js";
-import { useLongPress } from "../../utils/useLongPress.js";
 import { isAdminIn } from "../../utils/roles.js";
 // The feed shares the status page's stylesheet — it renders inline beneath the
 // status section on the same page.
 import styles from "../../pages/StatusPage.module.css";
 
 const FEED_POLL_INTERVAL_MS = 5000;
-const EDIT_HEADER_SELECTOR = "[data-module-edit-header]";
-const EDIT_KEYBOARD_SELECTOR = "[data-module-edit-keyboard]";
+const MODULE_PREFERENCE_VERSION = 2;
 const INTERACTIVE_SELECTOR = "button, a, input, textarea, select";
 const SWIPE_MIN_X = 64;
 const SWIPE_MAX_Y = 48;
@@ -87,7 +85,16 @@ function readModulePreferences(userId, groupId) {
       localStorage.getItem(modulePreferenceKey(userId, groupId)) || "null",
     );
     const order = sanitizeModuleOrder(stored?.order);
-    return { order, allTypes: sanitizeAllTypes(stored?.allTypes, order) };
+    const allTypes = sanitizeAllTypes(stored?.allTypes, order);
+    // Preferences saved before Book Club existed need a one-time default-on
+    // upgrade; the version marker preserves later explicit deselection.
+    if (
+      (stored?.version ?? 1) < MODULE_PREFERENCE_VERSION
+      && !allTypes.includes("book-club")
+    ) {
+      allTypes.push("book-club");
+    }
+    return { order, allTypes };
   } catch {
     const order = sanitizeModuleOrder(null);
     return { order, allTypes: sanitizeAllTypes(null, order) };
@@ -474,37 +481,6 @@ function ModuleFeedItem({
     focusIntent?.itemId === module.id && focusIntent.type === module.type
       ? focusIntent
       : null;
-  const longPressHandlers = useLongPress({
-    enabled: canEdit,
-    onLongPress: onEdit,
-    isPointerTarget: (event) => {
-      const header = event.target.closest?.(EDIT_HEADER_SELECTOR);
-      if (!header || !event.currentTarget.contains(header)) return false;
-      const interactive = event.target.closest?.(INTERACTIVE_SELECTOR);
-      return (
-        !interactive || !header.contains(interactive) || interactive === header
-      );
-    },
-    isKeyboardTarget: (event) =>
-      event.target.matches?.(EDIT_KEYBOARD_SELECTOR) &&
-      event.currentTarget.contains(event.target),
-  });
-  const editTrigger = {
-    enabled: canEdit,
-    onEdit: canEdit ? onEdit : undefined,
-    headerProps: canEdit
-      ? {
-          "data-module-edit-header": "",
-          title: "Long-press to edit",
-        }
-      : {},
-    keyboardProps: canEdit
-      ? {
-          "data-module-edit-keyboard": "",
-          "aria-description": "Hold Enter or Space to edit",
-        }
-      : {},
-  };
 
   useEffect(() => {
     if (!matchingIntent) return undefined;
@@ -517,12 +493,8 @@ function ModuleFeedItem({
 
   return (
     <ModuleFocusProvider intent={matchingIntent}>
-      <article
-        ref={itemRef}
-        className={styles.moduleItem}
-        {...longPressHandlers}
-      >
-        {children(editTrigger)}
+      <article ref={itemRef} className={styles.moduleItem}>
+        {children(canEdit ? onEdit : null)}
       </article>
     </ModuleFocusProvider>
   );
@@ -588,12 +560,6 @@ export default function GroupFeed({
   }, [activeType, moduleTypes]);
 
   useEffect(() => {
-    if (showBookClub) {
-      setAllTypes((current) => current.includes("book-club") ? current : [...current, "book-club"]);
-    }
-  }, [showBookClub]);
-
-  useEffect(() => {
     const nextPreferences = readModulePreferences(user.id, user.activeGroupId);
     setModuleOrder(nextPreferences.order);
     setAllTypes(nextPreferences.allTypes);
@@ -602,7 +568,11 @@ export default function GroupFeed({
   useEffect(() => {
     localStorage.setItem(
       modulePreferenceKey(user.id, user.activeGroupId),
-      JSON.stringify({ order: moduleOrder, allTypes }),
+      JSON.stringify({
+        version: MODULE_PREFERENCE_VERSION,
+        order: moduleOrder,
+        allTypes,
+      }),
     );
   }, [allTypes, moduleOrder, user.activeGroupId, user.id]);
 
@@ -1017,7 +987,7 @@ export default function GroupFeed({
     );
   }
 
-  function renderModule(module, editTrigger) {
+  function renderModule(module, onEdit) {
     const moduleTag = <ModuleTag module={module} />;
     if (module.type === "events") {
       return (
@@ -1028,7 +998,7 @@ export default function GroupFeed({
           onLiveTransition={handleLiveTransition}
           roommates={roommates}
           moduleTag={moduleTag}
-          editTrigger={editTrigger}
+          onEdit={onEdit}
         />
       );
     }
@@ -1039,7 +1009,7 @@ export default function GroupFeed({
           onRequestsChange={handleRequestsChange}
           roommates={roommates}
           moduleTag={moduleTag}
-          editTrigger={editTrigger}
+          onEdit={onEdit}
         />
       );
     }
@@ -1049,7 +1019,7 @@ export default function GroupFeed({
           checklists={[module.payload]}
           onChecklistsChange={handleChecklistsChange}
           moduleTag={moduleTag}
-          editTrigger={editTrigger}
+          onEdit={onEdit}
         />
       );
     }
@@ -1059,7 +1029,7 @@ export default function GroupFeed({
           shows={[module.payload]}
           onShowsChange={handleShowsChange}
           moduleTag={moduleTag}
-          editTrigger={editTrigger}
+          onEdit={onEdit}
         />
       );
     }
@@ -1068,7 +1038,7 @@ export default function GroupFeed({
         <BookClubMeetingFeature
           meetings={[module.payload]}
           moduleTag={moduleTag}
-          editTrigger={editTrigger}
+          onEdit={onEdit}
           canAdminister={canAdministerBookClub}
           onChanged={loadFeed}
         />
@@ -1178,7 +1148,7 @@ export default function GroupFeed({
                   canEdit={module.type === "book-club" ? canAdministerBookClub && !module.isArchived : module.isEditableBy(user.id)}
                   onEdit={() => setEditingModule(module)}
                 >
-                  {(editTrigger) => renderModule(module, editTrigger)}
+                  {(onEdit) => renderModule(module, onEdit)}
                 </ModuleFeedItem>
               ))
             )}
@@ -1206,7 +1176,7 @@ export default function GroupFeed({
                       canEdit={module.type === "book-club" ? false : module.isEditableBy(user.id)}
                       onEdit={() => setEditingModule(module)}
                     >
-                      {(editTrigger) => renderModule(module, editTrigger)}
+                      {(onEdit) => renderModule(module, onEdit)}
                     </ModuleFeedItem>
                   ))}
                 </div>

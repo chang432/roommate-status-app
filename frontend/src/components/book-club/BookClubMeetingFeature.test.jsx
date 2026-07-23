@@ -38,7 +38,7 @@ describe("BookClubMeetingFeature", () => {
       <BookClubMeetingFeature
         meetings={[MEETING]}
         moduleTag={<span>Books</span>}
-        editTrigger={{ enabled: true, onEdit, headerProps: {}, keyboardProps: {} }}
+        onEdit={onEdit}
         canAdminister
         onChanged={vi.fn()}
       />,
@@ -56,7 +56,6 @@ describe("BookClubMeetingFeature", () => {
       <BookClubMeetingFeature
         meetings={[MEETING]}
         moduleTag={<span>Books</span>}
-        editTrigger={{ enabled: false, headerProps: {}, keyboardProps: {} }}
         canAdminister={false}
         onChanged={vi.fn()}
       />,

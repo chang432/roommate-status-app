@@ -14,6 +14,7 @@ import {
 import { initialOf } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
 import { relativeTime } from "../../utils/time.js";
+import ModuleEditButton from "./ModuleEditButton.jsx";
 import styles from "./ChecklistFeature.module.css";
 
 function ChecklistItemEditor({
@@ -63,7 +64,7 @@ export default function ChecklistFeature({
   checklists,
   onChecklistsChange,
   moduleTag,
-  editTrigger,
+  onEdit,
 }) {
   const { user } = useAuth();
   const [error, setError] = useState("");
@@ -246,7 +247,6 @@ export default function ChecklistFeature({
                 role="button"
                 tabIndex={0}
                 aria-expanded={expanded}
-                {...editTrigger.keyboardProps}
                 onClick={() => toggleExpanded(checklist.id)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -256,7 +256,7 @@ export default function ChecklistFeature({
                 }}
                 className={cx(styles.card, isArchived ? styles.archivedCard : "")}
               >
-                  <div className={styles.summary} {...editTrigger.headerProps}>
+                  <div className={styles.summary}>
                     <div className={styles.summaryText}>
                       <div className={styles.titleRow}>
                         {moduleTag}
@@ -422,6 +422,18 @@ export default function ChecklistFeature({
                           onClick={(event) => event.stopPropagation()}
                           onKeyDown={(event) => event.stopPropagation()}
                         >
+                          <ModuleEditButton
+                            onEdit={onEdit}
+                            disabled={Boolean(
+                              restoringId
+                              || archivingId
+                              || deletingChecklistId
+                            )}
+                            className={cx(
+                              "ui-pillButton ui-pillSecondary",
+                              styles.archiveButton,
+                            )}
+                          />
                           {isArchived ? (
                             <button
                               type="button"

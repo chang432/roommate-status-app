@@ -70,6 +70,14 @@ npm run dev
 Open the printed local URL. Sign in as any seeded roommate using their lowercase
 name as username (for example `andre`) with the demo password **`roomie`**.
 
+## Module feed behavior
+
+The **All** filter is customizable per user and group. Book Club starts
+selected after a one-time preference upgrade; explicit exclusions made after
+that remain saved. To edit a module, expand its card and use the **Edit** action
+at the bottom. The action is shown only when the current user can edit that
+active instance.
+
 ## Backend / API
 
 Backend calls live in domain modules under `src/api/`, which share a request
