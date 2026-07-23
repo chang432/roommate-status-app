@@ -38,9 +38,11 @@ availability to hang out. Built from the mockups in `../mockups`.
   during feed polling. Swiping the feed switches between the ordered filters,
   the filter drawer can edit that order and the contents of All, and the
   floating `+` creates modules.
-- **Book Club meetings**: enabled groups show sticky Book and Snack owner lists
-  above the feed. Admins create and complete one meeting module at a time;
-  members can record attendance and reading progress until completion.
+- **Book Club workspace**: enabled groups link to `/book-club`, with a current
+  book overview, visible Book and Snack owners, meeting attendance/progress,
+  a meeting-scoped topic-and-reply forum, and a searchable completed-book
+  library. Members review completed books with 1–5 stars, finish status, and an
+  optional note. Completed meeting forums remain visible but become read-only.
 - **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, archive or restore requests, and open
   module notifications directly to the expanded request card.
@@ -58,7 +60,7 @@ availability to hang out. Built from the mockups in `../mockups`.
 - [Tailwind CSS](https://tailwindcss.com/) (semantic theme tokens in
   `src/styles/themes.css`, exposed through `tailwind.config.js`)
 - [React Router](https://reactrouter.com/) for `/login`, `/signup`, `/pending`,
-  `/feed`, and `/`
+  `/book-club`, and `/`
 
 ## Getting started
 
@@ -95,14 +97,20 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `joinGroup`                     | `POST /api/groups/join`                                    |
 | `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
 | `updateGroupDisplay`            | `PUT /api/groups/display?userId=:id`                       |
-| `getBookClubSummary`            | `GET /api/book-club?userId=:id`                            |
+| `getBookClub`                   | `GET /api/book-club?userId=:id`                            |
 | `createBookClubMeeting`         | `POST /api/book-club/meetings?userId=:id`                  |
+| `getBookClubMeetings`           | `GET /api/book-club/meetings?userId=:id`                   |
 | `getBookClubMeeting`            | `GET /api/book-club/meetings/:id?userId=:id`               |
-| `updateBookClubMeetingResponse` | `PUT /api/book-club/meetings/:id/response?userId=:id`      |
+| `setBookClubResponse`           | `PUT /api/book-club/meetings/:id/response?userId=:id`      |
 | `completeBookClubMeeting`       | `POST /api/book-club/meetings/:id/complete?userId=:id`     |
 | `completeBookClubBook`          | `POST /api/book-club/books/:id/complete?userId=:id`        |
 | `getCompletedBookClubBooks`     | `GET /api/book-club/books/completed?userId=:id`            |
+| `reviewBookClubBook`            | `PUT /api/book-club/books/:id/review?userId=:id`           |
 | `notifyBookClubMeeting`         | `POST /api/book-club/meetings/:id/notify?userId=:id`       |
+| `getBookClubForum`              | `GET /api/book-club/meetings/:id/forum?userId=:id`         |
+| `createBookClubForumEntry`      | `POST /api/book-club/meetings/:id/forum?userId=:id`        |
+| `updateBookClubForumEntry`      | `PATCH /api/book-club/meetings/:id/forum/:entryId`         |
+| `deleteBookClubForumEntry`      | `DELETE /api/book-club/meetings/:id/forum/:entryId`        |
 | `getRoommates`                  | `GET /api/roommates?userId=:id`                            |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |

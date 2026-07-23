@@ -60,7 +60,7 @@ def seed_local_book_club() -> None:
 
     members = db.get_all(BOOK_CLUB_GROUP_ID)
     creator = next(member for member in members if member["id"] == "andre")
-    _meeting, error = book_club.create_meeting(
+    meeting, error = book_club.create_meeting(
         BOOK_CLUB_GROUP_ID,
         members,
         creator,
@@ -75,10 +75,12 @@ def seed_local_book_club() -> None:
     )
     if error and not error.startswith("Complete the open meeting"):
         raise RuntimeError(f"Could not seed Book Club: {error}")
+    if meeting is None:
+        meeting = book_club.summary(BOOK_CLUB_GROUP_ID, members)["openMeeting"]
 
     now = int(time.time() * 1000)
-    # The active book above plus this completed title make the local history
-    # dialog useful immediately, while stable ids keep repeated seeds safe.
+    # The active book above plus this completed title make the local library
+    # useful immediately, while stable ids keep repeated seeds safe.
     book_club._get_table().put_item(Item={
         "groupId": BOOK_CLUB_GROUP_ID,
         "id": "book#a-psalm-for-the-wild-built",
@@ -93,6 +95,26 @@ def seed_local_book_club() -> None:
         "createdAt": now - 28 * 24 * 60 * 60 * 1000,
         "updatedAt": now - 14 * 24 * 60 * 60 * 1000,
     })
+    completed_book_id = "a-psalm-for-the-wild-built"
+    book_club.set_review(
+        BOOK_CLUB_GROUP_ID,
+        completed_book_id,
+        creator,
+        5,
+        True,
+        "Hopeful, compact, and perfect for a group conversation.",
+    )
+    if meeting and not book_club.get_forum(
+        BOOK_CLUB_GROUP_ID, meeting["id"]
+    )["threads"]:
+        book_club.create_forum_entry(
+            BOOK_CLUB_GROUP_ID,
+            meeting["id"],
+            creator,
+            "Predictions before Chapter 9",
+            "What do you think the stone eater wants?",
+            None,
+        )
 
 
 def main() -> int:

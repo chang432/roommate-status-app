@@ -1,0 +1,61 @@
+.layout { @apply grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.72fr)]; }
+.library, .detail { @apply rounded-xl border border-line bg-card p-4 shadow-sm sm:p-6; }
+.libraryHeading { @apply flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between; }
+.eyebrow { @apply text-xs font-bold uppercase tracking-[0.16em] text-accent-deep; }
+.libraryHeading h2, .detailHeader h2 { @apply mt-1 font-display text-2xl font-semibold text-ink; }
+.search input { @apply w-full rounded-full border border-line bg-surface-muted px-4 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft sm:w-72; }
+.bookGrid { @apply mt-4 grid gap-3 md:grid-cols-2; }
+.bookCard { @apply relative flex min-h-36 overflow-hidden rounded-lg border border-line bg-surface-muted text-left transition hover:-translate-y-0.5 hover:border-accent hover:shadow-md focus:outline-none focus:ring-2 focus:ring-accent; }
+.selected { @apply border-accent bg-accent-soft shadow-sm; }
+.bookSpine { @apply w-2 shrink-0 bg-accent; }
+.bookCopy { @apply flex min-w-0 flex-1 flex-col p-4; }
+.bookCopy strong { @apply font-display text-lg font-semibold leading-tight text-ink; }
+.bookCopy > span:not(.cardStats) { @apply mt-1 text-sm text-ink-soft; }
+.bookCopy small { @apply mt-3 text-xs font-semibold text-accent-deep; }
+.cardStats { @apply mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-3 text-xs text-ink-soft; }
+.noMatches { @apply col-span-full py-10 text-center text-sm text-ink-soft; }
+.detail { @apply h-fit xl:sticky xl:top-4; }
+.detailHeader > p:not(.eyebrow) { @apply text-sm text-ink-soft; }
+.detailHeader dl { @apply mt-4 grid grid-cols-3 gap-2; }
+.detailHeader dl div { @apply rounded-md bg-surface-muted p-2; }
+.detailHeader dt { @apply text-[0.65rem] font-bold uppercase tracking-wide text-ink-soft; }
+.detailHeader dd { @apply mt-1 text-sm font-semibold text-ink; }
+.reviewForm { @apply mt-5 grid gap-4 rounded-lg border border-accent-soft bg-accent-soft p-4; }
+.formHeading { @apply flex items-start justify-between gap-3; }
+.formHeading h3, .community h3 { @apply font-display text-lg font-semibold text-ink; }
+.formHeading p { @apply mt-1 text-xs text-ink-soft; }
+.formHeading > span { @apply rounded-full bg-surface-muted px-2 py-1 text-xs font-bold text-accent-deep; }
+.reviewForm fieldset { @apply grid gap-2; }
+.reviewForm legend, .note > span { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
+.starChoices { @apply flex gap-1; }
+.starChoices label { @apply cursor-pointer; }
+.starChoices input { @apply sr-only; }
+.starChoices span[aria-hidden] { @apply block rounded px-1 text-3xl text-line transition; }
+.starChoices input:checked ~ span[aria-hidden], .starChoices label:has(input:checked) ~ label span[aria-hidden] { @apply text-line; }
+.starChoices label:has(input:checked) span[aria-hidden], .starChoices label:has(~ label input:checked) span[aria-hidden] { @apply text-accent-deep; }
+.starChoices input:focus-visible + span { @apply outline outline-2 outline-offset-2 outline-accent; }
+.finishChoices { @apply grid grid-cols-2 gap-2; }
+.finishChoices label { @apply cursor-pointer; }
+.finishChoices input { @apply sr-only; }
+.finishChoices span { @apply block rounded-md border border-line bg-card px-3 py-2 text-center text-sm font-semibold text-ink; }
+.finishChoices input:checked + span { @apply border-accent bg-accent text-white; }
+.finishChoices input:focus-visible + span { @apply ring-2 ring-accent ring-offset-2; }
+.note { @apply grid gap-1; }
+.note textarea { @apply min-h-24 resize-y rounded-md border border-line bg-card p-3 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft; }
+.note small { @apply text-right text-xs text-ink-soft; }
+.community { @apply mt-6 border-t border-line pt-5; }
+.reviewList { @apply mt-3 grid gap-3; }
+.review { @apply rounded-lg border border-line bg-surface-muted p-3 text-sm text-ink; }
+.review > div { @apply flex items-center justify-between gap-3; }
+.review > div span { @apply tracking-wide text-accent-deep; }
+.review > p:last-child:not(.finishStatus) { @apply mt-2 whitespace-pre-wrap; }
+.finishStatus { @apply mt-1 text-xs font-semibold text-accent-deep; }
+.muted { @apply mt-2 text-sm text-ink-soft; }
+.empty { @apply grid min-h-80 place-items-center rounded-xl border border-dashed border-line bg-card p-8 text-center; }
+.empty span { @apply text-5xl; }
+.empty h2 { @apply mt-3 font-display text-2xl text-ink; }
+.empty p { @apply text-sm text-ink-soft; }
+
+@media (max-width: 480px) {
+  .detailHeader dl { @apply grid-cols-1; }
+}

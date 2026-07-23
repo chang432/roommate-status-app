@@ -23,6 +23,10 @@ CONFIG_ID = "config#book-club"
 TIMEZONE = "America/New_York"
 OPEN_STATUS = "scheduled"
 COMPLETED_STATUS = "completed"
+REVIEW_NOTE_LIMIT = 1000
+FORUM_TITLE_LIMIT = 120
+FORUM_POST_LIMIT = 2000
+FORUM_REPLY_LIMIT = 1000
 _table = None
 _table_lock = threading.Lock()
 
@@ -530,79 +534,315 @@ def list_completed(group_id: str, viewer_id: str | None = None) -> list[dict]:
     ratings = [row for row in rows if row.get("id", "").startswith("rating#")]
     result = []
     for book in books:
-        values = [int(item["rating"]) for item in ratings if item.get("bookId") == book["bookId"]]
+        book_ratings = [
+            item for item in ratings if item.get("bookId") == book["bookId"]
+        ]
+        reviews = [
+            {
+                "userId": item["userId"],
+                "userName": item.get("userName", "Former member"),
+                "rating": int(item["rating"]),
+                "finished": (
+                    bool(item["finished"])
+                    if isinstance(item.get("finished"), bool)
+                    else None
+                ),
+                "note": item.get("note", ""),
+                "createdAt": int(item["createdAt"]),
+                "updatedAt": int(item.get("updatedAt", item["createdAt"])),
+            }
+            for item in sorted(
+                book_ratings,
+                key=lambda value: (
+                    -int(value.get("updatedAt", value.get("createdAt", 0))),
+                    value.get("userName", ""),
+                ),
+            )
+        ]
+        values = [review["rating"] for review in reviews]
+        viewer_review = next(
+            (review for review in reviews if review["userId"] == viewer_id),
+            None,
+        )
         result.append({
             **_project_book(book),
-            "ratingCount": len(values),
+            "reviewCount": len(values),
             "averageRating": sum(values) / len(values) if values else None,
-            "viewerRating": next(
-                (int(item["rating"]) for item in ratings
-                 if item.get("bookId") == book["bookId"] and item.get("userId") == viewer_id),
-                None,
-            ),
+            "finishedCount": sum(review["finished"] is True for review in reviews),
+            "unfinishedCount": sum(review["finished"] is False for review in reviews),
+            "unknownFinishCount": sum(review["finished"] is None for review in reviews),
+            "viewerReview": viewer_review,
+            "reviews": reviews,
         })
     return sorted(result, key=lambda item: item.get("completedAt") or 0, reverse=True)
 
 
-def set_rating(group_id: str, book_id: str, member: dict, rating) -> str | None:
+def set_review(
+    group_id: str,
+    book_id: str,
+    member: dict,
+    rating,
+    finished,
+    note,
+) -> str | None:
     if isinstance(rating, bool) or not isinstance(rating, int) or not 1 <= rating <= 5:
         return "Rating must be an integer from 1 through 5."
+    if not isinstance(finished, bool):
+        return "Finished must be true or false."
+    if not isinstance(note, str):
+        return "Review note must be text."
+    note = note.strip()
+    if len(note) > REVIEW_NOTE_LIMIT:
+        return f"Review note must be at most {REVIEW_NOTE_LIMIT} characters."
     normalized = book_id[5:] if book_id.startswith("book#") else book_id
     book = _fetch(group_id, f"book#{normalized}")
     if book is None or book.get("status") != "completed":
-        return "Ratings are only available for completed books."
+        return "Reviews are only available for completed books."
     now = _now()
     item_id = f"rating#{normalized}#{member['id']}"
     existing = _fetch(group_id, item_id)
-    _get_table().put_item(Item={
+    item = {
         "groupId": group_id, "id": item_id, "bookId": normalized,
-        "userId": member["id"], "userName": member["name"], "rating": rating,
+        "userId": member["id"], "userName": member["name"],
+        "rating": rating, "finished": finished,
         "createdAt": existing.get("createdAt", now) if existing else now, "updatedAt": now,
-    })
+    }
+    if note:
+        item["note"] = note
+    _get_table().put_item(Item=item)
     return None
 
 
-def list_posts(group_id: str, book_id: str, chapter_key: str | None = None) -> list[dict]:
-    normalized = book_id[5:] if book_id.startswith("book#") else book_id
-    kwargs = {"IndexName": BOOK_ID_INDEX, "KeyConditionExpression": Key("bookId").eq(normalized)}
-    rows = []
-    while True:
-        response = _get_table().query(**kwargs)
+def _forum_prefix(meeting_id: str) -> str:
+    return f"forum#{meeting_id.split('#', 1)[-1]}#"
+
+
+def _forum_rows(
+    group_id: str, meeting_id: str, consistent: bool = True
+) -> list[dict]:
+    response = _get_table().query(
+        KeyConditionExpression=(
+            Key("groupId").eq(group_id)
+            & Key("id").begins_with(_forum_prefix(meeting_id))
+        ),
+        ConsistentRead=consistent,
+    )
+    rows = list(response.get("Items", []))
+    while response.get("LastEvaluatedKey"):
+        response = _get_table().query(
+            KeyConditionExpression=(
+                Key("groupId").eq(group_id)
+                & Key("id").begins_with(_forum_prefix(meeting_id))
+            ),
+            ConsistentRead=consistent,
+            ExclusiveStartKey=response["LastEvaluatedKey"],
+        )
         rows.extend(response.get("Items", []))
-        if not response.get("LastEvaluatedKey"):
-            break
-        kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
-    keys = ("id", "bookId", "chapterKey", "chapterLabel", "authorId", "authorName", "body", "createdAt", "updatedAt")
-    return [
-        {key: row[key] for key in keys}
-        for row in sorted(rows, key=lambda value: int(value.get("createdAt", 0)))
-        if row.get("groupId") == group_id
-        and row.get("id", "").startswith("post#")
-        and (chapter_key is None or row.get("chapterKey") == chapter_key)
-    ]
+    return rows
 
 
-def create_post(group_id: str, member: dict, book_id: str, chapter_key, chapter_label, body) -> tuple[dict | None, str | None]:
-    chapter_key, error = _validate_text(chapter_key, "Chapter key", 80)
-    if error:
-        return None, error
-    chapter_label, error = _validate_text(chapter_label, "Chapter label", 120)
-    if error:
-        return None, error
-    body, error = _validate_text(body, "Post", 1000)
-    if error:
-        return None, error
-    normalized = book_id[5:] if book_id.startswith("book#") else book_id
-    if _fetch(group_id, f"book#{normalized}") is None:
-        return None, "Unknown book."
-    now = _now()
-    post_id = uuid.uuid4().hex
-    item = {
-        "groupId": group_id, "id": f"post#{normalized}#{chapter_key}#{now}#{post_id}",
-        "bookId": normalized, "chapterKey": chapter_key, "chapterLabel": chapter_label,
-        "authorId": member["id"], "authorName": member["name"], "body": body,
-        "createdAt": now, "updatedAt": now,
+def _project_forum_entry(item: dict) -> dict:
+    projected = {
+        "id": item["id"],
+        "meetingId": item["meetingId"],
+        "bookId": item.get("bookId"),
+        "parentPostId": item.get("parentPostId"),
+        "authorId": item.get("authorId"),
+        "authorName": item.get("authorName", "Former member"),
+        "body": item.get("body", ""),
+        "createdAt": int(item["createdAt"]),
+        "updatedAt": int(item.get("updatedAt", item["createdAt"])),
+        "lastActivityAt": int(
+            item.get("lastActivityAt", item.get("updatedAt", item["createdAt"]))
+        ),
+        "deletedAt": (
+            int(item["deletedAt"]) if item.get("deletedAt") is not None else None
+        ),
+        "deletedByName": item.get("deletedByName"),
     }
-    _get_table().put_item(Item=item)
-    keys = ("id", "bookId", "chapterKey", "chapterLabel", "authorId", "authorName", "body", "createdAt", "updatedAt")
-    return {key: item[key] for key in keys}, None
+    if not item.get("parentPostId"):
+        projected["title"] = item.get("title", "")
+    return projected
+
+
+def get_forum(group_id: str, meeting_id: str) -> dict | None:
+    meeting = _fetch(group_id, meeting_id)
+    if meeting is None or not meeting.get("id", "").startswith(
+        ("meeting#", "session#")
+    ):
+        return None
+    rows = _forum_rows(group_id, meeting_id)
+    roots = {
+        row["id"]: row for row in rows if not row.get("parentPostId")
+    }
+    replies: dict[str, list[dict]] = {root_id: [] for root_id in roots}
+    for row in rows:
+        parent_id = row.get("parentPostId")
+        if parent_id in replies:
+            replies[parent_id].append(_project_forum_entry(row))
+    threads = []
+    for root_id, root in roots.items():
+        projected = _project_forum_entry(root)
+        projected["replies"] = sorted(
+            replies[root_id], key=lambda reply: (reply["createdAt"], reply["id"])
+        )
+        threads.append(projected)
+    threads.sort(
+        key=lambda thread: (
+            -thread["lastActivityAt"],
+            -thread["createdAt"],
+            thread["id"],
+        )
+    )
+    return {
+        "meetingId": meeting_id,
+        "locked": meeting.get("status") != OPEN_STATUS,
+        "threads": threads,
+    }
+
+
+def create_forum_entry(
+    group_id: str,
+    meeting_id: str,
+    member: dict,
+    title,
+    body,
+    parent_post_id,
+) -> tuple[dict | None, dict | None, str | None]:
+    meeting = _fetch(group_id, meeting_id)
+    if meeting is None or not meeting.get("id", "").startswith(
+        ("meeting#", "session#")
+    ):
+        return None, None, "Unknown meeting."
+    if meeting.get("status") != OPEN_STATUS:
+        return None, None, "Completed meeting forums are read-only."
+
+    body_limit = FORUM_REPLY_LIMIT if parent_post_id else FORUM_POST_LIMIT
+    body, error = _validate_text(body, "Post", body_limit)
+    if error:
+        return None, None, error
+    if parent_post_id:
+        parent = _fetch(group_id, parent_post_id)
+        if (
+            parent is None
+            or parent.get("meetingId") != meeting_id
+            or parent.get("parentPostId")
+            or parent.get("deletedAt") is not None
+        ):
+            return None, None, "Unknown open forum topic."
+        title = None
+    else:
+        title, error = _validate_text(title, "Topic title", FORUM_TITLE_LIMIT)
+        if error:
+            return None, None, error
+        parent = None
+
+    now = _now()
+    entry = {
+        "groupId": group_id,
+        "id": f"{_forum_prefix(meeting_id)}{now:013d}#{uuid.uuid4().hex}",
+        "meetingId": meeting_id,
+        "bookId": meeting.get("bookId"),
+        "authorId": member["id"],
+        "authorName": member["name"],
+        "body": body,
+        "createdAt": now,
+        "updatedAt": now,
+        "lastActivityAt": now,
+    }
+    if title is not None:
+        entry["title"] = title
+    if parent is not None:
+        entry["parentPostId"] = parent["id"]
+    _get_table().put_item(
+        Item=entry,
+        ConditionExpression="attribute_not_exists(id)",
+    )
+    if parent is not None:
+        _get_table().update_item(
+            Key={"groupId": group_id, "id": parent["id"]},
+            UpdateExpression="SET lastActivityAt = :now",
+            ExpressionAttributeValues={":now": now},
+        )
+    return get_forum(group_id, meeting_id), _project_forum_entry(entry), None
+
+
+def update_forum_entry(
+    group_id: str,
+    meeting_id: str,
+    entry_id: str,
+    member: dict,
+    title,
+    body,
+) -> tuple[dict | None, str | None]:
+    meeting = _fetch(group_id, meeting_id)
+    entry = _fetch(group_id, entry_id)
+    if meeting is None or entry is None or entry.get("meetingId") != meeting_id:
+        return None, "Unknown forum entry."
+    if meeting.get("status") != OPEN_STATUS:
+        return None, "Completed meeting forums are read-only."
+    if entry.get("authorId") != member["id"]:
+        return None, "Only the author can edit this forum entry."
+    if entry.get("deletedAt") is not None:
+        return None, "Deleted forum entries are read-only."
+    body_limit = (
+        FORUM_REPLY_LIMIT if entry.get("parentPostId") else FORUM_POST_LIMIT
+    )
+    body, error = _validate_text(body, "Post", body_limit)
+    if error:
+        return None, error
+    if not entry.get("parentPostId"):
+        title, error = _validate_text(title, "Topic title", FORUM_TITLE_LIMIT)
+        if error:
+            return None, error
+        entry["title"] = title
+    entry["body"] = body
+    entry["updatedAt"] = _now()
+    _get_table().put_item(Item=entry)
+    return get_forum(group_id, meeting_id), None
+
+
+def delete_forum_entry(
+    group_id: str,
+    meeting_id: str,
+    entry_id: str,
+    member: dict,
+    is_admin: bool,
+) -> tuple[dict | None, str | None]:
+    meeting = _fetch(group_id, meeting_id)
+    entry = _fetch(group_id, entry_id)
+    if meeting is None or entry is None or entry.get("meetingId") != meeting_id:
+        return None, "Unknown forum entry."
+    if meeting.get("status") != OPEN_STATUS:
+        return None, "Completed meeting forums are read-only."
+    if entry.get("authorId") != member["id"] and not is_admin:
+        return (
+            None,
+            "Only the author or a group admin can remove this forum entry.",
+        )
+    if entry.get("deletedAt") is None:
+        now = _now()
+        _get_table().update_item(
+            Key={"groupId": group_id, "id": entry_id},
+            UpdateExpression=(
+                "REMOVE title, body SET deletedAt = :now, deletedById = :userId, "
+                "deletedByName = :userName, updatedAt = :now"
+            ),
+            ExpressionAttributeValues={
+                ":now": now,
+                ":userId": member["id"],
+                ":userName": member["name"],
+            },
+        )
+    return get_forum(group_id, meeting_id), None
+
+
+def thread_participant_ids(
+    group_id: str, meeting_id: str, parent_post_id: str
+) -> set[str]:
+    return {
+        row["authorId"]
+        for row in _forum_rows(group_id, meeting_id)
+        if row.get("authorId")
+        and (row["id"] == parent_post_id or row.get("parentPostId") == parent_post_id)
+    }

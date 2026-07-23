@@ -1,4 +1,4 @@
-"TABLE RoommateStatus-dev-book-club - group-scoped sticky owner orders, meeting modules, books, ratings, and chapter discussion. Keyed (groupId HASH, id RANGE); BookIdIndex (HASH bookId, RANGE id, ProjectionType ALL) retrieves a book's meetings, ratings, and posts."
+"TABLE RoommateStatus-dev-book-club - group-scoped owner orders, meeting modules, completed-book reviews, and meeting forums. Keyed (groupId HASH, id RANGE); BookIdIndex (HASH bookId, RANGE id, ProjectionType ALL) retrieves a book's related records."
 groupId (S),id (S),timezone (S),openMeetingId (S),lastMeetingAt (N),activeBookId (S),bookOwnerOrderUserIds (L of S),snackOwnerOrderUserIds (L of S),createdAt (N),updatedAt (N),bookOwnerOrderAlignmentMigrated (BOOL),bookOwnerOrderAlignmentLegacyRecord (M),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
 book-club,config#book-club,America/New_York,meeting#meeting-uuid,1784763000000,book-uuid,"[""kayla"", ""sheryl"", ""andre""]","[""andre"", ""kayla"", ""sheryl""]",1783553400000,1783553400000,true,"{""hadBookOwnerOrderUserIds"": true, ""bookOwnerOrderUserIds"": [""kayla"", ""andre"", ""sheryl""], ""alignedBookOwnerOrderUserIds"": [""kayla"", ""sheryl"", ""andre""]}",,
 
@@ -11,8 +11,10 @@ book-club,meeting#meeting-uuid,1784763000000,book-uuid,The Fifth Season,N. K. Je
 groupId (S),id (S),meetingId (S),userId (S),userName (S),attendanceStatus (S),chaptersReadThrough (N),createdAt (N),updatedAt (N),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
 book-club,meeting-member#meeting-uuid#andre,meeting#meeting-uuid,andre,Andre,attending,6,1783553400000,1783553400000,,
 
-groupId (S),id (S),bookId (S),userId (S),userName (S),rating (N),createdAt (N),updatedAt (N)
-book-club,rating#book-uuid#andre,book-uuid,andre,Andre,5,1789000000000,1789000000000
+groupId (S),id (S),bookId (S),userId (S),userName (S),rating (N),finished (BOOL),note (S),createdAt (N),updatedAt (N)
+book-club,rating#book-uuid#andre,book-uuid,andre,Andre,5,true,Changed how I saw the opening.,1789000000000,1789000000000
+book-club,rating#older-book#kayla,older-book,kayla,Kayla,4,,,1788000000000,1788000000000
 
-groupId (S),id (S),bookId (S),chapterKey (S),chapterLabel (S),authorId (S),authorName (S),body (S),parentPostId (S),createdAt (N),updatedAt (N)
-book-club,post#book-uuid#008#1789000000000#post-uuid,book-uuid,008,Chapter 8,andre,Andre,The ending changed how I read the opening.,,1789000000000,1789000000000
+groupId (S),id (S),meetingId (S),bookId (S),parentPostId (S),title (S),authorId (S),authorName (S),body (S),createdAt (N),updatedAt (N),lastActivityAt (N),deletedAt (N),deletedById (S),deletedByName (S),meetingForumMigrated (BOOL),meetingForumLegacyRecord (M)
+book-club,forum#meeting-uuid#1789000000000#post-uuid,meeting#meeting-uuid,book-uuid,,Favorite turning point,andre,Andre,Which scene changed the book for you?,1789000000000,1789000000000,1789001000000,,,,,
+book-club,forum#meeting-uuid#1789001000000#reply-uuid,meeting#meeting-uuid,book-uuid,forum#meeting-uuid#1789000000000#post-uuid,,kayla,Kayla,The final conversation.,1789001000000,1789001000000,1789001000000,,,,,

@@ -1,0 +1,54 @@
+.page { @apply min-h-screen bg-gradient-to-b from-bg-top to-bg-bottom pb-16; }
+.header { @apply sticky top-0 z-20 mx-auto flex min-h-20 w-full max-w-[1180px] items-center gap-3 bg-accent px-4 py-3 text-white shadow-md sm:px-6; }
+.homeLink { @apply rounded-full focus:outline-none focus:ring-2 focus:ring-white; }
+.brandmark { @apply flex items-center; }
+.brandmarkIcon { @apply h-11 w-11; }
+.header > div { @apply min-w-0 flex-1; }
+.header p { @apply truncate text-xs font-bold uppercase tracking-[0.16em] text-white/75; }
+.header h1 { @apply font-display text-2xl font-semibold; }
+.backLink { @apply rounded-full border border-white/40 px-4 py-2 text-sm font-bold transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white; }
+.main { @apply mx-auto grid w-full max-w-[1180px] gap-5 px-4 py-5 sm:px-6; }
+.tabs { @apply sticky top-20 z-10 grid grid-cols-3 rounded-full border border-line bg-card p-1 shadow-sm; }
+.tabs button { @apply flex min-h-11 items-center justify-center gap-2 rounded-full px-3 text-sm font-bold text-ink-soft transition hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent; }
+.tabs button span { @apply rounded-full bg-surface-muted px-2 py-0.5 text-xs; }
+.tabs .activeTab { @apply bg-accent text-white shadow-sm hover:bg-accent; }
+.tabs .activeTab span { @apply bg-white/20; }
+.loading { @apply flex min-h-64 items-center justify-center gap-3 text-sm font-semibold text-ink-soft; }
+.loading span { @apply h-5 w-5 animate-spin rounded-full border-2 border-line border-t-accent; }
+.overview { @apply grid gap-5 lg:grid-cols-2; }
+.currentBook, .nextMeeting, .ownerOrders { @apply rounded-xl border border-line bg-card p-5 shadow-sm sm:p-6; }
+.currentBook { @apply relative overflow-hidden bg-gradient-to-br from-card to-accent-soft; }
+.eyebrow { @apply text-xs font-bold uppercase tracking-[0.16em] text-accent-deep; }
+.currentBook h2, .sectionHeading h2, .pageSectionHeading h2 { @apply mt-1 font-display text-2xl font-semibold text-ink; }
+.author { @apply mt-1 text-sm text-ink-soft; }
+.currentBook dl { @apply my-5 grid grid-cols-2 gap-2; }
+.currentBook dl div, .meetingSummary div { @apply rounded-md bg-card/70 p-3; }
+.currentBook dt, .meetingSummary dt { @apply text-[0.65rem] font-bold uppercase tracking-wide text-ink-soft; }
+.currentBook dd, .meetingSummary dd { @apply mt-1 text-sm font-semibold text-ink; }
+.sectionHeading, .pageSectionHeading { @apply flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between; }
+.sectionHeading button { @apply text-sm font-bold text-accent-deep hover:underline; }
+.meetingSummary { @apply mt-5 grid gap-2 sm:grid-cols-3; }
+.muted, .emptyState p { @apply mt-4 text-sm text-ink-soft; }
+.emptyState { @apply py-8; }
+.emptyState h2 { @apply font-display text-2xl text-ink; }
+.ownerOrders { @apply lg:col-span-2; }
+.ownerColumns { @apply mt-5 grid gap-4 sm:grid-cols-2; }
+.ownerColumns > div { @apply rounded-lg bg-surface-muted p-4; }
+.ownerColumns h3 { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
+.ownerColumns ol { @apply mt-3 grid gap-2; }
+.ownerColumns li { @apply grid grid-cols-[1.75rem_1fr_auto] items-center gap-2 rounded-md bg-card px-3 py-2 text-sm text-ink; }
+.ownerColumns li > span { @apply grid h-7 w-7 place-items-center rounded-full bg-surface-muted text-xs font-bold text-ink-soft; }
+.ownerColumns li small { @apply text-xs font-bold text-accent-deep; }
+.ownerColumns .currentOwner { @apply border border-accent-soft bg-accent-soft; }
+.libraryCallout { @apply flex flex-col justify-between gap-3 rounded-xl border border-accent bg-accent p-5 text-left text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-accent-deep sm:flex-row sm:items-center lg:col-span-2; }
+.libraryCallout strong { @apply mr-1 font-display text-3xl; }
+.libraryCallout > span:last-child { @apply text-sm font-bold; }
+.meetings { @apply grid gap-4; }
+.pageSectionHeading { @apply rounded-xl border border-line bg-card p-5 shadow-sm; }
+
+@media (max-width: 520px) {
+  .header { @apply rounded-none; }
+  .backLink { @apply px-3; }
+  .tabs { @apply top-20; }
+  .tabs button { @apply text-xs; }
+}

@@ -1,13 +1,10 @@
-.section { @apply mx-auto mt-6 w-full max-w-[720px] rounded-md border border-line bg-card p-4; }
-.muted { @apply text-sm text-ink-soft; }
-.listGrid { @apply grid grid-cols-2 gap-3; }
-.ownerCard { @apply grid gap-1 rounded-md border border-accent-soft bg-accent-soft px-4 py-3 text-left transition hover:border-accent hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent; }
-.ownerCard span { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
-.ownerCard strong { @apply truncate text-base text-ink; }
-.ownerCard small { @apply text-xs text-ink-soft; }
-.activeBook { @apply mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
-.activeBook button { @apply rounded border border-accent px-3 py-1.5 text-xs font-bold text-accent-deep hover:bg-card disabled:opacity-60; }
-.popupContent { @apply max-h-[min(60vh,440px)] overflow-y-auto pr-1; }
-.popupList { @apply grid gap-2; }
-.popupItem { @apply flex items-center justify-between gap-4 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
-.popupItem span { @apply text-right text-xs text-ink-soft; }
+.section { @apply mx-auto mt-6 w-full max-w-[720px] rounded-lg border border-line bg-card p-4 shadow-sm; }
+.heading { @apply flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between; }
+.eyebrow { @apply text-xs font-bold uppercase tracking-[0.16em] text-accent-deep; }
+.heading h2 { @apply mt-1 font-display text-xl font-semibold text-ink; }
+.muted { @apply mt-1 text-sm text-ink-soft; }
+.openLink { @apply inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-accent-deep focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2; }
+.ownerSummary { @apply mt-4 grid gap-2 border-t border-line pt-4 sm:grid-cols-3; }
+.ownerSummary div { @apply rounded-md bg-surface-muted px-3 py-2; }
+.ownerSummary dt { @apply text-[0.68rem] font-bold uppercase tracking-wide text-ink-soft; }
+.ownerSummary dd { @apply mt-0.5 truncate text-sm font-semibold text-ink; }

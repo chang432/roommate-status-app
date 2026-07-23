@@ -1,8 +1,8 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import BookClub from "./BookClub.jsx";
-import { completeBookClubBook, getBookClub } from "../../api/bookClub.js";
+import { getBookClub } from "../../api/bookClub.js";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { id: "andre", name: "Andre" } }),
@@ -11,7 +11,6 @@ vi.mock("../../context/AuthContext.jsx", () => ({
 vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   ...(await importOriginal()),
   getBookClub: vi.fn(),
-  completeBookClubBook: vi.fn(),
 }));
 
 const ROOMMATES = [
@@ -31,29 +30,31 @@ function summary(book = true) {
   };
 }
 
-describe("BookClub owner lists", () => {
+function renderBookClub() {
+  return render(
+    <MemoryRouter>
+      <BookClub roommates={ROOMMATES} groupId="book-club" />
+    </MemoryRouter>,
+  );
+}
+
+describe("BookClub household summary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getBookClub.mockResolvedValue({ summary: summary() });
   });
   afterEach(() => cleanup());
 
-  it("shows both prior owners and their full stored order", async () => {
-    render(<BookClub roommates={ROOMMATES} groupId="book-club" />);
+  it("shows the current read, owners, and a dedicated-page link", async () => {
+    renderBookClub();
 
-    const bookTracker = await screen.findByRole("button", { name: /Book Kayla/ });
-    expect(screen.getByRole("button", { name: /Snack Andre/ })).toBeInTheDocument();
-    const currentBook = screen.getByText(/Current book:/).closest("div");
-    expect(
-      currentBook.compareDocumentPosition(bookTracker)
-      & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-
-    await userEvent.click(bookTracker);
-    const dialog = screen.getByRole("dialog", { name: "Book owner order" });
-    expect(dialog).toHaveTextContent("KaylaCurrent and default owner");
-    expect(dialog).toHaveTextContent("AndreOrder #2");
-    expect(dialog).toHaveTextContent("SherylOrder #3");
+    expect(await screen.findByRole("heading", { name: "Parable of the Sower" })).toBeInTheDocument();
+    expect(screen.getByText("Kayla")).toBeInTheDocument();
+    expect(screen.getByText("Andre")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open Book Club/ })).toHaveAttribute(
+      "href",
+      "/book-club",
+    );
   });
 
   it("shows the active meeting owners even when the stored defaults differ", async () => {
@@ -66,24 +67,11 @@ describe("BookClub owner lists", () => {
         },
       },
     });
-    render(<BookClub roommates={ROOMMATES} groupId="book-club" />);
+    renderBookClub();
 
-    const bookTracker = await screen.findByRole("button", { name: /Book Andre/ });
-    expect(screen.getByRole("button", { name: /Snack Sheryl/ })).toBeInTheDocument();
-
-    await userEvent.click(bookTracker);
-    const dialog = screen.getByRole("dialog", { name: "Book owner order" });
-    expect(dialog).toHaveTextContent("KaylaDefault owner");
-    expect(dialog).toHaveTextContent("AndreCurrent owner");
-  });
-
-  it("lets an admin complete the active book without changing meetings", async () => {
-    completeBookClubBook.mockResolvedValue({ summary: summary(false) });
-    render(<BookClub roommates={ROOMMATES} groupId="book-club" />);
-
-    await userEvent.click(await screen.findByRole("button", { name: "Complete book" }));
-    expect(completeBookClubBook).toHaveBeenCalledWith("andre", "book-1");
-    await waitFor(() => expect(screen.queryByText("Current book:")).not.toBeInTheDocument());
+    expect(await screen.findByText("Andre")).toBeInTheDocument();
+    expect(screen.getByText("Sheryl")).toBeInTheDocument();
+    expect(screen.getByText("Scheduled")).toBeInTheDocument();
   });
 
   it("reloads after the shared Book Club change event", async () => {
@@ -96,10 +84,10 @@ describe("BookClub owner lists", () => {
           snackOwnerOrderUserIds: ["andre", "sheryl", "kayla"],
         },
       } });
-    render(<BookClub roommates={ROOMMATES} groupId="book-club" />);
-    await screen.findByRole("button", { name: /Book Kayla/ });
+    renderBookClub();
+    await screen.findByText("Kayla");
 
     window.dispatchEvent(new Event("roomie:book-club-changed"));
-    expect(await screen.findByRole("button", { name: /Book Andre/ })).toBeInTheDocument();
+    await waitFor(() => expect(getBookClub).toHaveBeenCalledTimes(2));
   });
 });

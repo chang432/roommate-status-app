@@ -19,7 +19,7 @@ import RequestCreateForm from "./RequestCreateForm.jsx";
 import RequestFeature from "./RequestFeature.jsx";
 import ShowCreateForm from "./ShowCreateForm.jsx";
 import ShowTrackerFeature from "./ShowTrackerFeature.jsx";
-import BookClubMeetingFeature from "../book-club/BookClubMeetingFeature.jsx";
+import BookClubMeetingLink from "../book-club/BookClubMeetingLink.jsx";
 import BookClubMeetingForm from "../book-club/BookClubMeetingForm.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
@@ -1059,12 +1059,9 @@ export default function GroupFeed({
     }
     if (module.type === "book-club") {
       return (
-        <BookClubMeetingFeature
-          meetings={[module.payload]}
+        <BookClubMeetingLink
+          meeting={module.payload}
           moduleTag={moduleTag}
-          onEdit={onEdit}
-          canAdminister={canAdministerBookClub}
-          onChanged={loadFeed}
         />
       );
     }
@@ -1169,7 +1166,7 @@ export default function GroupFeed({
                   module={module}
                   focusIntent={focusIntent}
                   onFocusHandled={consumeFocusIntent}
-                  canEdit={module.type === "book-club" ? canAdministerBookClub && !module.isArchived : module.isEditableBy(user.id)}
+                  canEdit={module.type === "book-club" ? false : module.isEditableBy(user.id)}
                   onEdit={() => setEditingModule(module)}
                 >
                   {(onEdit) => renderModule(module, onEdit)}

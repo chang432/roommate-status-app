@@ -18,11 +18,16 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `PUT  /api/groups/display`                                   | `?userId=<id>` + `{ showRoster, showFeed, showBookClub }` | updated admin-managed group display settings |
 | `GET /api/book-club`                                         | `?userId=<id>`                             | owner lists, active book, open meeting, and next suggested date |
 | `POST /api/book-club/meetings`                               | `?userId=<id>` + meeting fields            | admin-created open Book Club meeting module             |
+| `GET /api/book-club/meetings`                                | `?userId=<id>`                             | all meeting summaries and member responses              |
 | `GET /api/book-club/meetings/<id>`                           | `?userId=<id>`                             | meeting detail and member responses                     |
 | `PUT /api/book-club/meetings/<id>/response`                  | `?userId=<id>` + attendance/progress       | current member's meeting response                       |
 | `POST /api/book-club/meetings/<id>/complete`                 | `?userId=<id>`                             | admin-completed meeting                                 |
 | `POST /api/book-club/books/<id>/complete`                    | `?userId=<id>`                             | admin-completed active book                             |
 | `POST /api/book-club/meetings/<id>/notify`                   | `?userId=<id>`                             | sends members a deep-linked meeting reminder            |
+| `GET /api/book-club/books/completed`                         | `?userId=<id>`                             | completed books, aggregate review data, and reviews     |
+| `PUT /api/book-club/books/<id>/review`                       | `?userId=<id>` + rating/finished/note      | member review and refreshed completed-book library      |
+| `GET/POST /api/book-club/meetings/<id>/forum`                | `?userId=<id>` + optional topic/reply      | meeting forum threads                                   |
+| `PATCH/DELETE /api/book-club/meetings/<id>/forum/<entryId>`  | `?userId=<id>` + editable title/body       | edited or soft-removed forum entry                      |
 | `GET  /api/roommates`                                        | `?userId=<id>`                             | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |

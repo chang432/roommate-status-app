@@ -2,14 +2,19 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import BookClubMeetingFeature from "./BookClubMeetingFeature.jsx";
-import { getBookClubMeeting } from "../../api/bookClub.js";
-import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
+import {
+  createBookClubForumEntry,
+  getBookClubForum,
+  getBookClubMeeting,
+} from "../../api/bookClub.js";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { id: "andre", name: "Andre" } }),
 }));
 vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   ...(await importOriginal()),
+  createBookClubForumEntry: vi.fn(),
+  getBookClubForum: vi.fn(),
   getBookClubMeeting: vi.fn(),
 }));
 
@@ -30,6 +35,9 @@ describe("BookClubMeetingFeature", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getBookClubMeeting.mockResolvedValue({ meeting: MEETING });
+    getBookClubForum.mockResolvedValue({
+      forum: { meetingId: MEETING.id, locked: false, threads: [] },
+    });
   });
   afterEach(() => cleanup());
 
@@ -37,7 +45,7 @@ describe("BookClubMeetingFeature", () => {
     render(
       <BookClubMeetingFeature
         meetings={[MEETING]}
-        moduleTag={<span>Books</span>}
+        roommates={[]}
         canAdminister={false}
         onChanged={vi.fn()}
       />,
@@ -58,12 +66,12 @@ describe("BookClubMeetingFeature", () => {
     expect(document.querySelector("[inert]")).toBeInTheDocument();
   });
 
-  it("places the existing admin edit action beside the open-meeting actions", async () => {
+  it("places meeting administration actions with the meeting details", async () => {
     const onEdit = vi.fn();
     render(
       <BookClubMeetingFeature
         meetings={[MEETING]}
-        moduleTag={<span>Books</span>}
+        roommates={[]}
         onEdit={onEdit}
         canAdminister
         onChanged={vi.fn()}
@@ -74,13 +82,11 @@ describe("BookClubMeetingFeature", () => {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
-    const editButton = await screen.findByRole("button", { name: "Edit" });
+    const editButton = await screen.findByRole("button", { name: "Edit meeting" });
     const reminderButton = screen.getByRole("button", { name: "Send reminder" });
     const completeButton = screen.getByRole("button", { name: "Complete meeting" });
-    expect(editButton.parentElement).toHaveClass("ui-moduleActionRow");
-    expect(editButton).toHaveClass("ui-pillSecondary", "ui-moduleActionButton");
-    expect(reminderButton).toHaveClass("ui-pillSecondary", "ui-moduleActionButton");
-    expect(completeButton).toHaveClass("ui-pillSecondary", "ui-moduleActionButton");
+    expect(editButton.parentElement).toContainElement(reminderButton);
+    expect(editButton.parentElement).toContainElement(completeButton);
     await userEvent.click(editButton);
     expect(onEdit).toHaveBeenCalledTimes(1);
   });
@@ -89,7 +95,7 @@ describe("BookClubMeetingFeature", () => {
     render(
       <BookClubMeetingFeature
         meetings={[MEETING]}
-        moduleTag={<span>Books</span>}
+        roommates={[]}
         canAdminister={false}
         onChanged={vi.fn()}
       />,
@@ -100,19 +106,34 @@ describe("BookClubMeetingFeature", () => {
       expanded: false,
     }));
     expect(await screen.findByRole("button", { name: "Send reminder" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit meeting" })).not.toBeInTheDocument();
   });
 
-  it("loads full meeting details when a deep link expands the module", async () => {
+  it("opens the forum from a deep link and can create a topic", async () => {
+    const createdForum = {
+      meetingId: MEETING.id,
+      locked: false,
+      threads: [{
+        id: "forum#1",
+        title: "Favorite passage",
+        body: "Which scene stayed with you?",
+        authorId: "andre",
+        authorName: "Andre",
+        createdAt: 1,
+        updatedAt: 1,
+        lastActivityAt: 1,
+        replies: [],
+      }],
+    };
+    createBookClubForumEntry.mockResolvedValue({ forum: createdForum });
     render(
-      <ModuleFocusProvider intent={{ itemId: "meeting#1", token: "focus-1" }}>
-        <BookClubMeetingFeature
-          meetings={[MEETING]}
-          moduleTag={<span>Books</span>}
-          canAdminister={false}
-          onChanged={vi.fn()}
-        />
-      </ModuleFocusProvider>,
+      <BookClubMeetingFeature
+        meetings={[MEETING]}
+        roommates={[]}
+        focusMeetingId="meeting#1"
+        canAdminister={false}
+        onChanged={vi.fn()}
+      />,
     );
 
     expect(await screen.findByRole("button", {
@@ -120,5 +141,50 @@ describe("BookClubMeetingFeature", () => {
       expanded: true,
     })).toBeInTheDocument();
     expect(getBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");
+    expect(getBookClubForum).toHaveBeenCalledWith("andre", "meeting#1");
+
+    await userEvent.type(screen.getByLabelText("New topic title"), "Favorite passage");
+    await userEvent.type(screen.getByLabelText("New topic post"), "Which scene stayed with you?");
+    await userEvent.click(screen.getByRole("button", { name: "Post topic" }));
+    expect(createBookClubForumEntry).toHaveBeenCalledWith("andre", "meeting#1", {
+      title: "Favorite passage",
+      body: "Which scene stayed with you?",
+    });
+    expect(await screen.findByRole("heading", { name: "Favorite passage" })).toBeInTheDocument();
+  });
+
+  it("keeps a completed meeting forum visible but read-only", async () => {
+    getBookClubForum.mockResolvedValue({
+      forum: {
+        meetingId: MEETING.id,
+        locked: true,
+        threads: [{
+          id: "forum#1",
+          title: "Favorite passage",
+          body: "Which scene stayed with you?",
+          authorId: "andre",
+          authorName: "Andre",
+          createdAt: 1,
+          updatedAt: 1,
+          lastActivityAt: 1,
+          replies: [],
+        }],
+      },
+    });
+    render(
+      <BookClubMeetingFeature
+        meetings={[{ ...MEETING, status: "completed" }]}
+        focusMeetingId="meeting#1"
+        canAdminister
+        onChanged={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText(
+      "This forum closed when the meeting was completed.",
+    )).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Favorite passage" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reply" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Start a topic" })).not.toBeInTheDocument();
   });
 });

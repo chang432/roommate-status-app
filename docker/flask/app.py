@@ -639,6 +639,19 @@ def create_app() -> Flask:
             return jsonify({"error": error}), status
         return jsonify({"meeting": meeting}), 201
 
+    @app.get("/api/book-club/meetings")
+    def list_book_club_meetings():
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not group_has_book_club(viewer["groupId"]):
+            return jsonify({"error": "Book Club is not enabled for this group."}), 404
+        return jsonify({
+            "meetings": book_club.list_meetings(
+                viewer["groupId"], db.get_all(viewer["groupId"])
+            )
+        })
+
     @app.get("/api/book-club/meetings/<meeting_id>")
     def get_book_club_meeting(meeting_id: str):
         viewer, error = group_member_from_query()
@@ -726,40 +739,134 @@ def create_app() -> Flask:
             return error
         return jsonify({"books": book_club.list_completed(viewer["groupId"], viewer["id"])})
 
-    @app.put("/api/book-club/books/<book_id>/rating")
-    def rate_book_club_book(book_id: str):
+    @app.put("/api/book-club/books/<book_id>/review")
+    def review_book_club_book(book_id: str):
         viewer, error = group_member_from_query()
         if error:
             return error
-        error = book_club.set_rating(
-            viewer["groupId"], book_id, viewer, (request.get_json(silent=True) or {}).get("rating")
+        body = request.get_json(silent=True) or {}
+        error = book_club.set_review(
+            viewer["groupId"],
+            book_id,
+            viewer,
+            body.get("rating"),
+            body.get("finished"),
+            body.get("note", ""),
         )
         if error:
             return jsonify({"error": error}), 400
         return jsonify({"books": book_club.list_completed(viewer["groupId"], viewer["id"])})
 
-    @app.get("/api/book-club/books/<book_id>/posts")
-    def list_book_club_posts(book_id: str):
+    @app.get("/api/book-club/meetings/<meeting_id>/forum")
+    def get_book_club_forum(meeting_id: str):
         viewer, error = group_member_from_query()
         if error:
             return error
-        return jsonify({"posts": book_club.list_posts(
-            viewer["groupId"], book_id, request.args.get("chapterKey")
-        )})
+        forum = book_club.get_forum(viewer["groupId"], meeting_id)
+        if forum is None:
+            return jsonify({"error": "Unknown meeting."}), 404
+        return jsonify({"forum": forum})
 
-    @app.post("/api/book-club/books/<book_id>/posts")
-    def create_book_club_post(book_id: str):
+    @app.post("/api/book-club/meetings/<meeting_id>/forum")
+    def create_book_club_forum_entry(meeting_id: str):
         viewer, error = group_member_from_query()
         if error:
             return error
         body = request.get_json(silent=True) or {}
-        post, error = book_club.create_post(
-            viewer["groupId"], viewer, book_id, body.get("chapterKey"),
-            body.get("chapterLabel"), body.get("body"),
+        forum, entry, error = book_club.create_forum_entry(
+            viewer["groupId"],
+            meeting_id,
+            viewer,
+            body.get("title"),
+            body.get("body"),
+            body.get("parentPostId"),
         )
         if error:
-            return jsonify({"error": error}), 404 if error == "Unknown book." else 400
-        return jsonify({"post": post}), 201
+            if error in {"Unknown meeting.", "Unknown open forum topic."}:
+                status = 404
+            elif "read-only" in error:
+                status = 409
+            else:
+                status = 400
+            return jsonify({"error": error}), status
+
+        notification_url = module_models.module_url(
+            "book-club",
+            meeting_id,
+            body.get("parentPostId") or entry["id"],
+        )
+        try:
+            if body.get("parentPostId"):
+                push.notify_users(
+                    user_ids=book_club.thread_participant_ids(
+                        viewer["groupId"], meeting_id, body["parentPostId"]
+                    ),
+                    exclude_user_ids={viewer["id"]},
+                    title=f"{viewer['name']} replied in Book Club",
+                    body=entry["body"],
+                    url=group_url(viewer["groupId"], notification_url),
+                    event_type="book-club-changed",
+                )
+            else:
+                notify_group(
+                    viewer["groupId"],
+                    title=f"New Book Club topic from {viewer['name']}",
+                    body=f"{entry['title']}: {entry['body']}",
+                    url=notification_url,
+                    event_type="book-club-changed",
+                    exclude_user_ids={viewer["id"]},
+                )
+        except Exception:  # noqa: BLE001 - a forum write must not depend on push
+            app.logger.exception("Failed to send Book Club forum notification")
+        return jsonify({"forum": forum}), 201
+
+    @app.patch("/api/book-club/meetings/<meeting_id>/forum/<entry_id>")
+    def update_book_club_forum_entry(meeting_id: str, entry_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        forum, error = book_club.update_forum_entry(
+            viewer["groupId"],
+            meeting_id,
+            entry_id,
+            viewer,
+            body.get("title"),
+            body.get("body"),
+        )
+        if error:
+            if error == "Unknown forum entry.":
+                status = 404
+            elif error.startswith("Only the author"):
+                status = 403
+            elif "read-only" in error:
+                status = 409
+            else:
+                status = 400
+            return jsonify({"error": error}), status
+        return jsonify({"forum": forum})
+
+    @app.delete("/api/book-club/meetings/<meeting_id>/forum/<entry_id>")
+    def delete_book_club_forum_entry(meeting_id: str, entry_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        forum, error = book_club.delete_forum_entry(
+            viewer["groupId"],
+            meeting_id,
+            entry_id,
+            viewer,
+            db.is_group_admin(viewer["id"], viewer["groupId"]),
+        )
+        if error:
+            if error == "Unknown forum entry.":
+                status = 404
+            elif error.startswith("Only the author"):
+                status = 403
+            else:
+                status = 409
+            return jsonify({"error": error}), status
+        return jsonify({"forum": forum})
 
     # --- Spotify Jam --------------------------------------------------------
     @app.get("/api/jam")

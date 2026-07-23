@@ -122,24 +122,141 @@ def test_members_can_update_past_open_meetings_and_notify(client, monkeypatch):
     assert notifications[0][1]["url"] == module_models.module_url("book-club", meeting["id"])
 
 
-def test_completed_book_keeps_ratings_and_chapter_discussion(client):
+def test_completed_book_collects_member_reviews(client):
     meeting = create_meeting(client).get_json()["meeting"]
     completed = client.post(grouped_path(f"/api/book-club/books/{meeting['bookId']}/complete"))
     assert completed.status_code == 200
 
-    rated = client.put(
-        grouped_path(f"/api/book-club/books/{meeting['bookId']}/rating"), json={"rating": 5}
+    reviewed = client.put(
+        grouped_path(f"/api/book-club/books/{meeting['bookId']}/review"),
+        json={"rating": 5, "finished": True, "note": "A sharp ending."},
     )
-    assert rated.status_code == 200
-    assert rated.get_json()["books"][0]["viewerRating"] == 5
+    assert reviewed.status_code == 200
+    book = reviewed.get_json()["books"][0]
+    assert book["averageRating"] == 5
+    assert book["finishedCount"] == 1
+    assert book["viewerReview"]["note"] == "A sharp ending."
 
-    posted = client.post(
-        grouped_path(f"/api/book-club/books/{meeting['bookId']}/posts"),
-        json={"chapterKey": "008", "chapterLabel": "Chapter 8", "body": "A sharp ending."},
+    invalid = client.put(
+        grouped_path(
+            f"/api/book-club/books/{meeting['bookId']}/review",
+            user_id="sheryl",
+        ),
+        json={"rating": 4},
     )
-    assert posted.status_code == 201
-    posts = client.get(grouped_path(f"/api/book-club/books/{meeting['bookId']}/posts"))
-    assert posts.get_json()["posts"][0]["body"] == "A sharp ending."
+    assert invalid.status_code == 400
+    assert invalid.get_json()["error"] == "Finished must be true or false."
+
+
+def test_legacy_rating_is_visible_until_member_confirms_finish_status(client):
+    meeting = create_meeting(client).get_json()["meeting"]
+    client.post(grouped_path(f"/api/book-club/books/{meeting['bookId']}/complete"))
+    book_club._get_table().put_item(Item={
+        "groupId": TEST_GROUP_ID,
+        "id": f"rating#{meeting['bookId']}#sheryl",
+        "bookId": meeting["bookId"],
+        "userId": "sheryl",
+        "userName": "Sheryl",
+        "rating": 4,
+        "createdAt": 1,
+        "updatedAt": 1,
+    })
+
+    books = client.get(
+        grouped_path("/api/book-club/books/completed", user_id="sheryl")
+    ).get_json()["books"]
+
+    assert books[0]["viewerReview"]["rating"] == 4
+    assert books[0]["viewerReview"]["finished"] is None
+    assert books[0]["unknownFinishCount"] == 1
+
+
+def test_meeting_forum_supports_topics_replies_moderation_and_locking(
+    client, monkeypatch
+):
+    meeting = create_meeting(client).get_json()["meeting"]
+    group_notifications = []
+    user_notifications = []
+    monkeypatch.setattr(
+        "app.notify_group",
+        lambda group_id, **kwargs: group_notifications.append(kwargs)
+        or {"sent": 0, "pruned": 0, "failed": 0},
+    )
+    monkeypatch.setattr(
+        push,
+        "notify_users",
+        lambda **kwargs: user_notifications.append(kwargs)
+        or {"sent": 0, "pruned": 0, "failed": 0},
+    )
+
+    created = client.post(
+        grouped_path(meeting_path(meeting["id"], "/forum"), user_id="sheryl"),
+        json={"title": "Favorite passage", "body": "Which scene stayed with you?"},
+    )
+    assert created.status_code == 201
+    topic = created.get_json()["forum"]["threads"][0]
+    assert topic["authorName"] == "Sheryl"
+    assert group_notifications[0]["exclude_user_ids"] == {"sheryl"}
+    assert group_notifications[0]["url"] == module_models.module_url(
+        "book-club", meeting["id"], topic["id"]
+    )
+
+    edited = client.patch(
+        grouped_path(
+            meeting_path(
+                meeting["id"],
+                f"/forum/{quote(topic['id'], safe='')}",
+            ),
+            user_id="sheryl",
+        ),
+        json={"title": "Favorite scene", "body": "Which scene stayed with you?"},
+    )
+    assert edited.status_code == 200
+    assert edited.get_json()["forum"]["threads"][0]["title"] == "Favorite scene"
+
+    replied = client.post(
+        grouped_path(meeting_path(meeting["id"], "/forum")),
+        json={"parentPostId": topic["id"], "body": "The walk across the ice."},
+    )
+    assert replied.status_code == 201
+    thread = replied.get_json()["forum"]["threads"][0]
+    reply = thread["replies"][0]
+    assert reply["authorName"] == "Andre"
+    assert user_notifications[0]["user_ids"] == {"andre", "sheryl"}
+    assert user_notifications[0]["exclude_user_ids"] == {"andre"}
+
+    forbidden = client.patch(
+        grouped_path(
+            meeting_path(
+                meeting["id"],
+                f"/forum/{quote(topic['id'], safe='')}",
+            )
+        ),
+        json={"title": "Changed", "body": "Nope"},
+    )
+    assert forbidden.status_code == 403
+
+    removed = client.delete(
+        grouped_path(
+            meeting_path(
+                meeting["id"],
+                f"/forum/{quote(topic['id'], safe='')}",
+            )
+        )
+    )
+    assert removed.status_code == 200
+    assert removed.get_json()["forum"]["threads"][0]["deletedAt"] is not None
+
+    client.post(grouped_path(meeting_path(meeting["id"], "/complete")))
+    locked = client.get(
+        grouped_path(meeting_path(meeting["id"], "/forum"))
+    ).get_json()["forum"]
+    assert locked["locked"] is True
+    rejected = client.post(
+        grouped_path(meeting_path(meeting["id"], "/forum")),
+        json={"title": "Late topic", "body": "Too late"},
+    )
+    assert rejected.status_code == 409
 
 
 def test_feed_exposes_meetings_only_when_book_club_is_enabled(client):

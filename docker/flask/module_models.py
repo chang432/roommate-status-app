@@ -23,10 +23,22 @@ import jam
 MODULE_TYPES = {"events", "requests", "checklists", "polls", "tv", "spotify", "book-club"}
 
 
-def module_url(module_type: str, item_id: str | None = None) -> str:
+def module_url(
+    module_type: str,
+    item_id: str | None = None,
+    thread_id: str | None = None,
+) -> str:
     """Build the canonical frontend destination for a module or module filter."""
     if module_type not in MODULE_TYPES:
         raise ValueError(f"Unknown module type: {module_type}")
+    if module_type == "book-club":
+        params = {}
+        if item_id:
+            params["meeting"] = item_id
+        if thread_id:
+            params["thread"] = thread_id
+        query = urlencode(params)
+        return f"/book-club?{query}" if query else "/book-club"
     params = {"module": module_type}
     if item_id:
         params["item"] = item_id

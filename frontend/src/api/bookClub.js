@@ -11,6 +11,10 @@ export function createBookClubMeeting(userId, meeting) {
   });
 }
 
+export function getBookClubMeetings(userId) {
+  return request(withQuery("/book-club/meetings", { userId }));
+}
+
 export function getBookClubMeeting(userId, meetingId) {
   return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}`, { userId }));
 }
@@ -44,20 +48,33 @@ export function getCompletedBookClubBooks(userId) {
   return request(withQuery("/book-club/books/completed", { userId }));
 }
 
-export function rateBookClubBook(userId, bookId, rating) {
-  return request(withQuery(`/book-club/books/${encodeURIComponent(bookId)}/rating`, { userId }), {
+export function reviewBookClubBook(userId, bookId, review) {
+  return request(withQuery(`/book-club/books/${encodeURIComponent(bookId)}/review`, { userId }), {
     method: "PUT",
-    body: JSON.stringify({ rating }),
+    body: JSON.stringify(review),
   });
 }
 
-export function getBookClubPosts(userId, bookId, chapterKey) {
-  return request(withQuery(`/book-club/books/${encodeURIComponent(bookId)}/posts`, { userId, chapterKey }));
+export function getBookClubForum(userId, meetingId) {
+  return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}/forum`, { userId }));
 }
 
-export function createBookClubPost(userId, bookId, post) {
-  return request(withQuery(`/book-club/books/${encodeURIComponent(bookId)}/posts`, { userId }), {
+export function createBookClubForumEntry(userId, meetingId, entry) {
+  return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}/forum`, { userId }), {
     method: "POST",
-    body: JSON.stringify(post),
+    body: JSON.stringify(entry),
+  });
+}
+
+export function updateBookClubForumEntry(userId, meetingId, entryId, changes) {
+  return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}/forum/${encodeURIComponent(entryId)}`, { userId }), {
+    method: "PATCH",
+    body: JSON.stringify(changes),
+  });
+}
+
+export function deleteBookClubForumEntry(userId, meetingId, entryId) {
+  return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}/forum/${encodeURIComponent(entryId)}`, { userId }), {
+    method: "DELETE",
   });
 }

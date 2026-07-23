@@ -280,8 +280,8 @@ Resources:
         - Key: Environment
           Value: main
 
-  # Book Club keeps long-lived books, sessions, responses, ratings, and
-  # chapter posts out of group metadata and the household feed. BookIdIndex
+  # Book Club keeps long-lived books, meetings, responses, reviews, and
+  # meeting forums out of group metadata and the household feed. BookIdIndex
   # reads one book's related records without scanning its group partition.
   BookClubTable:
     Type: AWS::DynamoDB::Table
