@@ -3,12 +3,17 @@
 ## Product behavior
 
 - Groups with Book Club enabled show Book and Snack owner lists above the feed.
+  The cards display the open meeting's assigned owners; list heads are the
+  defaults when no active assignment is available.
 - The current-book card appears above those owner trackers. An open meeting
   exposes its full editor as an explicit admin action alongside reminder and
   completion actions.
 - Index zero in each list is the current owner and the default for a new meeting.
   Neither list advances automatically. An admin selection moves that member to
   the front while preserving everyone else's relative order.
+- A one-time alignment rotates the Book list onto the Snack list's relative
+  cycle while preserving the current Book owner. The lists remain independent
+  after that correction.
 - Meeting creation and editing use three-row vertical owner wheels that show
   the previous, selected, and next members and loop through the stored order.
 - An admin creates, edits, and manually completes one open meeting at a time.
@@ -51,4 +56,6 @@ update their own response, rate a completed book, and post discussion.
 `2026-07-22-01-book-club-meeting-modules` converts the former cursor-based
 rotations and date-derived session IDs to sticky owner lists and stable meeting
 IDs while preserving books, sessions, responses, ratings, and posts. No table
-or index change is required.
+or index change is required. `2026-07-23-01-align-book-owner-order` aligns the
+two relative owner cycles once without imposing an ongoing synchronization
+rule.

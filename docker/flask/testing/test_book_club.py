@@ -80,6 +80,8 @@ def test_admin_edit_moves_each_selected_owner_to_front(client):
     summary = client.get(grouped_path("/api/book-club")).get_json()["summary"]
     assert summary["configuration"]["bookOwnerOrderUserIds"][0] == "kayla"
     assert summary["configuration"]["snackOwnerOrderUserIds"][0] == "sheryl"
+    assert summary["configuration"]["bookOwnerOrderUserIds"][1] == "andre"
+    assert summary["configuration"]["snackOwnerOrderUserIds"][1] == "andre"
 
     forbidden = client.patch(
         f"/api/modules/book-club/{quote(meeting['id'], safe='')}",

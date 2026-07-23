@@ -56,6 +56,27 @@ describe("BookClub owner lists", () => {
     expect(dialog).toHaveTextContent("SherylOrder #3");
   });
 
+  it("shows the active meeting owners even when the stored defaults differ", async () => {
+    getBookClub.mockResolvedValue({
+      summary: {
+        ...summary(),
+        openMeeting: {
+          bookOwnerId: "andre",
+          snackOwnerId: "sheryl",
+        },
+      },
+    });
+    render(<BookClub roommates={ROOMMATES} groupId="book-club" />);
+
+    const bookTracker = await screen.findByRole("button", { name: /Book Andre/ });
+    expect(screen.getByRole("button", { name: /Snack Sheryl/ })).toBeInTheDocument();
+
+    await userEvent.click(bookTracker);
+    const dialog = screen.getByRole("dialog", { name: "Book owner order" });
+    expect(dialog).toHaveTextContent("KaylaDefault owner");
+    expect(dialog).toHaveTextContent("AndreCurrent owner");
+  });
+
   it("lets an admin complete the active book without changing meetings", async () => {
     completeBookClubBook.mockResolvedValue({ summary: summary(false) });
     render(<BookClub roommates={ROOMMATES} groupId="book-club" />);
