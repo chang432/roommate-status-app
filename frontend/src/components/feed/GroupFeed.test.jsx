@@ -413,6 +413,7 @@ describe("GroupFeed module focus", () => {
   it.each([
     ["events", "Movie night"],
     ["requests", "Pick up milk"],
+    ["polls", "Dinner?"],
   ])(
     "opens and reopens %s cards at the latest comment without snapping on refresh",
     async (type, label) => {

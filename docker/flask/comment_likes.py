@@ -3,19 +3,20 @@
 Likes on activity and request comments used to live inside the shared
 activities table as typed rows (``itemType`` ``commentLike`` /
 ``requestCommentLike``). They now own their own table so the activity and
-request feeds no longer scan-and-discard like rows on every read. Likes are
+request feeds no longer scan-and-discard like rows on every read. Poll comment
+likes use the same dedicated table. Likes are
 the highest-cardinality, fastest-growing rows in that feed (one per user per
 liked comment), so giving them a dedicated table keeps each feed scan lean.
 
 Each row still self-describes which parent it belongs to — activity likes
-carry ``activityId``, request likes carry ``requestId`` — so a single table
-holds both kinds; the ``itemType`` discriminator is redundant here and dropped.
-The deterministic ids the two modules generate are prefixed differently
-(``comment-like#…`` vs ``request-comment-like#…``), so they never collide.
+carry ``activityId``, request likes carry ``requestId``, and poll likes carry
+``pollId`` — so a single table holds every kind; the ``itemType`` discriminator
+is redundant here and dropped. Each module uses a distinct deterministic ID
+prefix, so their rows never collide.
 
 This module owns only the table plumbing; the per-parent id, validation, and
-row shape stay with activities.py / household_requests.py, which just target
-this table instead of the activities table.
+row shape stay with activities.py / household_requests.py /
+household_polls.py, which just target this table instead of their parent table.
 
 The table is keyed ``(groupId HASH, id RANGE)`` so a feed reads only its own
 household's likes — see group_tables.py for why the feed tables partition on
@@ -58,15 +59,16 @@ def _get_table():
 
 
 def list_for_group(group_id: str, consistent: bool = False) -> list[dict]:
-    """Read one group's comment-like rows (both activity and request likes)."""
+    """Read one group's comment-like rows across all supported parent types."""
     return query_group(_get_table(), group_id, consistent=consistent)
 
 
 def likes_by_parent(group_id: str, parent_field: str, consistent: bool = False) -> dict:
     """Group a household's likes into ``{parent_id: {comment_id: {user_id}}}``.
 
-    ``parent_field`` selects which kind of like to keep — ``"activityId"`` or
-    ``"requestId"`` — since both share this table and each row names its parent.
+    ``parent_field`` selects which kind of like to keep — ``"activityId"``,
+    ``"requestId"``, or ``"pollId"`` — since all share this table and each row
+    names its parent.
     """
     grouped: dict[str, dict[str, set[str]]] = {}
     for like in list_for_group(group_id, consistent=consistent):
@@ -80,7 +82,7 @@ def likes_by_parent(group_id: str, parent_field: str, consistent: bool = False) 
 
 
 def delete_for_parent(group_id: str, parent_field: str, parent_id: str) -> None:
-    """Drop every like belonging to one deleted activity or request."""
+    """Drop every like belonging to one deleted comment-bearing parent."""
     table = _get_table()
     for like in list_for_group(group_id, consistent=True):
         if like.get(parent_field) == parent_id:

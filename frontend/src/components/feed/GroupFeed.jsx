@@ -1040,6 +1040,7 @@ export default function GroupFeed({
       return (
         <PollFeature
           polls={[module.payload]}
+          roommates={roommates}
           onPollsChange={handlePollsChange}
           moduleTag={moduleTag}
           onEdit={onEdit}

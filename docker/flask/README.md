@@ -57,6 +57,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/polls/<id>/options`                               | `{ userId, text }`                         | full updated poll list                                  |
 | `PATCH /api/polls/<id>/options/<optionId>`                   | `{ userId, text }`                         | full updated poll list                                  |
 | `PUT/DELETE /api/polls/<id>/options/<optionId>/votes`        | `{ userId }`                               | full updated poll list                                  |
+| `POST /api/polls/<id>/comments`                              | `{ authorId, text }`                       | full updated poll list                                  |
+| `PUT/DELETE /api/polls/<id>/comments/<commentId>/likes`      | `{ userId }`                               | full updated poll list                                  |
 | `POST /api/polls/<id>/archive`                               | `{ userId }`                               | full updated poll list                                  |
 | `POST /api/polls/<id>/restore`                               | `{ userId }`                               | full updated poll list                                  |
 | `DELETE /api/polls/<id>`                                     | `{ userId }`                               | full updated poll list                                  |
@@ -118,6 +120,10 @@ push. The reserved `@all` mention sends one household-wide push excluding the
 author. Mention identities are resolved server-side from the shire roster.
 Comments have stable ids and can be liked once per non-author roommate; likes
 are idempotent, can be removed, and do not send push notifications.
+Poll comments follow the same shape and mention behavior. Their ordinary
+notification audience is the Poll creator plus members who have voted; option
+contributors who have not voted are excluded. Archived Polls keep comments and
+voter lists inspectable while all mutations remain read-only.
 Live-event pushes include an activity-change event type so open apps refresh
 their banner immediately.
 Requests are stored as typed records in the activities table, targeted to

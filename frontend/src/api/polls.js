@@ -28,6 +28,20 @@ export function setPollVote(id, optionId, userId, selected) {
   });
 }
 
+export function commentOnPoll(id, authorId, text) {
+  return request(`/polls/${id}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ authorId, text }),
+  });
+}
+
+export function setPollCommentLiked(id, commentId, userId, liked) {
+  return request(`/polls/${id}/comments/${commentId}/likes`, {
+    method: liked ? "PUT" : "DELETE",
+    body: JSON.stringify({ userId }),
+  });
+}
+
 export function archivePoll(id, userId) {
   return request(`/polls/${id}/archive`, {
     method: "POST",

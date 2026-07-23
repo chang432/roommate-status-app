@@ -10,10 +10,12 @@ import uuid
 
 from botocore.exceptions import ClientError
 
+import comment_likes
 from db import resource
 from group_tables import query_group
 
 RECENT_LIMIT = 10
+COMMENTS_LIMIT = 100
 MAX_OPTIONS = 50
 TABLE_NAME = os.environ.get("POLLS_TABLE") or (
     f"{os.environ.get('ROOMMATE_TABLE', 'RoommateStatus-main')}-polls"
@@ -25,6 +27,7 @@ READ_ONLY = "read_only"
 DUPLICATE = "duplicate"
 LIMIT_REACHED = "limit"
 CONFLICT = "conflict"
+LIKE_SELF_FORBIDDEN = "like_self_forbidden"
 
 _table = None
 _table_lock = threading.Lock()
@@ -86,7 +89,17 @@ def _project_option(raw: dict) -> dict:
     }
 
 
-def _project(item: dict) -> dict:
+def _comment_entries(item: dict) -> list[tuple[str, dict]]:
+    return [
+        (comment.get("id") or f"legacy-poll-comment-{index}", comment)
+        for index, comment in enumerate(item.get("comments") or [])
+    ]
+
+
+def _project(
+    item: dict, likes_by_comment: dict[str, set[str]] | None = None
+) -> dict:
+    likes_by_comment = likes_by_comment or {}
     archived_at = item.get("archivedAt")
     return {
         "id": item["id"],
@@ -96,6 +109,24 @@ def _project(item: dict) -> dict:
         "createdAt": int(item["createdAt"]),
         "updatedAt": int(item.get("updatedAt", item["createdAt"])),
         "options": [_project_option(option) for option in item.get("options") or []],
+        "comments": [
+            {
+                "id": comment_id,
+                "author": comment.get("author", "Someone"),
+                "authorId": comment.get("authorId"),
+                "text": comment.get("text", ""),
+                "createdAt": int(comment["createdAt"]),
+                "mentions": [
+                    {"id": mention["id"], "name": mention["name"]}
+                    for mention in comment.get("mentions") or []
+                    if mention.get("id") and mention.get("name")
+                ],
+                "mentionsAll": bool(comment.get("mentionsAll", False)),
+                "likedByIds": sorted(likes_by_comment.get(comment_id, set())),
+                "likeCount": len(likes_by_comment.get(comment_id, set())),
+            }
+            for comment_id, comment in _comment_entries(item)[-COMMENTS_LIMIT:]
+        ],
         "isArchived": bool(item.get("isArchived", False)),
         "archivedAt": int(archived_at) if archived_at is not None else None,
         "archivedById": item.get("archivedById"),
@@ -132,11 +163,14 @@ def add_poll(
 
 def get(poll_id: str, group_id: str) -> dict | None:
     item = _fetch(poll_id, group_id)
-    return _project(item) if item else None
+    if item is None:
+        return None
+    likes = comment_likes.likes_by_parent(group_id, "pollId", consistent=True)
+    return _project(item, likes.get(poll_id))
 
 
 def _mutate(poll_id: str, group_id: str, mutate, *, require_active: bool = True):
-    """Retry a whole embedded-option update so concurrent votes are not lost."""
+    """Retry a whole embedded-data update so concurrent mutations are not lost."""
     for _ in range(5):
         item = _fetch(poll_id, group_id)
         if item is None:
@@ -240,6 +274,88 @@ def set_vote(
     return _mutate(poll_id, group_id, mutate)
 
 
+def add_comment(
+    poll_id: str,
+    author_id: str,
+    author: str,
+    group_id: str,
+    text: str,
+    mentions: list[dict] | None = None,
+    mentions_all: bool = False,
+):
+    comment = {
+        "id": uuid.uuid4().hex,
+        "authorId": author_id,
+        "author": author,
+        "text": text,
+        "mentions": mentions or [],
+        "mentionsAll": mentions_all,
+        "createdAt": int(time.time() * 1000),
+    }
+
+    def mutate(item):
+        item.setdefault("comments", []).append(comment)
+
+    return _mutate(poll_id, group_id, mutate)
+
+
+def participant_ids(item: dict) -> set[str]:
+    """Return the creator and voters who receive ordinary comment pushes."""
+    participants = {item.get("createdById")}
+    for option in item.get("options") or []:
+        participants.update(option.get("voterIds") or [])
+    participants.discard(None)
+    return participants
+
+
+def set_comment_like(
+    poll_id: str,
+    comment_id: str,
+    user_id: str,
+    user_name: str,
+    group_id: str,
+    liked: bool,
+) -> str:
+    item = _fetch(poll_id, group_id)
+    if item is None:
+        return NOT_FOUND
+    if item.get("isArchived"):
+        return READ_ONLY
+    comment = next(
+        (
+            raw
+            for candidate_id, raw in _comment_entries(item)
+            if candidate_id == comment_id
+        ),
+        None,
+    )
+    if comment is None:
+        return NOT_FOUND
+    if comment.get("authorId") == user_id or (
+        not comment.get("authorId")
+        and comment.get("author", "").strip().casefold()
+        == user_name.strip().casefold()
+    ):
+        return LIKE_SELF_FORBIDDEN
+
+    key = {
+        "groupId": group_id,
+        "id": f"poll-comment-like#{poll_id}#{comment_id}#{user_id}",
+    }
+    if liked:
+        comment_likes._get_table().put_item(
+            Item={
+                **key,
+                "pollId": poll_id,
+                "commentId": comment_id,
+                "userId": user_id,
+            }
+        )
+    else:
+        comment_likes._get_table().delete_item(Key=key)
+    return "ok"
+
+
 def archive(poll_id: str, user_id: str, name: str, group_id: str):
     def mutate(item):
         archived_at = _now_after(item)
@@ -269,12 +385,16 @@ def delete(poll_id: str, group_id: str) -> dict | None:
     if item is None:
         return None
     _get_table().delete_item(Key={"groupId": group_id, "id": poll_id})
+    comment_likes.delete_for_parent(group_id, "pollId", poll_id)
     return _project(item)
 
 
 def list_recent(
     group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False
 ) -> list[dict]:
+    likes_by_poll = comment_likes.likes_by_parent(
+        group_id, "pollId", consistent=consistent
+    )
     polls = [
         item
         for item in query_group(_get_table(), group_id, consistent=consistent)
@@ -283,4 +403,6 @@ def list_recent(
     polls.sort(
         key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True
     )
-    return [_project(item) for item in polls[:limit]]
+    return [
+        _project(item, likes_by_poll.get(item["id"])) for item in polls[:limit]
+    ]

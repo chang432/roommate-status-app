@@ -49,7 +49,8 @@ availability to hang out. Built from the mockups in `../mockups`.
   restored, or deleted.
 - **Polls**: roommate and Book Club groups can create standalone, multi-select
   polls. Everyone can add options and vote; creators edit poll and option text,
-  while any current member can archive, restore, or delete.
+  while any current member can archive, restore, or delete. Poll panels also
+  support comments, mentions, likes, and inspectable voter lists.
 
 ## Tech
 
@@ -139,6 +140,8 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `addPollOption`                 | `POST /api/polls/:id/options`                              |
 | `editPollOption`                | `PATCH /api/polls/:id/options/:optionId`                   |
 | `setPollVote`                   | `PUT/DELETE /api/polls/:id/options/:optionId/votes`        |
+| `commentOnPoll`                 | `POST /api/polls/:id/comments`                             |
+| `setPollCommentLiked`           | `PUT/DELETE /api/polls/:id/comments/:commentId/likes`      |
 | `archivePoll`                   | `POST /api/polls/:id/archive`                              |
 | `restorePoll`                   | `POST /api/polls/:id/restore`                              |
 | `deletePoll`                    | `DELETE /api/polls/:id`                                    |

@@ -59,6 +59,8 @@ And the shire checklist feed:
     POST /api/polls                    -> the updated recent poll list
     POST/PATCH /api/polls/<id>/options -> add or edit poll options
     PUT/DELETE /api/polls/<id>/options/<option_id>/votes
+    POST /api/polls/<id>/comments
+    PUT/DELETE /api/polls/<id>/comments/<comment_id>/likes
     POST /api/polls/<id>/archive|restore
     DELETE /api/polls/<id>             -> the updated recent poll list
 
@@ -1833,6 +1835,119 @@ def create_app() -> Flask:
                 request.method == "PUT",
             ),
             roommate["groupId"],
+        )
+
+    @app.post("/api/polls/<poll_id>/comments")
+    def comment_on_poll(poll_id: str):
+        body = request.get_json(silent=True) or {}
+        author_id = (body.get("authorId") or "").strip()
+        text = (body.get("text") or "").strip()
+        author = db.get_group_member(author_id) if author_id else None
+        if author is None:
+            return jsonify({"error": "A valid author is required."}), 400
+        if not text:
+            return jsonify({"error": "A comment is required."}), 400
+        if len(text) > MAX_COMMENT_LEN:
+            return jsonify({"error": f"Keep it under {MAX_COMMENT_LEN} characters."}), 400
+
+        mentions = resolve_mentions(
+            text, db.get_all(author["groupId"]), author["id"]
+        )
+        mentions_everyone = mentions_all(text)
+        updated = household_polls.add_comment(
+            poll_id,
+            author["id"],
+            author["name"],
+            author["groupId"],
+            text,
+            mentions,
+            mentions_everyone,
+        )
+        if updated == household_polls.NOT_FOUND:
+            return jsonify({"error": f"Unknown poll: {poll_id}"}), 404
+        if updated == household_polls.READ_ONLY:
+            return jsonify({"error": "Archived polls are read-only."}), 409
+        if updated == household_polls.CONFLICT:
+            return jsonify({"error": "The poll changed. Please try again."}), 409
+
+        mentioned_ids = {mention["id"] for mention in mentions}
+        participant_ids = (
+            household_polls.participant_ids(updated)
+            - mentioned_ids
+            - {author["id"]}
+        )
+
+        def notify_poll_users(
+            user_ids: set[str], title: str, notification_body: str
+        ):
+            try:
+                push.notify_users(
+                    user_ids=user_ids,
+                    title=title,
+                    body=notification_body,
+                    url=group_url(
+                        author["groupId"],
+                        module_models.module_url("polls", updated["id"]),
+                    ),
+                    event_type="polls-changed",
+                )
+            except Exception:  # noqa: BLE001 - push cannot undo the comment
+                app.logger.exception("Failed to send poll comment notification")
+
+        if mentions_everyone:
+            try:
+                notify_group(
+                    author["groupId"],
+                    title=f"{author['name']} mentioned everyone",
+                    body=f"On poll “{updated['title']}”: {text}",
+                    url=module_models.module_url("polls", updated["id"]),
+                    event_type="polls-changed",
+                    exclude_user_ids={author["id"]},
+                )
+            except Exception:  # noqa: BLE001 - push cannot undo the comment
+                app.logger.exception("Failed to send poll comment @all notification")
+        elif mentioned_ids:
+            notify_poll_users(
+                mentioned_ids,
+                f"{author['name']} mentioned you",
+                f"On poll “{updated['title']}”: {text}",
+            )
+        if participant_ids and not mentions_everyone:
+            notify_poll_users(
+                participant_ids,
+                "New poll comment",
+                f"{author['name']} on “{updated['title']}”: {text}",
+            )
+        return jsonify(
+            household_polls.list_recent(author["groupId"], consistent=True)
+        )
+
+    @app.route(
+        "/api/polls/<poll_id>/comments/<comment_id>/likes",
+        methods=["PUT", "DELETE"],
+    )
+    def update_poll_comment_like(poll_id: str, comment_id: str):
+        body = request.get_json(silent=True) or {}
+        user_id = (body.get("userId") or "").strip()
+        roommate = db.get_group_member(user_id) if user_id else None
+        if roommate is None:
+            return invalid_user_response()
+        result = household_polls.set_comment_like(
+            poll_id,
+            comment_id,
+            roommate["id"],
+            roommate["name"],
+            roommate["groupId"],
+            request.method == "PUT",
+        )
+        if result == household_polls.NOT_FOUND:
+            return jsonify({"error": "Unknown poll or comment."}), 404
+        if result == household_polls.LIKE_SELF_FORBIDDEN:
+            return jsonify({"error": "You cannot like your own comment."}), 403
+        if result == household_polls.READ_ONLY:
+            return jsonify({"error": "Archived polls are read-only."}), 409
+        return jsonify(
+            household_polls.list_recent(roommate["groupId"], consistent=True)
         )
 
     @app.post("/api/polls/<poll_id>/archive")

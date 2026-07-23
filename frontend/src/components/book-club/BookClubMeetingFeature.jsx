@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   completeBookClubMeeting,
   createBookClubPost,
@@ -27,7 +27,22 @@ export default function BookClubMeetingFeature({ meetings, moduleTag, onEdit, ca
   const [posts, setPosts] = useState([]);
   const [chapterLabel, setChapterLabel] = useState("");
   const [postBody, setPostBody] = useState("");
-  useExpandOnModuleFocus(setExpandedId);
+
+  const loadMeetingDetails = useCallback(async (meetingId) => {
+    try {
+      const response = await getBookClubMeeting(user.id, meetingId);
+      setDetails((current) => ({ ...current, [meetingId]: response.meeting }));
+    } catch (err) {
+      setError(err.message || "Could not load meeting details.");
+    }
+  }, [user.id]);
+
+  const expandFocusedMeeting = useCallback((meetingId) => {
+    setExpandedId(meetingId);
+    // Deep links bypass the header click, so load the same full detail explicitly.
+    void loadMeetingDetails(meetingId);
+  }, [loadMeetingDetails]);
+  useExpandOnModuleFocus(expandFocusedMeeting);
 
   async function toggle(meeting) {
     if (expandedId === meeting.id) {
@@ -35,12 +50,7 @@ export default function BookClubMeetingFeature({ meetings, moduleTag, onEdit, ca
       return;
     }
     setExpandedId(meeting.id);
-    try {
-      const response = await getBookClubMeeting(user.id, meeting.id);
-      setDetails((current) => ({ ...current, [meeting.id]: response.meeting }));
-    } catch (err) {
-      setError(err.message || "Could not load meeting details.");
-    }
+    await loadMeetingDetails(meeting.id);
   }
 
   async function saveResponse(meeting, response, changes) {
@@ -155,7 +165,15 @@ export default function BookClubMeetingFeature({ meetings, moduleTag, onEdit, ca
               </span>
               {moduleTag}
             </button>
-            {expanded && (
+            <div
+              className={`${styles.expandedRegion} ${
+                expanded ? styles.expanded : styles.collapsed
+              }`}
+            >
+              <div
+                className={styles.expandedInner}
+                {...(!expanded ? { inert: "" } : {})}
+              >
               <div className={styles.panel}>
                 <button type="button" className={styles.bookButton} onClick={() => openBook(detail)}>
                   {detail.bookTitle} by {detail.bookAuthor}
@@ -205,7 +223,8 @@ export default function BookClubMeetingFeature({ meetings, moduleTag, onEdit, ca
                   </div>
                 )}
               </div>
-            )}
+              </div>
+            </div>
           </article>
         );
       })}
