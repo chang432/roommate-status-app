@@ -1,6 +1,6 @@
 "TABLE RoommateStatus-dev-book-club - group-scoped sticky owner orders, meeting modules, books, ratings, and chapter discussion. Keyed (groupId HASH, id RANGE); BookIdIndex (HASH bookId, RANGE id, ProjectionType ALL) retrieves a book's meetings, ratings, and posts."
-groupId (S),id (S),timezone (S),openMeetingId (S),lastMeetingAt (N),activeBookId (S),bookOwnerOrderUserIds (L of S),snackOwnerOrderUserIds (L of S),createdAt (N),updatedAt (N),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
-book-club,config#book-club,America/New_York,meeting#meeting-uuid,1784763000000,book-uuid,"[""kayla"", ""andre""]","[""andre"", ""kayla""]",1783553400000,1783553400000,,
+groupId (S),id (S),timezone (S),openMeetingId (S),lastMeetingAt (N),activeBookId (S),bookOwnerOrderUserIds (L of S),snackOwnerOrderUserIds (L of S),createdAt (N),updatedAt (N),bookOwnerOrderAlignmentMigrated (BOOL),bookOwnerOrderAlignmentLegacyRecord (M),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
+book-club,config#book-club,America/New_York,meeting#meeting-uuid,1784763000000,book-uuid,"[""kayla"", ""sheryl"", ""andre""]","[""andre"", ""kayla"", ""sheryl""]",1783553400000,1783553400000,true,"{""hadBookOwnerOrderUserIds"": true, ""bookOwnerOrderUserIds"": [""kayla"", ""andre"", ""sheryl""], ""alignedBookOwnerOrderUserIds"": [""kayla"", ""sheryl"", ""andre""]}",,
 
 groupId (S),id (S),bookId (S),title (S),author (S),bookOwnerId (S),bookOwnerName (S),status (S),selectedAt (N),completedAt (N),createdAt (N),updatedAt (N),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
 book-club,book#book-uuid,book-uuid,The Fifth Season,N. K. Jemisin,kayla,Kayla,active,1783553400000,,1783553400000,1783553400000,,
