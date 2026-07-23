@@ -64,6 +64,7 @@ create_table "$ROOMMATE_TABLE-migrations" id
 create_group_table "$ROOMMATE_TABLE-activities-v2"
 create_group_table "$ROOMMATE_TABLE-requests-v2"
 create_group_table "$ROOMMATE_TABLE-checklists-v2"
+create_group_table "$ROOMMATE_TABLE-polls"
 create_group_table "$ROOMMATE_TABLE-shows-v2"
 create_group_table "$ROOMMATE_TABLE-comment-likes-v2"
 

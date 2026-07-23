@@ -4,7 +4,7 @@ Description: >-
   one table per concern, all keyed by a string id (groups keyed by groupId):
   RoommateStatus-dev (roommates/accounts), plus the -pushsubs, -spotify-jam,
   -groups, -memberships, and -migrations tables, and the group-partitioned
-  -activities-v2, -requests-v2, -checklists-v2, -shows-v2, and
+  -activities-v2, -requests-v2, -checklists-v2, -polls, -shows-v2, and
   -comment-likes-v2 feed tables. See the matching Flask modules in docker/flask/
   for each table's shape. Table names are fixed per template so the dev and main
   deployments can never accidentally share data (see dynamodb-table-main.yaml
@@ -180,6 +180,33 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       TableName: RoommateStatus-dev-checklists-v2
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+        - AttributeName: id
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: dev
+
+  PollsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-dev-polls
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: groupId
@@ -465,6 +492,18 @@ Outputs:
     Value: !GetAtt ChecklistsV2Table.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ChecklistsV2TableArn"
+
+  PollsTableName:
+    Description: Name of the group-partitioned polls DynamoDB table.
+    Value: !Ref PollsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-PollsTableName"
+
+  PollsTableArn:
+    Description: ARN of the group-partitioned polls DynamoDB table.
+    Value: !GetAtt PollsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PollsTableArn"
 
   ShowsV2TableName:
     Description: Name of the group-partitioned TV shows DynamoDB table.

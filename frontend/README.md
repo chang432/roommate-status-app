@@ -30,7 +30,7 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Comment likes**: roommates can like or unlike other people’s comments and
   see their own reaction state, the total like count, and a popover listing
   who liked each comment.
-- **Module feed**: `/feed` contains events, requests, checklists, and TV shows
+- **Module feed**: `/feed` contains events, requests, checklists, polls, and TV shows
   in one chronological group feed. Material updates bump the module instance to
   the bottom, and the side drawer/rail filters by module type. Module
   notifications use `/?module=<type>&item=<id>` links that select the matching
@@ -47,6 +47,9 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Checklists**: the shire board includes shared checklists that can be
   posted, expanded, added to, checked off by multiple roommates, notified, archived,
   restored, or deleted.
+- **Polls**: roommate and Book Club groups can create standalone, multi-select
+  polls. Everyone can add options and vote; creators edit poll and option text,
+  while any current member can archive, restore, or delete.
 
 ## Tech
 
@@ -132,6 +135,13 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `endWatchparty`                 | `POST /api/shows/:id/watchparty/end`                       |
 | `restoreChecklist`              | `POST /api/checklists/:id/restore`                         |
 | `deleteChecklist`               | `DELETE /api/checklists/:id`                               |
+| `createPoll`                    | `POST /api/polls`                                          |
+| `addPollOption`                 | `POST /api/polls/:id/options`                              |
+| `editPollOption`                | `PATCH /api/polls/:id/options/:optionId`                   |
+| `setPollVote`                   | `PUT/DELETE /api/polls/:id/options/:optionId/votes`        |
+| `archivePoll`                   | `POST /api/polls/:id/archive`                              |
+| `restorePoll`                   | `POST /api/polls/:id/restore`                              |
+| `deletePoll`                    | `DELETE /api/polls/:id`                                    |
 
 In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
 Point at a different server with `VITE_API_TARGET`:

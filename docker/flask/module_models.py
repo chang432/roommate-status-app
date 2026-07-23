@@ -14,12 +14,13 @@ from urllib.parse import urlencode
 import activities
 import book_club
 import household_checklists
+import household_polls
 import household_requests
 import household_shows
 import jam
 
 
-MODULE_TYPES = {"events", "requests", "checklists", "tv", "spotify", "book-club"}
+MODULE_TYPES = {"events", "requests", "checklists", "polls", "tv", "spotify", "book-club"}
 
 
 def module_url(module_type: str, item_id: str | None = None) -> str:
@@ -128,6 +129,26 @@ class ChecklistModule(BaseModule):
         return bool(self.payload.get("isArchived"))
 
 
+class PollModule(BaseModule):
+    @classmethod
+    def from_payload(cls, item: dict[str, Any]) -> "PollModule":
+        count = len(item.get("options") or [])
+        return cls(
+            id=item["id"],
+            type="polls",
+            created_at=int(item["createdAt"]),
+            updated_at=int(item.get("updatedAt", item["createdAt"])),
+            title=item.get("title", "Poll"),
+            subtitle=f"{count} option{'s' if count != 1 else ''}",
+            actor=item.get("createdBy", "Someone"),
+            payload=item,
+        )
+
+    @property
+    def is_archived(self) -> bool:
+        return bool(self.payload.get("isArchived"))
+
+
 class TvModule(BaseModule):
     @classmethod
     def from_payload(cls, item: dict[str, Any]) -> "TvModule":
@@ -186,6 +207,7 @@ MODULE_CLASS_BY_TYPE = {
     "events": EventModule,
     "requests": RequestModule,
     "checklists": ChecklistModule,
+    "polls": PollModule,
     "tv": TvModule,
     "spotify": SpotifyModule,
     "book-club": BookClubMeetingModule,
@@ -226,6 +248,11 @@ def list_feed(
         modules.extend(
             module_from_payload("checklists", item)
             for item in household_checklists.list_recent(group_id, consistent=True)
+        )
+    if "polls" in requested_types:
+        modules.extend(
+            module_from_payload("polls", item)
+            for item in household_polls.list_recent(group_id, consistent=True)
         )
     if "tv" in requested_types:
         modules.extend(

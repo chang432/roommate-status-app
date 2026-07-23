@@ -10,6 +10,8 @@ import { useSearchParams } from "react-router-dom";
 import ActivityCreateForm from "./ActivityCreateForm.jsx";
 import ChecklistCreateForm from "./ChecklistCreateForm.jsx";
 import ChecklistFeature from "./ChecklistFeature.jsx";
+import PollCreateForm from "./PollCreateForm.jsx";
+import PollFeature from "./PollFeature.jsx";
 import ModalShell from "../ui/ModalShell.jsx";
 import ModuleEditForm from "./ModuleEditForm.jsx";
 import ProposeActivity from "./ProposeActivity.jsx";
@@ -39,7 +41,7 @@ import { isAdminIn } from "../../utils/roles.js";
 import styles from "../../pages/StatusPage.module.css";
 
 const FEED_POLL_INTERVAL_MS = 5000;
-const MODULE_PREFERENCE_VERSION = 2;
+const MODULE_PREFERENCE_VERSION = 3;
 const INTERACTIVE_SELECTOR = "button, a, input, textarea, select";
 const SWIPE_MIN_X = 64;
 const SWIPE_MAX_Y = 48;
@@ -51,6 +53,7 @@ const CREATE_LABEL_BY_TYPE = {
   events: "Create an event",
   requests: "Create a request",
   checklists: "Create a checklist",
+  polls: "Create a poll",
   tv: "Add a show",
   "book-club": "Create a Book Club meeting",
 };
@@ -86,14 +89,13 @@ function readModulePreferences(userId, groupId) {
     );
     const order = sanitizeModuleOrder(stored?.order);
     const allTypes = sanitizeAllTypes(stored?.allTypes, order);
-    // Preferences saved before Book Club existed need a one-time default-on
-    // upgrade; the version marker preserves later explicit deselection.
-    if (
-      (stored?.version ?? 1) < MODULE_PREFERENCE_VERSION
-      && !allTypes.includes("book-club")
-    ) {
+    const version = stored?.version ?? 1;
+    // Each newly introduced module is defaulted on exactly once; the version
+    // marker preserves a user's later explicit deselection.
+    if (version < 2 && !allTypes.includes("book-club")) {
       allTypes.push("book-club");
     }
+    if (version < 3 && !allTypes.includes("polls")) allTypes.push("polls");
     return { order, allTypes };
   } catch {
     const order = sanitizeModuleOrder(null);
@@ -544,6 +546,7 @@ export default function GroupFeed({
       ["events", "requests", "checklists", "tv"].forEach((id) => ids.add(id));
     }
     if (showBookClub) ids.add("book-club");
+    if (showStandardModules || showBookClub) ids.add("polls");
     return ids;
   }, [showBookClub, showStandardModules]);
 
@@ -767,6 +770,7 @@ export default function GroupFeed({
   const handleActivitiesChange = useCallback(() => loadFeed(), [loadFeed]);
   const handleRequestsChange = useCallback(() => loadFeed(), [loadFeed]);
   const handleChecklistsChange = useCallback(() => loadFeed(), [loadFeed]);
+  const handlePollsChange = useCallback(() => loadFeed(), [loadFeed]);
   const handleShowsChange = useCallback(() => {
     window.dispatchEvent(new Event("roomie:shows-changed"));
     loadFeed();
@@ -957,6 +961,15 @@ export default function GroupFeed({
         />
       );
     }
+    if (createType === "polls") {
+      return (
+        <PollCreateForm
+          onPollsChange={handlePollsChange}
+          onSuccess={() => setCreateModalOpen(false)}
+          onCancel={() => setCreateModalOpen(false)}
+        />
+      );
+    }
     if (createType === "tv") {
       return (
         <ShowCreateForm
@@ -1023,6 +1036,16 @@ export default function GroupFeed({
         />
       );
     }
+    if (module.type === "polls") {
+      return (
+        <PollFeature
+          polls={[module.payload]}
+          onPollsChange={handlePollsChange}
+          moduleTag={moduleTag}
+          onEdit={onEdit}
+        />
+      );
+    }
     if (module.type === "tv") {
       return (
         <ShowTrackerFeature
@@ -1054,7 +1077,7 @@ export default function GroupFeed({
     moduleTypes.find((type) => type.id === activeType)?.label ?? "Modules";
   const createLabel =
     activeType === "all" ? "Create a module" : CREATE_LABEL_BY_TYPE[activeType];
-  const canCreateModule = showStandardModules || (showBookClub && canAdministerBookClub);
+  const canCreateModule = showStandardModules || showBookClub;
 
   if (loading) {
     return <p className={styles.loading}>Loading the feed…</p>;

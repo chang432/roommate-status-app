@@ -20,6 +20,7 @@ import comment_likes
 import db
 import groups
 import household_checklists
+import household_polls
 import household_requests
 import household_shows
 import jam

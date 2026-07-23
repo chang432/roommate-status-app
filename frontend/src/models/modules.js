@@ -34,6 +34,17 @@ export const MODULE_DEFINITIONS = {
       fieldLabel: 'Checklist title',
     },
   },
+  polls: {
+    id: 'polls',
+    label: 'Polls',
+    shortLabel: 'Polls',
+    ownerField: 'createdById',
+    edit: {
+      label: 'Edit poll',
+      field: 'title',
+      fieldLabel: 'Poll title',
+    },
+  },
   tv: {
     id: 'tv',
     label: 'TV',

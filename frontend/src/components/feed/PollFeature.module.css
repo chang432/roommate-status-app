@@ -1,0 +1,63 @@
+.wrap {
+  @apply min-w-0 space-y-2;
+}
+
+.card {
+  @apply rounded-sm border border-line bg-card px-[14px] py-[10px];
+}
+
+.archived {
+  @apply border-surface-expired-border bg-surface-muted;
+}
+
+.summary {
+  @apply flex w-full items-center justify-between gap-3 text-left;
+}
+
+.summaryText {
+  @apply min-w-0;
+}
+
+.titleRow {
+  @apply flex flex-wrap items-center gap-2 text-[14px] text-ink;
+}
+
+.meta,
+.voters,
+.empty {
+  @apply mt-1 text-[12px] text-ink-soft;
+}
+
+.panel {
+  @apply mt-3 border-t border-line pt-3;
+}
+
+.options {
+  @apply space-y-2;
+}
+
+.option {
+  @apply rounded-sm border border-line bg-card p-2;
+}
+
+.vote {
+  @apply flex w-full items-center justify-between gap-3 rounded-sm px-2 py-2 text-left text-[14px] font-medium text-ink hover:bg-surface-muted disabled:opacity-60;
+}
+
+.voted {
+  @apply bg-success-panel-strong text-accent-deep;
+}
+
+.editOption {
+  @apply mt-1 text-[12px] font-semibold text-accent-deep underline;
+}
+
+.addOption,
+.optionEdit {
+  @apply mt-3 flex flex-wrap gap-2;
+}
+
+.addOption input,
+.optionEdit input {
+  @apply min-w-[180px] flex-1;
+}

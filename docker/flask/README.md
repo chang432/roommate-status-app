@@ -53,6 +53,13 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/checklists/<id>/archive`                          | `{ userId }`                               | full updated checklist list                             |
 | `POST /api/checklists/<id>/restore`                          | `{ userId }`                               | full updated checklist list                             |
 | `DELETE /api/checklists/<id>`                                | `{ userId }`                               | full updated checklist list                             |
+| `POST /api/polls`                                            | `{ title, createdById, options? }`         | full updated poll list                                  |
+| `POST /api/polls/<id>/options`                               | `{ userId, text }`                         | full updated poll list                                  |
+| `PATCH /api/polls/<id>/options/<optionId>`                   | `{ userId, text }`                         | full updated poll list                                  |
+| `PUT/DELETE /api/polls/<id>/options/<optionId>/votes`        | `{ userId }`                               | full updated poll list                                  |
+| `POST /api/polls/<id>/archive`                               | `{ userId }`                               | full updated poll list                                  |
+| `POST /api/polls/<id>/restore`                               | `{ userId }`                               | full updated poll list                                  |
+| `DELETE /api/polls/<id>`                                     | `{ userId }`                               | full updated poll list                                  |
 | `GET /api/shows`                                             | `?userId=<id>`                             | full show list                                          |
 | `POST /api/shows`                                            | `{ title, createdById }`                   | full updated show list                                  |
 | `POST /api/shows/<id>/join`                                  | `{ userId }`                               | full updated show list                                  |
@@ -81,7 +88,7 @@ their stable id (for example `andre`) and demo password **`roomie`**. Newly
 created accounts are valid sign-in accounts but have `groupId = null`, so they
 cannot see or use household features until they join a group with a reusable
 invite code. The current seeded household uses `groupId = "yorkshire"`.
-The module feed (`/api/feed`) normalizes events, requests, checklists,
+The module feed (`/api/feed`) normalizes events, requests, checklists, polls,
 TV shows, Book Club meetings for enabled groups, and the singleton Spotify Jam
 into `{ id, type, createdAt, updatedAt,
 sortAt, title, subtitle, actor, isArchived, payload }` records sorted oldest-to-newest by

@@ -29,6 +29,7 @@ def _dynamodb():
             household_requests.TABLE_NAME,
             household_shows.TABLE_NAME,
             household_checklists.TABLE_NAME,
+            household_polls.TABLE_NAME,
         ):
             definitions = [
                 {"AttributeName": "groupId", "AttributeType": "S"},
@@ -122,6 +123,7 @@ def client():
         household_requests._get_table(),
         household_shows._get_table(),
         household_checklists._get_table(),
+        household_polls._get_table(),
     ):
         for item in table.scan().get("Items", []):
             table.delete_item(Key={"groupId": item["groupId"], "id": item["id"]})

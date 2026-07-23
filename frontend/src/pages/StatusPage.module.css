@@ -164,6 +164,12 @@
   --module-text: hsl(var(--color-module-checklists-text));
 }
 
+.modulePalette[data-module-type='polls'] {
+  --module-bg: hsl(var(--color-module-polls-bg));
+  --module-border: hsl(var(--color-module-polls-border));
+  --module-text: hsl(var(--color-module-polls-text));
+}
+
 .modulePalette[data-module-type='tv'] {
   --module-bg: hsl(var(--color-module-tv-bg));
   --module-border: hsl(var(--color-module-tv-border));
