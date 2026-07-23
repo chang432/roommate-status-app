@@ -159,3 +159,20 @@ VITE_API_TARGET=http://localhost:9000 npm run dev
 - `npm run build` — production build to `dist/`
 - `npm run preview` — preview the production build
 - `npm run lint` — lint the source
+- `npm test` — run the Vitest unit tests
+- `npm run test:e2e:install` — install Playwright's Chromium browser
+- `npm run test:e2e` — run the Playwright browser tests
+- `npm run test:e2e:ui` — open Playwright's interactive test runner
+
+## Browser tests
+
+Install Chromium once, then run the end-to-end suite:
+
+```bash
+npm run test:e2e:install
+npm run test:e2e
+```
+
+Playwright starts the Vite development server automatically. Tests can mock
+individual API calls with `page.route`, so they do not need a running Flask
+backend unless a scenario intentionally exercises the complete stack.
