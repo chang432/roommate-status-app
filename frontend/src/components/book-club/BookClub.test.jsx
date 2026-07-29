@@ -146,17 +146,17 @@ describe("BookClub cards and library", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Complete book" })).not.toBeInTheDocument());
   });
 
-  it("requires the active book's open meeting to be completed first", async () => {
+  it("shows an error when an open meeting blocks book completion", async () => {
     getBookClub.mockResolvedValue({ summary: {
       ...summary(),
       openMeeting: { bookId: ACTIVE_BOOK.id, status: "scheduled" },
     } });
+    completeBookClubBook.mockRejectedValue(new Error("Complete the open meeting before completing the current book."));
     renderBookClub();
 
-    const button = await screen.findByRole("button", { name: "Complete meeting first" });
-    expect(button).toBeDisabled();
-    await userEvent.click(button);
-    expect(completeBookClubBook).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByRole("button", { name: "Complete book" }));
+    expect(completeBookClubBook).toHaveBeenCalledWith("andre", ACTIVE_BOOK.id);
+    expect(await screen.findByText("Complete the open meeting before completing the current book.")).toBeInTheDocument();
   });
 
   it("opens a notification-linked book directly and reloads shared changes", async () => {
