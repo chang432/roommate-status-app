@@ -13,7 +13,7 @@
 .popupList { @apply grid gap-2; }
 .popupItem { @apply flex items-center justify-between gap-4 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
 .popupItem span { @apply text-right text-xs text-ink-soft; }
-.libraryDialog { @apply max-w-[1040px]; }
+.libraryDialog { @apply max-w-[720px]; }
 .libraryContent { @apply mt-3; }
 .libraryState { @apply grid min-h-64 place-items-center text-sm font-semibold text-ink-soft; }
 

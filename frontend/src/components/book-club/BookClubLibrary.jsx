@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { reviewBookClubBook } from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { exactDateTime } from "../../utils/time.js";
+import BookClubDisclosure from "./BookClubDisclosure.jsx";
 import BookClubForum from "./BookClubForum.jsx";
 import styles from "./BookClubLibrary.module.css";
 
@@ -26,38 +27,41 @@ function stars(value) {
   return `${"★".repeat(value)}${"☆".repeat(5 - value)}`;
 }
 
-function Disclosure({ title, eyebrow, badge, open, onToggle, children, className = "" }) {
-  return (
-    <section className={`${styles.disclosure} ${className}`} aria-label={title}>
-      <button type="button" className={styles.disclosureToggle} aria-expanded={open} onClick={onToggle}>
-        <div>
-          {eyebrow && <p className={styles.eyebrow}>{eyebrow}</p>}
-          <h3>{title}</h3>
-        </div>
-        <span className={styles.disclosureMeta}>{badge}</span>
-        <span className={styles.disclosureChevron} aria-hidden="true">{open ? "▴" : "▾"}</span>
-      </button>
-      {open && <div className={styles.disclosureContent}>{children}</div>}
-    </section>
-  );
+function statusLabel(book) {
+  if (book.isCurrent) return "Current";
+  if (book.status === "active") return "Available";
+  return "Completed";
 }
 
 function MeetingDiscussion({ meeting, canAdminister, focusThreadId, initiallyOpen }) {
   const [open, setOpen] = useState(initiallyOpen);
+  const [hasOpened, setHasOpened] = useState(initiallyOpen);
   useEffect(() => {
-    if (initiallyOpen) setOpen(true);
+    if (initiallyOpen) {
+      setOpen(true);
+      setHasOpened(true);
+    }
   }, [initiallyOpen]);
+
+  function toggle() {
+    setOpen((value) => {
+      if (!value) setHasOpened(true);
+      return !value;
+    });
+  }
+
   return (
-    <Disclosure
+    <BookClubDisclosure
       className={styles.meetingForum}
       title={exactDateTime(meeting.scheduledAt)}
-      eyebrow={meeting.status === "scheduled" ? "Open meeting" : "Completed meeting"}
+      description={meeting.status === "scheduled" ? "Open meeting" : "Completed meeting"}
       badge={meeting.readingTarget}
       open={open}
-      onToggle={() => setOpen((value) => !value)}
+      onToggle={toggle}
     >
-      <BookClubForum meeting={meeting} canAdminister={canAdminister} focusThreadId={focusThreadId} />
-    </Disclosure>
+      {/* Avoid fetching every historical forum until its meeting is opened. */}
+      {hasOpened ? <BookClubForum meeting={meeting} canAdminister={canAdminister} focusThreadId={focusThreadId} /> : null}
+    </BookClubDisclosure>
   );
 }
 
@@ -109,14 +113,17 @@ function BookDetail({
   return (
     <div className={styles.detail}>
       <div className={styles.detailActions}>
-        <button type="button" className={styles.backButton} onClick={onBack}>← All books</button>
-        <button type="button" className="ui-secondaryButton" onClick={() => onEditBook(book)}>Edit book</button>
+        <button type="button" className={`ui-secondaryButton ${styles.actionButton}`} onClick={onBack}>← All books</button>
+        <button type="button" className={`ui-secondaryButton ${styles.actionButton}`} onClick={() => onEditBook(book)}>Edit book</button>
       </div>
       <header className={styles.detailHeader}>
-        <div>
-          <p className={styles.eyebrow}>{bookDate(book)}</p>
-          <h2>{book.title}</h2>
+        <div className={styles.detailTitle}>
+          <div className={styles.titleRow}>
+            <h2>{book.title}</h2>
+            <span className={styles.statusChip}>{statusLabel(book)}</span>
+          </div>
           <p>by {book.author}</p>
+          <small>{bookDate(book)}</small>
         </div>
         <dl>
           <div><dt>Book owner</dt><dd>{book.bookOwnerName || "Former member"}</dd></div>
@@ -125,9 +132,9 @@ function BookDetail({
         </dl>
       </header>
 
-      <Disclosure
+      <BookClubDisclosure
         title="Reviews"
-        eyebrow="Your review and the household"
+        description="Your review and the household"
         badge={`${book.reviewCount} ${book.reviewCount === 1 ? "review" : "reviews"}`}
         open={reviewsOpen}
         onToggle={() => setReviewsOpen((value) => !value)}
@@ -165,7 +172,9 @@ function BookDetail({
             <small>{note.length}/1000</small>
           </label>
           {error && <p className="ui-errorBox">{error}</p>}
-          <button className="ui-primaryButton" type="submit" disabled={busy || !rating || !finished}>{busy ? "Saving…" : initialReview ? "Update review" : "Save review"}</button>
+          <div className="ui-formActions">
+            <button className={`ui-primaryButton ${styles.saveReview}`} type="submit" disabled={busy || !rating || !finished}>{busy ? "Saving…" : initialReview ? "Update review" : "Save review"}</button>
+          </div>
         </form>
         <div className={styles.community}>
           <div className={styles.sectionHeading}><h3>Community reviews</h3></div>
@@ -180,11 +189,11 @@ function BookDetail({
             ))}
           </div>
         </div>
-      </Disclosure>
+      </BookClubDisclosure>
 
-      <Disclosure
+      <BookClubDisclosure
         title="Discussions"
-        eyebrow="Across every meeting"
+        description="Across every meeting"
         badge={`${book.meetings.length} ${book.meetings.length === 1 ? "meeting" : "meetings"}`}
         open={discussionsOpen}
         onToggle={() => setDiscussionsOpen((value) => !value)}
@@ -201,7 +210,7 @@ function BookDetail({
             />
           ))}
         </div>
-      </Disclosure>
+      </BookClubDisclosure>
     </div>
   );
 }
@@ -236,9 +245,9 @@ export default function BookClubLibrary({
   return (
     <section className={styles.library} aria-label="Book library">
       <div className={styles.libraryHeading}>
-        <div><p className={styles.eyebrow}>Current, available, and completed</p><h2>{books.length} {books.length === 1 ? "book" : "books"}</h2></div>
+        <p className={styles.libraryCount}>{books.length} {books.length === 1 ? "book" : "books"} · current, available, and completed</p>
         <div className={styles.libraryTools}>
-          <button type="button" className="ui-primaryButton" onClick={onAddBook}>Add book</button>
+          <button type="button" className={`ui-primaryButton ${styles.addButton}`} onClick={onAddBook}>Add book</button>
           <label className={styles.search}><span className="sr-only">Search books</span><input type="search" placeholder="Search title, author, or owner" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
         </div>
       </div>
@@ -248,13 +257,15 @@ export default function BookClubLibrary({
         <div className={styles.bookList}>
           {filteredBooks.map((book) => (
             <button type="button" className={styles.bookCard} key={book.id} onClick={() => onSelectBook(book.id)}>
-              <span className={styles.bookSpine} aria-hidden="true" />
               <span className={styles.bookCopy}>
-                <span className={styles.cardTopline}><small>{bookDate(book)}</small>{book.isCurrent && <em>Current</em>}</span>
-                <strong>{book.title}</strong><span>by {book.author}</span><small>Book owner: {book.bookOwnerName || "Former member"}</small>
-                <span className={styles.cardStats}><span>{ratingLabel(book)}</span><span>{finishedLabel(book)}</span></span>
+                <span className={styles.cardTopline}>
+                  <strong>{book.title}</strong>
+                  <em>{statusLabel(book)}</em>
+                </span>
+                <span className={styles.bookMeta}>by {book.author} · Book owner: {book.bookOwnerName || "Former member"}</span>
+                <span className={styles.bookMeta}>{bookDate(book)}</span>
               </span>
-              <span className={styles.chevron} aria-hidden="true">›</span>
+              <span className={styles.cardStats}><span>{ratingLabel(book)}</span><span>{finishedLabel(book)}</span></span>
             </button>
           ))}
           {!filteredBooks.length && <p className={styles.noMatches}>No books match “{query.trim()}”.</p>}

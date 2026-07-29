@@ -1,78 +1,74 @@
-.library, .detail { @apply grid gap-5; }
-.libraryHeading { @apply flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between; }
-.libraryTools { @apply flex flex-col gap-2 sm:items-end; }
-.eyebrow { @apply text-xs font-bold uppercase tracking-[0.14em] text-accent-deep; }
-.libraryHeading h2, .detailHeader h2 { @apply mt-1 font-display text-2xl font-semibold text-ink; }
-.search input { @apply w-full rounded-full border border-line bg-surface-muted px-4 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft sm:w-72; }
-.bookList { @apply grid gap-3; }
-.bookCard { @apply relative flex min-h-32 overflow-hidden rounded-lg border border-line bg-surface-muted text-left transition hover:-translate-y-0.5 hover:border-accent hover:shadow-md focus:outline-none focus:ring-2 focus:ring-accent; }
-.bookSpine { @apply w-2 shrink-0 bg-accent; }
-.bookCopy { @apply flex min-w-0 flex-1 flex-col p-4; }
-.cardTopline { @apply mb-1 flex flex-wrap items-center gap-2; }
-.cardTopline small { @apply text-[0.68rem] font-bold uppercase tracking-wide text-accent-deep; }
-.cardTopline em { @apply rounded-full bg-accent px-2 py-0.5 text-[0.65rem] font-bold not-italic text-white; }
-.bookCopy > strong { @apply font-display text-lg font-semibold leading-tight text-ink; }
-.bookCopy > span:not(.cardStats, .cardTopline) { @apply mt-1 text-sm text-ink-soft; }
-.bookCopy > small { @apply mt-2 text-xs font-semibold text-accent-deep; }
-.cardStats { @apply mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-3 text-xs text-ink-soft; }
-.chevron { @apply self-center pr-4 text-3xl text-accent-deep; }
-.noMatches { @apply py-10 text-center text-sm text-ink-soft; }
-.empty { @apply grid min-h-64 place-items-center content-center gap-2 rounded-lg border border-dashed border-line bg-surface-muted p-8 text-center; }
-.empty > span { @apply text-4xl; }
-.empty h2 { @apply font-display text-xl font-semibold text-ink; }
-.empty p { @apply text-sm text-ink-soft; }
-.backButton { @apply w-fit rounded-full border border-line px-3 py-1.5 text-sm font-bold text-accent-deep transition hover:border-accent hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent; }
+.library, .detail { @apply grid gap-4; }
+.libraryHeading { @apply flex flex-col gap-3 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between; }
+.libraryCount { @apply text-[12.5px] font-bold text-ink-soft; }
+.libraryTools { @apply flex flex-col-reverse gap-2 sm:flex-row sm:items-center; }
+.addButton { @apply min-h-10 px-4 text-[13px]; }
+.search input { @apply min-h-10 w-full rounded-sm border border-line bg-card px-3 text-[13.5px] text-ink outline-none transition placeholder:text-placeholder-muted focus:border-accent sm:w-72; }
+.bookList { @apply grid gap-[10px]; }
+.bookCard { @apply flex min-w-0 flex-col gap-3 rounded-sm border border-line bg-card px-[14px] py-[11px] text-left transition hover:border-accent-soft hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent sm:flex-row sm:items-center; }
+.bookCopy { @apply min-w-0 flex-1; }
+.cardTopline { @apply flex min-w-0 flex-wrap items-center gap-2; }
+.cardTopline strong { @apply truncate text-[14px] font-semibold text-ink; }
+.cardTopline em, .statusChip { @apply rounded-full bg-solid-neutral px-2 py-1 text-[10px] font-bold uppercase tracking-[0.05em] text-on-strong not-italic; }
+.bookMeta { @apply mt-1 block text-[12px] text-ink-soft; }
+.cardStats { @apply flex flex-none flex-wrap gap-x-3 gap-y-1 text-[11.5px] font-semibold text-ink-soft sm:max-w-40 sm:flex-col sm:items-end; }
+.noMatches { @apply py-8 text-center text-[13px] text-ink-soft; }
+.empty { @apply grid min-h-52 place-items-center content-center gap-2 rounded-md border border-dashed border-line bg-surface-muted p-6 text-center; }
+.empty > span { @apply text-3xl; }
+.empty h2 { @apply text-[16px] font-black text-ink; }
+.empty p { @apply text-[13px] text-ink-soft; }
 .detailActions { @apply flex items-center justify-between gap-3; }
-.detailHeader { @apply grid gap-4 rounded-lg border border-line bg-surface-muted p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end; }
-.detailHeader > div > p:not(.eyebrow) { @apply text-sm text-ink-soft; }
-.detailHeader dl { @apply grid grid-cols-3 gap-2; }
-.detailHeader dl div { @apply min-w-24 rounded-md bg-card p-2; }
-.detailHeader dt { @apply text-[0.65rem] font-bold uppercase tracking-wide text-ink-soft; }
-.detailHeader dd { @apply mt-1 text-sm font-semibold text-ink; }
-.reviewForm { @apply grid gap-4 rounded-lg border border-accent-soft bg-accent-soft p-4; }
+.actionButton { @apply px-3 py-2 text-[12.5px]; }
+.detailHeader { @apply grid gap-4 rounded-md border border-line bg-surface-muted p-4; }
+.detailTitle { @apply min-w-0; }
+.titleRow { @apply flex flex-wrap items-center gap-2; }
+.detailHeader h2 { @apply min-w-0 truncate text-[18px] font-black text-ink; }
+.detailTitle > p { @apply mt-1 text-[13px] text-ink-soft; }
+.detailTitle > small { @apply mt-1 block text-[11.5px] font-semibold text-accent-deep; }
+.detailHeader dl { @apply grid grid-cols-3 border-t border-line pt-3; }
+.detailHeader dl div { @apply min-w-0 border-r border-line px-3 first:pl-0 last:border-r-0 last:pr-0; }
+.detailHeader dt { @apply text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
+.detailHeader dd { @apply mt-1 truncate text-[13px] font-semibold text-ink; }
+.reviewForm { @apply grid gap-4 rounded-sm border border-line bg-surface-muted p-[14px]; }
 .formHeading, .sectionHeading { @apply flex items-start justify-between gap-3; }
-.formHeading h3, .sectionHeading h3 { @apply font-display text-lg font-semibold text-ink; }
-.formHeading p { @apply mt-1 text-xs text-ink-soft; }
-.formHeading > span, .sectionHeading > span { @apply rounded-full bg-surface-muted px-2 py-1 text-xs font-bold text-accent-deep; }
+.formHeading h3, .sectionHeading h3 { @apply text-[14px] font-semibold text-ink; }
+.formHeading p { @apply mt-1 text-[12px] text-ink-soft; }
+.formHeading > span { @apply rounded-sm bg-success-soft px-2 py-1 text-[11px] font-bold text-status-green; }
 .reviewForm fieldset { @apply grid gap-2; }
-.reviewForm legend, .note > span { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
+.reviewForm legend, .note > span { @apply text-[11px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
 .starChoices { @apply flex gap-1; }
 .starChoices label { @apply cursor-pointer; }
 .starChoices input { @apply sr-only; }
-.starChoices span[aria-hidden] { @apply block rounded px-1 text-3xl text-line transition; }
+.starChoices span[aria-hidden] { @apply block rounded-sm px-0.5 text-2xl text-line transition; }
 .starChoices input:checked ~ span[aria-hidden], .starChoices label:has(input:checked) ~ label span[aria-hidden] { @apply text-line; }
 .starChoices label:has(input:checked) span[aria-hidden], .starChoices label:has(~ label input:checked) span[aria-hidden] { @apply text-accent-deep; }
 .starChoices input:focus-visible + span { @apply outline outline-2 outline-offset-2 outline-accent; }
 .finishChoices { @apply grid grid-cols-2 gap-2; }
 .finishChoices label { @apply cursor-pointer; }
 .finishChoices input { @apply sr-only; }
-.finishChoices span { @apply block rounded-md border border-line bg-card px-3 py-2 text-center text-sm font-semibold text-ink; }
-.finishChoices input:checked + span { @apply border-accent bg-accent text-white; }
+.finishChoices span { @apply block rounded-sm border border-line bg-card px-3 py-2 text-center text-[13px] font-semibold text-ink; }
+.finishChoices input:checked + span { @apply border-accent bg-solid-accent text-on-strong; }
 .finishChoices input:focus-visible + span { @apply ring-2 ring-accent ring-offset-2; }
 .note { @apply grid gap-1; }
-.note textarea { @apply min-h-24 resize-y rounded-md border border-line bg-card p-3 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft; }
-.note small { @apply text-right text-xs text-ink-soft; }
-.community { @apply grid gap-3 border-t border-line pt-5; }
-.disclosure { @apply overflow-hidden rounded-lg border border-line bg-card; }
-.disclosureToggle { @apply grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 p-4 text-left hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent; }
-.disclosureToggle h3 { @apply font-display text-lg font-semibold text-ink; }
-.disclosureMeta { @apply max-w-52 truncate rounded-full bg-surface-muted px-2 py-1 text-xs font-bold text-accent-deep; }
-.disclosureChevron { @apply text-lg text-accent-deep; }
-.disclosureContent { @apply grid gap-4 border-t border-line p-4; }
-.reviewList { @apply grid gap-3 sm:grid-cols-2; }
-.review { @apply rounded-lg border border-line bg-surface-muted p-3 text-sm text-ink; }
+.note textarea { @apply min-h-24 w-full resize-y rounded-sm border border-line bg-card p-3 text-[13.5px] text-ink outline-none transition placeholder:text-placeholder-muted focus:border-accent; }
+.note small { @apply text-right text-[11px] text-ink-soft; }
+.saveReview { @apply min-w-32 px-4 py-2.5 text-[13px]; }
+.community { @apply grid gap-3 border-t border-line pt-4; }
+.reviewList { @apply grid gap-2; }
+.review { @apply rounded-sm border border-line bg-card px-3 py-[10px] text-[13px] text-ink; }
 .review > div { @apply flex items-center justify-between gap-3; }
-.review > div span { @apply tracking-wide text-accent-deep; }
-.review > p:last-child:not(.finishStatus) { @apply mt-2 whitespace-pre-wrap; }
-.finishStatus { @apply mt-1 text-xs font-semibold text-ink-soft; }
-.muted { @apply rounded-lg bg-surface-muted p-4 text-sm text-ink-soft; }
-.meetingForums { @apply grid gap-4; }
-.meetingForum { @apply overflow-hidden rounded-lg border border-line bg-surface-muted; }
+.review > div span { @apply text-[12px] tracking-wide text-accent-deep; }
+.review > p:last-child:not(.finishStatus) { @apply mt-2 whitespace-pre-wrap leading-5; }
+.finishStatus { @apply mt-1 text-[11.5px] font-semibold text-ink-soft; }
+.muted { @apply rounded-sm bg-surface-muted p-3 text-[13px] text-ink-soft; }
+.meetingForums { @apply grid gap-[10px]; }
+.meetingForum { @apply bg-surface-muted; }
 .meetingForum > div > section { @apply rounded-none border-0 shadow-none; }
 
 @media (max-width: 520px) {
-  .detailHeader dl { @apply grid-cols-1; }
-  .detailHeader dl div { @apply min-w-0; }
-  .bookCopy { @apply p-3; }
-  .chevron { @apply pr-3; }
+  .detailHeader dl { @apply grid-cols-2 gap-y-3; }
+  .detailHeader dl div { @apply px-2; }
+  .detailHeader dl div:nth-child(2) { @apply border-r-0 pr-0; }
+  .detailHeader dl div:nth-child(3) { @apply border-r-0 px-0; }
+  .cardStats { @apply border-t border-line pt-2; }
 }

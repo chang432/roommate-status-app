@@ -118,6 +118,18 @@ describe("BookClubLibrary", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Saved");
   });
 
+  it("keeps collapsed review controls mounted but inert", async () => {
+    renderLibrary({ selectedBookId: ACTIVE_BOOK.id });
+    const reviews = screen.getByRole("region", { name: "Reviews" });
+    const toggle = within(reviews).getByRole("button", { name: /Reviews/ });
+    const updateButton = within(reviews).getByRole("button", { name: "Update review" });
+
+    await userEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(updateButton.closest("[inert]")).toBeInTheDocument();
+  });
+
   it("shows every meeting discussion newest first and focuses the linked thread", async () => {
     renderLibrary({
       selectedBookId: ACTIVE_BOOK.id,

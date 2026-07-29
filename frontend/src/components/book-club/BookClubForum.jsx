@@ -7,7 +7,7 @@ import {
 } from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { relativeTime } from "../../utils/time.js";
-import styles from "./BookClubMeetingFeature.module.css";
+import styles from "./BookClubForum.module.css";
 
 export default function BookClubForum({ meeting, canAdminister, focusThreadId }) {
   const { user } = useAuth();
@@ -170,7 +170,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
             )}
             <textarea aria-label="Forum post" maxLength={editing.isReply ? 1000 : 2000} required value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} />
             <div>
-              <button type="submit" className="ui-primaryButton" disabled={busy}>Save</button>
+              <button type="submit" className={`ui-primaryButton ${styles.primaryAction}`} disabled={busy}>Save</button>
               <button type="button" onClick={() => setEditing(null)}>Cancel</button>
             </div>
           </form>
@@ -203,7 +203,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
               replyTo === thread.id ? (
                 <form className={styles.replyForm} onSubmit={createReply}>
                   <textarea aria-label={`Reply to ${thread.title}`} autoFocus maxLength={1000} required value={replyBody} onChange={(event) => setReplyBody(event.target.value)} placeholder="Write a reply…" />
-                  <div><button className="ui-primaryButton" type="submit" disabled={busy || !replyBody.trim()}>Reply</button><button type="button" onClick={() => { setReplyTo(null); setReplyBody(""); }}>Cancel</button></div>
+                  <div><button className={`ui-primaryButton ${styles.primaryAction}`} type="submit" disabled={busy || !replyBody.trim()}>Reply</button><button type="button" onClick={() => { setReplyTo(null); setReplyBody(""); }}>Cancel</button></div>
                 </form>
               ) : <button type="button" className={styles.replyButton} onClick={() => setReplyTo(thread.id)}>Reply</button>
             )}
@@ -211,15 +211,17 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
         ))}
       </div>
       {forum && !forum.locked && !topicComposerOpen && (
-        <button type="button" className="ui-primaryButton" onClick={() => setTopicComposerOpen(true)}>New topic</button>
+        <div className={styles.forumActions}>
+          <button type="button" className={`ui-primaryButton ${styles.primaryAction}`} onClick={() => setTopicComposerOpen(true)}>New topic</button>
+        </div>
       )}
       {forum && !forum.locked && topicComposerOpen && (
         <form className={styles.topicForm} onSubmit={createTopic}>
           <h2>Start a topic</h2>
           <input autoFocus aria-label="New topic title" maxLength={120} required placeholder="What should we discuss?" value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} />
           <textarea aria-label="New topic post" maxLength={2000} required placeholder="Share a question or thought…" value={topicBody} onChange={(event) => setTopicBody(event.target.value)} />
-          <div>
-            <button className="ui-primaryButton" type="submit" disabled={busy || !topicTitle.trim() || !topicBody.trim()}>Post topic</button>
+          <div className={styles.formActions}>
+            <button className={`ui-primaryButton ${styles.primaryAction}`} type="submit" disabled={busy || !topicTitle.trim() || !topicBody.trim()}>Post topic</button>
             <button type="button" onClick={() => { setTopicComposerOpen(false); setTopicTitle(""); setTopicBody(""); }}>Cancel</button>
           </div>
         </form>
