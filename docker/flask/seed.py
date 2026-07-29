@@ -60,15 +60,36 @@ def seed_local_book_club() -> None:
 
     members = db.get_all(BOOK_CLUB_GROUP_ID)
     creator = next(member for member in members if member["id"] == "andre")
+    seed_book = next(
+        (
+            book
+            for book in book_club.list_books(BOOK_CLUB_GROUP_ID)
+            if book["status"] == "active"
+            and book["title"] == "The Fifth Season"
+            and book["author"] == "N. K. Jemisin"
+        ),
+        None,
+    )
+    if seed_book is None:
+        seed_book, error = book_club.add_book(
+            BOOK_CLUB_GROUP_ID,
+            members,
+            {
+                "title": "The Fifth Season",
+                "author": "N. K. Jemisin",
+                "bookOwnerId": "kayla",
+            },
+        )
+        if error:
+            raise RuntimeError(f"Could not seed Book Club book: {error}")
+
     meeting, error = book_club.create_meeting(
         BOOK_CLUB_GROUP_ID,
         members,
         creator,
         {
-            "title": "The Fifth Season",
-            "author": "N. K. Jemisin",
+            "bookId": seed_book["id"],
             "readingTarget": "Read through Chapter 9",
-            "bookOwnerId": "kayla",
             "snackOwnerId": "andre",
             "scheduledAt": book_club.next_wednesday_evening(),
         },

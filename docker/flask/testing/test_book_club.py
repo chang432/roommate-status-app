@@ -471,3 +471,22 @@ def test_local_seed_group_remains_book_club_only(client):
     seed.seed_local_groups()
     group = groups.get_group_by_id(seed.BOOK_CLUB_GROUP_ID)
     assert (group["showRoster"], group["showFeed"], group["showBookClub"]) == (False, False, True)
+
+
+def test_local_book_club_seed_uses_catalog_book_and_is_idempotent(
+    client, monkeypatch
+):
+    monkeypatch.setenv("DYNAMODB_ENDPOINT", "http://dynamodb-local:8000")
+    seed.seed_local_groups()
+
+    seed.seed_local_book_club()
+    seed.seed_local_book_club()
+
+    members = db.get_all(seed.BOOK_CLUB_GROUP_ID)
+    summary = book_club.summary(seed.BOOK_CLUB_GROUP_ID, members)
+    books = book_club.list_books(seed.BOOK_CLUB_GROUP_ID)
+    seeded_books = [book for book in books if book["title"] == "The Fifth Season"]
+    assert len(seeded_books) == 1
+    assert summary["activeBook"]["id"] == seeded_books[0]["id"]
+    assert summary["openMeeting"]["bookId"] == seeded_books[0]["id"]
+    assert summary["openMeeting"]["bookOwnerId"] == "kayla"
