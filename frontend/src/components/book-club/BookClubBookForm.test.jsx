@@ -59,4 +59,17 @@ describe("BookClubBookForm", () => {
       "andre", "book-1", expect.objectContaining({ title: "Kindred" }),
     );
   });
+
+  it("can restore a completed book as the current book", async () => {
+    updateBookClubBook.mockResolvedValue({ book: { id: "book-1" }, books: [] });
+    render(<BookClubBookForm book={{
+      id: "book-1", title: "Kindred", author: "Octavia Butler", bookOwnerId: "andre",
+    }} roommates={ROOMMATES} canSetAsCurrent onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Set as current" }));
+
+    expect(updateBookClubBook).toHaveBeenCalledWith("andre", "book-1", {
+      title: "Kindred", author: "Octavia Butler", bookOwnerId: "andre", setAsCurrent: true,
+    });
+  });
 });

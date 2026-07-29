@@ -22,9 +22,10 @@
   default to two local calendar weeks after the prior meeting.
 - Only admins add books. Adding a title makes it current and atomically
   completes the former current title; it is blocked while a meeting is open.
-  Meetings always use the configured current title, and there is no catalog
-  queue or separate set-current action. Catalog corrections propagate to every
-  meeting snapshot for that book.
+  When no title is current, an admin can restore a completed title from its
+  edit form. This atomically clears its completion date and makes it current.
+  Meetings always use the configured current title. Catalog corrections
+  propagate to every meeting snapshot for that book.
 - `activeBookId` is the only book lifecycle state. A title it references is
   current; every other catalog title is completed. Completing the current book
   timestamps it and clears the pointer. Each member can review any book with a 1–5 star rating, required finished/not-finished

@@ -369,12 +369,58 @@ def update_book(
     values, error = _book_values(body, members)
     if error:
         return None, error
+    set_as_current = body.get("setAsCurrent", False)
+    if not isinstance(set_as_current, bool):
+        return None, "Set as current must be true or false."
     now = _now()
     book.update({**values, "updatedAt": now})
     book.pop("recommendedById", None)
     book.pop("recommendedByName", None)
     table = _get_table()
-    table.put_item(Item=book)
+    config = _fetch(group_id, CONFIG_ID, consistent=True)
+
+    if set_as_current:
+        if config is None:
+            return None, "Book Club configuration is unavailable."
+        # Restoring a completed title must claim the single-current pointer and
+        # clear its completion date together, so concurrent book changes cannot
+        # leave the library without (or with two) current titles.
+        book.pop("completedAt", None)
+        book_order = _member_order(config, "bookOwnerOrderUserIds", members)
+        try:
+            table.meta.client.transact_write_items(TransactItems=[
+                {"Put": {
+                    "TableName": TABLE_NAME,
+                    "Item": book,
+                    "ConditionExpression": "attribute_exists(id)",
+                }},
+                {"Update": {
+                    "TableName": TABLE_NAME,
+                    "Key": {"groupId": group_id, "id": CONFIG_ID},
+                    "UpdateExpression": (
+                        "SET activeBookId = :bookId, bookOwnerOrderUserIds = :bookOrder, "
+                        "updatedAt = :now"
+                    ),
+                    "ConditionExpression": (
+                        "attribute_not_exists(activeBookId) "
+                        "AND attribute_not_exists(openMeetingId) "
+                        "AND attribute_not_exists(nextSessionId)"
+                    ),
+                    "ExpressionAttributeValues": {
+                        ":bookId": normalized,
+                        ":bookOrder": _move_to_front(book_order, values["bookOwnerId"]),
+                        ":now": now,
+                    },
+                }},
+            ])
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] in {
+                "ConditionalCheckFailedException", "TransactionCanceledException"
+            }:
+                return None, "A current book or open meeting already exists."
+            raise
+    else:
+        table.put_item(Item=book)
 
     # Meeting rows intentionally keep display snapshots. A catalog correction
     # rewrites all snapshots so history cannot disagree with the canonical book.
@@ -392,8 +438,7 @@ def update_book(
             })
             table.put_item(Item=item)
 
-    config = _fetch(group_id, CONFIG_ID)
-    if config and config.get("activeBookId") == normalized:
+    if not set_as_current and config and config.get("activeBookId") == normalized:
         book_order = _member_order(config, "bookOwnerOrderUserIds", members)
         table.update_item(
             Key={"groupId": group_id, "id": CONFIG_ID},

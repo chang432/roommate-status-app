@@ -336,6 +336,49 @@ def test_completing_current_book_clears_pointer_and_blocks_new_meetings(client):
     assert rejected.get_json()["error"] == "Add a current book before scheduling a meeting."
 
 
+def test_admin_can_restore_a_completed_book_as_current_when_none_is_selected(client):
+    book = add_book(client)
+    client.post(grouped_path(f"/api/book-club/books/{book['id']}/complete"))
+
+    restored = client.patch(
+        grouped_path(f"/api/book-club/books/{book['id']}"),
+        json={
+            "title": "The Left Hand of Darkness",
+            "author": "Ursula K. Le Guin",
+            "bookOwnerId": "kayla",
+            "setAsCurrent": True,
+        },
+    )
+
+    assert restored.status_code == 200
+    assert restored.get_json()["book"]["id"] == book["id"]
+    assert restored.get_json()["summary"]["activeBook"]["id"] == book["id"]
+    stored = book_club._fetch(TEST_GROUP_ID, f"book#{book['id']}")
+    assert "completedAt" not in stored
+    assert book_club._fetch(TEST_GROUP_ID, book_club.CONFIG_ID)["activeBookId"] == book["id"]
+
+
+def test_restoring_a_completed_book_requires_an_admin_and_no_current_book(client):
+    book = add_book(client)
+    client.post(grouped_path(f"/api/book-club/books/{book['id']}/complete"))
+    body = {
+        "title": book["title"],
+        "author": book["author"],
+        "bookOwnerId": "andre",
+        "setAsCurrent": True,
+    }
+
+    forbidden = client.patch(
+        grouped_path(f"/api/book-club/books/{book['id']}", user_id="sheryl"), json=body,
+    )
+    assert forbidden.status_code == 403
+
+    add_book(client, title="Replacement", author="Another Writer")
+    rejected = client.patch(grouped_path(f"/api/book-club/books/{book['id']}"), json=body)
+    assert rejected.status_code == 409
+    assert rejected.get_json()["error"] == "A current book or open meeting already exists."
+
+
 def test_only_admins_can_add_current_books(client):
     rejected = client.post(grouped_path("/api/book-club/books", user_id="sheryl"), json={
         "title": "A Book", "author": "An Author", "bookOwnerId": "sheryl",

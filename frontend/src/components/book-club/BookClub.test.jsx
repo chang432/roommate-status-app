@@ -110,6 +110,18 @@ describe("BookClub cards and library", () => {
     expect(screen.getByRole("dialog", { name: "Add a book" })).toHaveTextContent("Book owner");
   });
 
+  it("offers admins a way to restore a completed book when none is current", async () => {
+    getBookClub.mockResolvedValue({ summary: summary(false) });
+    getBookClubBooks.mockResolvedValue({ books: [{ ...ACTIVE_BOOK, isCurrent: false, completedAt: 1 }] });
+    renderBookClub();
+
+    await userEvent.click(await screen.findByRole("button", { name: /Library All books/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Parable of the Sower/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit book" }));
+
+    expect(screen.getByRole("button", { name: "Set as current" })).toBeInTheDocument();
+  });
+
   it("keeps owner order dialogs and meeting snapshots authoritative", async () => {
     getBookClub.mockResolvedValue({
       summary: {

@@ -9,6 +9,7 @@ import styles from "./BookClubMeetingForm.module.css";
 export default function BookClubBookForm({
   book = null,
   roommates,
+  canSetAsCurrent = false,
   onSaved,
   onCancel,
 }) {
@@ -21,7 +22,7 @@ export default function BookClubBookForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  async function submit(event) {
+  async function submit(event, { setAsCurrent = false } = {}) {
     event.preventDefault();
     if (saving) return;
     setSaving(true);
@@ -31,6 +32,7 @@ export default function BookClubBookForm({
         title: draft.title.trim(),
         author: draft.author.trim(),
         bookOwnerId: draft.bookOwnerId,
+        ...(setAsCurrent ? { setAsCurrent: true } : {}),
       };
       const response = book
         ? await updateBookClubBook(user.id, book.id, payload)
@@ -63,6 +65,11 @@ export default function BookClubBookForm({
       </label>
       <div className="ui-formActions">
         <button type="button" className="ui-secondaryButton ui-formActionButton" disabled={saving} onClick={onCancel}>Cancel</button>
+        {canSetAsCurrent && (
+          <button type="button" className="ui-secondaryButton ui-formActionButton" disabled={saving} onClick={(event) => void submit(event, { setAsCurrent: true })}>
+            {saving ? "Saving…" : "Set as current"}
+          </button>
+        )}
         <button type="submit" className="ui-primaryButton ui-formActionButton" disabled={saving}>
           {saving ? "Saving…" : book ? "Save book" : "Add current book"}
         </button>

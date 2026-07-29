@@ -763,16 +763,24 @@ def create_app() -> Flask:
         viewer, error = group_member_from_query()
         if error:
             return error
+        body = request.get_json(silent=True) or {}
+        if body.get("setAsCurrent") is True and not db.is_group_admin(
+            viewer["id"], viewer["groupId"]
+        ):
+            return jsonify({"error": "Only a group admin can set the current book."}), 403
         book, error = book_club.update_book(
             viewer["groupId"], book_id, db.get_all(viewer["groupId"]),
-            request.get_json(silent=True) or {},
+            body,
         )
         if error:
-            status = 404 if error == "Unknown Book Club book." else 400
+            status = 404 if error == "Unknown Book Club book." else (
+                409 if error == "A current book or open meeting already exists." else 400
+            )
             return jsonify({"error": error}), status
         return jsonify({
             "book": book,
             "books": book_club.list_books(viewer["groupId"], viewer["id"]),
+            "summary": book_club.summary(viewer["groupId"], db.get_all(viewer["groupId"])),
         })
 
     @app.put("/api/book-club/books/<book_id>/review")
