@@ -8,22 +8,20 @@
 .expanded { grid-template-rows: 1fr; }
 .collapsed { grid-template-rows: 0fr; }
 .expandedInner { @apply min-h-0 overflow-hidden; }
-.panel { @apply mt-3 grid gap-3 border-t border-line pt-3 text-sm text-ink; }
-.bookButton { @apply rounded border border-accent-soft bg-accent-soft px-3 py-2 text-left font-semibold hover:border-accent; }
+.detailsPanel { @apply mt-3 grid gap-3 border-t border-line pt-3 text-sm text-ink; }
+.bookTitle { @apply rounded border border-accent-soft bg-accent-soft px-3 py-2 font-semibold; }
 .details { @apply grid gap-2; }
 .details div { @apply grid grid-cols-[7rem_1fr] gap-2; }
 .details dt { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
 .details dd { @apply text-ink; }
-.response { @apply flex items-center justify-between gap-3 border-t border-line pt-2 text-xs; }
+.responses { @apply grid gap-2; }
+.responses h3 { @apply font-display text-lg font-semibold text-ink; }
+.response { @apply flex flex-col gap-2 border-t border-line pt-2 text-xs sm:flex-row sm:items-center sm:justify-between; }
+.response > span:first-child { @apply font-semibold; }
 .responseControls { @apply flex gap-2; }
 .responseControls select, .responseControls input { @apply max-w-32 rounded border border-line bg-surface-muted px-2 py-1 text-ink; }
-.bookModal { @apply grid max-h-[70vh] gap-3 overflow-y-auto; }
-.bookMeta { @apply text-sm text-ink-soft; }
-.rating { @apply flex items-center gap-3 text-sm font-bold text-ink; }
-.rating select { @apply rounded border border-line bg-surface-muted px-2 py-1; }
-.posts { @apply grid gap-2; }
-.posts article { @apply rounded border border-line bg-surface-muted p-3 text-sm; }
-.posts p { @apply mt-1; }
-.postForm { @apply grid gap-2 border-t border-line pt-3; }
-.postForm input, .postForm textarea { @apply rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
-.postForm textarea { @apply min-h-24 resize-y; }
+.meetingActions { @apply flex flex-wrap gap-2 border-t border-line pt-3; }
+.meetingActions button, .meetingActions a { @apply min-h-10 rounded-full border border-accent px-4 py-2 text-sm font-bold text-accent-deep hover:bg-accent-soft disabled:opacity-50; }
+@media (max-width: 520px) {
+  .meta { @apply whitespace-normal; }
+}

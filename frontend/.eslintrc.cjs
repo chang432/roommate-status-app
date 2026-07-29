@@ -17,7 +17,13 @@ module.exports = {
   overrides: [
     {
       // Build/tooling configs run in Node, not the browser.
-      files: ['vite.config.js', 'tailwind.config.js', 'postcss.config.js', '.eslintrc.cjs'],
+      files: [
+        'vite.config.js',
+        'playwright.config.js',
+        'tailwind.config.js',
+        'postcss.config.js',
+        '.eslintrc.cjs',
+      ],
       env: { node: true },
     },
   ],

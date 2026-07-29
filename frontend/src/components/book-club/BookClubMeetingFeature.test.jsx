@@ -1,8 +1,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import BookClubMeetingFeature from "./BookClubMeetingFeature.jsx";
-import { getBookClubMeeting } from "../../api/bookClub.js";
+import { getBookClubMeeting, setBookClubResponse } from "../../api/bookClub.js";
 import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
@@ -11,6 +12,7 @@ vi.mock("../../context/AuthContext.jsx", () => ({
 vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   ...(await importOriginal()),
   getBookClubMeeting: vi.fn(),
+  setBookClubResponse: vi.fn(),
 }));
 
 const MEETING = {
@@ -23,98 +25,90 @@ const MEETING = {
   snackOwnerName: "Andre",
   scheduledAt: Date.UTC(2030, 7, 7, 23, 30),
   status: "scheduled",
-  responses: [],
+  responses: [{
+    userId: "andre",
+    userName: "Andre",
+    attendanceStatus: "maybe",
+    chaptersReadThrough: 4,
+  }],
 };
+
+function renderMeeting({ intent = null, canAdminister = false, onEdit = vi.fn() } = {}) {
+  return render(
+    <MemoryRouter>
+      <ModuleFocusProvider intent={intent}>
+        <BookClubMeetingFeature
+          meetings={[MEETING]}
+          moduleTag={<span>Book Club</span>}
+          onEdit={onEdit}
+          canAdminister={canAdminister}
+          onChanged={vi.fn()}
+        />
+      </ModuleFocusProvider>
+    </MemoryRouter>,
+  );
+}
 
 describe("BookClubMeetingFeature", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getBookClubMeeting.mockResolvedValue({ meeting: MEETING });
+    setBookClubResponse.mockResolvedValue({ meeting: MEETING });
   });
   afterEach(() => cleanup());
 
-  it("keeps details mounted for the shared expand and collapse animation", async () => {
-    render(
-      <BookClubMeetingFeature
-        meetings={[MEETING]}
-        moduleTag={<span>Books</span>}
-        canAdminister={false}
-        onChanged={vi.fn()}
-      />,
-    );
+  it("restores expandable meeting details and a focused forum link", async () => {
+    renderMeeting();
 
     const header = screen.getByRole("button", {
       name: /The Left Hand of Darkness/,
       expanded: false,
     });
-    expect(header).toHaveAttribute("aria-expanded", "false");
     expect(document.querySelector("[inert]")).toBeInTheDocument();
     await userEvent.click(header);
+
     expect(header).toHaveAttribute("aria-expanded", "true");
-    expect(document.querySelector("[inert]")).not.toBeInTheDocument();
     expect(getBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");
-    await userEvent.click(header);
-    expect(header).toHaveAttribute("aria-expanded", "false");
-    expect(document.querySelector("[inert]")).toBeInTheDocument();
+    expect(screen.getByText("Chapter 8")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Forum" })).toHaveAttribute(
+      "href",
+      "/?book=book-1&meeting=meeting%231",
+    );
   });
 
-  it("places the existing admin edit action beside the open-meeting actions", async () => {
+  it("keeps administration actions inside the expanded feed card", async () => {
     const onEdit = vi.fn();
-    render(
-      <BookClubMeetingFeature
-        meetings={[MEETING]}
-        moduleTag={<span>Books</span>}
-        onEdit={onEdit}
-        canAdminister
-        onChanged={vi.fn()}
-      />,
-    );
-
+    renderMeeting({ canAdminister: true, onEdit });
     await userEvent.click(screen.getByRole("button", {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
-    const editButton = await screen.findByRole("button", { name: "Edit" });
-    const reminderButton = screen.getByRole("button", { name: "Send reminder" });
-    const completeButton = screen.getByRole("button", { name: "Complete meeting" });
-    expect(editButton.parentElement).toHaveClass("ui-moduleActionRow");
-    expect(editButton).toHaveClass("ui-pillSecondary", "ui-moduleActionButton");
-    expect(reminderButton).toHaveClass("ui-pillSecondary", "ui-moduleActionButton");
-    expect(completeButton).toHaveClass("ui-pillSecondary", "ui-moduleActionButton");
-    await userEvent.click(editButton);
+
+    expect(screen.getByRole("button", { name: "Send reminder" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Complete meeting" })).toBeInTheDocument();
   });
 
-  it("does not show Edit when the feed marks the meeting non-editable", async () => {
-    render(
-      <BookClubMeetingFeature
-        meetings={[MEETING]}
-        moduleTag={<span>Books</span>}
-        canAdminister={false}
-        onChanged={vi.fn()}
-      />,
-    );
-
+  it("updates the viewer response inline", async () => {
+    renderMeeting();
     await userEvent.click(screen.getByRole("button", {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
-    expect(await screen.findByRole("button", { name: "Send reminder" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Your attendance"), "attending");
+    expect(setBookClubResponse).toHaveBeenCalledWith(
+      "andre",
+      "meeting#1",
+      "attending",
+      4,
+    );
   });
 
-  it("loads full meeting details when a deep link expands the module", async () => {
-    render(
-      <ModuleFocusProvider intent={{ itemId: "meeting#1", token: "focus-1" }}>
-        <BookClubMeetingFeature
-          meetings={[MEETING]}
-          moduleTag={<span>Books</span>}
-          canAdminister={false}
-          onChanged={vi.fn()}
-        />
-      </ModuleFocusProvider>,
-    );
-
+  it("expands a meeting targeted by a household notification", async () => {
+    renderMeeting({
+      intent: { itemId: "meeting#1", token: "book-club:meeting#1" },
+    });
     expect(await screen.findByRole("button", {
       name: /The Left Hand of Darkness/,
       expanded: true,

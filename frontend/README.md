@@ -38,9 +38,14 @@ availability to hang out. Built from the mockups in `../mockups`.
   during feed polling. Swiping the feed switches between the ordered filters,
   the filter drawer can edit that order and the contents of All, and the
   floating `+` creates modules.
-- **Book Club meetings**: enabled groups show sticky Book and Snack owner lists
-  above the feed. Admins create and complete one meeting module at a time;
-  members can record attendance and reading progress until completion.
+- **Book Club**: the household page shows a two-by-two Current Book, Library,
+  Book, and Snack card grid. The library opens as a searchable modal with the
+  current title first, other available titles and completed titles by recency,
+  aggregate ratings, collapsible reviews, and collapsible meeting discussions.
+  Members add and correct catalog books, then admins select an available title
+  when scheduling a meeting. Members review active or completed books with
+  1–5 stars, finish status, and an optional note; completed meeting forums
+  remain read-only.
 - **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, archive or restore requests, and open
   module notifications directly to the expanded request card.
@@ -58,7 +63,7 @@ availability to hang out. Built from the mockups in `../mockups`.
 - [Tailwind CSS](https://tailwindcss.com/) (semantic theme tokens in
   `src/styles/themes.css`, exposed through `tailwind.config.js`)
 - [React Router](https://reactrouter.com/) for `/login`, `/signup`, `/pending`,
-  `/feed`, and `/`
+  and `/`
 
 ## Getting started
 
@@ -95,14 +100,22 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `joinGroup`                     | `POST /api/groups/join`                                    |
 | `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
 | `updateGroupDisplay`            | `PUT /api/groups/display?userId=:id`                       |
-| `getBookClubSummary`            | `GET /api/book-club?userId=:id`                            |
+| `getBookClub`                   | `GET /api/book-club?userId=:id`                            |
 | `createBookClubMeeting`         | `POST /api/book-club/meetings?userId=:id`                  |
+| `getBookClubMeetings`           | `GET /api/book-club/meetings?userId=:id`                   |
 | `getBookClubMeeting`            | `GET /api/book-club/meetings/:id?userId=:id`               |
-| `updateBookClubMeetingResponse` | `PUT /api/book-club/meetings/:id/response?userId=:id`      |
+| `setBookClubResponse`           | `PUT /api/book-club/meetings/:id/response?userId=:id`      |
 | `completeBookClubMeeting`       | `POST /api/book-club/meetings/:id/complete?userId=:id`     |
 | `completeBookClubBook`          | `POST /api/book-club/books/:id/complete?userId=:id`        |
-| `getCompletedBookClubBooks`     | `GET /api/book-club/books/completed?userId=:id`            |
+| `getBookClubBooks`              | `GET /api/book-club/books?userId=:id`                      |
+| `addBookClubBook`               | `POST /api/book-club/books?userId=:id`                     |
+| `updateBookClubBook`            | `PATCH /api/book-club/books/:id?userId=:id`                |
+| `reviewBookClubBook`            | `PUT /api/book-club/books/:id/review?userId=:id`           |
 | `notifyBookClubMeeting`         | `POST /api/book-club/meetings/:id/notify?userId=:id`       |
+| `getBookClubForum`              | `GET /api/book-club/meetings/:id/forum?userId=:id`         |
+| `createBookClubForumEntry`      | `POST /api/book-club/meetings/:id/forum?userId=:id`        |
+| `updateBookClubForumEntry`      | `PATCH /api/book-club/meetings/:id/forum/:entryId`         |
+| `deleteBookClubForumEntry`      | `DELETE /api/book-club/meetings/:id/forum/:entryId`        |
 | `getRoommates`                  | `GET /api/roommates?userId=:id`                            |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
@@ -159,3 +172,20 @@ VITE_API_TARGET=http://localhost:9000 npm run dev
 - `npm run build` — production build to `dist/`
 - `npm run preview` — preview the production build
 - `npm run lint` — lint the source
+- `npm test` — run the Vitest unit tests
+- `npm run test:e2e:install` — install Playwright's Chromium browser
+- `npm run test:e2e` — run the Playwright browser tests
+- `npm run test:e2e:ui` — open Playwright's interactive test runner
+
+## Browser tests
+
+Install Chromium once, then run the end-to-end suite:
+
+```bash
+npm run test:e2e:install
+npm run test:e2e
+```
+
+Playwright starts the Vite development server automatically. Tests can mock
+individual API calls with `page.route`, so they do not need a running Flask
+backend unless a scenario intentionally exercises the complete stack.

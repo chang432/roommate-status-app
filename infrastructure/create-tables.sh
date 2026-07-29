@@ -68,9 +68,9 @@ create_group_table "$ROOMMATE_TABLE-polls"
 create_group_table "$ROOMMATE_TABLE-shows-v2"
 create_group_table "$ROOMMATE_TABLE-comment-likes-v2"
 
-# Book Club is group-partitioned too, with a bookId index for a book's ratings
-# and chapter discussion. The configuration and member-response rows simply
-# omit bookId, so they are not indexed.
+# Book Club is group-partitioned too, with a bookId index for a book's related
+# records. Configuration and member-response rows omit bookId; meeting forums
+# carry it for historical context but are read by meeting-key prefix.
 if aws dynamodb describe-table \
     --table-name "$ROOMMATE_TABLE-book-club" \
     --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then

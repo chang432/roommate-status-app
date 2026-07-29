@@ -2,12 +2,13 @@
 
 ## Product behavior
 
-- Groups with Book Club enabled show Book and Snack owner lists above the feed.
-  The cards display the open meeting's assigned owners; list heads are the
-  defaults when no active assignment is available.
-- The current-book card appears above those owner trackers. An open meeting
-  exposes its full editor as an explicit admin action alongside reminder and
-  completion actions.
+- Groups with Book Club enabled show a two-by-two Current Book, Library,
+  Book, and Snack card grid on the household page. Current Book opens its
+  detail, Library opens the complete catalog, and the owner cards open their
+  respective orders.
+- Meetings expand directly in the household feed for attendance, progress,
+  reminders, editing, and completion. Their Forum link opens the relevant book
+  and meeting discussion inside the household library modal.
 - Index zero in each list is the current owner and the default for a new meeting.
   Neither list advances automatically. An admin selection moves that member to
   the front while preserving everyone else's relative order.
@@ -19,10 +20,19 @@
 - An admin creates, edits, and manually completes one open meeting at a time.
   The first date defaults to the next Wednesday at 7:30 PM Eastern; later dates
   default to two local calendar weeks after the prior meeting.
-- An active book may span meetings and is completed separately. Completed books
-  retain ratings and chapter discussion.
+- Members add books to the library independently of meetings. Admins select any
+  non-completed catalog book when creating a meeting; that selection becomes
+  current without completing the previous book. Catalog corrections propagate
+  to every meeting snapshot for that book.
+- An active book may span meetings and is completed separately. Each member can
+  review an active or completed book with a 1–5 star rating, required finished/not-finished
+  status, and optional note. Legacy star-only ratings remain visible with
+  unknown finish status until their author updates them.
 - Members may update their own attendance and reading progress until the
   meeting is completed, even after its scheduled time.
+- Every meeting has a forum with titled root topics and one reply level.
+  Authors may edit or remove their entries, group admins may remove any entry,
+  and completion makes the entire forum read-only.
 
 ## DynamoDB records
 
@@ -37,7 +47,13 @@ The existing `RoommateStatus-{dev,main}-book-club` table remains keyed by
   scheduled/completed status, and creator/completer snapshots.
 - `meeting-member#<meetingUuid>#<userId>`: one member-owned attendance/progress
   response.
-- Ratings and chapter posts retain their existing book-scoped shapes.
+- `rating#<bookUuid>#<userId>`: member review with rating, finish status,
+  optional note, member snapshot, and lifecycle timestamps. The established ID
+  prefix remains because existing star ratings are upgraded in place.
+- `forum#<meetingUuid>#<timestamp>#<uuid>`: meeting-scoped topic or reply.
+  Replies include `parentPostId`; topics include `title` and
+  `lastActivityAt`. Removed entries keep attribution/timestamps but omit their
+  title and body.
 
 All timestamps are server-generated epoch milliseconds except an admin-selected
 meeting time. Historical display names remain denormalized while authorization
@@ -45,11 +61,16 @@ uses stable member IDs.
 
 ## Feed and authorization
 
-Meetings normalize as `type: "book-club"` feed modules and use
-`/?module=book-club&item=<id>` deep links. The type is included only when the
-group has Book Club enabled. Meeting creation, edits, completion, and book
-completion require a group admin; any current member can send a reminder,
-update their own response, rate a completed book, and post discussion.
+Meetings normalize as compact `type: "book-club"` feed modules and use
+`/?module=book-club&item=<id>` deep links that expand the household feed card.
+Forum notifications use
+`/?book=<book-id>&meeting=<meeting-id>&thread=<root-id>` so the household
+library modal opens the referenced topic. The type is
+included only when the group has Book Club enabled. Meeting creation, edits,
+completion, and book completion require a group admin; any current member can
+send a reminder, update their own response, review an active or completed book, create a
+forum topic, and reply before completion. New topics notify the group except
+the author; replies notify thread participants except the author.
 
 ## Migration
 
@@ -58,4 +79,6 @@ rotations and date-derived session IDs to sticky owner lists and stable meeting
 IDs while preserving books, sessions, responses, ratings, and posts. No table
 or index change is required. `2026-07-23-01-align-book-owner-order` aligns the
 two relative owner cycles once without imposing an ongoing synchronization
-rule.
+rule. `2026-07-23-02-book-club-meeting-forums` moves legacy chapter posts to
+the most likely meeting forum, keeps replies with their root topic, and embeds
+the original rows for an idempotent reverse pass.

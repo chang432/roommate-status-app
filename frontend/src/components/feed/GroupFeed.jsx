@@ -636,6 +636,7 @@ export default function GroupFeed({
 
     startPolling();
     window.addEventListener("focus", loadFeed);
+    window.addEventListener("roomie:book-club-changed", loadFeed);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     navigator.serviceWorker?.addEventListener(
       "message",
@@ -645,6 +646,7 @@ export default function GroupFeed({
     return () => {
       stopPolling();
       window.removeEventListener("focus", loadFeed);
+      window.removeEventListener("roomie:book-club-changed", loadFeed);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       navigator.serviceWorker?.removeEventListener(
         "message",
@@ -1169,7 +1171,7 @@ export default function GroupFeed({
                   module={module}
                   focusIntent={focusIntent}
                   onFocusHandled={consumeFocusIntent}
-                  canEdit={module.type === "book-club" ? canAdministerBookClub && !module.isArchived : module.isEditableBy(user.id)}
+                  canEdit={module.type === "book-club" ? false : module.isEditableBy(user.id)}
                   onEdit={() => setEditingModule(module)}
                 >
                   {(onEdit) => renderModule(module, onEdit)}

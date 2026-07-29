@@ -1,7 +1,12 @@
 .form { @apply grid gap-3 text-sm text-ink; }
 .form label { @apply grid gap-1 font-bold; }
-.form input { @apply rounded border border-line bg-surface-muted px-3 py-2 font-normal text-ink; }
+.form input, .form select { @apply rounded border border-line bg-surface-muted px-3 py-2 font-normal text-ink; }
 .muted { @apply text-sm text-ink-soft; }
+.emptyBooks { @apply grid gap-4 text-sm text-ink-soft; }
+.fixedBook { @apply grid gap-1 rounded-md border border-line bg-surface-muted px-3 py-3; }
+.fixedBook > span { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
+.fixedBook > strong { @apply text-base text-ink; }
+.fixedBook > small, .form label > small { @apply text-xs text-ink-soft; }
 .ownerPicker { @apply grid gap-1 rounded border border-line bg-surface-muted p-3; }
 .ownerPickerToggle { @apply grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded px-1 py-1 text-left text-ink hover:bg-card focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50; }
 .ownerPickerToggle > span:first-child { @apply text-sm font-bold; }

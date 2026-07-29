@@ -1,13 +1,26 @@
 .section { @apply mx-auto mt-6 w-full max-w-[720px] rounded-md border border-line bg-card p-4; }
 .muted { @apply text-sm text-ink-soft; }
-.listGrid { @apply grid grid-cols-2 gap-3; }
-.ownerCard { @apply grid gap-1 rounded-md border border-accent-soft bg-accent-soft px-4 py-3 text-left transition hover:border-accent hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent; }
-.ownerCard span { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
-.ownerCard strong { @apply truncate text-base text-ink; }
-.ownerCard small { @apply text-xs text-ink-soft; }
-.activeBook { @apply mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
-.activeBook button { @apply rounded border border-accent px-3 py-1.5 text-xs font-bold text-accent-deep hover:bg-card disabled:opacity-60; }
+.cardGrid { @apply grid grid-cols-2 gap-3; }
+.card, .currentCard { @apply min-w-0 rounded-md border border-accent-soft bg-accent-soft text-left transition; }
+.card { @apply grid gap-1 px-4 py-3 hover:border-accent hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent; }
+.currentCard { @apply flex flex-col overflow-hidden hover:border-accent; }
+.cardMain { @apply grid min-w-0 flex-1 gap-1 px-4 py-3 text-left hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent disabled:cursor-default disabled:hover:bg-transparent; }
+.card span, .cardMain span { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
+.card strong, .cardMain strong { @apply truncate text-base text-ink; }
+.card small, .cardMain small { @apply truncate text-xs text-ink-soft; }
+.completeButton { @apply border-t border-accent-soft px-4 py-2 text-left text-xs font-bold text-accent-deep transition hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent disabled:opacity-60; }
 .popupContent { @apply max-h-[min(60vh,440px)] overflow-y-auto pr-1; }
 .popupList { @apply grid gap-2; }
 .popupItem { @apply flex items-center justify-between gap-4 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
 .popupItem span { @apply text-right text-xs text-ink-soft; }
+.libraryDialog { @apply max-w-[720px]; }
+.libraryContent { @apply mt-3; }
+.libraryState { @apply grid min-h-64 place-items-center text-sm font-semibold text-ink-soft; }
+
+@media (max-width: 420px) {
+  .section { @apply px-3; }
+  .cardGrid { @apply gap-2; }
+  .card, .cardMain { @apply px-3 py-3; }
+  .card strong, .cardMain strong { @apply text-sm; }
+  .completeButton { @apply px-3; }
+}
