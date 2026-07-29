@@ -31,14 +31,8 @@ def module_url(
     """Build the canonical frontend destination for a module or module filter."""
     if module_type not in MODULE_TYPES:
         raise ValueError(f"Unknown module type: {module_type}")
-    if module_type == "book-club":
-        params = {}
-        if item_id:
-            params["meeting"] = item_id
-        if thread_id:
-            params["thread"] = thread_id
-        query = urlencode(params)
-        return f"/book-club?{query}" if query else "/book-club"
+    if module_type == "book-club" and thread_id:
+        return f"/book-club/forum?{urlencode({'meeting': item_id, 'thread': thread_id})}"
     params = {"module": module_type}
     if item_id:
         params["item"] = item_id

@@ -65,6 +65,14 @@ export default function App() {
           </RequireGroup>
         }
       />
+      <Route
+        path="/book-club/forum"
+        element={
+          <RequireGroup>
+            <BookClubPage view="forum" />
+          </RequireGroup>
+        }
+      />
       {/* Unknown paths fall back to the home route. */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

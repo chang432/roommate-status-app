@@ -122,6 +122,27 @@ def test_members_can_update_past_open_meetings_and_notify(client, monkeypatch):
     assert notifications[0][1]["url"] == module_models.module_url("book-club", meeting["id"])
 
 
+def test_summary_accepts_legacy_meeting_responses_without_user_id(client):
+    meeting = create_meeting(client).get_json()["meeting"]
+    meeting_key = meeting["id"].split("#", 1)[-1]
+    book_club._get_table().put_item(Item={
+        "groupId": TEST_GROUP_ID,
+        "id": f"meeting-member#{meeting_key}#sheryl",
+        "meetingId": meeting["id"],
+        "attendanceStatus": "attending",
+        "chaptersReadThrough": 7,
+    })
+
+    response = client.get(grouped_path("/api/book-club"))
+
+    assert response.status_code == 200
+    responses = response.get_json()["summary"]["openMeeting"]["responses"]
+    sheryl = next(item for item in responses if item["userId"] == "sheryl")
+    assert (sheryl["attendanceStatus"], sheryl["chaptersReadThrough"]) == (
+        "attending", 7
+    )
+
+
 def test_completed_book_collects_member_reviews(client):
     meeting = create_meeting(client).get_json()["meeting"]
     completed = client.post(grouped_path(f"/api/book-club/books/{meeting['bookId']}/complete"))

@@ -230,9 +230,10 @@ describe("GroupFeed module focus", () => {
     );
 
     expect(await screen.findByText("The Left Hand of Darkness")).toBeInTheDocument();
-    expect(screen.getByRole("link", {
-      name: "Open Book Club meeting for The Left Hand of Darkness",
-    })).toHaveAttribute("href", "/book-club?meeting=book-club-1");
+    expect(screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    })).toBeInTheDocument();
     expect(screen.queryByText("Movie night")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Book Club/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Events/ })).not.toBeInTheDocument();

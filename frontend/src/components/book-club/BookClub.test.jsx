@@ -1,8 +1,9 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import BookClub from "./BookClub.jsx";
-import { getBookClub } from "../../api/bookClub.js";
+import { completeBookClubBook, getBookClub } from "../../api/bookClub.js";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { id: "andre", name: "Andre" } }),
@@ -11,6 +12,7 @@ vi.mock("../../context/AuthContext.jsx", () => ({
 vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   ...(await importOriginal()),
   getBookClub: vi.fn(),
+  completeBookClubBook: vi.fn(),
 }));
 
 const ROOMMATES = [
@@ -38,40 +40,55 @@ function renderBookClub() {
   );
 }
 
-describe("BookClub household summary", () => {
+describe("BookClub owner lists", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getBookClub.mockResolvedValue({ summary: summary() });
   });
   afterEach(() => cleanup());
 
-  it("shows the current read, owners, and a dedicated-page link", async () => {
+  it("restores the current book and owner cards with a library launcher", async () => {
     renderBookClub();
 
-    expect(await screen.findByRole("heading", { name: "Parable of the Sower" })).toBeInTheDocument();
-    expect(screen.getByText("Kayla")).toBeInTheDocument();
-    expect(screen.getByText("Andre")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open Book Club/ })).toHaveAttribute(
+    const bookTracker = await screen.findByRole("button", { name: /Book Kayla/ });
+    expect(screen.getByRole("button", { name: /Snack Andre/ })).toBeInTheDocument();
+    expect(screen.getByText(/Current book:/)).toHaveTextContent("Parable of the Sower");
+    expect(screen.getByRole("link", { name: /Library Past books/ })).toHaveAttribute(
       "href",
       "/book-club",
     );
+
+    await userEvent.click(bookTracker);
+    const dialog = screen.getByRole("dialog", { name: "Book owner order" });
+    expect(dialog).toHaveTextContent("KaylaCurrent and default owner");
+    expect(dialog).toHaveTextContent("AndreOrder #2");
+    expect(dialog).toHaveTextContent("SherylOrder #3");
   });
 
   it("shows the active meeting owners even when the stored defaults differ", async () => {
     getBookClub.mockResolvedValue({
       summary: {
         ...summary(),
-        openMeeting: {
-          bookOwnerId: "andre",
-          snackOwnerId: "sheryl",
-        },
+        openMeeting: { bookOwnerId: "andre", snackOwnerId: "sheryl" },
       },
     });
     renderBookClub();
 
-    expect(await screen.findByText("Andre")).toBeInTheDocument();
-    expect(screen.getByText("Sheryl")).toBeInTheDocument();
-    expect(screen.getByText("Scheduled")).toBeInTheDocument();
+    const bookTracker = await screen.findByRole("button", { name: /Book Andre/ });
+    expect(screen.getByRole("button", { name: /Snack Sheryl/ })).toBeInTheDocument();
+    await userEvent.click(bookTracker);
+    const dialog = screen.getByRole("dialog", { name: "Book owner order" });
+    expect(dialog).toHaveTextContent("KaylaDefault owner");
+    expect(dialog).toHaveTextContent("AndreCurrent owner");
+  });
+
+  it("lets an admin complete the active book", async () => {
+    completeBookClubBook.mockResolvedValue({ summary: summary(false) });
+    renderBookClub();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Complete book" }));
+    expect(completeBookClubBook).toHaveBeenCalledWith("andre", "book-1");
+    await waitFor(() => expect(screen.queryByText("Current book:")).not.toBeInTheDocument());
   });
 
   it("reloads after the shared Book Club change event", async () => {
@@ -85,7 +102,7 @@ describe("BookClub household summary", () => {
         },
       } });
     renderBookClub();
-    await screen.findByText("Kayla");
+    await screen.findByRole("button", { name: /Book Kayla/ });
 
     window.dispatchEvent(new Event("roomie:book-club-changed"));
     await waitFor(() => expect(getBookClub).toHaveBeenCalledTimes(2));

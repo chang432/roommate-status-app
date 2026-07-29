@@ -10,10 +10,13 @@ def test_module_url_builds_canonical_encoded_destinations():
         "/?module=spotify&item=activeJam%23shire"
     )
     assert module_models.module_url("tv") == "/?module=tv"
+    assert module_models.module_url("book-club", "meeting#1") == (
+        "/?module=book-club&item=meeting%231"
+    )
     assert module_models.module_url(
         "book-club", "meeting#1", "forum#meeting-1#topic"
     ) == (
-        "/book-club?meeting=meeting%231&thread=forum%23meeting-1%23topic"
+        "/book-club/forum?meeting=meeting%231&thread=forum%23meeting-1%23topic"
     )
     with pytest.raises(ValueError, match="Unknown module type"):
         module_models.module_url("unknown", "item")

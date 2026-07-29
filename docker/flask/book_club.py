@@ -159,12 +159,17 @@ def _project_book(item: dict | None) -> dict | None:
 
 def _responses(group_id: str, meeting_id: str) -> dict[str, dict]:
     meeting_key = meeting_id.split("#", 1)[-1]
-    return {
-        item["userId"]: item
-        for item in query_group(_get_table(), group_id, consistent=False)
-        if item.get("id", "").startswith(f"meeting-member#{meeting_key}#")
-        and item.get("meetingId") == meeting_id
-    }
+    response_prefix = f"meeting-member#{meeting_key}#"
+    responses = {}
+    for item in query_group(_get_table(), group_id, consistent=False):
+        response_id = item.get("id", "")
+        if not response_id.startswith(response_prefix) or item.get("meetingId") != meeting_id:
+            continue
+        # Early meeting-response rows encoded the member only in the sort key.
+        user_id = item.get("userId") or response_id.removeprefix(response_prefix)
+        if user_id:
+            responses[user_id] = item
+    return responses
 
 
 def _project_meeting(item: dict | None, members: list[dict] | None = None, book: dict | None = None) -> dict | None:

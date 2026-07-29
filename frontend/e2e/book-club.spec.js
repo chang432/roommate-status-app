@@ -113,6 +113,9 @@ async function mockBookClub(page) {
         groupId: 'book-club',
         name: 'Book Club',
         showBookClub: true,
+        showRoster: true,
+        showFeed: true,
+        viewerIsAdmin: true,
       } }
     } else if (path === '/api/roommates') {
       payload = [
@@ -137,6 +140,23 @@ async function mockBookClub(page) {
       } }
     } else if (path === '/api/book-club/meetings') {
       payload = { meetings: [meeting] }
+    } else if (path === '/api/activities' || path === '/api/shows') {
+      payload = []
+    } else if (path === '/api/jam') {
+      payload = null
+    } else if (path === '/api/feed') {
+      payload = [{
+        id: meeting.id,
+        type: 'book-club',
+        createdAt: meeting.createdAt,
+        updatedAt: meeting.updatedAt,
+        sortAt: meeting.updatedAt,
+        title: meeting.bookTitle,
+        subtitle: 'Book Club meeting',
+        actor: meeting.createdByName,
+        isArchived: false,
+        payload: meeting,
+      }]
     } else if (path === '/api/book-club/books/completed') {
       payload = { books }
     } else if (path.endsWith('/review') && method === 'PUT') {
@@ -221,16 +241,23 @@ async function mockBookClub(page) {
   })
 }
 
-test('uses meeting forums and completes a legacy review', async ({ page }, testInfo) => {
+test('restores the classic card and opens focused forum and library pages', async ({ page }, testInfo) => {
   await mockBookClub(page)
-  await page.goto('/book-club')
+  await page.goto('/')
 
-  await expect(page.getByRole('heading', { name: 'Book Club', level: 1 })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
+  await expect(page.getByText('Current book:')).toContainText('The Fifth Season')
+  await expect(page.getByRole('button', { name: /Book Kayla/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Snack Andre/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Library Past books/ })).toBeVisible()
+  await page.screenshot({
+    path: testInfo.outputPath('book-club-household-desktop.png'),
+    fullPage: true,
+  })
 
-  await page.getByRole('button', { name: 'Meetings' }).click()
   await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
-  await page.getByRole('tab', { name: 'Forum' }).click()
+  await expect(page.getByText('Read through Chapter 9')).toBeVisible()
+  await page.getByRole('link', { name: 'Forum' }).click()
+  await expect(page).toHaveURL(/\/book-club\/forum\?meeting=meeting%23demo/)
   await page.getByLabel('New topic title').fill('Favorite passage')
   await page.getByLabel('New topic post').fill('Which scene stayed with you?')
   await page.getByRole('button', { name: 'Post topic' }).click()
@@ -246,7 +273,9 @@ test('uses meeting forums and completes a legacy review', async ({ page }, testI
     fullPage: true,
   })
 
-  await page.getByRole('button', { name: 'Library' }).click()
+  await page.getByRole('link', { name: 'Household', exact: true }).click()
+  await page.getByRole('link', { name: /Library Past books/ }).click()
+  await expect(page.getByRole('heading', { name: 'Library', level: 1 })).toBeVisible()
   await expect(page.getByText('Finish status not recorded').first()).toBeVisible()
   const fiveStars = page.getByRole('radio', { name: '5 stars' })
   await fiveStars.locator('..').click()
@@ -268,7 +297,6 @@ test('keeps the Book Club library usable on a phone', async ({ page }, testInfo)
   await page.setViewportSize({ width: 390, height: 844 })
   await mockBookClub(page)
   await page.goto('/book-club')
-  await page.getByRole('button', { name: 'Library' }).click()
 
   await expect(page.getByRole('searchbox', { name: 'Search completed books' })).toBeVisible()
   await expect(page.getByRole('button', { name: /A Psalm for the Wild-Built/ })).toBeVisible()

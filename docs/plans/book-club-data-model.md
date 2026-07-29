@@ -2,11 +2,12 @@
 
 ## Product behavior
 
-- Groups with Book Club enabled show a compact household summary and meeting
-  links. Full management lives on the dedicated `/book-club` page.
-- The page separates the current-book overview, meetings/forums, and completed
-  library into clear responsive sections. The current Book and Snack owners are
-  visible without opening an editor.
+- Groups with Book Club enabled show the current book and clickable Book,
+  Snack, and Library cards on the household page. The first two open their
+  owner orders; Library opens the dedicated `/book-club` review page.
+- Meetings expand directly in the household feed for attendance, progress,
+  reminders, editing, and completion. Their Forum link opens the focused
+  `/book-club/forum?meeting=<id>` discussion page.
 - Index zero in each list is the current owner and the default for a new meeting.
   Neither list advances automatically. An admin selection moves that member to
   the front while preserving everyone else's relative order.
@@ -56,8 +57,9 @@ uses stable member IDs.
 ## Feed and authorization
 
 Meetings normalize as compact `type: "book-club"` feed modules and use
-`/book-club?meeting=<id>` deep links. Forum notifications add
-`&thread=<root-id>` so the page opens the meeting's discussion. The type is
+`/?module=book-club&item=<id>` deep links that expand the household feed card.
+Forum notifications use `/book-club/forum?meeting=<id>&thread=<root-id>` so the
+focused discussion page scrolls to the referenced topic. The type is
 included only when the group has Book Club enabled. Meeting creation, edits,
 completion, and book completion require a group admin; any current member can
 send a reminder, update their own response, review a completed book, create a
