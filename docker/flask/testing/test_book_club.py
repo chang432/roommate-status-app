@@ -277,6 +277,25 @@ def test_members_add_and_correct_books_and_all_meeting_snapshots(client):
     )
 
 
+def test_admin_can_set_an_available_library_book_as_current(client):
+    first = add_book(client, title="First", author="Writer One")
+    second = add_book(client, title="Second", author="Writer Two", bookOwnerId="kayla")
+
+    forbidden = client.post(
+        grouped_path(f"/api/book-club/books/{second['id']}/current", user_id="sheryl")
+    )
+    assert forbidden.status_code == 403
+
+    selected = client.post(grouped_path(f"/api/book-club/books/{second['id']}/current"))
+
+    assert selected.status_code == 200
+    payload = selected.get_json()
+    assert payload["book"]["id"] == second["id"]
+    assert payload["summary"]["activeBook"]["id"] == second["id"]
+    assert payload["summary"]["configuration"]["bookOwnerOrderUserIds"][0] == "kayla"
+    assert [book["id"] for book in payload["books"][:2]] == [second["id"], first["id"]]
+
+
 def test_meetings_select_available_books_and_reject_completed_books(client):
     first = add_book(client, title="First", author="Writer One")
     second = add_book(client, title="Second", author="Writer Two", bookOwnerId="kayla")

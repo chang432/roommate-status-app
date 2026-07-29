@@ -44,6 +44,12 @@ export function completeBookClubBook(userId, bookId) {
   });
 }
 
+export function setBookClubCurrentBook(userId, bookId) {
+  return request(withQuery(`/book-club/books/${encodeURIComponent(bookId)}/current`, { userId }), {
+    method: "POST",
+  });
+}
+
 export function getBookClubBooks(userId) {
   return request(withQuery("/book-club/books", { userId }));
 }

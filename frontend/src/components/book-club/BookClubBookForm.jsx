@@ -1,9 +1,19 @@
 import { useState } from "react";
-import { addBookClubBook, updateBookClubBook } from "../../api/bookClub.js";
+import {
+  addBookClubBook,
+  setBookClubCurrentBook,
+  updateBookClubBook,
+} from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import styles from "./BookClubMeetingForm.module.css";
 
-export default function BookClubBookForm({ book = null, roommates, onSaved, onCancel }) {
+export default function BookClubBookForm({
+  book = null,
+  roommates,
+  canAdminister = false,
+  onSaved,
+  onCancel,
+}) {
   const { user } = useAuth();
   const [draft, setDraft] = useState({
     title: book?.title ?? "",
@@ -36,6 +46,26 @@ export default function BookClubBookForm({ book = null, roommates, onSaved, onCa
     }
   }
 
+  async function setAsCurrent() {
+    if (saving || !book) return;
+    setSaving(true);
+    setError("");
+    try {
+      const response = await setBookClubCurrentBook(user.id, book.id);
+      window.dispatchEvent(new Event("roomie:book-club-changed"));
+      await onSaved?.(response);
+    } catch (err) {
+      setError(err.message || "Could not set the current book.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const canSetAsCurrent = book
+    && book.status === "active"
+    && !book.isCurrent
+    && canAdminister;
+
   return (
     <form className={styles.form} onSubmit={submit}>
       {error && <p className="ui-errorBox">{error}</p>}
@@ -55,6 +85,11 @@ export default function BookClubBookForm({ book = null, roommates, onSaved, onCa
       </label>
       <div className="ui-formActions">
         <button type="button" className="ui-secondaryButton ui-formActionButton" disabled={saving} onClick={onCancel}>Cancel</button>
+        {canSetAsCurrent && (
+          <button type="button" className="ui-secondaryButton ui-formActionButton" disabled={saving} onClick={setAsCurrent}>
+            {saving ? "Setting…" : "Set as current book"}
+          </button>
+        )}
         <button type="submit" className="ui-primaryButton ui-formActionButton" disabled={saving}>
           {saving ? "Saving…" : book ? "Save book" : "Add book"}
         </button>

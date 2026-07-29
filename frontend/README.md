@@ -107,6 +107,7 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `setBookClubResponse`           | `PUT /api/book-club/meetings/:id/response?userId=:id`      |
 | `completeBookClubMeeting`       | `POST /api/book-club/meetings/:id/complete?userId=:id`     |
 | `completeBookClubBook`          | `POST /api/book-club/books/:id/complete?userId=:id`        |
+| `setBookClubCurrentBook`        | `POST /api/book-club/books/:id/current?userId=:id`         |
 | `getBookClubBooks`              | `GET /api/book-club/books?userId=:id`                      |
 | `addBookClubBook`               | `POST /api/book-club/books?userId=:id`                     |
 | `updateBookClubBook`            | `PATCH /api/book-club/books/:id?userId=:id`                |

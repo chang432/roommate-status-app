@@ -20,10 +20,11 @@
 - An admin creates, edits, and manually completes one open meeting at a time.
   The first date defaults to the next Wednesday at 7:30 PM Eastern; later dates
   default to two local calendar weeks after the prior meeting.
-- Members add books to the library independently of meetings. Admins select any
-  non-completed catalog book when creating a meeting; that selection becomes
-  current without completing the previous book. Catalog corrections propagate
-  to every meeting snapshot for that book.
+- Members add books to the library independently of meetings. Admins can set
+  any active catalog book as current from its edit form, or select one when
+  creating a meeting; either selection becomes current without completing the
+  previous book. Catalog corrections propagate to every meeting snapshot for
+  that book.
 - An active book may span meetings and is completed separately. Each member can
   review an active or completed book with a 1–5 star rating, required finished/not-finished
   status, and optional note. Legacy star-only ratings remain visible with

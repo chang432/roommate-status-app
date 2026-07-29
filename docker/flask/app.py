@@ -706,6 +706,24 @@ def create_app() -> Flask:
             viewer["groupId"], db.get_all(viewer["groupId"])
         )})
 
+    @app.post("/api/book-club/books/<book_id>/current")
+    def set_current_book_club_book(book_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        if not db.is_group_admin(viewer["id"], viewer["groupId"]):
+            return jsonify({"error": "Only a group admin can set the current book."}), 403
+        book, error = book_club.set_current_book(
+            viewer["groupId"], book_id, db.get_all(viewer["groupId"])
+        )
+        if error:
+            return jsonify({"error": error}), 400
+        return jsonify({
+            "book": book,
+            "summary": book_club.summary(viewer["groupId"], db.get_all(viewer["groupId"])),
+            "books": book_club.list_books(viewer["groupId"], viewer["id"]),
+        })
+
     @app.post("/api/book-club/meetings/<meeting_id>/notify")
     def notify_book_club_meeting(meeting_id: str):
         viewer, error = group_member_from_query()

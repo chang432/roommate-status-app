@@ -1,7 +1,11 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addBookClubBook, updateBookClubBook } from "../../api/bookClub.js";
+import {
+  addBookClubBook,
+  setBookClubCurrentBook,
+  updateBookClubBook,
+} from "../../api/bookClub.js";
 import BookClubBookForm from "./BookClubBookForm.jsx";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
@@ -10,6 +14,7 @@ vi.mock("../../context/AuthContext.jsx", () => ({
 vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   ...(await importOriginal()),
   addBookClubBook: vi.fn(),
+  setBookClubCurrentBook: vi.fn(),
   updateBookClubBook: vi.fn(),
 }));
 
@@ -55,5 +60,19 @@ describe("BookClubBookForm", () => {
     expect(updateBookClubBook).toHaveBeenCalledWith(
       "andre", "book-1", expect.objectContaining({ title: "Kindred" }),
     );
+  });
+
+  it("lets an admin set an available edited book as current", async () => {
+    const response = { book: { id: "book-1" }, books: [], summary: {} };
+    setBookClubCurrentBook.mockResolvedValue(response);
+    const onSaved = vi.fn();
+    render(<BookClubBookForm book={{
+      id: "book-1", title: "Kindred", author: "Octavia Butler", bookOwnerId: "andre", status: "active", isCurrent: false,
+    }} roommates={ROOMMATES} canAdminister onSaved={onSaved} onCancel={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Set as current book" }));
+
+    expect(setBookClubCurrentBook).toHaveBeenCalledWith("andre", "book-1");
+    expect(onSaved).toHaveBeenCalledWith(response);
   });
 });

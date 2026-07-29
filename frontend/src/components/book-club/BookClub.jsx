@@ -246,9 +246,11 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
             <BookClubBookForm
               book={bookEditor === "add" ? null : bookEditor}
               roommates={roommates}
+              canAdminister={canAdminister}
               onCancel={() => setBookEditor(null)}
-              onSaved={({ book, books: updatedBooks }) => {
+              onSaved={({ book, books: updatedBooks, summary: updatedSummary }) => {
                 setBooks(updatedBooks);
+                if (updatedSummary) setSummary(updatedSummary);
                 setSelectedBookId(book.id);
                 setBookEditor(null);
               }}

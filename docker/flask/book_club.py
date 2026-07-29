@@ -581,6 +581,42 @@ def complete_book(group_id: str, book_id: str) -> str | None:
     return None
 
 
+def set_current_book(
+    group_id: str, book_id: str, members: list[dict]
+) -> tuple[dict | None, str | None]:
+    """Select an available catalog title without creating a meeting."""
+    normalized = book_id[5:] if book_id.startswith("book#") else book_id
+    book = _fetch(group_id, f"book#{normalized}")
+    if book is None or book.get("status") != "active":
+        return None, "Select an available book from the library."
+
+    now = _now()
+    config = _fetch(group_id, CONFIG_ID)
+    book_order = _member_order(config, "bookOwnerOrderUserIds", members)
+    book_owner_id = book.get("bookOwnerId")
+    if book_owner_id in book_order:
+        book_order = _move_to_front(book_order, book_owner_id)
+
+    # update_item creates the configuration for a new library while retaining
+    # existing owner-order and meeting settings when the configuration exists.
+    _get_table().update_item(
+        Key={"groupId": group_id, "id": CONFIG_ID},
+        UpdateExpression=(
+            "SET activeBookId = :bookId, bookOwnerOrderUserIds = :bookOrder, "
+            "#timezone = if_not_exists(#timezone, :timezone), "
+            "createdAt = if_not_exists(createdAt, :now), updatedAt = :now"
+        ),
+        ExpressionAttributeNames={"#timezone": "timezone"},
+        ExpressionAttributeValues={
+            ":bookId": normalized,
+            ":bookOrder": book_order,
+            ":timezone": TIMEZONE,
+            ":now": now,
+        },
+    )
+    return _project_book(book), None
+
+
 def list_books(group_id: str, viewer_id: str | None = None) -> list[dict]:
     rows = query_group(_get_table(), group_id)
     config = next((row for row in rows if row.get("id") == CONFIG_ID), None)
