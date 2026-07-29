@@ -28,7 +28,8 @@
   propagate to every meeting snapshot for that book.
 - `activeBookId` is the only book lifecycle state. A title it references is
   current; every other catalog title is completed. Completing the current book
-  timestamps it and clears the pointer. Each member can review any book with a 1–5 star rating, required finished/not-finished
+  requires its open meeting to be completed first, then timestamps the book and
+  clears the pointer. Each member can review any book with a 1–5 star rating, required finished/not-finished
   status, and optional note. Legacy star-only ratings remain visible with
   unknown finish status until their author updates them.
 - Members may update their own attendance and reading progress until the

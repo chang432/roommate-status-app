@@ -146,6 +146,19 @@ describe("BookClub cards and library", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Complete book" })).not.toBeInTheDocument());
   });
 
+  it("requires the active book's open meeting to be completed first", async () => {
+    getBookClub.mockResolvedValue({ summary: {
+      ...summary(),
+      openMeeting: { bookId: ACTIVE_BOOK.id, status: "scheduled" },
+    } });
+    renderBookClub();
+
+    const button = await screen.findByRole("button", { name: "Complete meeting first" });
+    expect(button).toBeDisabled();
+    await userEvent.click(button);
+    expect(completeBookClubBook).not.toHaveBeenCalled();
+  });
+
   it("opens a notification-linked book directly and reloads shared changes", async () => {
     renderBookClub("/?book=book-1&meeting=meeting%231&thread=topic%231");
 

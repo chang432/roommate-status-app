@@ -336,6 +336,22 @@ def test_completing_current_book_clears_pointer_and_blocks_new_meetings(client):
     assert rejected.get_json()["error"] == "Add a current book before scheduling a meeting."
 
 
+def test_completing_current_book_requires_its_open_meeting_to_finish_first(client):
+    book = add_book(client)
+    meeting = create_meeting(client).get_json()["meeting"]
+
+    rejected = client.post(grouped_path(f"/api/book-club/books/{book['id']}/complete"))
+
+    assert rejected.status_code == 409
+    assert rejected.get_json()["error"] == "Complete the open meeting before completing the current book."
+    assert client.get(grouped_path("/api/book-club")).get_json()["summary"]["activeBook"]["id"] == book["id"]
+    assert book_club._fetch(TEST_GROUP_ID, f"book#{book['id']}").get("completedAt") is None
+
+    client.post(grouped_path(meeting_path(meeting["id"], "/complete")))
+    completed = client.post(grouped_path(f"/api/book-club/books/{book['id']}/complete"))
+    assert completed.status_code == 200
+
+
 def test_admin_can_restore_a_completed_book_as_current_when_none_is_selected(client):
     book = add_book(client)
     client.post(grouped_path(f"/api/book-club/books/{book['id']}/complete"))

@@ -664,15 +664,19 @@ def set_response(group_id: str, meeting_id: str, member: dict, attendance: str, 
 def complete_book(group_id: str, book_id: str) -> str | None:
     normalized = book_id[5:] if book_id.startswith("book#") else book_id
     book = _fetch(group_id, f"book#{normalized}")
-    config = _fetch(group_id, CONFIG_ID)
+    config = _fetch(group_id, CONFIG_ID, consistent=True)
     if book is None:
         return "Unknown active book."
     if config is None or config.get("activeBookId") != normalized:
         return "Unknown active book."
+    open_meeting_id = config.get("openMeetingId", config.get("nextSessionId"))
+    open_meeting = _fetch(group_id, open_meeting_id) if open_meeting_id else None
+    if open_meeting and open_meeting.get("bookId") == normalized and open_meeting.get("status") == OPEN_STATUS:
+        return "Complete the open meeting before completing the current book."
     now = _now()
     try:
-        # Checking and clearing the pointer in the same transaction prevents a
-        # stale completion request from completing a newly replaced title.
+        # The config condition prevents a meeting from being created between
+        # the read above and clearing the current-book pointer.
         _get_table().meta.client.transact_write_items(TransactItems=[
             {"Update": {
                 "TableName": TABLE_NAME,
@@ -685,7 +689,10 @@ def complete_book(group_id: str, book_id: str) -> str | None:
                 "TableName": TABLE_NAME,
                 "Key": {"groupId": group_id, "id": CONFIG_ID},
                 "UpdateExpression": "REMOVE activeBookId SET updatedAt = :now",
-                "ConditionExpression": "activeBookId = :bookId",
+                "ConditionExpression": (
+                    "activeBookId = :bookId AND attribute_not_exists(openMeetingId) "
+                    "AND attribute_not_exists(nextSessionId)"
+                ),
                 "ExpressionAttributeValues": {":bookId": normalized, ":now": now},
             }},
         ])
@@ -693,6 +700,14 @@ def complete_book(group_id: str, book_id: str) -> str | None:
         if exc.response["Error"]["Code"] in {
             "ConditionalCheckFailedException", "TransactionCanceledException"
         }:
+            refreshed_config = _fetch(group_id, CONFIG_ID, consistent=True)
+            refreshed_open_id = (
+                refreshed_config.get("openMeetingId", refreshed_config.get("nextSessionId"))
+                if refreshed_config else None
+            )
+            refreshed_meeting = _fetch(group_id, refreshed_open_id) if refreshed_open_id else None
+            if refreshed_meeting and refreshed_meeting.get("bookId") == normalized and refreshed_meeting.get("status") == OPEN_STATUS:
+                return "Complete the open meeting before completing the current book."
             return "Unknown current book."
         raise
     return None

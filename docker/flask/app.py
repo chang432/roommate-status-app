@@ -701,7 +701,8 @@ def create_app() -> Flask:
             return jsonify({"error": "Only a group admin can complete books."}), 403
         error = book_club.complete_book(viewer["groupId"], book_id)
         if error:
-            return jsonify({"error": error}), 404
+            status = 409 if error == "Complete the open meeting before completing the current book." else 404
+            return jsonify({"error": error}), status
         return jsonify({"summary": book_club.summary(
             viewer["groupId"], db.get_all(viewer["groupId"])
         )})

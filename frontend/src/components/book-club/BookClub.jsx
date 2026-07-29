@@ -177,6 +177,10 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   const openOrder = openList ? lists[openList] : [];
   const openTitle = openList === "book" ? "Book owner order" : "Snack owner order";
   const activeBook = summary?.activeBook;
+  const openMeeting = summary?.openMeeting;
+  const activeBookHasOpenMeeting = Boolean(openMeeting)
+    && openMeeting.bookId === activeBook?.id
+    && openMeeting.status === "scheduled";
 
   return (
     <section className={styles.section} aria-label="Book Club">
@@ -196,8 +200,8 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
               />
             </button>
             {activeBook && canAdminister && (
-              <button className={styles.completeButton} type="button" disabled={completingBook} onClick={completeBook}>
-                {completingBook ? "Completing…" : "Complete book"}
+              <button className={styles.completeButton} type="button" disabled={completingBook || activeBookHasOpenMeeting} onClick={completeBook} title={activeBookHasOpenMeeting ? "Complete the open meeting first" : undefined}>
+                {completingBook ? "Completing…" : activeBookHasOpenMeeting ? "Complete meeting first" : "Complete book"}
               </button>
             )}
           </div>
