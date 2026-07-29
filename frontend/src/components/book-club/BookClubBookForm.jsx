@@ -63,7 +63,6 @@ export default function BookClubBookForm({
 
   const canSetAsCurrent = book
     && book.status === "active"
-    && !book.isCurrent
     && canAdminister;
 
   return (

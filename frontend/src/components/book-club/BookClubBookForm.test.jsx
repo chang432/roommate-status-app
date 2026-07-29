@@ -62,12 +62,12 @@ describe("BookClubBookForm", () => {
     );
   });
 
-  it("lets an admin set an available edited book as current", async () => {
+  it("lets an admin set an active edited book as current", async () => {
     const response = { book: { id: "book-1" }, books: [], summary: {} };
     setBookClubCurrentBook.mockResolvedValue(response);
     const onSaved = vi.fn();
     render(<BookClubBookForm book={{
-      id: "book-1", title: "Kindred", author: "Octavia Butler", bookOwnerId: "andre", status: "active", isCurrent: false,
+      id: "book-1", title: "Kindred", author: "Octavia Butler", bookOwnerId: "andre", status: "active", isCurrent: true,
     }} roommates={ROOMMATES} canAdminister onSaved={onSaved} onCancel={vi.fn()} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Set as current book" }));
