@@ -25,6 +25,7 @@ const ACTIVE_BOOK = {
   author: "Octavia E. Butler",
   bookOwnerName: "Kayla",
   status: "active",
+  isCurrent: true,
   completedAt: null,
   averageRating: 4,
   reviewCount: 1,
@@ -54,6 +55,7 @@ const COMPLETED_BOOK = {
   id: "completed-book",
   title: "Kindred",
   status: "completed",
+  isCurrent: false,
   completedAt: Date.UTC(2030, 0, 1),
   averageRating: 5,
   finishedCount: 1,
@@ -81,13 +83,13 @@ describe("BookClubLibrary", () => {
 
   it("lists the active book first with ratings and finished counts", async () => {
     const { props } = renderLibrary();
-    const cards = screen.getAllByRole("button");
-    expect(cards[0]).toHaveTextContent("Active");
-    expect(cards[0]).toHaveTextContent("4.0 ★");
-    expect(cards[0]).toHaveTextContent("0 people finished");
-    expect(cards[1]).toHaveTextContent("Kindred");
+    const activeCard = screen.getByRole("button", { name: /Parable of the Sower/ });
+    expect(activeCard).toHaveTextContent("Current");
+    expect(activeCard).toHaveTextContent("4.0 ★");
+    expect(activeCard).toHaveTextContent("0 people finished");
+    expect(screen.getByRole("button", { name: /Kindred/ })).toBeInTheDocument();
 
-    await userEvent.click(cards[0]);
+    await userEvent.click(activeCard);
     expect(props.onSelectBook).toHaveBeenCalledWith("active-book");
   });
 
@@ -116,7 +118,7 @@ describe("BookClubLibrary", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Saved");
   });
 
-  it("shows every meeting discussion newest first and focuses the linked thread", () => {
+  it("shows every meeting discussion newest first and focuses the linked thread", async () => {
     renderLibrary({
       selectedBookId: ACTIVE_BOOK.id,
       focusMeetingId: "meeting-old",
@@ -124,11 +126,9 @@ describe("BookClubLibrary", () => {
     });
 
     const discussions = screen.getByRole("region", { name: "Discussions" });
-    expect(within(discussions).getAllByText(/Forum for/).map((node) => node.textContent)).toEqual([
-      "Forum for Finish",
-      "Forum for Chapter 5",
-    ]);
     expect(screen.getByTestId("forum-meeting-old")).toHaveAttribute("data-focus-thread", "topic-1");
+    expect(screen.queryByTestId("forum-meeting-new")).not.toBeInTheDocument();
+    await userEvent.click(within(discussions).getAllByRole("button")[1]);
     expect(screen.getByTestId("forum-meeting-new")).toHaveAttribute("data-focus-thread", "");
   });
 

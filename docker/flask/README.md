@@ -17,7 +17,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `GET  /api/groups/current`                                   | `?userId=<id>`                             | selected group metadata, including `viewerIsAdmin`      |
 | `PUT  /api/groups/display`                                   | `?userId=<id>` + `{ showRoster, showFeed, showBookClub }` | updated admin-managed group display settings |
 | `GET /api/book-club`                                         | `?userId=<id>`                             | owner lists, active book, open meeting, and next suggested date |
-| `POST /api/book-club/meetings`                               | `?userId=<id>` + meeting fields            | admin-created open Book Club meeting module             |
+| `POST /api/book-club/meetings`                               | `?userId=<id>` + catalog book ID / meeting fields | admin-created open Book Club meeting module        |
 | `GET /api/book-club/meetings`                                | `?userId=<id>`                             | all meeting summaries and member responses              |
 | `GET /api/book-club/meetings/<id>`                           | `?userId=<id>`                             | meeting detail and member responses                     |
 | `PUT /api/book-club/meetings/<id>/response`                  | `?userId=<id>` + attendance/progress       | current member's meeting response                       |
@@ -25,6 +25,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/book-club/books/<id>/complete`                    | `?userId=<id>`                             | admin-completed active book                             |
 | `POST /api/book-club/meetings/<id>/notify`                   | `?userId=<id>`                             | sends members a deep-linked meeting reminder            |
 | `GET /api/book-club/books`                                   | `?userId=<id>`                             | active/completed books, meetings, aggregate review data, and reviews |
+| `POST /api/book-club/books`                                  | `?userId=<id>` + title/author/Book owner   | member-added catalog book                               |
+| `PATCH /api/book-club/books/<id>`                            | `?userId=<id>` + title/author/Book owner   | corrected book and historical meeting snapshots         |
 | `PUT /api/book-club/books/<id>/review`                       | `?userId=<id>` + rating/finished/note      | member review and refreshed Book Club library           |
 | `GET/POST /api/book-club/meetings/<id>/forum`                | `?userId=<id>` + optional topic/reply      | meeting forum threads                                   |
 | `PATCH/DELETE /api/book-club/meetings/<id>/forum/<entryId>`  | `?userId=<id>` + editable title/body       | edited or soft-removed forum entry                      |

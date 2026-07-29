@@ -2,9 +2,9 @@
 
 ## Product behavior
 
-- Groups with Book Club enabled show a two-by-two Current Book, Past Books,
+- Groups with Book Club enabled show a two-by-two Current Book, Library,
   Book, and Snack card grid on the household page. Current Book opens its
-  detail, Past Books opens the complete library, and the owner cards open their
+  detail, Library opens the complete catalog, and the owner cards open their
   respective orders.
 - Meetings expand directly in the household feed for attendance, progress,
   reminders, editing, and completion. Their Forum link opens the relevant book
@@ -20,6 +20,10 @@
 - An admin creates, edits, and manually completes one open meeting at a time.
   The first date defaults to the next Wednesday at 7:30 PM Eastern; later dates
   default to two local calendar weeks after the prior meeting.
+- Members add books to the library independently of meetings. Admins select any
+  non-completed catalog book when creating a meeting; that selection becomes
+  current without completing the previous book. Catalog corrections propagate
+  to every meeting snapshot for that book.
 - An active book may span meetings and is completed separately. Each member can
   review an active or completed book with a 1–5 star rating, required finished/not-finished
   status, and optional note. Legacy star-only ratings remain visible with

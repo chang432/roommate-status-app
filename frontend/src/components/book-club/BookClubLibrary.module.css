@@ -1,5 +1,6 @@
 .library, .detail { @apply grid gap-5; }
 .libraryHeading { @apply flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between; }
+.libraryTools { @apply flex flex-col gap-2 sm:items-end; }
 .eyebrow { @apply text-xs font-bold uppercase tracking-[0.14em] text-accent-deep; }
 .libraryHeading h2, .detailHeader h2 { @apply mt-1 font-display text-2xl font-semibold text-ink; }
 .search input { @apply w-full rounded-full border border-line bg-surface-muted px-4 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft sm:w-72; }
@@ -21,6 +22,7 @@
 .empty h2 { @apply font-display text-xl font-semibold text-ink; }
 .empty p { @apply text-sm text-ink-soft; }
 .backButton { @apply w-fit rounded-full border border-line px-3 py-1.5 text-sm font-bold text-accent-deep transition hover:border-accent hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent; }
+.detailActions { @apply flex items-center justify-between gap-3; }
 .detailHeader { @apply grid gap-4 rounded-lg border border-line bg-surface-muted p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end; }
 .detailHeader > div > p:not(.eyebrow) { @apply text-sm text-ink-soft; }
 .detailHeader dl { @apply grid grid-cols-3 gap-2; }
@@ -50,7 +52,13 @@
 .note { @apply grid gap-1; }
 .note textarea { @apply min-h-24 resize-y rounded-md border border-line bg-card p-3 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft; }
 .note small { @apply text-right text-xs text-ink-soft; }
-.community, .discussions { @apply grid gap-3 border-t border-line pt-5; }
+.community { @apply grid gap-3 border-t border-line pt-5; }
+.disclosure { @apply overflow-hidden rounded-lg border border-line bg-card; }
+.disclosureToggle { @apply grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 p-4 text-left hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent; }
+.disclosureToggle h3 { @apply font-display text-lg font-semibold text-ink; }
+.disclosureMeta { @apply max-w-52 truncate rounded-full bg-surface-muted px-2 py-1 text-xs font-bold text-accent-deep; }
+.disclosureChevron { @apply text-lg text-accent-deep; }
+.disclosureContent { @apply grid gap-4 border-t border-line p-4; }
 .reviewList { @apply grid gap-3 sm:grid-cols-2; }
 .review { @apply rounded-lg border border-line bg-surface-muted p-3 text-sm text-ink; }
 .review > div { @apply flex items-center justify-between gap-3; }
@@ -60,10 +68,7 @@
 .muted { @apply rounded-lg bg-surface-muted p-4 text-sm text-ink-soft; }
 .meetingForums { @apply grid gap-4; }
 .meetingForum { @apply overflow-hidden rounded-lg border border-line bg-surface-muted; }
-.meetingForum > header { @apply flex flex-col gap-2 border-b border-line bg-card p-4 sm:flex-row sm:items-end sm:justify-between; }
-.meetingForum > header h4 { @apply mt-1 font-display text-base font-semibold text-ink; }
-.meetingForum > header > p { @apply text-sm text-ink-soft; }
-.meetingForum > section { @apply rounded-none border-0 shadow-none; }
+.meetingForum > div > section { @apply rounded-none border-0 shadow-none; }
 
 @media (max-width: 520px) {
   .detailHeader dl { @apply grid-cols-1; }

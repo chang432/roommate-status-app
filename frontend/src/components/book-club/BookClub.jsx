@@ -7,7 +7,9 @@ import {
 } from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { isAdminIn } from "../../utils/roles.js";
+import { OPEN_BOOK_LIBRARY_ADD_EVENT } from "../../utils/bookClubEvents.js";
 import ModalShell from "../ui/ModalShell.jsx";
+import BookClubBookForm from "./BookClubBookForm.jsx";
 import BookClubLibrary from "./BookClubLibrary.jsx";
 import styles from "./BookClub.module.css";
 
@@ -49,6 +51,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   const [libraryError, setLibraryError] = useState("");
   const [books, setBooks] = useState([]);
   const [selectedBookId, setSelectedBookId] = useState(null);
+  const [bookEditor, setBookEditor] = useState(null);
   const [completingBook, setCompletingBook] = useState(false);
   const canAdminister = isAdminIn(roommates, user?.id);
 
@@ -92,6 +95,17 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   }, [libraryOpen, loadBooks, loadSummary]);
 
   useEffect(() => {
+    function openAddBook() {
+      setSelectedBookId(null);
+      setBookEditor("add");
+      setLibraryOpen(true);
+      void loadBooks();
+    }
+    window.addEventListener(OPEN_BOOK_LIBRARY_ADD_EVENT, openAddBook);
+    return () => window.removeEventListener(OPEN_BOOK_LIBRARY_ADD_EVENT, openAddBook);
+  }, [loadBooks]);
+
+  useEffect(() => {
     if (!linkedBookId) return;
     setLibraryOpen(true);
     setSelectedBookId(linkedBookId);
@@ -112,6 +126,14 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
 
   async function openLibrary(bookId = null) {
     setSelectedBookId(bookId);
+    setBookEditor(null);
+    setLibraryOpen(true);
+    await loadBooks();
+  }
+
+  async function openAddBook() {
+    setSelectedBookId(null);
+    setBookEditor("add");
     setLibraryOpen(true);
     await loadBooks();
   }
@@ -127,11 +149,13 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   function closeLibrary() {
     setLibraryOpen(false);
     setSelectedBookId(null);
+    setBookEditor(null);
     clearLibraryParams();
   }
 
   function showBookList() {
     setSelectedBookId(null);
+    setBookEditor(null);
     clearLibraryParams();
   }
 
@@ -163,13 +187,12 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
             <button
               type="button"
               className={styles.cardMain}
-              disabled={!activeBook}
-              onClick={() => openLibrary(activeBook?.id)}
+              onClick={() => activeBook ? openLibrary(activeBook.id) : openAddBook()}
             >
               <CardCopy
                 label="Current book"
                 value={activeBook?.title || "No book selected"}
-                hint={activeBook?.author ? `by ${activeBook.author}` : "Choose one with the next meeting"}
+                hint={activeBook?.author ? `by ${activeBook.author}` : "Add a book to the library"}
               />
             </button>
             {activeBook && canAdminister && (
@@ -179,7 +202,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
             )}
           </div>
           <button type="button" className={styles.card} onClick={() => openLibrary()}>
-            <CardCopy label="Past books" value="Book library" hint="Ratings, reviews, and discussions" />
+            <CardCopy label="Library" value="All books" hint="Ratings, reviews, and discussions" />
           </button>
           <button type="button" className={styles.card} onClick={() => setOpenList("book")}>
             <CardCopy
@@ -212,20 +235,35 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
       )}
       {libraryOpen && (
         <ModalShell
-          title={selectedBookId ? "Book details" : "Book library"}
+          title={bookEditor === "add" ? "Add a book" : bookEditor ? "Edit book" : selectedBookId ? "Book details" : "Book library"}
           onClose={closeLibrary}
           widthClassName={styles.libraryDialog}
           contentClassName={styles.libraryContent}
         >
           {libraryError && <p className="ui-errorBox">{libraryError}</p>}
           {libraryLoading && <p className={styles.libraryState}>Loading books…</p>}
-          {!libraryLoading && !libraryError && (
+          {!libraryLoading && !libraryError && bookEditor && (
+            <BookClubBookForm
+              book={bookEditor === "add" ? null : bookEditor}
+              roommates={roommates}
+              onCancel={() => setBookEditor(null)}
+              onSaved={({ book, books: updatedBooks }) => {
+                setBooks(updatedBooks);
+                setSelectedBookId(book.id);
+                setBookEditor(null);
+              }}
+            />
+          )}
+          {!libraryLoading && !libraryError && !bookEditor && (
             <BookClubLibrary
               books={books}
               selectedBookId={selectedBookId}
               onSelectBook={setSelectedBookId}
               onBack={showBookList}
               onBooksChange={setBooks}
+              onAddBook={() => setBookEditor("add")}
+              onEditBook={setBookEditor}
+              roommates={roommates}
               canAdminister={canAdminister}
               focusMeetingId={linkedMeetingId}
               focusThreadId={linkedThreadId}

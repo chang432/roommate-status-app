@@ -38,10 +38,12 @@ availability to hang out. Built from the mockups in `../mockups`.
   during feed polling. Swiping the feed switches between the ordered filters,
   the filter drawer can edit that order and the contents of All, and the
   floating `+` creates modules.
-- **Book Club**: the household page shows a two-by-two Current Book, Past Books,
+- **Book Club**: the household page shows a two-by-two Current Book, Library,
   Book, and Snack card grid. The library opens as a searchable modal with the
-  active title first, completed titles by recency, aggregate ratings, reviews,
-  and every meeting discussion. Members review active or completed books with
+  current title first, other available titles and completed titles by recency,
+  aggregate ratings, collapsible reviews, and collapsible meeting discussions.
+  Members add and correct catalog books, then admins select an available title
+  when scheduling a meeting. Members review active or completed books with
   1–5 stars, finish status, and an optional note; completed meeting forums
   remain read-only.
 - **Requests**: the household board lets users ask specific roommates for
@@ -106,6 +108,8 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `completeBookClubMeeting`       | `POST /api/book-club/meetings/:id/complete?userId=:id`     |
 | `completeBookClubBook`          | `POST /api/book-club/books/:id/complete?userId=:id`        |
 | `getBookClubBooks`              | `GET /api/book-club/books?userId=:id`                      |
+| `addBookClubBook`               | `POST /api/book-club/books?userId=:id`                     |
+| `updateBookClubBook`            | `PATCH /api/book-club/books/:id?userId=:id`                |
 | `reviewBookClubBook`            | `PUT /api/book-club/books/:id/review?userId=:id`           |
 | `notifyBookClubMeeting`         | `POST /api/book-club/meetings/:id/notify?userId=:id`       |
 | `getBookClubForum`              | `GET /api/book-club/meetings/:id/forum?userId=:id`         |

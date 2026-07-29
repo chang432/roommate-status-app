@@ -50,7 +50,8 @@ describe("BookClubForum", () => {
     createBookClubForumEntry.mockResolvedValue({ forum: createdForum });
     render(<BookClubForum meeting={MEETING} canAdminister={false} />);
 
-    await userEvent.type(await screen.findByLabelText("New topic title"), "Favorite passage");
+    await userEvent.click(await screen.findByRole("button", { name: "New topic" }));
+    await userEvent.type(screen.getByLabelText("New topic title"), "Favorite passage");
     await userEvent.type(screen.getByLabelText("New topic post"), "Which scene stayed with you?");
     await userEvent.click(screen.getByRole("button", { name: "Post topic" }));
     expect(createBookClubForumEntry).toHaveBeenCalledWith("andre", "meeting#1", {
@@ -58,6 +59,7 @@ describe("BookClubForum", () => {
       body: "Which scene stayed with you?",
     });
     expect(await screen.findByRole("heading", { name: "Favorite passage" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New topic" })).toBeInTheDocument();
   });
 
   it("keeps a completed meeting forum visible but read-only", async () => {

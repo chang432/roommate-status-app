@@ -13,11 +13,33 @@ def enable_book_club():
     groups.set_display_options("andre", TEST_GROUP_ID, True, True, True)
 
 
-def create_meeting(client, **overrides):
+def add_book(client, user_id="andre", **overrides):
     enable_book_club()
     body = {
         "title": "The Left Hand of Darkness",
         "author": "Ursula K. Le Guin",
+        "bookOwnerId": "andre",
+        **overrides,
+    }
+    response = client.post(
+        grouped_path("/api/book-club/books", user_id=user_id), json=body
+    )
+    assert response.status_code == 201
+    return response.get_json()["book"]
+
+
+def create_meeting(client, **overrides):
+    enable_book_club()
+    title = overrides.pop("title", "The Left Hand of Darkness")
+    author = overrides.pop("author", "Ursula K. Le Guin")
+    book_owner_id = overrides.pop("bookOwnerId", "andre")
+    book_id = overrides.pop("bookId", None)
+    if book_id is None:
+        book_id = add_book(
+            client, title=title, author=author, bookOwnerId=book_owner_id
+        )["id"]
+    body = {
+        "bookId": book_id,
         "readingTarget": "Read through Chapter 8",
         "scheduledAt": FUTURE,
         **overrides,
@@ -49,8 +71,7 @@ def test_owner_lists_and_meeting_defaults_are_sticky(client):
     second = client.post(
         grouped_path("/api/book-club/meetings"),
         json={
-            "title": first["bookTitle"],
-            "author": first["bookAuthor"],
+            "bookId": first["bookId"],
             "readingTarget": "Finish the book",
         },
     )
@@ -60,35 +81,39 @@ def test_owner_lists_and_meeting_defaults_are_sticky(client):
     assert next_meeting["scheduledAt"] == book_club.following_meeting_at(FUTURE)
 
 
-def test_admin_edit_moves_each_selected_owner_to_front(client):
+def test_meeting_edit_keeps_book_fixed_and_updates_snack_owner(client):
     meeting = create_meeting(client).get_json()["meeting"]
     edited = client.patch(
         f"/api/modules/book-club/{quote(meeting['id'], safe='')}",
         json={
             "editorId": "andre",
             "changes": {
-                "title": meeting["bookTitle"],
-                "author": meeting["bookAuthor"],
                 "readingTarget": "Chapter 9",
                 "scheduledAt": FUTURE - 1000,
-                "bookOwnerId": "kayla",
                 "snackOwnerId": "sheryl",
             },
         },
     )
     assert edited.status_code == 200
     summary = client.get(grouped_path("/api/book-club")).get_json()["summary"]
-    assert summary["configuration"]["bookOwnerOrderUserIds"][0] == "kayla"
     assert summary["configuration"]["snackOwnerOrderUserIds"][0] == "sheryl"
-    assert summary["configuration"]["bookOwnerOrderUserIds"][1] == "andre"
     assert summary["configuration"]["snackOwnerOrderUserIds"][1] == "andre"
+
+    fixed = client.patch(
+        f"/api/modules/book-club/{quote(meeting['id'], safe='')}",
+        json={"editorId": "andre", "changes": {
+            "bookOwnerId": "kayla", "readingTarget": "Chapter 10",
+            "scheduledAt": FUTURE, "snackOwnerId": "sheryl",
+        }},
+    )
+    assert fixed.status_code == 400
+    assert "book is fixed" in fixed.get_json()["error"]
 
     forbidden = client.patch(
         f"/api/modules/book-club/{quote(meeting['id'], safe='')}",
         json={"editorId": "sheryl", "changes": {
-            "title": meeting["bookTitle"], "author": meeting["bookAuthor"],
             "readingTarget": "Chapter 10", "scheduledAt": FUTURE,
-            "bookOwnerId": "sheryl", "snackOwnerId": "sheryl",
+            "snackOwnerId": "sheryl",
         }},
     )
     assert forbidden.status_code == 403
@@ -159,7 +184,9 @@ def test_active_book_collects_member_reviews_and_meeting_history(client):
     assert [item["id"] for item in book["meetings"]] == [meeting["id"]]
 
     client.post(grouped_path(meeting_path(meeting["id"], "/complete")))
-    later = create_meeting(client, scheduledAt=FUTURE + 1000).get_json()["meeting"]
+    later = create_meeting(
+        client, bookId=meeting["bookId"], scheduledAt=FUTURE + 1000
+    ).get_json()["meeting"]
     refreshed = client.get(grouped_path("/api/book-club/books")).get_json()["books"][0]
     assert [item["id"] for item in refreshed["meetings"]] == [
         later["id"], meeting["id"]
@@ -214,6 +241,85 @@ def test_books_list_places_active_before_recently_completed(client):
 
     assert [book["id"] for book in books] == [second["bookId"], first["bookId"]]
     assert [book["status"] for book in books] == ["active", "completed"]
+
+
+def test_members_add_and_correct_books_and_all_meeting_snapshots(client):
+    book = add_book(
+        client,
+        user_id="sheryl",
+        title="Kindred",
+        author="Octavia Butler",
+        bookOwnerId="kayla",
+    )
+    assert book["bookOwnerName"] == "Kayla"
+    assert client.get(grouped_path("/api/book-club")).get_json()["summary"]["activeBook"] is None
+
+    meeting = create_meeting(client, bookId=book["id"]).get_json()["meeting"]
+    client.post(grouped_path(meeting_path(meeting["id"], "/complete")))
+    client.post(grouped_path(f"/api/book-club/books/{book['id']}/complete"))
+
+    corrected = client.patch(
+        grouped_path(f"/api/book-club/books/{book['id']}", user_id="sheryl"),
+        json={
+            "title": "Kindred: A Novel",
+            "author": "Octavia E. Butler",
+            "bookOwnerId": "sheryl",
+        },
+    )
+    assert corrected.status_code == 200
+    updated = corrected.get_json()["book"]
+    assert (updated["title"], updated["bookOwnerName"]) == (
+        "Kindred: A Novel", "Sheryl"
+    )
+    historical = client.get(grouped_path(meeting_path(meeting["id"]))).get_json()["meeting"]
+    assert (historical["bookTitle"], historical["bookAuthor"], historical["bookOwnerId"]) == (
+        "Kindred: A Novel", "Octavia E. Butler", "sheryl"
+    )
+
+
+def test_meetings_select_available_books_and_reject_completed_books(client):
+    first = add_book(client, title="First", author="Writer One")
+    second = add_book(client, title="Second", author="Writer Two", bookOwnerId="kayla")
+
+    first_meeting = create_meeting(client, bookId=first["id"]).get_json()["meeting"]
+    client.post(grouped_path(meeting_path(first_meeting["id"], "/complete")))
+    second_meeting = create_meeting(
+        client, bookId=second["id"], scheduledAt=FUTURE + 1000
+    ).get_json()["meeting"]
+    books = client.get(grouped_path("/api/book-club/books")).get_json()["books"]
+    assert [book["id"] for book in books[:2]] == [second["id"], first["id"]]
+    assert [book["isCurrent"] for book in books[:2]] == [True, False]
+    assert second_meeting["bookTitle"] == "Second"
+
+    corrected = client.patch(
+        grouped_path(f"/api/book-club/books/{second['id']}", user_id="sheryl"),
+        json={
+            "title": "Second Edition",
+            "author": "Writer Two",
+            "bookOwnerId": "sheryl",
+        },
+    )
+    assert corrected.status_code == 200
+    summary = client.get(grouped_path("/api/book-club")).get_json()["summary"]
+    assert summary["activeBook"]["title"] == "Second Edition"
+    assert summary["configuration"]["bookOwnerOrderUserIds"][0] == "sheryl"
+    corrected_meeting = client.get(
+        grouped_path(meeting_path(second_meeting["id"]))
+    ).get_json()["meeting"]
+    assert corrected_meeting["bookTitle"] == "Second Edition"
+
+    client.post(grouped_path(meeting_path(second_meeting["id"], "/complete")))
+    client.post(grouped_path(f"/api/book-club/books/{second['id']}/complete"))
+    rejected = client.post(
+        grouped_path("/api/book-club/meetings"),
+        json={
+            "bookId": second["id"],
+            "readingTarget": "Again",
+            "scheduledAt": FUTURE + 2000,
+        },
+    )
+    assert rejected.status_code == 400
+    assert rejected.get_json()["error"] == "Select an available book from the library."
 
 
 def test_meeting_forum_supports_topics_replies_moderation_and_locking(
@@ -324,7 +430,7 @@ def test_non_admin_cannot_create_or_complete_meetings(client):
     meeting = create_meeting(client).get_json()["meeting"]
     create = client.post(
         grouped_path("/api/book-club/meetings", user_id="sheryl"),
-        json={"title": "A", "author": "B", "readingTarget": "C", "scheduledAt": FUTURE},
+        json={"bookId": meeting["bookId"], "readingTarget": "C", "scheduledAt": FUTURE},
     )
     complete = client.post(
         grouped_path(meeting_path(meeting["id"], "/complete"), user_id="sheryl")

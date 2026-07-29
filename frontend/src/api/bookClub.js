@@ -48,6 +48,20 @@ export function getBookClubBooks(userId) {
   return request(withQuery("/book-club/books", { userId }));
 }
 
+export function addBookClubBook(userId, book) {
+  return request(withQuery("/book-club/books", { userId }), {
+    method: "POST",
+    body: JSON.stringify(book),
+  });
+}
+
+export function updateBookClubBook(userId, bookId, book) {
+  return request(withQuery(`/book-club/books/${encodeURIComponent(bookId)}`, { userId }), {
+    method: "PATCH",
+    body: JSON.stringify(book),
+  });
+}
+
 export function reviewBookClubBook(userId, bookId, review) {
   return request(withQuery(`/book-club/books/${encodeURIComponent(bookId)}/review`, { userId }), {
     method: "PUT",

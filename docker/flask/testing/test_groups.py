@@ -184,11 +184,16 @@ def test_joining_a_group_makes_a_plain_member(client):
 def test_joining_an_existing_book_club_appends_both_owner_lists(client):
     group_id, headers = admin_group(client)
     groups.set_display_options("andre", group_id, False, False, True)
+    book = client.post(
+        "/api/book-club/books?userId=andre",
+        headers=headers,
+        json={"title": "A Book", "author": "An Author", "bookOwnerId": "andre"},
+    ).get_json()["book"]
     configured = client.post(
         "/api/book-club/meetings?userId=andre",
         headers=headers,
         json={
-            "title": "A Book", "author": "An Author", "readingTarget": "Chapter 1",
+            "bookId": book["id"], "readingTarget": "Chapter 1",
             "scheduledAt": book_club.next_wednesday_evening(),
         },
     )

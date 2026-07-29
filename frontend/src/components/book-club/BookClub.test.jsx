@@ -32,6 +32,7 @@ const ACTIVE_BOOK = {
   author: "Octavia E. Butler",
   bookOwnerName: "Kayla",
   status: "active",
+  isCurrent: true,
   completedAt: null,
   averageRating: null,
   reviewCount: 0,
@@ -73,7 +74,7 @@ describe("BookClub cards and library", () => {
   });
   afterEach(() => cleanup());
 
-  it("shows Current and Past before the Book and Snack owner cards", async () => {
+  it("shows Current and Library before the Book and Snack owner cards", async () => {
     renderBookClub();
 
     const section = screen.getByRole("region", { name: "Book Club" });
@@ -81,7 +82,7 @@ describe("BookClub cards and library", () => {
     expect(cards.slice(0, 5).map((card) => card.textContent)).toEqual([
       expect.stringContaining("Current bookParable of the Sower"),
       "Complete book",
-      expect.stringContaining("Past booksBook library"),
+      expect.stringContaining("LibraryAll books"),
       expect.stringContaining("BookKayla"),
       expect.stringContaining("SnackAndre"),
     ]);
@@ -90,7 +91,7 @@ describe("BookClub cards and library", () => {
   it("opens the library list and current-book detail in the shared modal", async () => {
     renderBookClub();
 
-    await userEvent.click(await screen.findByRole("button", { name: /Past books Book library/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Library All books/ }));
     expect(screen.getByRole("dialog", { name: "Book library" })).toHaveTextContent("Parable of the Sower");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
@@ -99,6 +100,15 @@ describe("BookClub cards and library", () => {
     expect(detail).toHaveTextContent("Your review");
     expect(detail).toHaveTextContent("Discussions");
     expect(getBookClubBooks).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens the add-book flow from an empty current-book card", async () => {
+    getBookClub.mockResolvedValue({ summary: summary(false) });
+    getBookClubBooks.mockResolvedValue({ books: [] });
+    renderBookClub();
+
+    await userEvent.click(await screen.findByRole("button", { name: /Current book No book selected/ }));
+    expect(screen.getByRole("dialog", { name: "Add a book" })).toHaveTextContent("Book owner");
   });
 
   it("keeps owner order dialogs and meeting snapshots authoritative", async () => {

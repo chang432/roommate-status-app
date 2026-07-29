@@ -739,6 +739,39 @@ def create_app() -> Flask:
             return error
         return jsonify({"books": book_club.list_books(viewer["groupId"], viewer["id"])})
 
+    @app.post("/api/book-club/books")
+    def add_book_club_book():
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        book, error = book_club.add_book(
+            viewer["groupId"], db.get_all(viewer["groupId"]),
+            request.get_json(silent=True) or {},
+        )
+        if error:
+            return jsonify({"error": error}), 400
+        return jsonify({
+            "book": book,
+            "books": book_club.list_books(viewer["groupId"], viewer["id"]),
+        }), 201
+
+    @app.patch("/api/book-club/books/<book_id>")
+    def update_book_club_book(book_id: str):
+        viewer, error = group_member_from_query()
+        if error:
+            return error
+        book, error = book_club.update_book(
+            viewer["groupId"], book_id, db.get_all(viewer["groupId"]),
+            request.get_json(silent=True) or {},
+        )
+        if error:
+            status = 404 if error == "Unknown Book Club book." else 400
+            return jsonify({"error": error}), status
+        return jsonify({
+            "book": book,
+            "books": book_club.list_books(viewer["groupId"], viewer["id"]),
+        })
+
     @app.put("/api/book-club/books/<book_id>/review")
     def review_book_club_book(book_id: str):
         viewer, error = group_member_from_query()

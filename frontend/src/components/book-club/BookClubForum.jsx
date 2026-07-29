@@ -14,6 +14,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
   const [forum, setForum] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [topicComposerOpen, setTopicComposerOpen] = useState(false);
   const [topicTitle, setTopicTitle] = useState("");
   const [topicBody, setTopicBody] = useState("");
   const [replyTo, setReplyTo] = useState(null);
@@ -58,6 +59,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
       setForum(response.forum);
       setTopicTitle("");
       setTopicBody("");
+      setTopicComposerOpen(false);
     } catch (err) {
       setError(err.message || "Could not create the topic.");
     } finally {
@@ -208,12 +210,18 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
           </section>
         ))}
       </div>
-      {forum && !forum.locked && (
+      {forum && !forum.locked && !topicComposerOpen && (
+        <button type="button" className="ui-primaryButton" onClick={() => setTopicComposerOpen(true)}>New topic</button>
+      )}
+      {forum && !forum.locked && topicComposerOpen && (
         <form className={styles.topicForm} onSubmit={createTopic}>
           <h2>Start a topic</h2>
-          <input aria-label="New topic title" maxLength={120} required placeholder="What should we discuss?" value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} />
+          <input autoFocus aria-label="New topic title" maxLength={120} required placeholder="What should we discuss?" value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} />
           <textarea aria-label="New topic post" maxLength={2000} required placeholder="Share a question or thought…" value={topicBody} onChange={(event) => setTopicBody(event.target.value)} />
-          <button className="ui-primaryButton" type="submit" disabled={busy || !topicTitle.trim() || !topicBody.trim()}>Post topic</button>
+          <div>
+            <button className="ui-primaryButton" type="submit" disabled={busy || !topicTitle.trim() || !topicBody.trim()}>Post topic</button>
+            <button type="button" onClick={() => { setTopicComposerOpen(false); setTopicTitle(""); setTopicBody(""); }}>Cancel</button>
+          </div>
         </form>
       )}
     </section>

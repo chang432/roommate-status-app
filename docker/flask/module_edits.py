@@ -199,10 +199,11 @@ def _edit_jam(item_id: str, editor: dict, changes: dict) -> EditResult:
 
 
 def _edit_book_club_meeting(item_id: str, editor: dict, changes: dict) -> EditResult:
-    allowed = {
-        "scheduledAt", "title", "author", "readingTarget",
-        "bookOwnerId", "snackOwnerId",
-    }
+    if set(changes) & {"bookId", "title", "author", "bookOwnerId"}:
+        return _invalid(
+            "book-club", "A meeting's book is fixed; edit book details in the library."
+        )
+    allowed = {"scheduledAt", "readingTarget", "snackOwnerId"}
     if set(changes) != allowed:
         return _invalid("book-club", "Every meeting field is required when editing.")
     current = book_club.get_meeting(editor["groupId"], item_id)

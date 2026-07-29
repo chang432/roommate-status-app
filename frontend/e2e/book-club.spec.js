@@ -34,6 +34,7 @@ function bookClubFixture() {
     bookOwnerId: 'kayla',
     bookOwnerName: 'Kayla',
     status: 'active',
+    isCurrent: true,
     selectedAt: NOW - 1_000_000,
     completedAt: null,
     reviewCount: 0,
@@ -52,6 +53,7 @@ function bookClubFixture() {
     bookOwnerId: 'andre',
     bookOwnerName: 'Andre',
     status: 'completed',
+    isCurrent: false,
     selectedAt: NOW - 2_000_000,
     completedAt: NOW - 1_500_000,
     reviewCount: 1,
@@ -138,7 +140,25 @@ async function mockBookClub(page) {
         actor: meeting.createdByName, isArchived: false, payload: meeting,
       }]
     } else if (path === '/api/book-club/books') {
-      payload = { books }
+      if (method === 'POST') {
+        const book = {
+          id: 'new-book', ...request.postDataJSON(), bookOwnerName: 'Andre',
+          status: 'active', isCurrent: false, selectedAt: NOW,
+          completedAt: null, reviewCount: 0, averageRating: null,
+          finishedCount: 0, unfinishedCount: 0, unknownFinishCount: 0,
+          viewerReview: null, reviews: [], meetings: [],
+        }
+        books = [books[0], book, ...books.slice(1)]
+        payload = { book, books }
+        status = 201
+      } else {
+        payload = { books }
+      }
+    } else if (path.startsWith('/api/book-club/books/') && method === 'PATCH') {
+      const bookId = decodeURIComponent(path.split('/books/')[1])
+      const changes = request.postDataJSON()
+      books = books.map((book) => book.id === bookId ? { ...book, ...changes, bookOwnerName: changes.bookOwnerId === 'kayla' ? 'Kayla' : 'Andre' } : book)
+      payload = { book: books.find((book) => book.id === bookId), books }
     } else if (path.endsWith('/review') && method === 'PUT') {
       const bookId = decodeURIComponent(path.split('/books/')[1].split('/')[0])
       const review = request.postDataJSON()
@@ -201,27 +221,37 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await page.goto('/')
 
   await expect(page.getByRole('button', { name: /Current book The Fifth Season/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Past books Book library/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Library All books/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /Book Kayla/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /Snack Andre/ })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('book-club-household-desktop.png'), fullPage: true })
 
-  await page.getByRole('button', { name: /Past books Book library/ }).click()
+  await page.getByRole('button', { name: /Library All books/ }).click()
   const library = page.getByRole('dialog', { name: 'Book library' })
-  await expect(library.getByRole('button', { name: /The Fifth Season/ })).toContainText('Active')
+  await expect(library.getByRole('button', { name: /The Fifth Season/ })).toContainText('Current')
   await expect(library.getByRole('button', { name: /A Psalm for the Wild-Built/ })).toContainText('4.0 ★')
   await page.screenshot({ path: testInfo.outputPath('book-club-library-modal-desktop.png'), fullPage: true })
+
+  await library.getByRole('button', { name: 'Add book' }).click()
+  const addDialog = page.getByRole('dialog', { name: 'Add a book' })
+  await addDialog.getByRole('textbox', { name: 'Book title' }).fill('Kindred')
+  await addDialog.getByRole('textbox', { name: 'Author' }).fill('Octavia E. Butler')
+  await addDialog.getByRole('button', { name: 'Add book' }).click()
+  await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Kindred')
+  await page.getByRole('button', { name: '← All books' }).click()
 
   await library.getByRole('button', { name: /The Fifth Season/ }).click()
   const details = page.getByRole('dialog', { name: 'Book details' })
   await expect(details.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
-  await expect(details.getByText('Read through Chapter 9')).toBeVisible()
   await details.getByRole('radio', { name: '5 stars' }).locator('..').click()
   await details.getByRole('radio', { name: 'Finished' }).locator('..').click()
   await details.getByPlaceholder('What stayed with you?').fill('A fierce and unforgettable start.')
   await details.getByRole('button', { name: 'Save review' }).click()
   await expect(details.getByRole('status')).toHaveText('Saved')
 
+  await details.getByRole('button', { name: /Discussions/ }).click()
+  await details.getByRole('button', { name: /Read through Chapter 9/ }).click()
+  await details.getByRole('button', { name: 'New topic' }).click()
   await details.getByLabel('New topic title').fill('Favorite passage')
   await details.getByLabel('New topic post').fill('Which scene stayed with you?')
   await details.getByRole('button', { name: 'Post topic' }).click()
@@ -231,7 +261,7 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await expect(details.getByText('The final conversation.')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-modal-desktop.png'), fullPage: true })
 
-  await details.getByRole('button', { name: 'All books' }).click()
+  await details.getByRole('button', { name: '← All books' }).click()
   await page.getByRole('button', { name: /A Psalm for the Wild-Built/ }).click()
   await expect(page.getByText('Finish status not recorded').first()).toBeVisible()
   await page.getByRole('radio', { name: 'Finished' }).locator('..').click()
@@ -258,7 +288,7 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   const snackBox = await snackCard.boundingBox()
   expect(Math.abs(bookBox.y - snackBox.y)).toBeLessThan(2)
 
-  await page.getByRole('button', { name: /Past books Book library/ }).click()
+  await page.getByRole('button', { name: /Library All books/ }).click()
   const library = page.getByRole('dialog', { name: 'Book library' })
   await expect(library.getByRole('searchbox', { name: 'Search books' })).toBeVisible()
   await expect(library.getByRole('button', { name: /The Fifth Season/ })).toBeVisible()

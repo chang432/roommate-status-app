@@ -152,7 +152,7 @@ def _project_book(item: dict | None) -> dict | None:
         "bookOwnerId": item.get("bookOwnerId", item.get("recommendedById")),
         "bookOwnerName": item.get("bookOwnerName", item.get("recommendedByName")),
         "status": item["status"],
-        "selectedAt": int(item["selectedAt"]),
+        "selectedAt": int(item.get("selectedAt", item.get("createdAt", 0))),
         "completedAt": int(item["completedAt"]) if item.get("completedAt") is not None else None,
     }
 
@@ -263,22 +263,100 @@ def get_meeting(group_id: str, meeting_id: str, members: list[dict] | None = Non
     return _project_meeting(item, members, book)
 
 
-def _meeting_values(body: dict, members: list[dict], config: dict | None, *, creating: bool) -> tuple[dict | None, str | None]:
+def _book_values(body: dict, members: list[dict]) -> tuple[dict | None, str | None]:
     member_by_id = {member["id"]: member for member in members}
-    book_order = _member_order(config, "bookOwnerOrderUserIds", members)
-    snack_order = _member_order(config, "snackOwnerOrderUserIds", members)
-    if not book_order or not snack_order:
-        return None, "Book Club needs at least one current group member."
-    book_owner_id = body.get("bookOwnerId") or book_order[0]
-    snack_owner_id = body.get("snackOwnerId") or snack_order[0]
-    if book_owner_id not in member_by_id or snack_owner_id not in member_by_id:
-        return None, "Book and Snack owners must be current group members."
     title, error = _validate_text(body.get("title"), "Book title")
     if error:
         return None, error
     author, error = _validate_text(body.get("author"), "Book author")
     if error:
         return None, error
+    book_owner_id = body.get("bookOwnerId")
+    if book_owner_id not in member_by_id:
+        return None, "Book owner must be a current group member."
+    return {
+        "title": title,
+        "author": author,
+        "bookOwnerId": book_owner_id,
+        "bookOwnerName": member_by_id[book_owner_id]["name"],
+    }, None
+
+
+def add_book(group_id: str, members: list[dict], body: dict) -> tuple[dict | None, str | None]:
+    values, error = _book_values(body, members)
+    if error:
+        return None, error
+    now = _now()
+    book_id = uuid.uuid4().hex
+    book = {
+        "groupId": group_id,
+        "id": f"book#{book_id}",
+        "bookId": book_id,
+        **values,
+        "status": "active",
+        "selectedAt": now,
+        "createdAt": now,
+        "updatedAt": now,
+    }
+    _get_table().put_item(Item=book, ConditionExpression="attribute_not_exists(id)")
+    return _project_book(book), None
+
+
+def update_book(
+    group_id: str, book_id: str, members: list[dict], body: dict
+) -> tuple[dict | None, str | None]:
+    normalized = book_id[5:] if book_id.startswith("book#") else book_id
+    book = _fetch(group_id, f"book#{normalized}")
+    if book is None or book.get("status") not in {"active", "completed"}:
+        return None, "Unknown Book Club book."
+    values, error = _book_values(body, members)
+    if error:
+        return None, error
+    now = _now()
+    book.update({**values, "updatedAt": now})
+    book.pop("recommendedById", None)
+    book.pop("recommendedByName", None)
+    table = _get_table()
+    table.put_item(Item=book)
+
+    # Meeting rows intentionally keep display snapshots. A catalog correction
+    # rewrites all snapshots so history cannot disagree with the canonical book.
+    for item in query_group(table, group_id, consistent=True):
+        if (
+            item.get("id", "").startswith(("meeting#", "session#"))
+            and item.get("bookId") == normalized
+        ):
+            item.update({
+                "bookTitle": values["title"],
+                "bookAuthor": values["author"],
+                "bookOwnerId": values["bookOwnerId"],
+                "bookOwnerName": values["bookOwnerName"],
+                "updatedAt": now,
+            })
+            table.put_item(Item=item)
+
+    config = _fetch(group_id, CONFIG_ID)
+    if config and config.get("activeBookId") == normalized:
+        book_order = _member_order(config, "bookOwnerOrderUserIds", members)
+        table.update_item(
+            Key={"groupId": group_id, "id": CONFIG_ID},
+            UpdateExpression="SET bookOwnerOrderUserIds = :bookOrder, updatedAt = :now",
+            ExpressionAttributeValues={
+                ":bookOrder": _move_to_front(book_order, values["bookOwnerId"]),
+                ":now": now,
+            },
+        )
+    return _project_book(book), None
+
+
+def _meeting_values(body: dict, members: list[dict], config: dict | None, *, creating: bool) -> tuple[dict | None, str | None]:
+    member_by_id = {member["id"]: member for member in members}
+    snack_order = _member_order(config, "snackOwnerOrderUserIds", members)
+    if not snack_order:
+        return None, "Book Club needs at least one current group member."
+    snack_owner_id = body.get("snackOwnerId") or snack_order[0]
+    if snack_owner_id not in member_by_id:
+        return None, "Snack owner must be a current group member."
     reading_target, error = _validate_text(body.get("readingTarget"), "Reading target")
     if error:
         return None, error
@@ -289,14 +367,9 @@ def _meeting_values(body: dict, members: list[dict], config: dict | None, *, cre
         return None, "A new meeting must be scheduled in the future."
     return {
         "scheduledAt": scheduled_at,
-        "title": title,
-        "author": author,
         "readingTarget": reading_target,
-        "bookOwnerId": book_owner_id,
-        "bookOwnerName": member_by_id[book_owner_id]["name"],
         "snackOwnerId": snack_owner_id,
         "snackOwnerName": member_by_id[snack_owner_id]["name"],
-        "bookOrder": _move_to_front(book_order, book_owner_id),
         "snackOrder": _move_to_front(snack_order, snack_owner_id),
     }, None
 
@@ -306,50 +379,35 @@ def create_meeting(group_id: str, members: list[dict], creator: dict, body: dict
     open_id = config.get("openMeetingId", config.get("nextSessionId")) if config else None
     if open_id and _fetch(group_id, open_id):
         return None, "Complete the open meeting before creating another one."
+    if any(field in body for field in ("title", "author", "bookOwnerId")):
+        return None, "Book details must be managed in the library."
+    selected_book_id = body.get("bookId")
+    if not isinstance(selected_book_id, str) or not selected_book_id:
+        return None, "Select a book from the library."
+    selected_book_id = selected_book_id.removeprefix("book#")
+    book = _fetch(group_id, f"book#{selected_book_id}")
+    if book is None or book.get("status") != "active":
+        return None, "Select an available book from the library."
     values, error = _meeting_values(body, members, config, creating=True)
     if error:
         return None, error
     now = _now()
     table = _get_table()
-    active_book_id = config.get("activeBookId") if config else None
-    book = _fetch(group_id, f"book#{active_book_id}") if active_book_id else None
-    if book is None or book.get("status") != "active":
-        active_book_id = uuid.uuid4().hex
-        book = {
-            "groupId": group_id,
-            "id": f"book#{active_book_id}",
-            "bookId": active_book_id,
-            "title": values["title"],
-            "author": values["author"],
-            "bookOwnerId": values["bookOwnerId"],
-            "bookOwnerName": values["bookOwnerName"],
-            "status": "active",
-            "selectedAt": now,
-            "createdAt": now,
-            "updatedAt": now,
-        }
-    else:
-        book = {
-            **book,
-            "title": values["title"],
-            "author": values["author"],
-            "bookOwnerId": values["bookOwnerId"],
-            "bookOwnerName": values["bookOwnerName"],
-            "updatedAt": now,
-        }
-        book.pop("recommendedById", None)
-        book.pop("recommendedByName", None)
+    book_order = _member_order(config, "bookOwnerOrderUserIds", members)
+    selected_owner = book.get("bookOwnerId")
+    if selected_owner in book_order:
+        book_order = _move_to_front(book_order, selected_owner)
     meeting_id = f"meeting#{uuid.uuid4().hex}"
     meeting = {
         "groupId": group_id,
         "id": meeting_id,
         "scheduledAt": values["scheduledAt"],
-        "bookId": active_book_id,
-        "bookTitle": values["title"],
-        "bookAuthor": values["author"],
+        "bookId": selected_book_id,
+        "bookTitle": book["title"],
+        "bookAuthor": book["author"],
         "readingTarget": values["readingTarget"],
-        "bookOwnerId": values["bookOwnerId"],
-        "bookOwnerName": values["bookOwnerName"],
+        "bookOwnerId": book.get("bookOwnerId"),
+        "bookOwnerName": book.get("bookOwnerName"),
         "snackOwnerId": values["snackOwnerId"],
         "snackOwnerName": values["snackOwnerName"],
         "status": OPEN_STATUS,
@@ -367,18 +425,18 @@ def create_meeting(group_id: str, members: list[dict], creator: dict, body: dict
         }
     config = {
         **config,
-        "activeBookId": active_book_id,
+        "activeBookId": selected_book_id,
         "openMeetingId": meeting_id,
         "lastMeetingAt": values["scheduledAt"],
-        "bookOwnerOrderUserIds": values["bookOrder"],
+        "bookOwnerOrderUserIds": book_order,
         "snackOwnerOrderUserIds": values["snackOrder"],
         "updatedAt": now,
     }
     for field in ("nextSessionAt", "nextSessionId", "bookRotationUserIds", "bookRotationCursor", "snackRotationUserIds", "snackRotationCursor", "frequency", "weekday", "localTime"):
         config.pop(field, None)
     try:
-        # The config condition is the one-open-meeting lock. Keeping all three
-        # writes in one transaction avoids orphaned books or meetings if two
+        # The config condition is the one-open-meeting lock. Keeping both
+        # writes in one transaction avoids an orphaned meeting if two
         # admin requests arrive together.
         table.meta.client.transact_write_items(TransactItems=[
             {"Put": {
@@ -386,7 +444,6 @@ def create_meeting(group_id: str, members: list[dict], creator: dict, body: dict
                 "Item": meeting,
                 "ConditionExpression": "attribute_not_exists(id)",
             }},
-            {"Put": {"TableName": TABLE_NAME, "Item": book}},
             {"Put": {
                 "TableName": TABLE_NAME,
                 "Item": config,
@@ -412,17 +469,15 @@ def update_meeting(group_id: str, meeting_id: str, members: list[dict], body: di
         return None, "Unknown meeting."
     if meeting.get("status") != OPEN_STATUS:
         return None, "Completed meetings are read-only."
+    if any(field in body for field in ("bookId", "title", "author", "bookOwnerId")):
+        return None, "A meeting's book is fixed; edit book details in the library."
     values, error = _meeting_values(body, members, config, creating=False)
     if error:
         return None, error
     now = _now()
     meeting.update({
         "scheduledAt": values["scheduledAt"],
-        "bookTitle": values["title"],
-        "bookAuthor": values["author"],
         "readingTarget": values["readingTarget"],
-        "bookOwnerId": values["bookOwnerId"],
-        "bookOwnerName": values["bookOwnerName"],
         "snackOwnerId": values["snackOwnerId"],
         "snackOwnerName": values["snackOwnerName"],
         "updatedAt": now,
@@ -430,24 +485,15 @@ def update_meeting(group_id: str, meeting_id: str, members: list[dict], body: di
     for field in ("snackDutyUserId", "snackDutyName"):
         meeting.pop(field, None)
     book = _fetch(group_id, f"book#{meeting['bookId']}")
-    if book and book.get("status") == "active":
-        book.update({
-            "title": values["title"], "author": values["author"],
-            "bookOwnerId": values["bookOwnerId"], "bookOwnerName": values["bookOwnerName"],
-            "updatedAt": now,
-        })
-        book.pop("recommendedById", None)
-        book.pop("recommendedByName", None)
-        _get_table().put_item(Item=book)
     _get_table().put_item(Item=meeting)
     _get_table().update_item(
         Key={"groupId": group_id, "id": CONFIG_ID},
         UpdateExpression=(
-            "SET lastMeetingAt = :scheduledAt, bookOwnerOrderUserIds = :bookOrder, "
+            "SET lastMeetingAt = :scheduledAt, "
             "snackOwnerOrderUserIds = :snackOrder, updatedAt = :now"
         ),
         ExpressionAttributeValues={
-            ":scheduledAt": values["scheduledAt"], ":bookOrder": values["bookOrder"],
+            ":scheduledAt": values["scheduledAt"],
             ":snackOrder": values["snackOrder"], ":now": now,
         },
     )
@@ -537,6 +583,8 @@ def complete_book(group_id: str, book_id: str) -> str | None:
 
 def list_books(group_id: str, viewer_id: str | None = None) -> list[dict]:
     rows = query_group(_get_table(), group_id)
+    config = next((row for row in rows if row.get("id") == CONFIG_ID), None)
+    current_book_id = config.get("activeBookId") if config else None
     books = [
         row for row in rows
         if row.get("id", "").startswith("book#")
@@ -581,6 +629,7 @@ def list_books(group_id: str, viewer_id: str | None = None) -> list[dict]:
         )
         result.append({
             **_project_book(book),
+            "isCurrent": book["bookId"] == current_book_id,
             "reviewCount": len(values),
             "averageRating": sum(values) / len(values) if values else None,
             "finishedCount": sum(review["finished"] is True for review in reviews),
@@ -598,13 +647,18 @@ def list_books(group_id: str, viewer_id: str | None = None) -> list[dict]:
                 reverse=True,
             ),
         })
-    # The active title is always the first library entry; completed books then
-    # follow in reverse completion order regardless of their selection date.
+    # Current comes first, followed by other available books by addition time,
+    # then completed books by completion time.
     return sorted(
         result,
         key=lambda item: (
-            item.get("status") != "active",
-            -(item.get("completedAt") or 0),
+            not item["isCurrent"],
+            item.get("status") == "completed",
+            -(
+                item.get("completedAt")
+                if item.get("status") == "completed"
+                else item.get("selectedAt", 0)
+            ),
         ),
     )
 
