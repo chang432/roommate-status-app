@@ -23,8 +23,9 @@ function bookClubFixture() {
     createdAt: NOW - 1000,
     updatedAt: NOW - 1000,
     responses: [
-      { userId: 'andre', userName: 'Andre', attendanceStatus: 'attending', chaptersReadThrough: 6 },
-      { userId: 'kayla', userName: 'Kayla', attendanceStatus: 'maybe', chaptersReadThrough: 5 },
+      { userId: 'andre', userName: 'Andre', attendanceStatus: 'attending', chaptersReadThrough: 6, readingComplete: false },
+      { userId: 'kayla', userName: 'Kayla', attendanceStatus: 'maybe', chaptersReadThrough: 5, readingComplete: true },
+      { userId: 'ting', userName: 'Ting', attendanceStatus: null, chaptersReadThrough: 0, readingComplete: false },
     ],
   }
   const activeBook = {
@@ -109,6 +110,7 @@ async function mockBookClub(page) {
       payload = [
         { id: 'andre', name: 'Andre', role: 'admin' },
         { id: 'kayla', name: 'Kayla', role: 'member' },
+        { id: 'ting', name: 'Ting', role: 'member' },
       ]
     } else if (path === '/api/book-club') {
       payload = { summary: {
@@ -128,6 +130,12 @@ async function mockBookClub(page) {
       } }
     } else if (path === '/api/book-club/meetings') {
       payload = { meetings: [meeting] }
+    } else if (path.endsWith('/response') && method === 'PUT') {
+      const changes = request.postDataJSON()
+      meeting.responses = meeting.responses.map((response) => response.userId === 'andre'
+        ? { ...response, ...changes }
+        : response)
+      payload = { meeting }
     } else if (path === '/api/activities' || path === '/api/shows') {
       payload = []
     } else if (path === '/api/jam') {
@@ -272,6 +280,13 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await page.getByRole('button', { name: 'Close' }).click()
 
   await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  const responseList = page.getByRole('list', { name: 'Member attendance and progress' })
+  await expect(responseList.getByRole('listitem')).toHaveCount(3)
+  await expect(page.getByLabel('Attendance totals')).toContainText('1 Pending')
+  await page.getByLabel('Your reading progress mode').selectOption('complete')
+  await expect(page.getByLabel('Your reading progress mode')).toHaveValue('complete')
+  await page.waitForTimeout(750)
+  await page.screenshot({ path: testInfo.outputPath('book-club-meeting-tracker-desktop.png'), fullPage: true })
   await page.getByRole('link', { name: 'Forum' }).click()
   await expect(page).toHaveURL(/\?book=active-book&meeting=meeting%23demo/)
   await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Favorite passage')
@@ -302,4 +317,12 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   await expect(details.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
   await expect.poll(() => details.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-modal-mobile.png'), fullPage: true })
+
+  await details.getByRole('button', { name: 'Close' }).click()
+  await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  const responseList = page.getByRole('list', { name: 'Member attendance and progress' })
+  await expect(responseList.getByRole('listitem')).toHaveCount(3)
+  await expect.poll(() => responseList.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await page.waitForTimeout(750)
+  await page.screenshot({ path: testInfo.outputPath('book-club-meeting-tracker-mobile.png'), fullPage: true })
 })

@@ -19,10 +19,10 @@ export function getBookClubMeeting(userId, meetingId) {
   return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}`, { userId }));
 }
 
-export function setBookClubResponse(userId, meetingId, attendanceStatus, chaptersReadThrough) {
+export function setBookClubResponse(userId, meetingId, changes) {
   return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}/response`, { userId }), {
     method: "PUT",
-    body: JSON.stringify({ attendanceStatus, chaptersReadThrough }),
+    body: JSON.stringify(changes),
   });
 }
 

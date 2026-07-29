@@ -131,6 +131,7 @@ def test_members_can_update_past_open_meetings_and_notify(client, monkeypatch):
     assert response.status_code == 200
     mine = next(item for item in response.get_json()["meeting"]["responses"] if item["userId"] == "sheryl")
     assert (mine["attendanceStatus"], mine["chaptersReadThrough"]) == ("attending", 6)
+    assert mine["readingComplete"] is False
 
     notifications = []
     monkeypatch.setattr(push, "is_configured", lambda: True)
@@ -143,6 +144,45 @@ def test_members_can_update_past_open_meetings_and_notify(client, monkeypatch):
     )
     assert notified.status_code == 200
     assert notifications[0][1]["url"] == module_models.module_url("book-club", meeting["id"])
+
+
+def test_meeting_response_fields_save_independently(client):
+    meeting = create_meeting(client).get_json()["meeting"]
+    path = grouped_path(meeting_path(meeting["id"], "/response"), user_id="sheryl")
+
+    pending = next(
+        item for item in meeting["responses"] if item["userId"] == "sheryl"
+    )
+    assert pending == {
+        "userId": "sheryl",
+        "userName": "Sheryl",
+        "attendanceStatus": None,
+        "chaptersReadThrough": 0,
+        "readingComplete": False,
+    }
+
+    chapter_response = client.put(path, json={"chaptersReadThrough": 7})
+    chapter = next(
+        item for item in chapter_response.get_json()["meeting"]["responses"]
+        if item["userId"] == "sheryl"
+    )
+    assert (chapter["attendanceStatus"], chapter["chaptersReadThrough"]) == (None, 7)
+
+    attendance_response = client.put(path, json={"attendanceStatus": "maybe"})
+    attendance = next(
+        item for item in attendance_response.get_json()["meeting"]["responses"]
+        if item["userId"] == "sheryl"
+    )
+    assert (attendance["attendanceStatus"], attendance["chaptersReadThrough"]) == ("maybe", 7)
+
+    complete_response = client.put(path, json={"readingComplete": True})
+    complete = next(
+        item for item in complete_response.get_json()["meeting"]["responses"]
+        if item["userId"] == "sheryl"
+    )
+    assert (complete["readingComplete"], complete["chaptersReadThrough"]) == (True, 7)
+
+    assert client.put(path, json={}).status_code == 400
 
 
 def test_summary_accepts_legacy_meeting_responses_without_user_id(client):

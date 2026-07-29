@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -30,6 +30,25 @@ const MEETING = {
     userName: "Andre",
     attendanceStatus: "maybe",
     chaptersReadThrough: 4,
+    readingComplete: false,
+  }, {
+    userId: "kayla",
+    userName: "Kayla",
+    attendanceStatus: "attending",
+    chaptersReadThrough: 8,
+    readingComplete: true,
+  }, {
+    userId: "ting",
+    userName: "Ting",
+    attendanceStatus: "not_attending",
+    chaptersReadThrough: 0,
+    readingComplete: false,
+  }, {
+    userId: "sheryl",
+    userName: "Sheryl",
+    attendanceStatus: null,
+    chaptersReadThrough: 3,
+    readingComplete: false,
   }],
 };
 
@@ -100,8 +119,44 @@ describe("BookClubMeetingFeature", () => {
     expect(setBookClubResponse).toHaveBeenCalledWith(
       "andre",
       "meeting#1",
-      "attending",
-      4,
+      { attendanceStatus: "attending" },
+    );
+  });
+
+  it("shows one member row and an attendance total for every response", async () => {
+    renderMeeting();
+    await userEvent.click(screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    }));
+
+    const responseList = screen.getByRole("list", { name: "Member attendance and progress" });
+    expect(within(responseList).getAllByRole("listitem")).toHaveLength(4);
+    expect(screen.getByLabelText("Attendance totals")).toHaveTextContent(
+      "1 Attending1 Maybe1 Not attending1 Pending",
+    );
+    const kaylaRow = within(responseList).getByText("Kayla").closest('[role="listitem"]');
+    expect(within(kaylaRow).getByText("Complete")).toBeInTheDocument();
+  });
+
+  it("saves chapter progress and completion mode independently", async () => {
+    renderMeeting();
+    await userEvent.click(screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    }));
+
+    const chapter = screen.getByLabelText("Chapters read through");
+    await userEvent.clear(chapter);
+    await userEvent.type(chapter, "7");
+    await userEvent.tab();
+    expect(setBookClubResponse).toHaveBeenCalledWith(
+      "andre", "meeting#1", { chaptersReadThrough: 7 },
+    );
+
+    await userEvent.selectOptions(screen.getByLabelText("Your reading progress mode"), "complete");
+    expect(setBookClubResponse).toHaveBeenCalledWith(
+      "andre", "meeting#1", { readingComplete: true },
     );
   });
 

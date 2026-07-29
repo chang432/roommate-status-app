@@ -202,8 +202,9 @@ def _project_meeting(item: dict | None, members: list[dict] | None = None, book:
             {
                 "userId": member["id"],
                 "userName": member["name"],
-                "attendanceStatus": responses.get(member["id"], {}).get("attendanceStatus", "not_attending"),
+                "attendanceStatus": responses.get(member["id"], {}).get("attendanceStatus"),
                 "chaptersReadThrough": int(responses.get(member["id"], {}).get("chaptersReadThrough", 0)),
+                "readingComplete": bool(responses.get(member["id"], {}).get("readingComplete", False)),
             }
             for member in members
         ]
@@ -633,11 +634,24 @@ def complete_meeting(group_id: str, meeting_id: str, completer: dict) -> tuple[d
     return _project_meeting(meeting), None
 
 
-def set_response(group_id: str, meeting_id: str, member: dict, attendance: str, chapters) -> tuple[dict | None, str | None]:
-    if attendance not in {"attending", "maybe", "not_attending"}:
+def set_response(group_id: str, meeting_id: str, member: dict, changes: dict) -> tuple[dict | None, str | None]:
+    allowed = {"attendanceStatus", "chaptersReadThrough", "readingComplete"}
+    provided = allowed.intersection(changes)
+    if not provided:
+        return None, "An attendance or reading progress update is required."
+    if (
+        "attendanceStatus" in changes
+        and changes["attendanceStatus"] not in {"attending", "maybe", "not_attending"}
+    ):
         return None, "Attendance must be attending, maybe, or not_attending."
-    if isinstance(chapters, bool) or not isinstance(chapters, int) or chapters < 0:
+    chapters = changes.get("chaptersReadThrough")
+    if (
+        "chaptersReadThrough" in changes
+        and (isinstance(chapters, bool) or not isinstance(chapters, int) or chapters < 0)
+    ):
         return None, "Chapters read through must be a non-negative integer."
+    if "readingComplete" in changes and not isinstance(changes["readingComplete"], bool):
+        return None, "Reading complete must be true or false."
     meeting = _fetch(group_id, meeting_id)
     if meeting is None:
         return None, "Unknown meeting."
@@ -647,17 +661,22 @@ def set_response(group_id: str, meeting_id: str, member: dict, attendance: str, 
     meeting_key = meeting_id.split("#", 1)[-1]
     response_id = f"meeting-member#{meeting_key}#{member['id']}"
     existing = _fetch(group_id, response_id)
-    _get_table().put_item(Item={
+    response = {
         "groupId": group_id,
         "id": response_id,
         "meetingId": meeting_id,
         "userId": member["id"],
         "userName": member["name"],
-        "attendanceStatus": attendance,
-        "chaptersReadThrough": chapters,
         "createdAt": existing.get("createdAt", now) if existing else now,
         "updatedAt": now,
-    })
+    }
+    # Partial writes let each inline control save without resetting its siblings.
+    for field in allowed:
+        if field in changes:
+            response[field] = changes[field]
+        elif existing and field in existing:
+            response[field] = existing[field]
+    _get_table().put_item(Item=response)
     return get_meeting(group_id, meeting_id), None
 
 

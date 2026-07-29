@@ -15,13 +15,37 @@
 .details dt { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
 .details dd { @apply text-ink; }
 .responses { @apply grid gap-2; }
-.responses h3 { @apply font-display text-lg font-semibold text-ink; }
-.response { @apply flex flex-col gap-2 border-t border-line pt-2 text-xs sm:flex-row sm:items-center sm:justify-between; }
-.response > span:first-child { @apply font-semibold; }
-.responseControls { @apply flex gap-2; }
-.responseControls select, .responseControls input { @apply max-w-32 rounded border border-line bg-surface-muted px-2 py-1 text-ink; }
+.responseHeading { @apply flex flex-wrap items-center justify-between gap-2; }
+.responseHeading h3 { @apply text-[14px] font-semibold text-ink; }
+.attendanceTotals { @apply flex flex-wrap items-center gap-1; }
+.attendanceTotals span { @apply rounded-full border border-line bg-surface-muted px-2 py-1 text-[10px] font-bold text-ink-soft; }
+.attendanceTotals span[data-status="attending"] { @apply border-success-soft-border bg-success-soft text-status-green; }
+.attendanceTotals span[data-status="not_attending"] { @apply border-danger-soft-border bg-danger-soft text-status-red; }
+.responseColumns, .response { grid-template-columns: minmax(4.5rem, 1fr) minmax(6.5rem, .95fr) minmax(8rem, 1.15fr); }
+.responseColumns { @apply grid gap-2 px-2 text-[9.5px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
+.responseList { @apply overflow-hidden rounded-sm border border-line bg-card; }
+.response { @apply grid min-h-12 items-center gap-2 border-t border-line px-2 py-2 text-xs first:border-t-0; }
+.memberName { @apply flex min-w-0 items-center gap-1 truncate font-semibold text-ink; }
+.memberName small { @apply rounded-full bg-accent-soft px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-accent-deep; }
+.attendanceControl, .progressControls select, .progressControls input { @apply h-8 min-w-0 rounded-sm border border-line bg-surface-muted px-2 text-[11.5px] text-ink outline-none focus:border-accent; }
+.attendanceControl { @apply w-full; }
+.progressControls { @apply grid min-w-0 grid-cols-[minmax(0,1fr)_3rem] gap-1; }
+.progressControls select { @apply w-full; }
+.progressControls select:only-child { grid-column: 1 / -1; }
+.progressControls input { @apply w-full px-1.5 text-center tabular-nums; }
+.attendanceBadge, .progressValue { @apply min-w-0 truncate text-[11.5px] font-semibold text-ink-soft; }
+.attendanceBadge[data-status="attending"] { @apply text-status-green; }
+.attendanceBadge[data-status="not_attending"] { @apply text-status-red; }
+.attendanceBadge[data-status="pending"] { @apply italic; }
+.progressValue { @apply text-ink; }
 .meetingActions { @apply flex flex-wrap gap-2 border-t border-line pt-3; }
 .meetingActions button, .meetingActions a { @apply min-h-10 rounded-full border border-accent px-4 py-2 text-sm font-bold text-accent-deep hover:bg-accent-soft disabled:opacity-50; }
 @media (max-width: 520px) {
   .meta { @apply whitespace-normal; }
+  .responseHeading { @apply items-start; }
+  .attendanceTotals { @apply w-full; }
+  .responseColumns, .response { grid-template-columns: minmax(3.8rem, .8fr) minmax(5.6rem, 1fr) minmax(7.3rem, 1.25fr); }
+  .responseColumns, .response { @apply gap-1.5 px-1.5; }
+  .attendanceControl, .progressControls select, .progressControls input { @apply px-1 text-[10.5px]; }
+  .memberName, .attendanceBadge, .progressValue { @apply text-[10.5px]; }
 }

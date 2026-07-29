@@ -12,6 +12,21 @@ import { exactDateTime } from "../../utils/time.js";
 import ModuleEditButton from "../feed/ModuleEditButton.jsx";
 import styles from "./BookClubMeetingFeature.module.css";
 
+const ATTENDANCE_LABELS = {
+  attending: "Attending",
+  maybe: "Maybe",
+  not_attending: "Not attending",
+  pending: "Pending",
+};
+
+function attendanceCounts(responses) {
+  return responses.reduce((counts, response) => {
+    const status = response.attendanceStatus ?? "pending";
+    counts[status] += 1;
+    return counts;
+  }, { attending: 0, maybe: 0, not_attending: 0, pending: 0 });
+}
+
 export default function BookClubMeetingFeature({
   meetings,
   moduleTag,
@@ -51,17 +66,12 @@ export default function BookClubMeetingFeature({
     await loadMeetingDetails(meeting.id);
   }
 
-  async function saveResponse(meeting, response, changes) {
+  async function saveResponse(meeting, changes) {
     if (busy) return;
     setBusy(true);
     setError("");
     try {
-      const result = await setBookClubResponse(
-        user.id,
-        meeting.id,
-        changes.attendanceStatus ?? response.attendanceStatus,
-        changes.chaptersReadThrough ?? response.chaptersReadThrough,
-      );
+      const result = await setBookClubResponse(user.id, meeting.id, changes);
       setDetails((current) => ({ ...current, [meeting.id]: result.meeting }));
     } catch (err) {
       setError(err.message || "Could not save your meeting plan.");
@@ -106,6 +116,8 @@ export default function BookClubMeetingFeature({
       {meetings.map((meeting) => {
         const detail = details[meeting.id] || meeting;
         const expanded = expandedId === meeting.id;
+        const responses = detail.responses || [];
+        const counts = attendanceCounts(responses);
         return (
           <article key={meeting.id} className={styles.card}>
             <button
@@ -130,25 +142,73 @@ export default function BookClubMeetingFeature({
                     <div><dt>Snack owner</dt><dd>{detail.snackOwnerName}</dd></div>
                   </dl>
                   <div className={styles.responses}>
-                    <h3>Attendance and progress</h3>
-                    {(detail.responses || []).map((response) => {
-                      const mine = response.userId === user.id;
-                      return (
-                        <div className={styles.response} key={response.userId}>
-                          <span>{response.userName}</span>
-                          {mine && detail.status === "scheduled" ? (
-                            <span className={styles.responseControls}>
-                              <select aria-label="Your attendance" value={response.attendanceStatus} disabled={busy} onChange={(event) => saveResponse(detail, response, { attendanceStatus: event.target.value })}>
+                    <div className={styles.responseHeading}>
+                      <h3>Attendance and progress</h3>
+                      <div className={styles.attendanceTotals} aria-label="Attendance totals">
+                        {Object.entries(ATTENDANCE_LABELS).map(([status, label]) => (
+                          <span key={status} data-status={status}>{counts[status]} {label}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className={styles.responseColumns} aria-hidden="true">
+                      <span>Member</span><span>Attendance</span><span>Progress</span>
+                    </div>
+                    <div className={styles.responseList} role="list" aria-label="Member attendance and progress">
+                      {responses.map((response) => {
+                        const mine = response.userId === user.id;
+                        const editable = mine && detail.status === "scheduled";
+                        const attendance = response.attendanceStatus ?? "pending";
+                        return (
+                          <div className={styles.response} key={response.userId} role="listitem">
+                            <span className={styles.memberName} title={response.userName}>
+                              {response.userName}{mine ? <small>You</small> : null}
+                            </span>
+                            {editable ? (
+                              <select
+                                className={styles.attendanceControl}
+                                aria-label="Your attendance"
+                                value={response.attendanceStatus ?? ""}
+                                disabled={busy}
+                                onChange={(event) => saveResponse(detail, { attendanceStatus: event.target.value })}
+                              >
+                                <option value="" disabled>Pending</option>
                                 <option value="attending">Attending</option>
                                 <option value="maybe">Maybe</option>
                                 <option value="not_attending">Not attending</option>
                               </select>
-                              <input aria-label="Chapters read through" type="number" min="0" defaultValue={response.chaptersReadThrough} disabled={busy} onBlur={(event) => saveResponse(detail, response, { chaptersReadThrough: Number(event.target.value) })} />
-                            </span>
-                          ) : <span>{response.attendanceStatus.replace("_", " ")} · chapter {response.chaptersReadThrough}</span>}
-                        </div>
-                      );
-                    })}
+                            ) : (
+                              <span className={styles.attendanceBadge} data-status={attendance}>{ATTENDANCE_LABELS[attendance]}</span>
+                            )}
+                            {editable ? (
+                              <span className={styles.progressControls}>
+                                <select
+                                  aria-label="Your reading progress mode"
+                                  value={response.readingComplete ? "complete" : "chapter"}
+                                  disabled={busy}
+                                  onChange={(event) => saveResponse(detail, { readingComplete: event.target.value === "complete" })}
+                                >
+                                  <option value="chapter">Chapter</option>
+                                  <option value="complete">Complete</option>
+                                </select>
+                                {!response.readingComplete ? (
+                                  <input
+                                    key={`${response.userId}-${response.chaptersReadThrough}`}
+                                    aria-label="Chapters read through"
+                                    type="number"
+                                    min="0"
+                                    defaultValue={response.chaptersReadThrough}
+                                    disabled={busy}
+                                    onBlur={(event) => saveResponse(detail, { chaptersReadThrough: Number(event.target.value) })}
+                                  />
+                                ) : null}
+                              </span>
+                            ) : (
+                              <span className={styles.progressValue}>{response.readingComplete ? "Complete" : `Chapter ${response.chaptersReadThrough}`}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div className={styles.meetingActions}>
                     <Link to={`/?book=${encodeURIComponent(meeting.bookId)}&meeting=${encodeURIComponent(meeting.id)}`}>Forum</Link>

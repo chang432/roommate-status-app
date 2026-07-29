@@ -9,8 +9,9 @@ book-club,book#older-book-uuid,older-book-uuid,Kindred,Octavia E. Butler,sheryl,
 groupId (S),id (S),scheduledAt (N),bookId (S),bookTitle (S),bookAuthor (S),readingTarget (S),bookOwnerId (S),bookOwnerName (S),snackOwnerId (S),snackOwnerName (S),status (S),createdById (S),createdByName (S),completedById (S),completedByName (S),completedAt (N),createdAt (N),updatedAt (N),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
 book-club,meeting#meeting-uuid,1784763000000,book-uuid,The Fifth Season,N. K. Jemisin,Read through Chapter 9,kayla,Kayla,andre,Andre,scheduled,andre,Andre,,,,1783553400000,1783553400000,,
 
-groupId (S),id (S),meetingId (S),userId (S),userName (S),attendanceStatus (S),chaptersReadThrough (N),createdAt (N),updatedAt (N),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
-book-club,meeting-member#meeting-uuid#andre,meeting#meeting-uuid,andre,Andre,attending,6,1783553400000,1783553400000,,
+groupId (S),id (S),meetingId (S),userId (S),userName (S),attendanceStatus (S),chaptersReadThrough (N),readingComplete (BOOL),createdAt (N),updatedAt (N),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
+book-club,meeting-member#meeting-uuid#andre,meeting#meeting-uuid,andre,Andre,attending,6,true,1783553400000,1783553400000,,
+book-club,meeting-member#meeting-uuid#kayla,meeting#meeting-uuid,kayla,Kayla,,4,false,1783553400000,1783553400000,,
 
 groupId (S),id (S),bookId (S),userId (S),userName (S),rating (N),finished (BOOL),note (S),createdAt (N),updatedAt (N)
 book-club,rating#book-uuid#andre,book-uuid,andre,Andre,5,true,Changed how I saw the opening.,1789000000000,1789000000000

@@ -20,7 +20,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/book-club/meetings`                               | `?userId=<id>` + meeting fields | admin-created meeting for the configured current book |
 | `GET /api/book-club/meetings`                                | `?userId=<id>`                             | all meeting summaries and member responses              |
 | `GET /api/book-club/meetings/<id>`                           | `?userId=<id>`                             | meeting detail and member responses                     |
-| `PUT /api/book-club/meetings/<id>/response`                  | `?userId=<id>` + attendance/progress       | current member's meeting response                       |
+| `PUT /api/book-club/meetings/<id>/response`                  | `?userId=<id>` + partial attendance/chapter/completion update | current member's meeting response             |
 | `POST /api/book-club/meetings/<id>/complete`                 | `?userId=<id>`                             | admin-completed meeting                                 |
 | `POST /api/book-club/books/<id>/complete`                    | `?userId=<id>`                             | admin-completed active book after its open meeting is completed |
 | `POST /api/book-club/meetings/<id>/notify`                   | `?userId=<id>`                             | sends members a deep-linked meeting reminder            |

@@ -671,8 +671,7 @@ def create_app() -> Flask:
             return error
         body = request.get_json(silent=True) or {}
         _meeting, error = book_club.set_response(
-            viewer["groupId"], meeting_id, viewer,
-            body.get("attendanceStatus"), body.get("chaptersReadThrough"),
+            viewer["groupId"], meeting_id, viewer, body,
         )
         if error:
             return jsonify({"error": error}), 404 if error == "Unknown meeting." else 400

@@ -50,8 +50,9 @@ The existing `RoommateStatus-{dev,main}-book-club` table remains keyed by
   its `bookId` with `config#book-club.activeBookId`.
 - `meeting#<uuid>`: scheduled time, book and owner snapshots, reading target,
   scheduled/completed status, and creator/completer snapshots.
-- `meeting-member#<meetingUuid>#<userId>`: one member-owned attendance/progress
-  response.
+- `meeting-member#<meetingUuid>#<userId>`: one member-owned response with
+  independently saved attendance, chapter progress, and optional reading
+  completion. Missing attendance is projected as pending.
 - `rating#<bookUuid>#<userId>`: member review with rating, finish status,
   optional note, member snapshot, and lifecycle timestamps. The established ID
   prefix remains because existing star ratings are upgraded in place.
