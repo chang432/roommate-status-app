@@ -54,7 +54,7 @@ def seed_local_groups() -> None:
 
 
 def seed_local_book_club() -> None:
-    """Create a local meeting and completed title for Book Club UI coverage."""
+    """Create a local meeting, current title, and completed title for UI coverage."""
     if not os.environ.get("DYNAMODB_ENDPOINT"):
         return
 
@@ -64,8 +64,7 @@ def seed_local_book_club() -> None:
         (
             book
             for book in book_club.list_books(BOOK_CLUB_GROUP_ID)
-            if book["status"] == "active"
-            and book["title"] == "The Fifth Season"
+            if book["title"] == "The Fifth Season"
             and book["author"] == "N. K. Jemisin"
         ),
         None,
@@ -82,6 +81,26 @@ def seed_local_book_club() -> None:
         )
         if error:
             raise RuntimeError(f"Could not seed Book Club book: {error}")
+
+    if seed_book["status"] != "active":
+        # The local fixture may have been completed manually while its seeded
+        # meeting remains open. Restore its designated current title on rerun.
+        book_club._get_table().update_item(
+            Key={"groupId": BOOK_CLUB_GROUP_ID, "id": f"book#{seed_book['id']}"},
+            UpdateExpression="SET #status = :active, updatedAt = :now REMOVE completedAt",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":active": "active",
+                ":now": int(time.time() * 1000),
+            },
+        )
+        seed_book = {**seed_book, "status": "active", "completedAt": None}
+
+    _current_book, error = book_club.set_current_book(
+        BOOK_CLUB_GROUP_ID, seed_book["id"], members
+    )
+    if error:
+        raise RuntimeError(f"Could not set the seeded Book Club current book: {error}")
 
     meeting, error = book_club.create_meeting(
         BOOK_CLUB_GROUP_ID,

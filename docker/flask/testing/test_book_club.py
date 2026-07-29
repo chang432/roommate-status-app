@@ -509,3 +509,14 @@ def test_local_book_club_seed_uses_catalog_book_and_is_idempotent(
     assert summary["activeBook"]["id"] == seeded_books[0]["id"]
     assert summary["openMeeting"]["bookId"] == seeded_books[0]["id"]
     assert summary["openMeeting"]["bookOwnerId"] == "kayla"
+
+    # A prior local run could complete the seeded title without completing its
+    # meeting. Re-seeding must repair that fixture back to a usable current book.
+    assert book_club.complete_book(
+        seed.BOOK_CLUB_GROUP_ID, seeded_books[0]["id"]
+    ) is None
+    seed.seed_local_book_club()
+    repaired = book_club.summary(seed.BOOK_CLUB_GROUP_ID, members)
+    config = book_club._fetch(seed.BOOK_CLUB_GROUP_ID, book_club.CONFIG_ID)
+    assert repaired["activeBook"]["id"] == seeded_books[0]["id"]
+    assert config["activeBookId"] == seeded_books[0]["id"]
