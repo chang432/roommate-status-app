@@ -40,10 +40,10 @@ availability to hang out. Built from the mockups in `../mockups`.
   floating `+` creates modules.
 - **Book Club**: the household page shows a two-by-two Current Book, Library,
   Book, and Snack card grid. The library opens as a searchable modal with the
-  current title first, other available titles and completed titles by recency,
-  aggregate ratings, collapsible reviews, and collapsible meeting discussions.
-  Members add and correct catalog books, then admins select an available title
-  when scheduling a meeting. Members review active or completed books with
+  current title first and completed titles by recency, aggregate ratings,
+  collapsible reviews, and collapsible meeting discussions. Admins add the
+  current title and schedule meetings for it; members can correct catalog books.
+  Members review current or completed books with
   1–5 stars, finish status, and an optional note; completed meeting forums
   remain read-only.
 - **Requests**: the household board lets users ask specific roommates for
@@ -107,7 +107,6 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `setBookClubResponse`           | `PUT /api/book-club/meetings/:id/response?userId=:id`      |
 | `completeBookClubMeeting`       | `POST /api/book-club/meetings/:id/complete?userId=:id`     |
 | `completeBookClubBook`          | `POST /api/book-club/books/:id/complete?userId=:id`        |
-| `setBookClubCurrentBook`        | `POST /api/book-club/books/:id/current?userId=:id`         |
 | `getBookClubBooks`              | `GET /api/book-club/books?userId=:id`                      |
 | `addBookClubBook`               | `POST /api/book-club/books?userId=:id`                     |
 | `updateBookClubBook`            | `PATCH /api/book-club/books/:id?userId=:id`                |

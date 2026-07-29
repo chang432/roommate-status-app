@@ -8,7 +8,6 @@ import styles from "./BookClubLibrary.module.css";
 
 function bookDate(book) {
   if (book.isCurrent) return "Currently reading";
-  if (book.status === "active") return "Available for a meeting";
   if (!book.completedAt) return "Completion date unavailable";
   return `Completed ${new Intl.DateTimeFormat(undefined, {
     month: "short", day: "numeric", year: "numeric",
@@ -29,7 +28,6 @@ function stars(value) {
 
 function statusLabel(book) {
   if (book.isCurrent) return "Current";
-  if (book.status === "active") return "Available";
   return "Completed";
 }
 
@@ -245,14 +243,14 @@ export default function BookClubLibrary({
   return (
     <section className={styles.library} aria-label="Book library">
       <div className={styles.libraryHeading}>
-        <p className={styles.libraryCount}>{books.length} {books.length === 1 ? "book" : "books"} · current, available, and completed</p>
+        <p className={styles.libraryCount}>{books.length} {books.length === 1 ? "book" : "books"} · current and completed</p>
         <div className={styles.libraryTools}>
-          <button type="button" className={`ui-primaryButton ${styles.addButton}`} onClick={onAddBook}>Add book</button>
+          {canAdminister && <button type="button" className={`ui-primaryButton ${styles.addButton}`} onClick={onAddBook}>Add book</button>}
           <label className={styles.search}><span className="sr-only">Search books</span><input type="search" placeholder="Search title, author, or owner" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
         </div>
       </div>
       {!books.length ? (
-        <div className={styles.empty}><span aria-hidden="true">📚</span><h2>No books yet</h2><p>Add the first book, then select it when creating a meeting.</p><button type="button" className="ui-primaryButton" onClick={onAddBook}>Add the first book</button></div>
+        <div className={styles.empty}><span aria-hidden="true">📚</span><h2>No books yet</h2><p>{canAdminister ? "Add the first book to begin your club’s current read." : "An admin can add the first current book."}</p>{canAdminister && <button type="button" className="ui-primaryButton" onClick={onAddBook}>Add the first book</button>}</div>
       ) : (
         <div className={styles.bookList}>
           {filteredBooks.map((book) => (

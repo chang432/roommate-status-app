@@ -1,10 +1,10 @@
-"TABLE RoommateStatus-main-book-club - group-scoped owner orders, meeting modules, completed-book reviews, and meeting forums. Keyed (groupId HASH, id RANGE); BookIdIndex (HASH bookId, RANGE id, ProjectionType ALL) retrieves a book's related records."
+"TABLE RoommateStatus-main-book-club - group-scoped owner orders, meeting modules, completed-book reviews, and meeting forums. Keyed (groupId HASH, id RANGE); BookIdIndex (HASH bookId, RANGE id, ProjectionType ALL) retrieves a book's related records. activeBookId is the sole current-book pointer; every other book is completed."
 groupId (S),id (S),timezone (S),openMeetingId (S),lastMeetingAt (N),activeBookId (S),bookOwnerOrderUserIds (L of S),snackOwnerOrderUserIds (L of S),createdAt (N),updatedAt (N),bookOwnerOrderAlignmentMigrated (BOOL),bookOwnerOrderAlignmentLegacyRecord (M),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
 book-club,config#book-club,America/New_York,meeting#meeting-uuid,1784763000000,book-uuid,"[""kayla"", ""sheryl"", ""andre""]","[""andre"", ""kayla"", ""sheryl""]",1783553400000,1783553400000,true,"{""hadBookOwnerOrderUserIds"": true, ""bookOwnerOrderUserIds"": [""kayla"", ""andre"", ""sheryl""], ""alignedBookOwnerOrderUserIds"": [""kayla"", ""sheryl"", ""andre""]}",,
 
-groupId (S),id (S),bookId (S),title (S),author (S),bookOwnerId (S),bookOwnerName (S),status (S),selectedAt (N),completedAt (N),createdAt (N),updatedAt (N),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
-book-club,book#book-uuid,book-uuid,The Fifth Season,N. K. Jemisin,kayla,Kayla,active,1783553400000,,1783553400000,1783553400000,,
-book-club,book#available-book-uuid,available-book-uuid,Kindred,Octavia E. Butler,sheryl,Sheryl,active,1783553500000,,1783553500000,1783553500000,,
+groupId (S),id (S),bookId (S),title (S),author (S),bookOwnerId (S),bookOwnerName (S),completedAt (N),createdAt (N),updatedAt (N),bookCompletionDerivedLegacyRecord (M),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
+book-club,book#book-uuid,book-uuid,The Fifth Season,N. K. Jemisin,kayla,Kayla,,1783553400000,1783553400000,,,
+book-club,book#older-book-uuid,older-book-uuid,Kindred,Octavia E. Butler,sheryl,Sheryl,1783553500000,1783553400000,1783553500000,,,
 
 groupId (S),id (S),scheduledAt (N),bookId (S),bookTitle (S),bookAuthor (S),readingTarget (S),bookOwnerId (S),bookOwnerName (S),snackOwnerId (S),snackOwnerName (S),status (S),createdById (S),createdByName (S),completedById (S),completedByName (S),completedAt (N),createdAt (N),updatedAt (N),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
 book-club,meeting#meeting-uuid,1784763000000,book-uuid,The Fifth Season,N. K. Jemisin,Read through Chapter 9,kayla,Kayla,andre,Andre,scheduled,andre,Andre,,,,1783553400000,1783553400000,,

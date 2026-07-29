@@ -31,7 +31,6 @@ const ACTIVE_BOOK = {
   title: "Parable of the Sower",
   author: "Octavia E. Butler",
   bookOwnerName: "Kayla",
-  status: "active",
   isCurrent: true,
   completedAt: null,
   averageRating: null,

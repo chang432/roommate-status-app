@@ -13,8 +13,6 @@ the standard AWS config chain for region/credentials.
 from __future__ import annotations
 
 import os
-import time
-
 import book_club
 import db
 import groups
@@ -82,32 +80,11 @@ def seed_local_book_club() -> None:
         if error:
             raise RuntimeError(f"Could not seed Book Club book: {error}")
 
-    if seed_book["status"] != "active":
-        # The local fixture may have been completed manually while its seeded
-        # meeting remains open. Restore its designated current title on rerun.
-        book_club._get_table().update_item(
-            Key={"groupId": BOOK_CLUB_GROUP_ID, "id": f"book#{seed_book['id']}"},
-            UpdateExpression="SET #status = :active, updatedAt = :now REMOVE completedAt",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":active": "active",
-                ":now": int(time.time() * 1000),
-            },
-        )
-        seed_book = {**seed_book, "status": "active", "completedAt": None}
-
-    _current_book, error = book_club.set_current_book(
-        BOOK_CLUB_GROUP_ID, seed_book["id"], members
-    )
-    if error:
-        raise RuntimeError(f"Could not set the seeded Book Club current book: {error}")
-
     meeting, error = book_club.create_meeting(
         BOOK_CLUB_GROUP_ID,
         members,
         creator,
         {
-            "bookId": seed_book["id"],
             "readingTarget": "Read through Chapter 9",
             "snackOwnerId": "andre",
             "scheduledAt": book_club.next_wednesday_evening(),
@@ -118,7 +95,6 @@ def seed_local_book_club() -> None:
     if meeting is None:
         meeting = book_club.summary(BOOK_CLUB_GROUP_ID, members)["openMeeting"]
 
-    now = int(time.time() * 1000)
     # The active book above plus this completed title make the local library
     # useful immediately, while stable ids keep repeated seeds safe.
     book_club._get_table().put_item(Item={
@@ -129,11 +105,9 @@ def seed_local_book_club() -> None:
         "author": "Becky Chambers",
         "bookOwnerId": "andre",
         "bookOwnerName": "Andre",
-        "status": "completed",
-        "selectedAt": now - 28 * 24 * 60 * 60 * 1000,
-        "completedAt": now - 14 * 24 * 60 * 60 * 1000,
-        "createdAt": now - 28 * 24 * 60 * 60 * 1000,
-        "updatedAt": now - 14 * 24 * 60 * 60 * 1000,
+        "completedAt": book_club._now() - 14 * 24 * 60 * 60 * 1000,
+        "createdAt": book_club._now() - 28 * 24 * 60 * 60 * 1000,
+        "updatedAt": book_club._now() - 14 * 24 * 60 * 60 * 1000,
     })
     completed_book_id = "a-psalm-for-the-wild-built"
     book_club.set_review(
