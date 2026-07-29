@@ -74,7 +74,9 @@ function renderLibrary(props = {}) {
     onSelectBook: vi.fn(),
     onBack: vi.fn(),
     onBooksChange: vi.fn(),
+    onCompleteBook: vi.fn(),
     canAdminister: true,
+    completingBook: false,
     focusMeetingId: null,
     focusThreadId: null,
   };
@@ -121,6 +123,15 @@ describe("BookClubLibrary", () => {
     });
     expect(props.onBooksChange).toHaveBeenCalledWith([updatedBook, COMPLETED_BOOK]);
     expect(await screen.findByRole("status")).toHaveTextContent("Saved");
+  });
+
+  it("only offers book completion from a current book's detail page", () => {
+    const { unmount } = renderLibrary({ selectedBookId: ACTIVE_BOOK.id });
+    expect(screen.getByRole("button", { name: "Complete book" })).toBeInTheDocument();
+    unmount();
+
+    renderLibrary({ selectedBookId: COMPLETED_BOOK.id });
+    expect(screen.queryByRole("button", { name: "Complete book" })).not.toBeInTheDocument();
   });
 
   it("labels historical books without a recorded completion date as completed", () => {

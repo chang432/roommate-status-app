@@ -18,6 +18,7 @@
 .empty h2 { @apply text-[16px] font-black text-ink; }
 .empty p { @apply text-[13px] text-ink-soft; }
 .detailActions { @apply flex items-center justify-between gap-3; }
+.detailActionGroup { @apply flex items-center gap-2; }
 .actionButton { @apply px-3 py-2 text-[12.5px]; }
 .detailHeader { @apply grid gap-4 rounded-md border border-line bg-surface-muted p-4; }
 .detailTitle { @apply min-w-0; }

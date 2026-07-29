@@ -8,7 +8,6 @@
 .card span, .cardMain span { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
 .card strong, .cardMain strong { @apply truncate text-base text-ink; }
 .card small, .cardMain small { @apply truncate text-xs text-ink-soft; }
-.completeButton { @apply border-t border-accent-soft px-4 py-2 text-left text-xs font-bold text-accent-deep transition hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent disabled:opacity-60; }
 .popupContent { @apply max-h-[min(60vh,440px)] overflow-y-auto pr-1; }
 .popupList { @apply grid gap-2; }
 .popupItem { @apply flex items-center justify-between gap-4 rounded border border-line bg-surface-muted px-3 py-2 text-sm text-ink; }
@@ -22,5 +21,4 @@
   .cardGrid { @apply gap-2; }
   .card, .cardMain { @apply px-3 py-3; }
   .card strong, .cardMain strong { @apply text-sm; }
-  .completeButton { @apply px-3; }
 }

@@ -159,12 +159,12 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
     clearLibraryParams();
   }
 
-  async function completeBook() {
-    if (!summary?.activeBook || completingBook) return;
+  async function completeBook(bookId) {
+    if (!bookId || completingBook) return;
     setCompletingBook(true);
     setError("");
     try {
-      const response = await completeBookClubBook(user.id, summary.activeBook.id);
+      const response = await completeBookClubBook(user.id, bookId);
       setSummary(response.summary);
       if (libraryOpen) await loadBooks();
     } catch (err) {
@@ -195,11 +195,6 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
                 hint={activeBook?.author ? `by ${activeBook.author}` : "Add a book to the library"}
               />
             </button>
-            {activeBook && canAdminister && (
-              <button className={styles.completeButton} type="button" disabled={completingBook} onClick={completeBook}>
-                {completingBook ? "Completing…" : "Complete book"}
-              </button>
-            )}
           </div>
           <button type="button" className={styles.card} onClick={() => openLibrary()}>
             <CardCopy label="Library" value="All books" hint="Ratings, reviews, and discussions" />
@@ -269,6 +264,8 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
               onEditBook={setBookEditor}
               roommates={roommates}
               canAdminister={canAdminister}
+              onCompleteBook={completeBook}
+              completingBook={completingBook}
               focusMeetingId={linkedMeetingId}
               focusThreadId={linkedThreadId}
             />

@@ -69,6 +69,8 @@ function BookDetail({
   onBooksChange,
   onEditBook,
   canAdminister,
+  onCompleteBook,
+  completingBook,
   focusMeetingId,
   focusThreadId,
 }) {
@@ -112,7 +114,14 @@ function BookDetail({
     <div className={styles.detail}>
       <div className={styles.detailActions}>
         <button type="button" className={`ui-secondaryButton ${styles.actionButton}`} onClick={onBack}>← All books</button>
-        <button type="button" className={`ui-secondaryButton ${styles.actionButton}`} onClick={() => onEditBook(book)}>Edit book</button>
+        <div className={styles.detailActionGroup}>
+          {book.isCurrent && canAdminister && (
+            <button type="button" className={`ui-secondaryButton ${styles.actionButton}`} disabled={completingBook} onClick={() => onCompleteBook(book.id)}>
+              {completingBook ? "Completing…" : "Complete book"}
+            </button>
+          )}
+          <button type="button" className={`ui-secondaryButton ${styles.actionButton}`} onClick={() => onEditBook(book)}>Edit book</button>
+        </div>
       </div>
       <header className={styles.detailHeader}>
         <div className={styles.detailTitle}>
@@ -222,6 +231,8 @@ export default function BookClubLibrary({
   onAddBook,
   onEditBook,
   canAdminister,
+  onCompleteBook,
+  completingBook,
   focusMeetingId,
   focusThreadId,
 }) {
@@ -237,7 +248,7 @@ export default function BookClubLibrary({
     return <div className={styles.empty}><span aria-hidden="true">📕</span><h2>Book unavailable</h2><p>This title is no longer available in this household.</p><button type="button" className="ui-primaryButton" onClick={onBack}>View all books</button></div>;
   }
   if (selected) {
-    return <BookDetail key={selected.id} book={selected} onBack={onBack} onBooksChange={onBooksChange} onEditBook={onEditBook} canAdminister={canAdminister} focusMeetingId={focusMeetingId} focusThreadId={focusThreadId} />;
+    return <BookDetail key={selected.id} book={selected} onBack={onBack} onBooksChange={onBooksChange} onEditBook={onEditBook} canAdminister={canAdminister} onCompleteBook={onCompleteBook} completingBook={completingBook} focusMeetingId={focusMeetingId} focusThreadId={focusThreadId} />;
   }
 
   return (

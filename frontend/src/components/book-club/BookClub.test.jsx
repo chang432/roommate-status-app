@@ -78,9 +78,8 @@ describe("BookClub cards and library", () => {
 
     const section = screen.getByRole("region", { name: "Book Club" });
     const cards = await within(section).findAllByRole("button");
-    expect(cards.slice(0, 5).map((card) => card.textContent)).toEqual([
+    expect(cards.slice(0, 4).map((card) => card.textContent)).toEqual([
       expect.stringContaining("Current bookParable of the Sower"),
-      "Complete book",
       expect.stringContaining("LibraryAll books"),
       expect.stringContaining("BookKayla"),
       expect.stringContaining("SnackAndre"),
@@ -141,9 +140,9 @@ describe("BookClub cards and library", () => {
     completeBookClubBook.mockResolvedValue({ summary: summary(false) });
     renderBookClub();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Complete book" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Current book Parable of the Sower/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Complete book" }));
     expect(completeBookClubBook).toHaveBeenCalledWith("andre", "book-1");
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Complete book" })).not.toBeInTheDocument());
   });
 
   it("shows an error when an open meeting blocks book completion", async () => {
@@ -154,7 +153,8 @@ describe("BookClub cards and library", () => {
     completeBookClubBook.mockRejectedValue(new Error("Complete the open meeting before completing the current book."));
     renderBookClub();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Complete book" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Current book Parable of the Sower/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Complete book" }));
     expect(completeBookClubBook).toHaveBeenCalledWith("andre", ACTIVE_BOOK.id);
     expect(await screen.findByText("Complete the open meeting before completing the current book.")).toBeInTheDocument();
   });
