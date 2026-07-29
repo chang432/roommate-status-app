@@ -535,10 +535,18 @@ def complete_book(group_id: str, book_id: str) -> str | None:
     return None
 
 
-def list_completed(group_id: str, viewer_id: str | None = None) -> list[dict]:
+def list_books(group_id: str, viewer_id: str | None = None) -> list[dict]:
     rows = query_group(_get_table(), group_id)
-    books = [row for row in rows if row.get("id", "").startswith("book#") and row.get("status") == "completed"]
+    books = [
+        row for row in rows
+        if row.get("id", "").startswith("book#")
+        and row.get("status") in {"active", "completed"}
+    ]
     ratings = [row for row in rows if row.get("id", "").startswith("rating#")]
+    meetings = [
+        row for row in rows
+        if row.get("id", "").startswith(("meeting#", "session#"))
+    ]
     result = []
     for book in books:
         book_ratings = [
@@ -580,8 +588,25 @@ def list_completed(group_id: str, viewer_id: str | None = None) -> list[dict]:
             "unknownFinishCount": sum(review["finished"] is None for review in reviews),
             "viewerReview": viewer_review,
             "reviews": reviews,
+            "meetings": sorted(
+                [
+                    _project_meeting(item, book=book)
+                    for item in meetings
+                    if item.get("bookId") == book["bookId"]
+                ],
+                key=lambda item: (item["scheduledAt"], item["createdAt"]),
+                reverse=True,
+            ),
         })
-    return sorted(result, key=lambda item: item.get("completedAt") or 0, reverse=True)
+    # The active title is always the first library entry; completed books then
+    # follow in reverse completion order regardless of their selection date.
+    return sorted(
+        result,
+        key=lambda item: (
+            item.get("status") != "active",
+            -(item.get("completedAt") or 0),
+        ),
+    )
 
 
 def set_review(
@@ -603,8 +628,8 @@ def set_review(
         return f"Review note must be at most {REVIEW_NOTE_LIMIT} characters."
     normalized = book_id[5:] if book_id.startswith("book#") else book_id
     book = _fetch(group_id, f"book#{normalized}")
-    if book is None or book.get("status") != "completed":
-        return "Reviews are only available for completed books."
+    if book is None or book.get("status") not in {"active", "completed"}:
+        return "Unknown Book Club book."
     now = _now()
     item_id = f"rating#{normalized}#{member['id']}"
     existing = _fetch(group_id, item_id)

@@ -24,8 +24,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/book-club/meetings/<id>/complete`                 | `?userId=<id>`                             | admin-completed meeting                                 |
 | `POST /api/book-club/books/<id>/complete`                    | `?userId=<id>`                             | admin-completed active book                             |
 | `POST /api/book-club/meetings/<id>/notify`                   | `?userId=<id>`                             | sends members a deep-linked meeting reminder            |
-| `GET /api/book-club/books/completed`                         | `?userId=<id>`                             | completed books, aggregate review data, and reviews     |
-| `PUT /api/book-club/books/<id>/review`                       | `?userId=<id>` + rating/finished/note      | member review and refreshed completed-book library      |
+| `GET /api/book-club/books`                                   | `?userId=<id>`                             | active/completed books, meetings, aggregate review data, and reviews |
+| `PUT /api/book-club/books/<id>/review`                       | `?userId=<id>` + rating/finished/note      | member review and refreshed Book Club library           |
 | `GET/POST /api/book-club/meetings/<id>/forum`                | `?userId=<id>` + optional topic/reply      | meeting forum threads                                   |
 | `PATCH/DELETE /api/book-club/meetings/<id>/forum/<entryId>`  | `?userId=<id>` + editable title/body       | edited or soft-removed forum entry                      |
 | `GET  /api/roommates`                                        | `?userId=<id>`                             | `[ { id, name, status, statusText, statusUpdatedAt } ]` |

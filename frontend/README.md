@@ -38,12 +38,12 @@ availability to hang out. Built from the mockups in `../mockups`.
   during feed polling. Swiping the feed switches between the ordered filters,
   the filter drawer can edit that order and the contents of All, and the
   floating `+` creates modules.
-- **Book Club**: the household page shows the current book plus clickable Book,
-  Snack, and Library cards. Meetings expand inside the feed for attendance,
-  progress, reminders, and administration. `/book-club` is the searchable
-  completed-book library, while `/book-club/forum?meeting=<id>` opens a focused
-  topic-and-reply forum. Members review completed books with 1–5 stars, finish
-  status, and an optional note; completed meeting forums remain read-only.
+- **Book Club**: the household page shows a two-by-two Current Book, Past Books,
+  Book, and Snack card grid. The library opens as a searchable modal with the
+  active title first, completed titles by recency, aggregate ratings, reviews,
+  and every meeting discussion. Members review active or completed books with
+  1–5 stars, finish status, and an optional note; completed meeting forums
+  remain read-only.
 - **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, archive or restore requests, and open
   module notifications directly to the expanded request card.
@@ -61,7 +61,7 @@ availability to hang out. Built from the mockups in `../mockups`.
 - [Tailwind CSS](https://tailwindcss.com/) (semantic theme tokens in
   `src/styles/themes.css`, exposed through `tailwind.config.js`)
 - [React Router](https://reactrouter.com/) for `/login`, `/signup`, `/pending`,
-  `/book-club`, `/book-club/forum`, and `/`
+  and `/`
 
 ## Getting started
 
@@ -105,7 +105,7 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `setBookClubResponse`           | `PUT /api/book-club/meetings/:id/response?userId=:id`      |
 | `completeBookClubMeeting`       | `POST /api/book-club/meetings/:id/complete?userId=:id`     |
 | `completeBookClubBook`          | `POST /api/book-club/books/:id/complete?userId=:id`        |
-| `getCompletedBookClubBooks`     | `GET /api/book-club/books/completed?userId=:id`            |
+| `getBookClubBooks`              | `GET /api/book-club/books?userId=:id`                      |
 | `reviewBookClubBook`            | `PUT /api/book-club/books/:id/review?userId=:id`           |
 | `notifyBookClubMeeting`         | `POST /api/book-club/meetings/:id/notify?userId=:id`       |
 | `getBookClubForum`              | `GET /api/book-club/meetings/:id/forum?userId=:id`         |

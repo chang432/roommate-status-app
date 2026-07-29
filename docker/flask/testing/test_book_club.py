@@ -143,10 +143,8 @@ def test_summary_accepts_legacy_meeting_responses_without_user_id(client):
     )
 
 
-def test_completed_book_collects_member_reviews(client):
+def test_active_book_collects_member_reviews_and_meeting_history(client):
     meeting = create_meeting(client).get_json()["meeting"]
-    completed = client.post(grouped_path(f"/api/book-club/books/{meeting['bookId']}/complete"))
-    assert completed.status_code == 200
 
     reviewed = client.put(
         grouped_path(f"/api/book-club/books/{meeting['bookId']}/review"),
@@ -157,6 +155,15 @@ def test_completed_book_collects_member_reviews(client):
     assert book["averageRating"] == 5
     assert book["finishedCount"] == 1
     assert book["viewerReview"]["note"] == "A sharp ending."
+    assert book["status"] == "active"
+    assert [item["id"] for item in book["meetings"]] == [meeting["id"]]
+
+    client.post(grouped_path(meeting_path(meeting["id"], "/complete")))
+    later = create_meeting(client, scheduledAt=FUTURE + 1000).get_json()["meeting"]
+    refreshed = client.get(grouped_path("/api/book-club/books")).get_json()["books"][0]
+    assert [item["id"] for item in refreshed["meetings"]] == [
+        later["id"], meeting["id"]
+    ]
 
     invalid = client.put(
         grouped_path(
@@ -184,12 +191,29 @@ def test_legacy_rating_is_visible_until_member_confirms_finish_status(client):
     })
 
     books = client.get(
-        grouped_path("/api/book-club/books/completed", user_id="sheryl")
+        grouped_path("/api/book-club/books", user_id="sheryl")
     ).get_json()["books"]
 
     assert books[0]["viewerReview"]["rating"] == 4
     assert books[0]["viewerReview"]["finished"] is None
     assert books[0]["unknownFinishCount"] == 1
+
+
+def test_books_list_places_active_before_recently_completed(client):
+    first = create_meeting(client).get_json()["meeting"]
+    client.post(grouped_path(meeting_path(first["id"], "/complete")))
+    client.post(grouped_path(f"/api/book-club/books/{first['bookId']}/complete"))
+    second = create_meeting(
+        client,
+        title="Kindred",
+        author="Octavia E. Butler",
+        readingTarget="Read through Chapter 5",
+    ).get_json()["meeting"]
+
+    books = client.get(grouped_path("/api/book-club/books")).get_json()["books"]
+
+    assert [book["id"] for book in books] == [second["bookId"], first["bookId"]]
+    assert [book["status"] for book in books] == ["active", "completed"]
 
 
 def test_meeting_forum_supports_topics_replies_moderation_and_locking(
@@ -218,8 +242,8 @@ def test_meeting_forum_supports_topics_replies_moderation_and_locking(
     topic = created.get_json()["forum"]["threads"][0]
     assert topic["authorName"] == "Sheryl"
     assert group_notifications[0]["exclude_user_ids"] == {"sheryl"}
-    assert group_notifications[0]["url"] == module_models.module_url(
-        "book-club", meeting["id"], topic["id"]
+    assert group_notifications[0]["url"] == module_models.book_club_url(
+        meeting["bookId"], meeting["id"], topic["id"]
     )
 
     summary = client.get(grouped_path("/api/book-club")).get_json()["summary"]

@@ -3,7 +3,6 @@ import LoginPage from './pages/LoginPage.jsx'
 import PendingAccountPage from './pages/PendingAccountPage.jsx'
 import SignupPage from './pages/SignupPage.jsx'
 import StatusPage from './pages/StatusPage.jsx'
-import BookClubPage from './pages/BookClubPage.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 
 function RequireAccount({ children }) {
@@ -54,22 +53,6 @@ export default function App() {
         element={
           <RequireGroup>
             <StatusPage />
-          </RequireGroup>
-        }
-      />
-      <Route
-        path="/book-club"
-        element={
-          <RequireGroup>
-            <BookClubPage />
-          </RequireGroup>
-        }
-      />
-      <Route
-        path="/book-club/forum"
-        element={
-          <RequireGroup>
-            <BookClubPage view="forum" />
           </RequireGroup>
         }
       />

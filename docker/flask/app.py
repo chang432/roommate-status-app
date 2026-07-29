@@ -732,12 +732,12 @@ def create_app() -> Flask:
         )
         return jsonify(result)
 
-    @app.get("/api/book-club/books/completed")
-    def list_completed_book_club_books():
+    @app.get("/api/book-club/books")
+    def list_book_club_books():
         viewer, error = group_member_from_query()
         if error:
             return error
-        return jsonify({"books": book_club.list_completed(viewer["groupId"], viewer["id"])})
+        return jsonify({"books": book_club.list_books(viewer["groupId"], viewer["id"])})
 
     @app.put("/api/book-club/books/<book_id>/review")
     def review_book_club_book(book_id: str):
@@ -755,7 +755,7 @@ def create_app() -> Flask:
         )
         if error:
             return jsonify({"error": error}), 400
-        return jsonify({"books": book_club.list_completed(viewer["groupId"], viewer["id"])})
+        return jsonify({"books": book_club.list_books(viewer["groupId"], viewer["id"])})
 
     @app.get("/api/book-club/meetings/<meeting_id>/forum")
     def get_book_club_forum(meeting_id: str):
@@ -790,8 +790,8 @@ def create_app() -> Flask:
                 status = 400
             return jsonify({"error": error}), status
 
-        notification_url = module_models.module_url(
-            "book-club",
+        notification_url = module_models.book_club_url(
+            entry["bookId"],
             meeting_id,
             body.get("parentPostId") or entry["id"],
         )

@@ -72,7 +72,7 @@ describe("BookClubMeetingFeature", () => {
     expect(screen.getByText("Chapter 8")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Forum" })).toHaveAttribute(
       "href",
-      "/book-club/forum?meeting=meeting%231",
+      "/?book=book-1&meeting=meeting%231",
     );
   });
 

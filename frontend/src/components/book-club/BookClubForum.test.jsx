@@ -31,7 +31,7 @@ describe("BookClubForum", () => {
   });
   afterEach(() => cleanup());
 
-  it("creates topics on the focused forum page", async () => {
+  it("creates topics in an open meeting discussion", async () => {
     const createdForum = {
       meetingId: MEETING.id,
       locked: false,

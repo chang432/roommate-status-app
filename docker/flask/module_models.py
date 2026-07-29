@@ -26,16 +26,27 @@ MODULE_TYPES = {"events", "requests", "checklists", "polls", "tv", "spotify", "b
 def module_url(
     module_type: str,
     item_id: str | None = None,
-    thread_id: str | None = None,
 ) -> str:
     """Build the canonical frontend destination for a module or module filter."""
     if module_type not in MODULE_TYPES:
         raise ValueError(f"Unknown module type: {module_type}")
-    if module_type == "book-club" and thread_id:
-        return f"/book-club/forum?{urlencode({'meeting': item_id, 'thread': thread_id})}"
     params = {"module": module_type}
     if item_id:
         params["item"] = item_id
+    return f"/?{urlencode(params)}"
+
+
+def book_club_url(
+    book_id: str,
+    meeting_id: str | None = None,
+    thread_id: str | None = None,
+) -> str:
+    """Open a Book Club title, optionally focused on one discussion thread."""
+    params = {"book": book_id}
+    if meeting_id:
+        params["meeting"] = meeting_id
+    if thread_id:
+        params["thread"] = thread_id
     return f"/?{urlencode(params)}"
 
 

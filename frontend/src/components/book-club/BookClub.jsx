@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { completeBookClubBook, getBookClub } from "../../api/bookClub.js";
+import { useSearchParams } from "react-router-dom";
+import {
+  completeBookClubBook,
+  getBookClub,
+  getBookClubBooks,
+} from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { isAdminIn } from "../../utils/roles.js";
 import ModalShell from "../ui/ModalShell.jsx";
+import BookClubLibrary from "./BookClubLibrary.jsx";
 import styles from "./BookClub.module.css";
 
 function ownerName(roommates, userId) {
@@ -19,12 +24,31 @@ function ownerOrderLabel(index, memberId, currentOwnerId) {
   return `Order #${index + 1}`;
 }
 
+function CardCopy({ label, value, hint }) {
+  return (
+    <>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{hint}</small>
+    </>
+  );
+}
+
 export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedBookId = searchParams.get("book");
+  const linkedMeetingId = searchParams.get("meeting");
+  const linkedThreadId = searchParams.get("thread");
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openList, setOpenList] = useState(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState("");
+  const [books, setBooks] = useState([]);
+  const [selectedBookId, setSelectedBookId] = useState(null);
   const [completingBook, setCompletingBook] = useState(false);
   const canAdminister = isAdminIn(roommates, user?.id);
 
@@ -41,14 +65,38 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
     }
   }, [user.id]);
 
+  const loadBooks = useCallback(async () => {
+    setLibraryLoading(true);
+    try {
+      const response = await getBookClubBooks(user.id);
+      setBooks(response.books);
+      setLibraryError("");
+    } catch (err) {
+      setLibraryError(err.message || "Could not load the Book Club library.");
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, [user.id]);
+
   useEffect(() => {
     void loadSummary();
   }, [groupId, loadSummary, refreshToken]);
 
   useEffect(() => {
-    window.addEventListener("roomie:book-club-changed", loadSummary);
-    return () => window.removeEventListener("roomie:book-club-changed", loadSummary);
-  }, [loadSummary]);
+    function onChanged() {
+      void loadSummary();
+      if (libraryOpen) void loadBooks();
+    }
+    window.addEventListener("roomie:book-club-changed", onChanged);
+    return () => window.removeEventListener("roomie:book-club-changed", onChanged);
+  }, [libraryOpen, loadBooks, loadSummary]);
+
+  useEffect(() => {
+    if (!linkedBookId) return;
+    setLibraryOpen(true);
+    setSelectedBookId(linkedBookId);
+    void loadBooks();
+  }, [groupId, linkedBookId, loadBooks]);
 
   const lists = useMemo(() => ({
     book: summary?.configuration?.bookOwnerOrderUserIds ?? [],
@@ -62,6 +110,31 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
     snack: summary?.openMeeting?.snackOwnerId ?? lists.snack[0],
   }), [lists, summary]);
 
+  async function openLibrary(bookId = null) {
+    setSelectedBookId(bookId);
+    setLibraryOpen(true);
+    await loadBooks();
+  }
+
+  function clearLibraryParams() {
+    const next = new URLSearchParams(searchParams);
+    next.delete("book");
+    next.delete("meeting");
+    next.delete("thread");
+    setSearchParams(next, { replace: true });
+  }
+
+  function closeLibrary() {
+    setLibraryOpen(false);
+    setSelectedBookId(null);
+    clearLibraryParams();
+  }
+
+  function showBookList() {
+    setSelectedBookId(null);
+    clearLibraryParams();
+  }
+
   async function completeBook() {
     if (!summary?.activeBook || completingBook) return;
     setCompletingBook(true);
@@ -69,6 +142,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
     try {
       const response = await completeBookClubBook(user.id, summary.activeBook.id);
       setSummary(response.summary);
+      if (libraryOpen) await loadBooks();
     } catch (err) {
       setError(err.message || "Could not complete the current book.");
     } finally {
@@ -78,40 +152,50 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
 
   const openOrder = openList ? lists[openList] : [];
   const openTitle = openList === "book" ? "Book owner order" : "Snack owner order";
+  const activeBook = summary?.activeBook;
 
   return (
-    <section className={styles.section} aria-label="Book Club owner lists">
+    <section className={styles.section} aria-label="Book Club">
       {error && <p className="ui-errorBox">{error}</p>}
-      {loading ? <p className={styles.muted}>Loading owner lists…</p> : (
-        <>
-          {summary?.activeBook && (
-            <div className={styles.activeBook}>
-              <span>Current book: <strong>{summary.activeBook.title}</strong></span>
-              {canAdminister && (
-                <button type="button" disabled={completingBook} onClick={completeBook}>
-                  {completingBook ? "Completing…" : "Complete book"}
-                </button>
-              )}
-            </div>
-          )}
-          <div className={styles.listGrid}>
-            <button type="button" className={styles.ownerCard} onClick={() => setOpenList("book")}>
-              <span>Book</span>
-              <strong>{currentOwners.book ? ownerName(roommates, currentOwners.book) : "No owner yet"}</strong>
-              <small>Tap to see order</small>
+      {loading ? <p className={styles.muted}>Loading Book Club…</p> : (
+        <div className={styles.cardGrid}>
+          <div className={styles.currentCard}>
+            <button
+              type="button"
+              className={styles.cardMain}
+              disabled={!activeBook}
+              onClick={() => openLibrary(activeBook?.id)}
+            >
+              <CardCopy
+                label="Current book"
+                value={activeBook?.title || "No book selected"}
+                hint={activeBook?.author ? `by ${activeBook.author}` : "Choose one with the next meeting"}
+              />
             </button>
-            <button type="button" className={styles.ownerCard} onClick={() => setOpenList("snack")}>
-              <span>Snack</span>
-              <strong>{currentOwners.snack ? ownerName(roommates, currentOwners.snack) : "No owner yet"}</strong>
-              <small>Tap to see order</small>
-            </button>
-            <Link className={styles.ownerCard} to="/book-club">
-              <span>Library</span>
-              <strong>Past books</strong>
-              <small>Browse reviews</small>
-            </Link>
+            {activeBook && canAdminister && (
+              <button className={styles.completeButton} type="button" disabled={completingBook} onClick={completeBook}>
+                {completingBook ? "Completing…" : "Complete book"}
+              </button>
+            )}
           </div>
-        </>
+          <button type="button" className={styles.card} onClick={() => openLibrary()}>
+            <CardCopy label="Past books" value="Book library" hint="Ratings, reviews, and discussions" />
+          </button>
+          <button type="button" className={styles.card} onClick={() => setOpenList("book")}>
+            <CardCopy
+              label="Book"
+              value={currentOwners.book ? ownerName(roommates, currentOwners.book) : "No owner yet"}
+              hint="Tap to see order"
+            />
+          </button>
+          <button type="button" className={styles.card} onClick={() => setOpenList("snack")}>
+            <CardCopy
+              label="Snack"
+              value={currentOwners.snack ? ownerName(roommates, currentOwners.snack) : "No owner yet"}
+              hint="Tap to see order"
+            />
+          </button>
+        </div>
       )}
       {openList && (
         <ModalShell title={openTitle} onClose={() => setOpenList(null)} contentClassName={styles.popupContent}>
@@ -124,6 +208,29 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
             ))}
             {!openOrder.length && <li className={styles.muted}>No members are available.</li>}
           </ol>
+        </ModalShell>
+      )}
+      {libraryOpen && (
+        <ModalShell
+          title={selectedBookId ? "Book details" : "Book library"}
+          onClose={closeLibrary}
+          widthClassName={styles.libraryDialog}
+          contentClassName={styles.libraryContent}
+        >
+          {libraryError && <p className="ui-errorBox">{libraryError}</p>}
+          {libraryLoading && <p className={styles.libraryState}>Loading books…</p>}
+          {!libraryLoading && !libraryError && (
+            <BookClubLibrary
+              books={books}
+              selectedBookId={selectedBookId}
+              onSelectBook={setSelectedBookId}
+              onBack={showBookList}
+              onBooksChange={setBooks}
+              canAdminister={canAdminister}
+              focusMeetingId={linkedMeetingId}
+              focusThreadId={linkedThreadId}
+            />
+          )}
         </ModalShell>
       )}
     </section>

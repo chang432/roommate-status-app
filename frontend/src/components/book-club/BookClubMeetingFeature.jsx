@@ -151,7 +151,7 @@ export default function BookClubMeetingFeature({
                     })}
                   </div>
                   <div className={styles.meetingActions}>
-                    <Link to={`/book-club/forum?meeting=${encodeURIComponent(meeting.id)}`}>Forum</Link>
+                    <Link to={`/?book=${encodeURIComponent(meeting.bookId)}&meeting=${encodeURIComponent(meeting.id)}`}>Forum</Link>
                     {detail.status === "scheduled" && (
                       <>
                         <button type="button" disabled={busy} onClick={() => notify(detail)}>Send reminder</button>

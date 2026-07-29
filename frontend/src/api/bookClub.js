@@ -44,8 +44,8 @@ export function completeBookClubBook(userId, bookId) {
   });
 }
 
-export function getCompletedBookClubBooks(userId) {
-  return request(withQuery("/book-club/books/completed", { userId }));
+export function getBookClubBooks(userId) {
+  return request(withQuery("/book-club/books", { userId }));
 }
 
 export function reviewBookClubBook(userId, bookId, review) {
