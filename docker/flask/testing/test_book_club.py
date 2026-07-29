@@ -201,6 +201,11 @@ def test_meeting_forum_supports_topics_replies_moderation_and_locking(
         "book-club", meeting["id"], topic["id"]
     )
 
+    summary = client.get(grouped_path("/api/book-club")).get_json()["summary"]
+    assert {
+        response["userId"] for response in summary["openMeeting"]["responses"]
+    } == set(db.get_group_user_ids(TEST_GROUP_ID, consistent=True))
+
     edited = client.patch(
         grouped_path(
             meeting_path(

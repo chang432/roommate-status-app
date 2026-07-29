@@ -158,10 +158,12 @@ def _project_book(item: dict | None) -> dict | None:
 
 
 def _responses(group_id: str, meeting_id: str) -> dict[str, dict]:
+    meeting_key = meeting_id.split("#", 1)[-1]
     return {
         item["userId"]: item
         for item in query_group(_get_table(), group_id, consistent=False)
-        if item.get("meetingId", item.get("sessionId")) == meeting_id
+        if item.get("id", "").startswith(f"meeting-member#{meeting_key}#")
+        and item.get("meetingId") == meeting_id
     }
 
 
