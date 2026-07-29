@@ -192,10 +192,7 @@ def test_joining_an_existing_book_club_appends_both_owner_lists(client):
     configured = client.post(
         "/api/book-club/meetings?userId=andre",
         headers=headers,
-        json={
-            "bookId": book["id"], "readingTarget": "Chapter 1",
-            "scheduledAt": book_club.next_wednesday_evening(),
-        },
+        json={"readingTarget": "Chapter 1", "scheduledAt": book_club.next_wednesday_evening()},
     )
     assert configured.status_code == 201
 

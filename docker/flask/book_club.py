@@ -151,8 +151,6 @@ def _project_book(item: dict | None) -> dict | None:
         "author": item["author"],
         "bookOwnerId": item.get("bookOwnerId", item.get("recommendedById")),
         "bookOwnerName": item.get("bookOwnerName", item.get("recommendedByName")),
-        "status": item["status"],
-        "selectedAt": int(item.get("selectedAt", item.get("createdAt", 0))),
         "completedAt": int(item["completedAt"]) if item.get("completedAt") is not None else None,
     }
 
@@ -293,12 +291,71 @@ def add_book(group_id: str, members: list[dict], body: dict) -> tuple[dict | Non
         "id": f"book#{book_id}",
         "bookId": book_id,
         **values,
-        "status": "active",
-        "selectedAt": now,
         "createdAt": now,
         "updatedAt": now,
     }
-    _get_table().put_item(Item=book, ConditionExpression="attribute_not_exists(id)")
+    table = _get_table()
+    config = _fetch(group_id, CONFIG_ID, consistent=True)
+    open_meeting_id = config.get("openMeetingId") if config else None
+    if open_meeting_id and _fetch(group_id, open_meeting_id):
+        return None, "Complete the open meeting before adding a new book."
+
+    prior_book_id = config.get("activeBookId") if config else None
+    book_order = _member_order(config, "bookOwnerOrderUserIds", members)
+    if values["bookOwnerId"] in book_order:
+        book_order = _move_to_front(book_order, values["bookOwnerId"])
+    config_condition = (
+        "activeBookId = :priorBookId AND attribute_not_exists(openMeetingId) "
+        "AND attribute_not_exists(nextSessionId)"
+        if prior_book_id
+        else "attribute_not_exists(activeBookId) AND attribute_not_exists(openMeetingId) "
+        "AND attribute_not_exists(nextSessionId)"
+    )
+    config_values = {
+        ":bookId": book_id,
+        ":bookOrder": book_order,
+        ":timezone": TIMEZONE,
+        ":now": now,
+    }
+    if prior_book_id:
+        config_values[":priorBookId"] = prior_book_id
+    transaction = [
+        {"Put": {
+            "TableName": TABLE_NAME,
+            "Item": book,
+            "ConditionExpression": "attribute_not_exists(id)",
+        }},
+        {"Update": {
+            "TableName": TABLE_NAME,
+            "Key": {"groupId": group_id, "id": CONFIG_ID},
+            # The configuration condition is the single-current lock. It also
+            # stops a replacement from racing an open-meeting creation.
+            "UpdateExpression": (
+                "SET activeBookId = :bookId, bookOwnerOrderUserIds = :bookOrder, "
+                "#timezone = if_not_exists(#timezone, :timezone), "
+                "createdAt = if_not_exists(createdAt, :now), updatedAt = :now"
+            ),
+            "ConditionExpression": config_condition,
+            "ExpressionAttributeNames": {"#timezone": "timezone"},
+            "ExpressionAttributeValues": config_values,
+        }},
+    ]
+    if prior_book_id:
+        transaction.append({"Update": {
+            "TableName": TABLE_NAME,
+            "Key": {"groupId": group_id, "id": f"book#{prior_book_id}"},
+            "UpdateExpression": "SET completedAt = :now, updatedAt = :now",
+            "ConditionExpression": "attribute_exists(id)",
+            "ExpressionAttributeValues": {":now": now},
+        }})
+    try:
+        table.meta.client.transact_write_items(TransactItems=transaction)
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] in {
+            "ConditionalCheckFailedException", "TransactionCanceledException"
+        }:
+            return None, "Complete the open meeting before adding a new book."
+        raise
     return _project_book(book), None
 
 
@@ -307,17 +364,63 @@ def update_book(
 ) -> tuple[dict | None, str | None]:
     normalized = book_id[5:] if book_id.startswith("book#") else book_id
     book = _fetch(group_id, f"book#{normalized}")
-    if book is None or book.get("status") not in {"active", "completed"}:
+    if book is None:
         return None, "Unknown Book Club book."
     values, error = _book_values(body, members)
     if error:
         return None, error
+    set_as_current = body.get("setAsCurrent", False)
+    if not isinstance(set_as_current, bool):
+        return None, "Set as current must be true or false."
     now = _now()
     book.update({**values, "updatedAt": now})
     book.pop("recommendedById", None)
     book.pop("recommendedByName", None)
     table = _get_table()
-    table.put_item(Item=book)
+    config = _fetch(group_id, CONFIG_ID, consistent=True)
+
+    if set_as_current:
+        if config is None:
+            return None, "Book Club configuration is unavailable."
+        # Restoring a completed title must claim the single-current pointer and
+        # clear its completion date together, so concurrent book changes cannot
+        # leave the library without (or with two) current titles.
+        book.pop("completedAt", None)
+        book_order = _member_order(config, "bookOwnerOrderUserIds", members)
+        try:
+            table.meta.client.transact_write_items(TransactItems=[
+                {"Put": {
+                    "TableName": TABLE_NAME,
+                    "Item": book,
+                    "ConditionExpression": "attribute_exists(id)",
+                }},
+                {"Update": {
+                    "TableName": TABLE_NAME,
+                    "Key": {"groupId": group_id, "id": CONFIG_ID},
+                    "UpdateExpression": (
+                        "SET activeBookId = :bookId, bookOwnerOrderUserIds = :bookOrder, "
+                        "updatedAt = :now"
+                    ),
+                    "ConditionExpression": (
+                        "attribute_not_exists(activeBookId) "
+                        "AND attribute_not_exists(openMeetingId) "
+                        "AND attribute_not_exists(nextSessionId)"
+                    ),
+                    "ExpressionAttributeValues": {
+                        ":bookId": normalized,
+                        ":bookOrder": _move_to_front(book_order, values["bookOwnerId"]),
+                        ":now": now,
+                    },
+                }},
+            ])
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] in {
+                "ConditionalCheckFailedException", "TransactionCanceledException"
+            }:
+                return None, "A current book or open meeting already exists."
+            raise
+    else:
+        table.put_item(Item=book)
 
     # Meeting rows intentionally keep display snapshots. A catalog correction
     # rewrites all snapshots so history cannot disagree with the canonical book.
@@ -335,8 +438,7 @@ def update_book(
             })
             table.put_item(Item=item)
 
-    config = _fetch(group_id, CONFIG_ID)
-    if config and config.get("activeBookId") == normalized:
+    if not set_as_current and config and config.get("activeBookId") == normalized:
         book_order = _member_order(config, "bookOwnerOrderUserIds", members)
         table.update_item(
             Key={"groupId": group_id, "id": CONFIG_ID},
@@ -376,18 +478,19 @@ def _meeting_values(body: dict, members: list[dict], config: dict | None, *, cre
 
 def create_meeting(group_id: str, members: list[dict], creator: dict, body: dict) -> tuple[dict | None, str | None]:
     config = _fetch(group_id, CONFIG_ID, consistent=True)
+    if "bookId" in body:
+        return None, "Meetings always use the current book."
     open_id = config.get("openMeetingId", config.get("nextSessionId")) if config else None
     if open_id and _fetch(group_id, open_id):
         return None, "Complete the open meeting before creating another one."
     if any(field in body for field in ("title", "author", "bookOwnerId")):
         return None, "Book details must be managed in the library."
-    selected_book_id = body.get("bookId")
-    if not isinstance(selected_book_id, str) or not selected_book_id:
-        return None, "Select a book from the library."
-    selected_book_id = selected_book_id.removeprefix("book#")
+    selected_book_id = config.get("activeBookId") if config else None
+    if not selected_book_id:
+        return None, "Add a current book before scheduling a meeting."
     book = _fetch(group_id, f"book#{selected_book_id}")
-    if book is None or book.get("status") != "active":
-        return None, "Select an available book from the library."
+    if book is None:
+        return None, "Add a current book before scheduling a meeting."
     values, error = _meeting_values(body, members, config, creating=True)
     if error:
         return None, error
@@ -425,7 +528,6 @@ def create_meeting(group_id: str, members: list[dict], creator: dict, body: dict
         }
     config = {
         **config,
-        "activeBookId": selected_book_id,
         "openMeetingId": meeting_id,
         "lastMeetingAt": values["scheduledAt"],
         "bookOwnerOrderUserIds": book_order,
@@ -448,9 +550,10 @@ def create_meeting(group_id: str, members: list[dict], creator: dict, body: dict
                 "TableName": TABLE_NAME,
                 "Item": config,
                 "ConditionExpression": (
-                    "attribute_not_exists(openMeetingId) AND "
-                    "attribute_not_exists(nextSessionId)"
+                    "activeBookId = :bookId AND attribute_not_exists(openMeetingId) "
+                    "AND attribute_not_exists(nextSessionId)"
                 ),
+                "ExpressionAttributeValues": {":bookId": selected_book_id},
             }},
         ])
     except ClientError as exc:
@@ -561,23 +664,52 @@ def set_response(group_id: str, meeting_id: str, member: dict, attendance: str, 
 def complete_book(group_id: str, book_id: str) -> str | None:
     normalized = book_id[5:] if book_id.startswith("book#") else book_id
     book = _fetch(group_id, f"book#{normalized}")
-    config = _fetch(group_id, CONFIG_ID)
-    if book is None or book.get("status") != "active":
+    config = _fetch(group_id, CONFIG_ID, consistent=True)
+    if book is None:
         return "Unknown active book."
     if config is None or config.get("activeBookId") != normalized:
         return "Unknown active book."
+    open_meeting_id = config.get("openMeetingId", config.get("nextSessionId"))
+    open_meeting = _fetch(group_id, open_meeting_id) if open_meeting_id else None
+    if open_meeting and open_meeting.get("bookId") == normalized and open_meeting.get("status") == OPEN_STATUS:
+        return "Complete the open meeting before completing the current book."
     now = _now()
-    _get_table().update_item(
-        Key={"groupId": group_id, "id": book["id"]},
-        UpdateExpression="SET #status = :completed, completedAt = :now, updatedAt = :now",
-        ExpressionAttributeNames={"#status": "status"},
-        ExpressionAttributeValues={":completed": "completed", ":now": now},
-    )
-    _get_table().update_item(
-        Key={"groupId": group_id, "id": CONFIG_ID},
-        UpdateExpression="REMOVE activeBookId SET updatedAt = :now",
-        ExpressionAttributeValues={":now": now},
-    )
+    try:
+        # The config condition prevents a meeting from being created between
+        # the read above and clearing the current-book pointer.
+        _get_table().meta.client.transact_write_items(TransactItems=[
+            {"Update": {
+                "TableName": TABLE_NAME,
+                "Key": {"groupId": group_id, "id": book["id"]},
+                "UpdateExpression": "SET completedAt = :now, updatedAt = :now",
+                "ConditionExpression": "attribute_exists(id)",
+                "ExpressionAttributeValues": {":now": now},
+            }},
+            {"Update": {
+                "TableName": TABLE_NAME,
+                "Key": {"groupId": group_id, "id": CONFIG_ID},
+                "UpdateExpression": "REMOVE activeBookId SET updatedAt = :now",
+                "ConditionExpression": (
+                    "activeBookId = :bookId AND attribute_not_exists(openMeetingId) "
+                    "AND attribute_not_exists(nextSessionId)"
+                ),
+                "ExpressionAttributeValues": {":bookId": normalized, ":now": now},
+            }},
+        ])
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] in {
+            "ConditionalCheckFailedException", "TransactionCanceledException"
+        }:
+            refreshed_config = _fetch(group_id, CONFIG_ID, consistent=True)
+            refreshed_open_id = (
+                refreshed_config.get("openMeetingId", refreshed_config.get("nextSessionId"))
+                if refreshed_config else None
+            )
+            refreshed_meeting = _fetch(group_id, refreshed_open_id) if refreshed_open_id else None
+            if refreshed_meeting and refreshed_meeting.get("bookId") == normalized and refreshed_meeting.get("status") == OPEN_STATUS:
+                return "Complete the open meeting before completing the current book."
+            return "Unknown current book."
+        raise
     return None
 
 
@@ -588,7 +720,6 @@ def list_books(group_id: str, viewer_id: str | None = None) -> list[dict]:
     books = [
         row for row in rows
         if row.get("id", "").startswith("book#")
-        and row.get("status") in {"active", "completed"}
     ]
     ratings = [row for row in rows if row.get("id", "").startswith("rating#")]
     meetings = [
@@ -647,18 +778,13 @@ def list_books(group_id: str, viewer_id: str | None = None) -> list[dict]:
                 reverse=True,
             ),
         })
-    # Current comes first, followed by other available books by addition time,
-    # then completed books by completion time.
+    # The pointer is the only lifecycle state: its title comes first and every
+    # other catalog entry is historical, even when old data lacks a date.
     return sorted(
         result,
         key=lambda item: (
             not item["isCurrent"],
-            item.get("status") == "completed",
-            -(
-                item.get("completedAt")
-                if item.get("status") == "completed"
-                else item.get("selectedAt", 0)
-            ),
+            -(item.get("completedAt") or item.get("createdAt", 0)),
         ),
     )
 
@@ -682,7 +808,7 @@ def set_review(
         return f"Review note must be at most {REVIEW_NOTE_LIMIT} characters."
     normalized = book_id[5:] if book_id.startswith("book#") else book_id
     book = _fetch(group_id, f"book#{normalized}")
-    if book is None or book.get("status") not in {"active", "completed"}:
+    if book is None:
         return "Unknown Book Club book."
     now = _now()
     item_id = f"rating#{normalized}#{member['id']}"

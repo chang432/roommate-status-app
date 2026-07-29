@@ -13,8 +13,6 @@ the standard AWS config chain for region/credentials.
 from __future__ import annotations
 
 import os
-import time
-
 import book_club
 import db
 import groups
@@ -54,7 +52,7 @@ def seed_local_groups() -> None:
 
 
 def seed_local_book_club() -> None:
-    """Create a local meeting and completed title for Book Club UI coverage."""
+    """Create a local meeting, current title, and completed title for UI coverage."""
     if not os.environ.get("DYNAMODB_ENDPOINT"):
         return
 
@@ -64,8 +62,7 @@ def seed_local_book_club() -> None:
         (
             book
             for book in book_club.list_books(BOOK_CLUB_GROUP_ID)
-            if book["status"] == "active"
-            and book["title"] == "The Fifth Season"
+            if book["title"] == "The Fifth Season"
             and book["author"] == "N. K. Jemisin"
         ),
         None,
@@ -88,7 +85,6 @@ def seed_local_book_club() -> None:
         members,
         creator,
         {
-            "bookId": seed_book["id"],
             "readingTarget": "Read through Chapter 9",
             "snackOwnerId": "andre",
             "scheduledAt": book_club.next_wednesday_evening(),
@@ -99,7 +95,6 @@ def seed_local_book_club() -> None:
     if meeting is None:
         meeting = book_club.summary(BOOK_CLUB_GROUP_ID, members)["openMeeting"]
 
-    now = int(time.time() * 1000)
     # The active book above plus this completed title make the local library
     # useful immediately, while stable ids keep repeated seeds safe.
     book_club._get_table().put_item(Item={
@@ -110,11 +105,9 @@ def seed_local_book_club() -> None:
         "author": "Becky Chambers",
         "bookOwnerId": "andre",
         "bookOwnerName": "Andre",
-        "status": "completed",
-        "selectedAt": now - 28 * 24 * 60 * 60 * 1000,
-        "completedAt": now - 14 * 24 * 60 * 60 * 1000,
-        "createdAt": now - 28 * 24 * 60 * 60 * 1000,
-        "updatedAt": now - 14 * 24 * 60 * 60 * 1000,
+        "completedAt": book_club._now() - 14 * 24 * 60 * 60 * 1000,
+        "createdAt": book_club._now() - 28 * 24 * 60 * 60 * 1000,
+        "updatedAt": book_club._now() - 14 * 24 * 60 * 60 * 1000,
     })
     completed_book_id = "a-psalm-for-the-wild-built"
     book_club.set_review(

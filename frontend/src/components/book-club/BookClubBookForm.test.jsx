@@ -1,7 +1,10 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addBookClubBook, updateBookClubBook } from "../../api/bookClub.js";
+import {
+  addBookClubBook,
+  updateBookClubBook,
+} from "../../api/bookClub.js";
 import BookClubBookForm from "./BookClubBookForm.jsx";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
@@ -22,7 +25,7 @@ describe("BookClubBookForm", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => cleanup());
 
-  it("adds a catalog book without selecting it as current", async () => {
+  it("adds the current book", async () => {
     const response = {
       book: { id: "book-1", title: "Kindred" },
       books: [{ id: "book-1", title: "Kindred", isCurrent: false }],
@@ -34,7 +37,7 @@ describe("BookClubBookForm", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Book title" }), "Kindred");
     await userEvent.type(screen.getByRole("textbox", { name: "Author" }), "Octavia E. Butler");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Book owner" }), "kayla");
-    await userEvent.click(screen.getByRole("button", { name: "Add book" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add current book" }));
 
     expect(addBookClubBook).toHaveBeenCalledWith("andre", {
       title: "Kindred", author: "Octavia E. Butler", bookOwnerId: "kayla",
@@ -55,5 +58,18 @@ describe("BookClubBookForm", () => {
     expect(updateBookClubBook).toHaveBeenCalledWith(
       "andre", "book-1", expect.objectContaining({ title: "Kindred" }),
     );
+  });
+
+  it("can restore a completed book as the current book", async () => {
+    updateBookClubBook.mockResolvedValue({ book: { id: "book-1" }, books: [] });
+    render(<BookClubBookForm book={{
+      id: "book-1", title: "Kindred", author: "Octavia Butler", bookOwnerId: "andre",
+    }} roommates={ROOMMATES} canSetAsCurrent onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Set as current" }));
+
+    expect(updateBookClubBook).toHaveBeenCalledWith("andre", "book-1", {
+      title: "Kindred", author: "Octavia Butler", bookOwnerId: "andre", setAsCurrent: true,
+    });
   });
 });

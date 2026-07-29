@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createBookClubMeeting, getBookClub, getBookClubBooks } from "../../api/bookClub.js";
+import { createBookClubMeeting, getBookClub } from "../../api/bookClub.js";
 import { updateModule } from "../../api/feed.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { fromDateTimeLocal, toDateTimeLocal } from "../../utils/time.js";
@@ -10,7 +10,6 @@ import styles from "./BookClubMeetingForm.module.css";
 export default function BookClubMeetingForm({ meeting = null, roommates, onSaved, onCancel }) {
   const { user } = useAuth();
   const [summary, setSummary] = useState(null);
-  const [books, setBooks] = useState([]);
   const [draft, setDraft] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -19,18 +18,12 @@ export default function BookClubMeetingForm({ meeting = null, roommates, onSaved
 
   useEffect(() => {
     let current = true;
-    Promise.all([getBookClub(user.id), getBookClubBooks(user.id)])
-      .then(([{ summary: nextSummary }, { books: nextBooks }]) => {
+    getBookClub(user.id)
+      .then(({ summary: nextSummary }) => {
         if (!current) return;
         const snackOrder = nextSummary.configuration.snackOwnerOrderUserIds;
-        const availableBooks = nextBooks.filter((book) => book.status === "active");
         setSummary(nextSummary);
-        setBooks(availableBooks);
         setDraft({
-          bookId: meeting?.bookId
-            ?? availableBooks.find((book) => book.isCurrent)?.id
-            ?? availableBooks[0]?.id
-            ?? "",
           readingTarget: meeting?.readingTarget ?? "",
           scheduledAt: toDateTimeLocal(meeting?.scheduledAt ?? nextSummary.configuration.suggestedMeetingAt),
           snackOwnerId: meeting?.snackOwnerId ?? snackOrder[0] ?? "",
@@ -49,7 +42,6 @@ export default function BookClubMeetingForm({ meeting = null, roommates, onSaved
       scheduledAt: fromDateTimeLocal(draft.scheduledAt),
       snackOwnerId: draft.snackOwnerId,
     };
-    if (!meeting) payload.bookId = draft.bookId;
     setSaving(true);
     setError("");
     try {
@@ -66,10 +58,10 @@ export default function BookClubMeetingForm({ meeting = null, roommates, onSaved
 
   if (loading) return <p className={styles.muted}>Loading meeting defaults…</p>;
   if (!draft || !summary) return <p className="ui-errorBox">{error || "Meeting defaults are unavailable."}</p>;
-  if (!meeting && !books.length) {
+  if (!meeting && !summary.activeBook) {
     return (
       <div className={styles.emptyBooks}>
-        <p>There are no available books yet. Add one to the library before scheduling a meeting.</p>
+        <p>There is no current book yet. Add one to the library before scheduling a meeting.</p>
         <div className="ui-formActions">
           <button type="button" className="ui-secondaryButton ui-formActionButton" onClick={onCancel}>Cancel</button>
           <button type="button" className="ui-primaryButton ui-formActionButton" onClick={() => {
@@ -83,26 +75,16 @@ export default function BookClubMeetingForm({ meeting = null, roommates, onSaved
 
   const selectedBook = meeting
     ? { title: meeting.bookTitle, author: meeting.bookAuthor, bookOwnerName: meeting.bookOwnerName }
-    : books.find((book) => book.id === draft.bookId);
+    : summary.activeBook;
 
   return (
     <form className={styles.form} onSubmit={submit}>
       {error && <p className="ui-errorBox">{error}</p>}
-      {meeting ? (
-        <div className={styles.fixedBook}>
-          <span>Book</span>
-          <strong>{selectedBook.title}</strong>
-          <small>by {selectedBook.author} · Book owner: {selectedBook.bookOwnerName || "Former member"}</small>
-        </div>
-      ) : (
-        <label>
-          <span>Book</span>
-          <select required value={draft.bookId} onChange={(event) => setDraft({ ...draft, bookId: event.target.value })}>
-            {books.map((book) => <option key={book.id} value={book.id}>{book.title} — {book.author}</option>)}
-          </select>
-          {selectedBook && <small>Book owner: {selectedBook.bookOwnerName || "Former member"}</small>}
-        </label>
-      )}
+      <div className={styles.fixedBook}>
+        <span>Book</span>
+        <strong>{selectedBook.title}</strong>
+        <small>by {selectedBook.author} · Book owner: {selectedBook.bookOwnerName || "Former member"}</small>
+      </div>
       <label><span>Reading target</span><input required maxLength={160} placeholder="Read through Chapter 8" value={draft.readingTarget} onChange={(event) => setDraft({ ...draft, readingTarget: event.target.value })} /></label>
       <label><span>Meeting date and time</span><input required type="datetime-local" value={draft.scheduledAt} onChange={(event) => setDraft({ ...draft, scheduledAt: event.target.value })} /></label>
       <LoopingOwnerPicker

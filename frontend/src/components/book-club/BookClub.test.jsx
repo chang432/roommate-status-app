@@ -31,7 +31,6 @@ const ACTIVE_BOOK = {
   title: "Parable of the Sower",
   author: "Octavia E. Butler",
   bookOwnerName: "Kayla",
-  status: "active",
   isCurrent: true,
   completedAt: null,
   averageRating: null,
@@ -79,9 +78,8 @@ describe("BookClub cards and library", () => {
 
     const section = screen.getByRole("region", { name: "Book Club" });
     const cards = await within(section).findAllByRole("button");
-    expect(cards.slice(0, 5).map((card) => card.textContent)).toEqual([
+    expect(cards.slice(0, 4).map((card) => card.textContent)).toEqual([
       expect.stringContaining("Current bookParable of the Sower"),
-      "Complete book",
       expect.stringContaining("LibraryAll books"),
       expect.stringContaining("BookKayla"),
       expect.stringContaining("SnackAndre"),
@@ -111,6 +109,18 @@ describe("BookClub cards and library", () => {
     expect(screen.getByRole("dialog", { name: "Add a book" })).toHaveTextContent("Book owner");
   });
 
+  it("offers admins a way to restore a completed book when none is current", async () => {
+    getBookClub.mockResolvedValue({ summary: summary(false) });
+    getBookClubBooks.mockResolvedValue({ books: [{ ...ACTIVE_BOOK, isCurrent: false, completedAt: 1 }] });
+    renderBookClub();
+
+    await userEvent.click(await screen.findByRole("button", { name: /Library All books/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Parable of the Sower/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit book" }));
+
+    expect(screen.getByRole("button", { name: "Set as current" })).toBeInTheDocument();
+  });
+
   it("keeps owner order dialogs and meeting snapshots authoritative", async () => {
     getBookClub.mockResolvedValue({
       summary: {
@@ -130,9 +140,23 @@ describe("BookClub cards and library", () => {
     completeBookClubBook.mockResolvedValue({ summary: summary(false) });
     renderBookClub();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Complete book" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Current book Parable of the Sower/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Complete book" }));
     expect(completeBookClubBook).toHaveBeenCalledWith("andre", "book-1");
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Complete book" })).not.toBeInTheDocument());
+  });
+
+  it("shows an error when an open meeting blocks book completion", async () => {
+    getBookClub.mockResolvedValue({ summary: {
+      ...summary(),
+      openMeeting: { bookId: ACTIVE_BOOK.id, status: "scheduled" },
+    } });
+    completeBookClubBook.mockRejectedValue(new Error("Complete the open meeting before completing the current book."));
+    renderBookClub();
+
+    await userEvent.click(await screen.findByRole("button", { name: /Current book Parable of the Sower/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Complete book" }));
+    expect(completeBookClubBook).toHaveBeenCalledWith("andre", ACTIVE_BOOK.id);
+    expect(await screen.findByText("Complete the open meeting before completing the current book.")).toBeInTheDocument();
   });
 
   it("opens a notification-linked book directly and reloads shared changes", async () => {

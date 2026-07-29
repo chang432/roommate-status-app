@@ -8,7 +8,6 @@ import styles from "./BookClubLibrary.module.css";
 
 function bookDate(book) {
   if (book.isCurrent) return "Currently reading";
-  if (book.status === "active") return "Available for a meeting";
   if (!book.completedAt) return "Completion date unavailable";
   return `Completed ${new Intl.DateTimeFormat(undefined, {
     month: "short", day: "numeric", year: "numeric",
@@ -29,7 +28,6 @@ function stars(value) {
 
 function statusLabel(book) {
   if (book.isCurrent) return "Current";
-  if (book.status === "active") return "Available";
   return "Completed";
 }
 
@@ -71,6 +69,8 @@ function BookDetail({
   onBooksChange,
   onEditBook,
   canAdminister,
+  onCompleteBook,
+  completingBook,
   focusMeetingId,
   focusThreadId,
 }) {
@@ -114,7 +114,14 @@ function BookDetail({
     <div className={styles.detail}>
       <div className={styles.detailActions}>
         <button type="button" className={`ui-secondaryButton ${styles.actionButton}`} onClick={onBack}>← All books</button>
-        <button type="button" className={`ui-secondaryButton ${styles.actionButton}`} onClick={() => onEditBook(book)}>Edit book</button>
+        <div className={styles.detailActionGroup}>
+          {book.isCurrent && canAdminister && (
+            <button type="button" className={`ui-secondaryButton ${styles.actionButton}`} disabled={completingBook} onClick={() => onCompleteBook(book.id)}>
+              {completingBook ? "Completing…" : "Complete book"}
+            </button>
+          )}
+          <button type="button" className={`ui-secondaryButton ${styles.actionButton}`} onClick={() => onEditBook(book)}>Edit book</button>
+        </div>
       </div>
       <header className={styles.detailHeader}>
         <div className={styles.detailTitle}>
@@ -224,6 +231,8 @@ export default function BookClubLibrary({
   onAddBook,
   onEditBook,
   canAdminister,
+  onCompleteBook,
+  completingBook,
   focusMeetingId,
   focusThreadId,
 }) {
@@ -239,20 +248,20 @@ export default function BookClubLibrary({
     return <div className={styles.empty}><span aria-hidden="true">📕</span><h2>Book unavailable</h2><p>This title is no longer available in this household.</p><button type="button" className="ui-primaryButton" onClick={onBack}>View all books</button></div>;
   }
   if (selected) {
-    return <BookDetail key={selected.id} book={selected} onBack={onBack} onBooksChange={onBooksChange} onEditBook={onEditBook} canAdminister={canAdminister} focusMeetingId={focusMeetingId} focusThreadId={focusThreadId} />;
+    return <BookDetail key={selected.id} book={selected} onBack={onBack} onBooksChange={onBooksChange} onEditBook={onEditBook} canAdminister={canAdminister} onCompleteBook={onCompleteBook} completingBook={completingBook} focusMeetingId={focusMeetingId} focusThreadId={focusThreadId} />;
   }
 
   return (
     <section className={styles.library} aria-label="Book library">
       <div className={styles.libraryHeading}>
-        <p className={styles.libraryCount}>{books.length} {books.length === 1 ? "book" : "books"} · current, available, and completed</p>
+        <p className={styles.libraryCount}>{books.length} {books.length === 1 ? "book" : "books"} · current and completed</p>
         <div className={styles.libraryTools}>
-          <button type="button" className={`ui-primaryButton ${styles.addButton}`} onClick={onAddBook}>Add book</button>
+          {canAdminister && <button type="button" className={`ui-primaryButton ${styles.addButton}`} onClick={onAddBook}>Add book</button>}
           <label className={styles.search}><span className="sr-only">Search books</span><input type="search" placeholder="Search title, author, or owner" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
         </div>
       </div>
       {!books.length ? (
-        <div className={styles.empty}><span aria-hidden="true">📚</span><h2>No books yet</h2><p>Add the first book, then select it when creating a meeting.</p><button type="button" className="ui-primaryButton" onClick={onAddBook}>Add the first book</button></div>
+        <div className={styles.empty}><span aria-hidden="true">📚</span><h2>No books yet</h2><p>{canAdminister ? "Add the first book to begin your club’s current read." : "An admin can add the first current book."}</p>{canAdminister && <button type="button" className="ui-primaryButton" onClick={onAddBook}>Add the first book</button>}</div>
       ) : (
         <div className={styles.bookList}>
           {filteredBooks.map((book) => (

@@ -24,7 +24,6 @@ const ACTIVE_BOOK = {
   title: "Parable of the Sower",
   author: "Octavia E. Butler",
   bookOwnerName: "Kayla",
-  status: "active",
   isCurrent: true,
   completedAt: null,
   averageRating: 4,
@@ -54,12 +53,18 @@ const COMPLETED_BOOK = {
   ...ACTIVE_BOOK,
   id: "completed-book",
   title: "Kindred",
-  status: "completed",
   isCurrent: false,
   completedAt: Date.UTC(2030, 0, 1),
   averageRating: 5,
   finishedCount: 1,
   meetings: [],
+};
+
+const UNKNOWN_COMPLETION_DATE_BOOK = {
+  ...COMPLETED_BOOK,
+  id: "unknown-date-book",
+  title: "Legacy History",
+  completedAt: null,
 };
 
 function renderLibrary(props = {}) {
@@ -69,7 +74,9 @@ function renderLibrary(props = {}) {
     onSelectBook: vi.fn(),
     onBack: vi.fn(),
     onBooksChange: vi.fn(),
+    onCompleteBook: vi.fn(),
     canAdminister: true,
+    completingBook: false,
     focusMeetingId: null,
     focusThreadId: null,
   };
@@ -116,6 +123,21 @@ describe("BookClubLibrary", () => {
     });
     expect(props.onBooksChange).toHaveBeenCalledWith([updatedBook, COMPLETED_BOOK]);
     expect(await screen.findByRole("status")).toHaveTextContent("Saved");
+  });
+
+  it("only offers book completion from a current book's detail page", () => {
+    const { unmount } = renderLibrary({ selectedBookId: ACTIVE_BOOK.id });
+    expect(screen.getByRole("button", { name: "Complete book" })).toBeInTheDocument();
+    unmount();
+
+    renderLibrary({ selectedBookId: COMPLETED_BOOK.id });
+    expect(screen.queryByRole("button", { name: "Complete book" })).not.toBeInTheDocument();
+  });
+
+  it("labels historical books without a recorded completion date as completed", () => {
+    renderLibrary({ books: [ACTIVE_BOOK, UNKNOWN_COMPLETION_DATE_BOOK] });
+    expect(screen.getByRole("button", { name: /Legacy History/ })).toHaveTextContent("Completed");
+    expect(screen.getByRole("button", { name: /Legacy History/ })).toHaveTextContent("Completion date unavailable");
   });
 
   it("keeps collapsed review controls mounted but inert", async () => {

@@ -20,12 +20,16 @@
 - An admin creates, edits, and manually completes one open meeting at a time.
   The first date defaults to the next Wednesday at 7:30 PM Eastern; later dates
   default to two local calendar weeks after the prior meeting.
-- Members add books to the library independently of meetings. Admins select any
-  non-completed catalog book when creating a meeting; that selection becomes
-  current without completing the previous book. Catalog corrections propagate
-  to every meeting snapshot for that book.
-- An active book may span meetings and is completed separately. Each member can
-  review an active or completed book with a 1–5 star rating, required finished/not-finished
+- Only admins add books. Adding a title makes it current and atomically
+  completes the former current title; it is blocked while a meeting is open.
+  When no title is current, an admin can restore a completed title from its
+  edit form. This atomically clears its completion date and makes it current.
+  Meetings always use the configured current title. Catalog corrections
+  propagate to every meeting snapshot for that book.
+- `activeBookId` is the only book lifecycle state. A title it references is
+  current; every other catalog title is completed. Completing the current book
+  requires its open meeting to be completed first, then timestamps the book and
+  clears the pointer. Each member can review any book with a 1–5 star rating, required finished/not-finished
   status, and optional note. Legacy star-only ratings remain visible with
   unknown finish status until their author updates them.
 - Members may update their own attendance and reading progress until the
@@ -41,8 +45,9 @@ The existing `RoommateStatus-{dev,main}-book-club` table remains keyed by
 
 - `config#book-club`: `openMeetingId`, `lastMeetingAt`, optional `activeBookId`,
   and the two ordered owner-ID lists.
-- `book#<uuid>`: title, author, current Book owner snapshot, active/completed
-  status, and lifecycle timestamps.
+- `book#<uuid>`: title, author, current Book owner snapshot, and optional
+  `completedAt`. It has no status field: current status is derived by comparing
+  its `bookId` with `config#book-club.activeBookId`.
 - `meeting#<uuid>`: scheduled time, book and owner snapshots, reading target,
   scheduled/completed status, and creator/completer snapshots.
 - `meeting-member#<meetingUuid>#<userId>`: one member-owned attendance/progress
@@ -66,7 +71,7 @@ Meetings normalize as compact `type: "book-club"` feed modules and use
 Forum notifications use
 `/?book=<book-id>&meeting=<meeting-id>&thread=<root-id>` so the household
 library modal opens the referenced topic. The type is
-included only when the group has Book Club enabled. Meeting creation, edits,
+included only when the group has Book Club enabled. Book addition, meeting creation, edits,
 completion, and book completion require a group admin; any current member can
 send a reminder, update their own response, review an active or completed book, create a
 forum topic, and reply before completion. New topics notify the group except
@@ -74,7 +79,9 @@ the author; replies notify thread participants except the author.
 
 ## Migration
 
-`2026-07-22-01-book-club-meeting-modules` converts the former cursor-based
+`2026-07-29-01-derive-book-completion` removes legacy book `status` fields,
+preserving known historical completion dates and clearing an invalid completion
+date from the configured current title. `2026-07-22-01-book-club-meeting-modules` converts the former cursor-based
 rotations and date-derived session IDs to sticky owner lists and stable meeting
 IDs while preserving books, sessions, responses, ratings, and posts. No table
 or index change is required. `2026-07-23-01-align-book-owner-order` aligns the
