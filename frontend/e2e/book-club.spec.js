@@ -340,6 +340,18 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
     getComputedStyle(element).backgroundColor
   ))).toBe('rgba(0, 0, 0, 0)')
   await feedTabs.getByRole('tab', { name: /^TV/ }).click()
+  await expect(feedTabs.getByRole('tab', { name: /^TV/, selected: true })).toBeVisible()
+  const categoryScroller = page.locator('[data-feed-category-scroller]')
+  await categoryScroller.evaluate((element) => element.scrollTo({ left: 0, behavior: 'auto' }))
+  const expectedCategoryScroll = await categoryScroller.evaluate((element) => {
+    const activeTab = element.querySelector('[role="tab"][aria-selected="true"]')
+    const centered = activeTab.offsetLeft - (element.clientWidth - activeTab.offsetWidth) / 2
+    return {
+      before: element.scrollLeft,
+      target: Math.min(Math.max(centered, 0), element.scrollWidth - element.clientWidth),
+    }
+  })
+  expect(Math.abs(expectedCategoryScroll.before - expectedCategoryScroll.target)).toBeGreaterThan(5)
   const feedMain = page.locator('[data-feed-swipe-phase]').locator('..')
   await feedMain.scrollIntoViewIfNeeded()
   const feedBox = await feedMain.boundingBox()
@@ -347,6 +359,11 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   const swipeY = feedBox.y + Math.min(60, feedBox.height / 2)
   await page.mouse.move(swipeStartX, swipeY)
   await page.mouse.down()
+  await page.mouse.move(swipeStartX - 12, swipeY + 1)
+  await expect.poll(async () => Math.abs(
+    await categoryScroller.evaluate((element) => element.scrollLeft) -
+    expectedCategoryScroll.target
+  )).toBeLessThan(2)
   await page.mouse.move(swipeStartX - 260, swipeY + 4, { steps: 8 })
 
   const incomingBookClub = page.locator('[data-feed-panel-type="book-club"]')

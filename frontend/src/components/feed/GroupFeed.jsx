@@ -138,6 +138,44 @@ function ModuleTabs({
   const tabRefs = useRef(new Map());
   const [tabMetrics, setTabMetrics] = useState({});
 
+  const alignActiveTab = useCallback(
+    ({ force = false, immediate = false } = {}) => {
+      const scroller = scrollerRef.current;
+      const tab = tabRefs.current.get(activeType);
+      if (!scroller || !tab) return;
+
+      const tabStart = tab.offsetLeft;
+      const tabEnd = tabStart + tab.offsetWidth;
+      const visibleStart = scroller.scrollLeft;
+      const visibleEnd = visibleStart + scroller.clientWidth;
+      if (
+        !force &&
+        tabStart >= visibleStart &&
+        tabEnd <= visibleEnd
+      ) {
+        return;
+      }
+
+      // Center middle categories while allowing the browser's natural first
+      // and last positions to remain anchored to their nearest ribbon edge.
+      const centeredLeft =
+        tabStart - (scroller.clientWidth - tab.offsetWidth) / 2;
+      const maxScrollLeft = Math.max(
+        scroller.scrollWidth - scroller.clientWidth,
+        0,
+      );
+      const left = Math.min(Math.max(centeredLeft, 0), maxScrollLeft);
+      const prefersReducedMotion = window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      const behavior =
+        immediate || prefersReducedMotion ? "auto" : "smooth";
+      if (scroller.scrollTo) scroller.scrollTo({ left, behavior });
+      else scroller.scrollLeft = left;
+    },
+    [activeType],
+  );
+
   useLayoutEffect(() => {
     const tabs = tabsRef.current;
     if (!tabs) return undefined;
@@ -171,24 +209,13 @@ function ModuleTabs({
   }, [counts, moduleTypes]);
 
   useEffect(() => {
-    const scroller = scrollerRef.current;
-    const tab = tabRefs.current.get(activeType);
-    if (!scroller || !tab) return;
+    alignActiveTab();
+  }, [activeType, alignActiveTab, moduleTypes]);
 
-    const tabStart = tab.offsetLeft;
-    const tabEnd = tabStart + tab.offsetWidth;
-    const visibleStart = scroller.scrollLeft;
-    const visibleEnd = visibleStart + scroller.clientWidth;
-    if (tabStart >= visibleStart && tabEnd <= visibleEnd) return;
-
-    const prefersReducedMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    scroller.scrollTo?.({
-      left: tabStart - (scroller.clientWidth - tab.offsetWidth) / 2,
-      behavior: prefersReducedMotion ? "auto" : "smooth",
-    });
-  }, [activeType, moduleTypes]);
+  useLayoutEffect(() => {
+    if (swipePhase !== "dragging") return;
+    alignActiveTab({ force: true, immediate: true });
+  }, [alignActiveTab, swipePhase]);
 
   function handleKeyDown(event, index) {
     let nextIndex = null;
@@ -231,7 +258,11 @@ function ModuleTabs({
     : { left: 0, width: 0 };
 
   return (
-    <div ref={scrollerRef} className={styles.feedCategoryScroller}>
+    <div
+      ref={scrollerRef}
+      className={styles.feedCategoryScroller}
+      data-feed-category-scroller
+    >
       <div
         ref={tabsRef}
         className={styles.feedCategoryTabs}

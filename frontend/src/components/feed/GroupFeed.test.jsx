@@ -692,6 +692,126 @@ describe("GroupFeed module focus", () => {
     });
   });
 
+  it.each([
+    [
+      "the first category to the left edge",
+      "/",
+      {},
+      /^All/,
+      "Movie night",
+      0,
+      60,
+      0,
+    ],
+    [
+      "a middle category to the center",
+      "/?module=tv",
+      {},
+      /^TV/,
+      "Severance",
+      430,
+      70,
+      365,
+    ],
+    [
+      "the last category to the nearest edge",
+      "/?module=book-club",
+      { showBookClub: true },
+      /^Book Club/,
+      "The Left Hand of Darkness",
+      560,
+      100,
+      400,
+    ],
+  ])(
+    "immediately snaps %s when a feed swipe starts",
+    async (
+      _label,
+      initialUrl,
+      props,
+      activeTabName,
+      cardText,
+      tabOffset,
+      tabWidth,
+      expectedLeft,
+    ) => {
+      renderFeed(
+        initialUrl,
+        [feedItem("events"), feedItem("tv"), feedItem("book-club")],
+        props,
+      );
+
+      const activeTab = await screen.findByRole("tab", {
+        name: activeTabName,
+        selected: true,
+      });
+      await screen.findByText(cardText);
+      const swipeTarget = document.querySelector(
+        "[data-feed-swipe-phase]",
+      ).parentElement;
+      const scroller = document.querySelector(
+        "[data-feed-category-scroller]",
+      );
+      Object.defineProperties(scroller, {
+        clientWidth: { configurable: true, value: 200 },
+        scrollWidth: { configurable: true, value: 600 },
+        scrollLeft: { configurable: true, value: 250, writable: true },
+      });
+      Object.defineProperties(activeTab, {
+        offsetLeft: { configurable: true, value: tabOffset },
+        offsetWidth: { configurable: true, value: tabWidth },
+      });
+      scroller.scrollTo = vi.fn(({ left }) => {
+        scroller.scrollLeft = left;
+      });
+
+      fireEvent.pointerDown(swipeTarget, {
+        pointerId: 1,
+        pointerType: "touch",
+        clientX: 180,
+        clientY: 120,
+      });
+      fireEvent.pointerMove(swipeTarget, {
+        pointerId: 1,
+        pointerType: "touch",
+        clientX: 170,
+        clientY: 121,
+      });
+
+      expect(scroller.scrollTo).toHaveBeenLastCalledWith({
+        left: expectedLeft,
+        behavior: "auto",
+      });
+      expect(scroller.scrollLeft).toBe(expectedLeft);
+    },
+  );
+
+  it("does not reposition categories before horizontal swipe intent", async () => {
+    renderFeed("/", [feedItem("events")]);
+
+    await screen.findByText("Movie night");
+    const card = cardForText("Movie night");
+    const scroller = document.querySelector(
+      "[data-feed-category-scroller]",
+    );
+    scroller.scrollTo = vi.fn();
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 120,
+    });
+    expect(scroller.scrollTo).not.toHaveBeenCalled();
+
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 178,
+      clientY: 160,
+    });
+    expect(scroller.scrollTo).not.toHaveBeenCalled();
+  });
+
   it("snaps an incomplete swipe back while keeping the adjacent page visible", async () => {
     renderFeed("/", [feedItem("events"), feedItem("requests")]);
 
