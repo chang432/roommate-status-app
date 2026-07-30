@@ -202,8 +202,7 @@ def _project_meeting(item: dict | None, members: list[dict] | None = None, book:
             {
                 "userId": member["id"],
                 "userName": member["name"],
-                "attendanceStatus": responses.get(member["id"], {}).get("attendanceStatus", "not_attending"),
-                "chaptersReadThrough": int(responses.get(member["id"], {}).get("chaptersReadThrough", 0)),
+                "attendanceStatus": responses.get(member["id"], {}).get("attendanceStatus"),
             }
             for member in members
         ]
@@ -633,11 +632,11 @@ def complete_meeting(group_id: str, meeting_id: str, completer: dict) -> tuple[d
     return _project_meeting(meeting), None
 
 
-def set_response(group_id: str, meeting_id: str, member: dict, attendance: str, chapters) -> tuple[dict | None, str | None]:
-    if attendance not in {"attending", "maybe", "not_attending"}:
+def set_response(group_id: str, meeting_id: str, member: dict, changes: dict) -> tuple[dict | None, str | None]:
+    if not isinstance(changes, dict) or set(changes) != {"attendanceStatus"}:
+        return None, "An attendance update is required."
+    if changes["attendanceStatus"] not in {"attending", "maybe", "not_attending"}:
         return None, "Attendance must be attending, maybe, or not_attending."
-    if isinstance(chapters, bool) or not isinstance(chapters, int) or chapters < 0:
-        return None, "Chapters read through must be a non-negative integer."
     meeting = _fetch(group_id, meeting_id)
     if meeting is None:
         return None, "Unknown meeting."
@@ -646,18 +645,23 @@ def set_response(group_id: str, meeting_id: str, member: dict, attendance: str, 
     now = _now()
     meeting_key = meeting_id.split("#", 1)[-1]
     response_id = f"meeting-member#{meeting_key}#{member['id']}"
-    existing = _fetch(group_id, response_id)
-    _get_table().put_item(Item={
-        "groupId": group_id,
-        "id": response_id,
-        "meetingId": meeting_id,
-        "userId": member["id"],
-        "userName": member["name"],
-        "attendanceStatus": attendance,
-        "chaptersReadThrough": chapters,
-        "createdAt": existing.get("createdAt", now) if existing else now,
-        "updatedAt": now,
-    })
+    # Update only the live attendance contract so reversible migration metadata
+    # and not-yet-migrated legacy fields survive the deploy-before-migrate window.
+    _get_table().update_item(
+        Key={"groupId": group_id, "id": response_id},
+        UpdateExpression=(
+            "SET meetingId = :meetingId, userId = :userId, userName = :userName, "
+            "attendanceStatus = :attendance, createdAt = if_not_exists(createdAt, :now), "
+            "updatedAt = :now"
+        ),
+        ExpressionAttributeValues={
+            ":meetingId": meeting_id,
+            ":userId": member["id"],
+            ":userName": member["name"],
+            ":attendance": changes["attendanceStatus"],
+            ":now": now,
+        },
+    )
     return get_meeting(group_id, meeting_id), None
 
 

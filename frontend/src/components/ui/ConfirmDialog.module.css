@@ -1,0 +1,15 @@
+.dialog {
+  @apply max-w-[420px];
+}
+
+.message {
+  @apply text-sm leading-relaxed text-ink-soft;
+}
+
+.actions {
+  @apply mt-5 flex flex-wrap justify-end gap-2;
+}
+
+.action {
+  @apply min-h-10 px-4 py-2 text-sm;
+}

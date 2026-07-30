@@ -1,9 +1,13 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import BookClubMeetingFeature from "./BookClubMeetingFeature.jsx";
-import { getBookClubMeeting, setBookClubResponse } from "../../api/bookClub.js";
+import {
+  completeBookClubMeeting,
+  getBookClubMeeting,
+  setBookClubResponse,
+} from "../../api/bookClub.js";
 import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
@@ -13,6 +17,7 @@ vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   ...(await importOriginal()),
   getBookClubMeeting: vi.fn(),
   setBookClubResponse: vi.fn(),
+  completeBookClubMeeting: vi.fn(),
 }));
 
 const MEETING = {
@@ -29,7 +34,18 @@ const MEETING = {
     userId: "andre",
     userName: "Andre",
     attendanceStatus: "maybe",
-    chaptersReadThrough: 4,
+  }, {
+    userId: "kayla",
+    userName: "Kayla",
+    attendanceStatus: "attending",
+  }, {
+    userId: "ting",
+    userName: "Ting",
+    attendanceStatus: "not_attending",
+  }, {
+    userId: "sheryl",
+    userName: "Sheryl",
+    attendanceStatus: null,
   }],
 };
 
@@ -85,12 +101,44 @@ describe("BookClubMeetingFeature", () => {
     }));
 
     expect(screen.getByRole("button", { name: "Send reminder" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send reminder" })).toHaveClass(
+      "ui-pillSecondary",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Complete meeting" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Forum" })).toHaveClass("ui-pillSecondary");
+    expect(screen.getByRole("button", { name: "Complete meeting" })).toHaveClass(
+      "ui-pillDanger",
+    );
+  });
+
+  it("requires explicit confirmation before completing a meeting", async () => {
+    completeBookClubMeeting.mockResolvedValue({});
+    renderMeeting({ canAdminister: true });
+    await userEvent.click(screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Complete meeting" }));
+    expect(completeBookClubMeeting).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    await userEvent.click(within(screen.getByRole("dialog", { name: /Complete meeting/ })).getByRole("button", { name: "Complete meeting" }));
+    expect(completeBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");
   });
 
   it("updates the viewer response inline", async () => {
+    setBookClubResponse.mockResolvedValueOnce({
+      meeting: {
+        ...MEETING,
+        responses: MEETING.responses.map((response) => (
+          response.userId === "andre"
+            ? { ...response, attendanceStatus: "attending" }
+            : response
+        )),
+      },
+    });
     renderMeeting();
     await userEvent.click(screen.getByRole("button", {
       name: /The Left Hand of Darkness/,
@@ -100,9 +148,45 @@ describe("BookClubMeetingFeature", () => {
     expect(setBookClubResponse).toHaveBeenCalledWith(
       "andre",
       "meeting#1",
-      "attending",
-      4,
+      { attendanceStatus: "attending" },
     );
+    await waitFor(() => {
+      expect(within(screen.getByRole("region", { name: "Attending: 2" })).getByText("Andre"))
+        .toBeInTheDocument();
+    });
+  });
+
+  it("groups every member by attendance status with explicit counts", async () => {
+    renderMeeting();
+    await userEvent.click(screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    }));
+
+    const attendance = screen.getByLabelText("Member attendance");
+    expect(within(screen.getByRole("region", { name: "Attending: 1" })).getByText("Kayla"))
+      .toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Maybe: 1" })).getByText("Andre"))
+      .toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Not attending: 1" })).getByText("Ting"))
+      .toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Pending: 1" })).getByText("Sheryl"))
+      .toBeInTheDocument();
+    expect(within(attendance).getAllByRole("listitem")).toHaveLength(4);
+    expect(within(screen.getByRole("region", { name: "Maybe: 1" })).getByText("You"))
+      .toBeInTheDocument();
+  });
+
+  it("keeps completed meeting attendance read-only", async () => {
+    getBookClubMeeting.mockResolvedValueOnce({ meeting: { ...MEETING, status: "completed" } });
+    renderMeeting();
+    await userEvent.click(screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    }));
+
+    await waitFor(() => expect(screen.queryByLabelText("Your attendance")).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Member attendance")).toBeInTheDocument();
   });
 
   it("expands a meeting targeted by a household notification", async () => {

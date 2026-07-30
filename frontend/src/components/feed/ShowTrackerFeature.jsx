@@ -13,6 +13,7 @@ import {
   startWatchparty,
 } from "../../api/shows.js";
 import ModalShell from "../ui/ModalShell.jsx";
+import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import ModuleEditButton from "./ModuleEditButton.jsx";
 import { initialOf } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
@@ -214,6 +215,7 @@ export default function ShowTrackerFeature({
     season: "1",
     episode: "1",
   });
+  const { confirm, confirmationDialog } = useConfirmDialog();
   useExpandOnModuleFocus(setExpandedId);
 
   function toggleExpanded(id) {
@@ -272,6 +274,12 @@ export default function ShowTrackerFeature({
 
   async function handleDelete(show) {
     if (deletingShowId) return;
+    const confirmed = await confirm({
+      title: `Delete ${show.title}?`,
+      message: "This permanently removes the show and every watcher's saved progress.",
+      confirmLabel: "Delete show",
+    });
+    if (!confirmed) return;
     setDeletingShowId(show.id);
     setError("");
     try {
@@ -298,6 +306,14 @@ export default function ShowTrackerFeature({
 
   async function handleWatchparty(show, episodeOverride = null) {
     if (watchpartyShowId) return;
+    if (show.isWatchpartyLive) {
+      const confirmed = await confirm({
+        title: `End ${show.title} watchparty?`,
+        message: "This stops the live watchparty for everyone in the group.",
+        confirmLabel: "End watchparty",
+      });
+      if (!confirmed) return;
+    }
     setWatchpartyShowId(show.id);
     setError("");
     try {
@@ -364,6 +380,12 @@ export default function ShowTrackerFeature({
 
   async function handleRemove(show, member) {
     if (busyMemberIds.includes(member.id)) return;
+    const confirmed = await confirm({
+      title: `Remove ${member.name} from ${show.title}?`,
+      message: `${member.name}'s saved season and episode progress will be removed.`,
+      confirmLabel: "Remove watcher",
+    });
+    if (!confirmed) return;
     markMemberBusy(member.id);
     setError("");
     try {
@@ -628,6 +650,7 @@ export default function ShowTrackerFeature({
           shows.map(renderShow)
         )}
       </div>
+      {confirmationDialog}
     </div>
   );
 }

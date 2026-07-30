@@ -156,10 +156,9 @@ function cardForText(text) {
   return screen.getByText(text).closest('[role="button"]');
 }
 
-function moduleNavEditButton() {
-  return within(screen.getByLabelText("Module types")).getByRole("button", {
-    name: "Edit",
-  });
+async function openModuleNav(user) {
+  await user.click(screen.getByRole("button", { name: "Open feed menu" }));
+  return screen.getByLabelText("Module types");
 }
 
 describe("GroupFeed module focus", () => {
@@ -206,18 +205,21 @@ describe("GroupFeed module focus", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Movie night");
+    expect(
+      screen.getByRole("heading", { name: "Group Feed" }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Create a module" }));
 
     const themedTypes = ["events", "requests", "checklists", "polls", "tv"];
     themedTypes.forEach((type) => {
       expect(
         document.querySelectorAll(`[data-module-type="${type}"]`),
-      ).toHaveLength(3);
+      ).toHaveLength(4);
     });
     expect(
       document.querySelectorAll('[data-module-type="spotify"]'),
     ).toHaveLength(0);
-    expect(screen.getByRole("button", { name: /^All/ })).not.toHaveAttribute(
+    expect(screen.getByRole("tab", { name: /^All/ })).not.toHaveAttribute(
       "data-module-type",
     );
   });
@@ -235,8 +237,8 @@ describe("GroupFeed module focus", () => {
       expanded: false,
     })).toBeInTheDocument();
     expect(screen.queryByText("Movie night")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Book Club/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Events/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Book Club/ })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Events/ })).not.toBeInTheDocument();
   });
 
   it("makes polls available in a Book Club-only group", async () => {
@@ -247,11 +249,7 @@ describe("GroupFeed module focus", () => {
     );
 
     expect(await screen.findByText("Dinner?")).toBeInTheDocument();
-    expect(
-      within(screen.getByLabelText("Module types")).getByRole("button", {
-        name: /^Polls/,
-      }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^Polls/ })).toBeInTheDocument();
     expect(screen.queryByText("Movie night")).not.toBeInTheDocument();
   });
 
@@ -288,7 +286,10 @@ describe("GroupFeed module focus", () => {
     expect(
       await screen.findByText("The Left Hand of Darkness"),
     ).toBeInTheDocument();
-    await user.click(moduleNavEditButton());
+    const moduleNav = await openModuleNav(user);
+    await user.click(
+      within(moduleNav).getByRole("button", { name: "Edit" }),
+    );
     await user.click(screen.getByRole("button", { name: /^All/ }));
     await user.click(screen.getByRole("checkbox", { name: "Book Club" }));
     expect(screen.queryByText("The Left Hand of Darkness")).not.toBeInTheDocument();
@@ -364,7 +365,7 @@ describe("GroupFeed module focus", () => {
   it("handles filter-only and unknown module destinations without scrolling", async () => {
     renderFeed("/?module=tv", [feedItem("tv")]);
     expect(
-      await screen.findByRole("heading", { name: "TV" }),
+      await screen.findByRole("tab", { name: /^TV/, selected: true }),
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(""),
@@ -586,6 +587,27 @@ describe("GroupFeed module focus", () => {
 
     await screen.findByText("Movie night");
     const card = cardForText("Movie night");
+    const allTab = screen.getByRole("tab", { name: /^All/ });
+    const eventsTab = screen.getByRole("tab", { name: /^Events/ });
+    const scroller = document.querySelector(
+      "[data-feed-category-scroller]",
+    );
+    Object.defineProperties(scroller, {
+      clientWidth: { configurable: true, value: 200 },
+      scrollWidth: { configurable: true, value: 600 },
+      scrollLeft: { configurable: true, value: 0, writable: true },
+    });
+    Object.defineProperties(allTab, {
+      offsetLeft: { configurable: true, value: 0 },
+      offsetWidth: { configurable: true, value: 60 },
+    });
+    Object.defineProperties(eventsTab, {
+      offsetLeft: { configurable: true, value: 180 },
+      offsetWidth: { configurable: true, value: 80 },
+    });
+    document.querySelector(
+      "[data-feed-swipe-phase]",
+    ).parentElement.getBoundingClientRect = vi.fn(() => ({ width: 184 }));
     fireEvent.pointerDown(card, {
       pointerId: 1,
       pointerType: "touch",
@@ -598,9 +620,16 @@ describe("GroupFeed module focus", () => {
       clientX: 80,
       clientY: 126,
     });
-    expect(document.querySelector('[data-feed-swipe-phase="dragging"]')).toHaveStyle(
-      { transform: "translateX(-85px)" },
+    expect(
+      document.querySelector('[data-feed-panel-type="all"]'),
+    ).toHaveStyle({ transform: "translate3d(-85px, 0, 0)" });
+    const incomingPanel = document.querySelector(
+      '[data-feed-panel-type="events"]',
     );
+    expect(incomingPanel).toHaveStyle({
+      transform: "translate3d(calc(100% + 16px + -85px), 0, 0)",
+    });
+    expect(within(incomingPanel).getByText("Movie night")).toBeInTheDocument();
     fireEvent.pointerUp(card, {
       pointerId: 1,
       pointerType: "touch",
@@ -609,8 +638,353 @@ describe("GroupFeed module focus", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "Events" }),
+      await screen.findByRole("tab", { name: /^Events/, selected: true }),
     ).toBeInTheDocument();
+    expect(scroller.scrollLeft).toBe(120);
+  });
+
+  it("moves the category underline with an in-progress swipe", async () => {
+    renderFeed("/", [feedItem("events"), feedItem("requests")]);
+
+    await screen.findByText("Movie night");
+    const tabList = screen.getByRole("tablist", { name: "Feed categories" });
+    const allContent = within(
+      screen.getByRole("tab", { name: /^All/ }),
+    ).getByText("All").parentElement;
+    const eventsContent = within(
+      screen.getByRole("tab", { name: /^Events/ }),
+    ).getByText("Events").parentElement;
+    const rect = (left, width) => ({
+      left,
+      right: left + width,
+      top: 0,
+      bottom: 20,
+      x: left,
+      y: 0,
+      width,
+      height: 20,
+      toJSON: () => ({}),
+    });
+    tabList.getBoundingClientRect = vi.fn(() => rect(0, 500));
+    allContent.getBoundingClientRect = vi.fn(() => rect(10, 40));
+    eventsContent.getBoundingClientRect = vi.fn(() => rect(110, 70));
+    fireEvent(window, new Event("resize"));
+
+    const indicator = document.querySelector(
+      "[data-feed-category-indicator]",
+    );
+    await waitFor(() =>
+      expect(indicator).toHaveStyle({
+        transform: "translate3d(10px, 0, 0)",
+        width: "40px",
+      }),
+    );
+
+    const feedMain = document.querySelector(
+      "[data-feed-swipe-phase]",
+    ).parentElement;
+    feedMain.getBoundingClientRect = vi.fn(() => rect(0, 184));
+    const card = cardForText("Movie night");
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 124,
+    });
+
+    expect(indicator).toHaveStyle({
+      transform: "translate3d(52.5px, 0, 0)",
+      width: "52.75px",
+    });
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 150,
+      clientY: 124,
+    });
+    expect(indicator).toHaveStyle({
+      transform: "translate3d(10px, 0, 0)",
+      width: "40px",
+    });
+  });
+
+  it.each([
+    ["forward", -100, /^Book Club/, 560, 100, 379.875],
+    ["backward", 100, /^Polls/, 330, 70, 322.5],
+  ])(
+    "tracks a %s swipe between the centered category positions",
+    async (_direction, deltaX, adjacentName, adjacentOffset, adjacentWidth, expectedLeft) => {
+      renderFeed(
+        "/?module=tv",
+        [feedItem("events"), feedItem("tv"), feedItem("book-club")],
+        { showBookClub: true },
+      );
+
+      const activeTab = await screen.findByRole("tab", {
+        name: /^TV/,
+        selected: true,
+      });
+      const adjacentTab = screen.getByRole("tab", { name: adjacentName });
+      const swipeTarget = document.querySelector(
+        "[data-feed-swipe-phase]",
+      ).parentElement;
+      const scroller = document.querySelector(
+        "[data-feed-category-scroller]",
+      );
+      Object.defineProperties(scroller, {
+        clientWidth: { configurable: true, value: 200 },
+        scrollWidth: { configurable: true, value: 600 },
+        scrollLeft: { configurable: true, value: 365, writable: true },
+      });
+      Object.defineProperties(activeTab, {
+        offsetLeft: { configurable: true, value: 430 },
+        offsetWidth: { configurable: true, value: 70 },
+      });
+      Object.defineProperties(adjacentTab, {
+        offsetLeft: { configurable: true, value: adjacentOffset },
+        offsetWidth: { configurable: true, value: adjacentWidth },
+      });
+      swipeTarget.getBoundingClientRect = vi.fn(() => ({ width: 184 }));
+
+      fireEvent.pointerDown(swipeTarget, {
+        pointerId: 1,
+        pointerType: "touch",
+        clientX: 180,
+        clientY: 120,
+      });
+      fireEvent.pointerMove(swipeTarget, {
+        pointerId: 1,
+        pointerType: "touch",
+        clientX: 180 + deltaX,
+        clientY: 121,
+      });
+
+      expect(scroller.scrollLeft).toBeCloseTo(expectedLeft, 3);
+    },
+  );
+
+  it.each([
+    ["first", "/", {}, /^All/, "Movie night", 0, 60, 100, 0],
+    [
+      "last",
+      "/?module=book-club",
+      { showBookClub: true },
+      /^Book Club/,
+      "The Left Hand of Darkness",
+      560,
+      100,
+      -100,
+      400,
+    ],
+  ])(
+    "keeps the %s category edge-anchored during an outward swipe",
+    async (
+      _edge,
+      initialUrl,
+      props,
+      activeTabName,
+      cardText,
+      tabOffset,
+      tabWidth,
+      deltaX,
+      expectedLeft,
+    ) => {
+      renderFeed(
+        initialUrl,
+        [feedItem("events"), feedItem("tv"), feedItem("book-club")],
+        props,
+      );
+
+      const activeTab = await screen.findByRole("tab", {
+        name: activeTabName,
+        selected: true,
+      });
+      await screen.findByText(cardText);
+      const swipeTarget = document.querySelector(
+        "[data-feed-swipe-phase]",
+      ).parentElement;
+      const scroller = document.querySelector(
+        "[data-feed-category-scroller]",
+      );
+      Object.defineProperties(scroller, {
+        clientWidth: { configurable: true, value: 200 },
+        scrollWidth: { configurable: true, value: 600 },
+        scrollLeft: { configurable: true, value: 250, writable: true },
+      });
+      Object.defineProperties(activeTab, {
+        offsetLeft: { configurable: true, value: tabOffset },
+        offsetWidth: { configurable: true, value: tabWidth },
+      });
+      swipeTarget.getBoundingClientRect = vi.fn(() => ({ width: 184 }));
+
+      fireEvent.pointerDown(swipeTarget, {
+        pointerId: 1,
+        pointerType: "touch",
+        clientX: 180,
+        clientY: 120,
+      });
+      fireEvent.pointerMove(swipeTarget, {
+        pointerId: 1,
+        pointerType: "touch",
+        clientX: 180 + deltaX,
+        clientY: 121,
+      });
+
+      expect(scroller.scrollLeft).toBe(expectedLeft);
+    },
+  );
+
+  it("does not reposition categories before horizontal swipe intent", async () => {
+    renderFeed("/", [feedItem("events")]);
+
+    await screen.findByText("Movie night");
+    const card = cardForText("Movie night");
+    const scroller = document.querySelector(
+      "[data-feed-category-scroller]",
+    );
+    scroller.scrollTo = vi.fn();
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 120,
+    });
+    expect(scroller.scrollTo).not.toHaveBeenCalled();
+
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 178,
+      clientY: 160,
+    });
+    expect(scroller.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("snaps an incomplete swipe back while keeping the adjacent page visible", async () => {
+    renderFeed("/", [feedItem("events"), feedItem("requests")]);
+
+    await screen.findByText("Movie night");
+    const card = cardForText("Movie night");
+    const allTab = screen.getByRole("tab", { name: /^All/ });
+    const eventsTab = screen.getByRole("tab", { name: /^Events/ });
+    const scroller = document.querySelector(
+      "[data-feed-category-scroller]",
+    );
+    Object.defineProperties(scroller, {
+      clientWidth: { configurable: true, value: 200 },
+      scrollWidth: { configurable: true, value: 600 },
+      scrollLeft: { configurable: true, value: 0, writable: true },
+    });
+    Object.defineProperties(allTab, {
+      offsetLeft: { configurable: true, value: 0 },
+      offsetWidth: { configurable: true, value: 60 },
+    });
+    Object.defineProperties(eventsTab, {
+      offsetLeft: { configurable: true, value: 180 },
+      offsetWidth: { configurable: true, value: 80 },
+    });
+    document.querySelector(
+      "[data-feed-swipe-phase]",
+    ).parentElement.getBoundingClientRect = vi.fn(() => ({ width: 184 }));
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 150,
+      clientY: 123,
+    });
+    expect(scroller.scrollLeft).toBeCloseTo(15.3, 3);
+
+    const incomingPanel = document.querySelector(
+      '[data-feed-panel-type="events"]',
+    );
+    expect(within(incomingPanel).getByText("Movie night")).toBeInTheDocument();
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 150,
+      clientY: 123,
+    });
+
+    expect(document.querySelector('[data-feed-panel-type="all"]')).toHaveStyle({
+      transform: "translate3d(0px, 0, 0)",
+    });
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-feed-swipe-phase="idle"]'),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("tab", { name: /^All/, selected: true })).toBeInTheDocument();
+    await waitFor(() => expect(scroller.scrollLeft).toBe(0));
+  });
+
+  it("resists outward swipes at the first category without wrapping", async () => {
+    renderFeed("/", [feedItem("events")]);
+
+    await screen.findByText("Movie night");
+    const card = cardForText("Movie night");
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 124,
+    });
+
+    expect(document.querySelector('[data-feed-panel-type="all"]')).toHaveStyle({
+      transform: "translate3d(18px, 0, 0)",
+    });
+    expect(
+      document.querySelector('[data-feed-panel-type="tv"]'),
+    ).not.toBeInTheDocument();
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 124,
+    });
+
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-feed-swipe-phase="idle"]'),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("tab", { name: /^All/, selected: true })).toBeInTheDocument();
+  });
+
+  it("supports arrow-key navigation across category tabs", async () => {
+    renderFeed("/", [feedItem("events"), feedItem("requests")]);
+
+    await screen.findByText("Movie night");
+    const allTab = screen.getByRole("tab", { name: /^All/ });
+    allTab.focus();
+    fireEvent.keyDown(allTab, { key: "ArrowRight" });
+
+    const eventsTab = screen.getByRole("tab", {
+      name: /^Events/,
+      selected: true,
+    });
+    expect(eventsTab).toHaveFocus();
+    expect(screen.getByRole("tabpanel")).toHaveAttribute(
+      "aria-labelledby",
+      eventsTab.id,
+    );
   });
 
   it("supports touch drag ordering in filter edit mode", async () => {
@@ -618,7 +992,10 @@ describe("GroupFeed module focus", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Movie night");
-    await user.click(moduleNavEditButton());
+    const moduleNav = await openModuleNav(user);
+    await user.click(
+      within(moduleNav).getByRole("button", { name: "Edit" }),
+    );
     const requestDropTarget = document.querySelector(
       '[data-module-drop-type="requests"]',
     );
@@ -655,6 +1032,7 @@ describe("GroupFeed module focus", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
     const card = cardForText("Movie night");
     fireEvent.pointerDown(card, {
       pointerId: 2,
@@ -676,7 +1054,7 @@ describe("GroupFeed module focus", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "Requests" }),
+      await screen.findByRole("tab", { name: /^Requests/, selected: true }),
     ).toBeInTheDocument();
   });
 

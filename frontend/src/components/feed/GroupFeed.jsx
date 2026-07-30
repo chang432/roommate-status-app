@@ -46,8 +46,16 @@ const INTERACTIVE_SELECTOR = "button, a, input, textarea, select";
 const SWIPE_MIN_X = 64;
 const SWIPE_MAX_Y = 48;
 const SWIPE_DRAG_RESISTANCE = 0.85;
+const SWIPE_EDGE_RESISTANCE = 0.18;
+const SWIPE_PANEL_GAP_PX = 16;
 const FEED_SWIPE_TRANSITION_MS = 220;
 const FEED_SWIPE_CLICK_SUPPRESSION_MS = FEED_SWIPE_TRANSITION_MS * 2;
+
+function feedSwipeTransitionMs() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ? 0
+    : FEED_SWIPE_TRANSITION_MS;
+}
 
 const CREATE_LABEL_BY_TYPE = {
   events: "Create an event",
@@ -103,9 +111,312 @@ function readModulePreferences(userId, groupId) {
   }
 }
 
+function getModuleCounts(modules, allTypes) {
+  const counts = modules.reduce((result, module) => {
+    if (!module.isArchived) {
+      result[module.type] = (result[module.type] ?? 0) + 1;
+    }
+    return result;
+  }, {});
+  counts.all = modules.filter(
+    (module) => !module.isArchived && allTypes.includes(module.type),
+  ).length;
+  return counts;
+}
+
+function ModuleTabs({
+  activeType,
+  counts,
+  moduleTypes,
+  onSelect,
+  swipeOffset,
+  swipePhase,
+  swipeTravelDistance,
+}) {
+  const scrollerRef = useRef(null);
+  const tabsRef = useRef(null);
+  const tabRefs = useRef(new Map());
+  const ribbonFrameRef = useRef(null);
+  const [tabMetrics, setTabMetrics] = useState({});
+  const activeIndex = moduleTypes.findIndex((type) => type.id === activeType);
+
+  const categoryScrollTarget = useCallback((typeId) => {
+    const scroller = scrollerRef.current;
+    const tab = tabRefs.current.get(typeId);
+    if (!scroller || !tab) return null;
+
+    const centeredLeft =
+      tab.offsetLeft - (scroller.clientWidth - tab.offsetWidth) / 2;
+    const maxScrollLeft = Math.max(
+      scroller.scrollWidth - scroller.clientWidth,
+      0,
+    );
+    return Math.min(Math.max(centeredLeft, 0), maxScrollLeft);
+  }, []);
+
+  const cancelRibbonAnimation = useCallback(() => {
+    if (ribbonFrameRef.current === null) return;
+    window.cancelAnimationFrame(ribbonFrameRef.current);
+    ribbonFrameRef.current = null;
+  }, []);
+
+  const setRibbonScroll = useCallback((left) => {
+    if (scrollerRef.current) scrollerRef.current.scrollLeft = left;
+  }, []);
+
+  const animateRibbonScroll = useCallback(
+    (destination) => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      cancelRibbonAnimation();
+
+      const duration = feedSwipeTransitionMs();
+      const startLeft = scroller.scrollLeft;
+      if (!duration || Math.abs(destination - startLeft) < 0.5) {
+        setRibbonScroll(destination);
+        return;
+      }
+
+      let startTime = null;
+      function advance(timestamp) {
+        startTime ??= timestamp;
+        const progress = Math.min((timestamp - startTime) / duration, 1);
+        const easedProgress = 1 - (1 - progress) ** 3;
+        setRibbonScroll(
+          startLeft + (destination - startLeft) * easedProgress,
+        );
+        if (progress < 1) {
+          ribbonFrameRef.current = window.requestAnimationFrame(advance);
+        } else {
+          ribbonFrameRef.current = null;
+          setRibbonScroll(destination);
+        }
+      }
+      ribbonFrameRef.current = window.requestAnimationFrame(advance);
+    },
+    [cancelRibbonAnimation, setRibbonScroll],
+  );
+
+  const alignActiveTab = useCallback(
+    ({ force = false, immediate = false } = {}) => {
+      const scroller = scrollerRef.current;
+      const tab = tabRefs.current.get(activeType);
+      if (!scroller || !tab) return;
+
+      const tabStart = tab.offsetLeft;
+      const tabEnd = tabStart + tab.offsetWidth;
+      const visibleStart = scroller.scrollLeft;
+      const visibleEnd = visibleStart + scroller.clientWidth;
+      if (
+        !force &&
+        tabStart >= visibleStart &&
+        tabEnd <= visibleEnd
+      ) {
+        return;
+      }
+
+      // Center middle categories while allowing the first and last positions
+      // to remain anchored to their nearest ribbon edge.
+      const left = categoryScrollTarget(activeType);
+      if (left === null) return;
+      const prefersReducedMotion = window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      const behavior =
+        immediate || prefersReducedMotion ? "auto" : "smooth";
+      if (scroller.scrollTo) scroller.scrollTo({ left, behavior });
+      else scroller.scrollLeft = left;
+    },
+    [activeType, categoryScrollTarget],
+  );
+
+  useLayoutEffect(() => {
+    const tabs = tabsRef.current;
+    if (!tabs) return undefined;
+
+    function measureTabs() {
+      const tabsRect = tabs.getBoundingClientRect();
+      const nextMetrics = {};
+      tabRefs.current.forEach((tab, typeId) => {
+        const content = tab.querySelector("[data-feed-tab-content]");
+        if (!content) return;
+        const contentRect = content.getBoundingClientRect();
+        nextMetrics[typeId] = {
+          left: contentRect.left - tabsRect.left,
+          width: contentRect.width,
+        };
+      });
+      setTabMetrics(nextMetrics);
+    }
+
+    measureTabs();
+    window.addEventListener("resize", measureTabs);
+    const observer = window.ResizeObserver
+      ? new window.ResizeObserver(measureTabs)
+      : null;
+    observer?.observe(tabs);
+    tabRefs.current.forEach((tab) => observer?.observe(tab));
+    return () => {
+      window.removeEventListener("resize", measureTabs);
+      observer?.disconnect();
+    };
+  }, [counts, moduleTypes]);
+
+  useEffect(() => {
+    alignActiveTab();
+  }, [activeType, alignActiveTab, moduleTypes]);
+
+  useLayoutEffect(() => {
+    const activeTarget = categoryScrollTarget(activeType);
+    if (activeTarget === null) return;
+    const adjacentType =
+      swipeOffset < 0
+        ? moduleTypes[activeIndex + 1]?.id
+        : moduleTypes[activeIndex - 1]?.id;
+    const adjacentTarget =
+      categoryScrollTarget(adjacentType) ?? activeTarget;
+
+    if (swipePhase === "dragging") {
+      cancelRibbonAnimation();
+      const progress = Math.min(
+        Math.abs(swipeOffset) / Math.max(swipeTravelDistance, 1),
+        1,
+      );
+      // Mirror the page track's normalized drag so the selected category
+      // travels with the reader's finger instead of jumping after release.
+      setRibbonScroll(
+        activeTarget + (adjacentTarget - activeTarget) * progress,
+      );
+    } else if (swipePhase === "exiting") {
+      animateRibbonScroll(adjacentTarget);
+    } else if (swipePhase === "settling") {
+      animateRibbonScroll(activeTarget);
+    } else if (swipePhase === "preparing") {
+      cancelRibbonAnimation();
+      setRibbonScroll(activeTarget);
+    }
+  }, [
+    activeIndex,
+    activeType,
+    animateRibbonScroll,
+    cancelRibbonAnimation,
+    categoryScrollTarget,
+    moduleTypes,
+    setRibbonScroll,
+    swipeOffset,
+    swipePhase,
+    swipeTravelDistance,
+  ]);
+
+  useEffect(() => cancelRibbonAnimation, [cancelRibbonAnimation]);
+
+  function handleKeyDown(event, index) {
+    let nextIndex = null;
+    if (event.key === "ArrowRight") nextIndex = Math.min(index + 1, moduleTypes.length - 1);
+    if (event.key === "ArrowLeft") nextIndex = Math.max(index - 1, 0);
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = moduleTypes.length - 1;
+    if (nextIndex === null || nextIndex === index) return;
+
+    event.preventDefault();
+    const nextType = moduleTypes[nextIndex].id;
+    onSelect(nextType);
+    tabRefs.current.get(nextType)?.focus();
+  }
+
+  const adjacentType =
+    swipeOffset < 0
+      ? moduleTypes[activeIndex + 1]?.id
+      : moduleTypes[activeIndex - 1]?.id;
+  const activeMetric = tabMetrics[activeType];
+  const adjacentMetric = tabMetrics[adjacentType];
+  const progress = adjacentMetric
+    ? Math.min(Math.abs(swipeOffset) / Math.max(swipeTravelDistance, 1), 1)
+    : 0;
+  // The underline follows the same normalized distance as the feed page, so
+  // it stays attached to the reader's finger through differently sized tabs.
+  const indicator = activeMetric
+    ? {
+        left:
+          activeMetric.left +
+          ((adjacentMetric?.left ?? activeMetric.left) - activeMetric.left) *
+            progress,
+        width:
+          activeMetric.width +
+          ((adjacentMetric?.width ?? activeMetric.width) -
+            activeMetric.width) *
+            progress,
+      }
+    : { left: 0, width: 0 };
+
+  return (
+    <div
+      ref={scrollerRef}
+      className={styles.feedCategoryScroller}
+      data-feed-category-scroller
+    >
+      <div
+        ref={tabsRef}
+        className={styles.feedCategoryTabs}
+        role="tablist"
+        aria-label="Feed categories"
+      >
+        {moduleTypes.map((type, index) => (
+          <button
+            key={type.id}
+            ref={(element) => {
+              if (element) tabRefs.current.set(type.id, element);
+              else tabRefs.current.delete(type.id);
+            }}
+            type="button"
+            role="tab"
+            id={`feed-tab-${type.id}`}
+            aria-controls={`feed-panel-${type.id}`}
+            aria-selected={activeType === type.id}
+            tabIndex={activeType === type.id ? 0 : -1}
+            onClick={() => onSelect(type.id)}
+            onKeyDown={(event) => handleKeyDown(event, index)}
+            className={cx(
+              styles.feedCategoryTab,
+              type.id === "all" ? "" : styles.modulePalette,
+              activeType === type.id ? styles.feedCategoryTabActive : "",
+            )}
+            data-module-type={type.id === "all" ? undefined : type.id}
+          >
+            <span
+              className={styles.feedCategoryTabContent}
+              data-feed-tab-content
+            >
+              <span>{type.label}</span>
+              <span className={styles.feedCategoryCount}>
+                {counts[type.id] ?? 0}
+              </span>
+            </span>
+          </button>
+        ))}
+        <span
+          aria-hidden="true"
+          className={cx(
+            styles.feedCategoryIndicator,
+            swipePhase === "dragging" || swipePhase === "preparing"
+              ? styles.feedCategoryIndicatorDirect
+              : "",
+          )}
+          style={{
+            transform: `translate3d(${indicator.left}px, 0, 0)`,
+            width: `${indicator.width}px`,
+            opacity: indicator.width > 0 ? 1 : 0,
+          }}
+          data-feed-category-indicator
+        />
+      </div>
+    </div>
+  );
+}
+
 function ModuleNav({
   activeType,
-  modules,
+  counts,
   moduleTypes,
   drawerOpen,
   onClose,
@@ -124,14 +435,6 @@ function ModuleNav({
   const rowPositionsBeforeReorderRef = useRef(null);
   const [allDropdownOpen, setAllDropdownOpen] = useState(false);
   const [draggingType, setDraggingType] = useState(null);
-  const counts = modules.reduce((acc, module) => {
-    if (module.isArchived) return acc;
-    acc[module.type] = (acc[module.type] ?? 0) + 1;
-    return acc;
-  }, {});
-  counts.all = modules.filter(
-    (module) => !module.isArchived && allTypes.includes(module.type),
-  ).length;
   const editableTypes = moduleTypes.filter((type) => type.id !== "all");
   const selectedAllLabels = editableTypes
     .filter((type) => allTypes.includes(type.id))
@@ -261,9 +564,12 @@ function ModuleNav({
         />
       ) : null}
       <aside
+        id="group-feed-menu"
         ref={navRef}
         className={cx(styles.moduleNav, drawerOpen ? styles.moduleNavOpen : "")}
         aria-label="Module types"
+        aria-hidden={!drawerOpen}
+        inert={drawerOpen ? undefined : ""}
       >
         <div className={styles.moduleNavHeader}>
           <p className={styles.moduleNavEyebrow}>Modules</p>
@@ -536,8 +842,11 @@ export default function GroupFeed({
   const swipeTimersRef = useRef([]);
   const swipeFrameRef = useRef(null);
   const swipeClickBlockUntilRef = useRef(0);
+  const stickyHeaderRef = useRef(null);
   const [feedSwipeOffset, setFeedSwipeOffset] = useState(0);
   const [feedSwipePhase, setFeedSwipePhase] = useState("idle");
+  const [feedSwipeTravelDistance, setFeedSwipeTravelDistance] = useState(1);
+  const [feedHeaderStuck, setFeedHeaderStuck] = useState(false);
   const canAdministerBookClub = isAdminIn(roommates, user.id);
 
   const enabledTypeIds = useMemo(() => {
@@ -655,26 +964,24 @@ export default function GroupFeed({
     };
   }, [loadFeed]);
 
-  const visibleModules = useMemo(
-    () =>
-      activeType === "all"
-        ? modules.filter((module) => enabledTypeIds.has(module.type) && allTypes.includes(module.type))
-        : modules.filter((module) => enabledTypeIds.has(module.type) && module.type === activeType),
-    [activeType, allTypes, enabledTypeIds, modules],
-  );
-  const activeModules = useMemo(
-    () => visibleModules.filter((module) => !module.isArchived),
-    [visibleModules],
-  );
-  const archivedModules = useMemo(
-    () => visibleModules.filter((module) => module.isArchived),
-    [visibleModules],
-  );
-
   const feedModules = useMemo(
-    () => modules.filter((module) => module.type !== "spotify" && enabledTypeIds.has(module.type)),
+    () =>
+      modules.filter(
+        (module) =>
+          module.type !== "spotify" && enabledTypeIds.has(module.type),
+      ),
     [enabledTypeIds, modules],
   );
+  const moduleCounts = useMemo(
+    () => getModuleCounts(feedModules, allTypes),
+    [allTypes, feedModules],
+  );
+  const activeTypeIndex = moduleTypes.findIndex(
+    (type) => type.id === activeType,
+  );
+  const previousType = moduleTypes[activeTypeIndex - 1]?.id ?? null;
+  const nextType = moduleTypes[activeTypeIndex + 1]?.id ?? null;
+  const showAdjacentPanels = feedSwipePhase !== "idle";
 
   const focusIntent = useMemo(
     () => moduleFocusFromSearchParams(searchParams),
@@ -756,6 +1063,34 @@ export default function GroupFeed({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [drawerOpen]);
 
+  useEffect(() => {
+    if (loading) return undefined;
+    const header = stickyHeaderRef.current;
+    if (!header) return undefined;
+    let frameId = null;
+
+    function updateStickyState() {
+      frameId = null;
+      setFeedHeaderStuck(
+        window.scrollY > 0 && header.getBoundingClientRect().top <= 0,
+      );
+    }
+
+    function scheduleStickyUpdate() {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(updateStickyState);
+    }
+
+    updateStickyState();
+    window.addEventListener("scroll", scheduleStickyUpdate, { passive: true });
+    window.addEventListener("resize", scheduleStickyUpdate);
+    return () => {
+      window.removeEventListener("scroll", scheduleStickyUpdate);
+      window.removeEventListener("resize", scheduleStickyUpdate);
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
+  }, [loading]);
+
   useEffect(
     () => () => {
       swipeTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
@@ -794,6 +1129,15 @@ export default function GroupFeed({
   }
 
   function selectModuleType(type) {
+    swipeTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    swipeTimersRef.current = [];
+    if (swipeFrameRef.current !== null) {
+      window.cancelAnimationFrame(swipeFrameRef.current);
+      swipeFrameRef.current = null;
+    }
+    swipeStartRef.current = null;
+    setFeedSwipeOffset(0);
+    setFeedSwipePhase("idle");
     setActiveType(type);
     setNavigationError("");
     setDrawerOpen(false);
@@ -825,7 +1169,7 @@ export default function GroupFeed({
     if (feedSwipePhase === "idle") return;
     setFeedSwipePhase("settling");
     setFeedSwipeOffset(0);
-    scheduleFeedSwipe(() => setFeedSwipePhase("idle"), FEED_SWIPE_TRANSITION_MS);
+    scheduleFeedSwipe(() => setFeedSwipePhase("idle"), feedSwipeTransitionMs());
   }
 
   function handleFeedClickCapture(event) {
@@ -838,12 +1182,16 @@ export default function GroupFeed({
     if (feedSwipePhase !== "idle") return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     if (event.target.closest?.(INTERACTIVE_SELECTOR)) return;
+    const panelWidth = event.currentTarget.getBoundingClientRect().width;
     swipeStartRef.current = {
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      width: event.currentTarget.getBoundingClientRect().width,
+      width: panelWidth,
     };
+    setFeedSwipeTravelDistance(
+      Math.max(panelWidth + SWIPE_PANEL_GAP_PX, 1),
+    );
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }
 
@@ -863,8 +1211,13 @@ export default function GroupFeed({
     }
     if (Math.abs(deltaX) < 4) return;
 
+    const direction = deltaX < 0 ? 1 : -1;
+    const hasAdjacentType = direction > 0 ? Boolean(nextType) : Boolean(previousType);
     setFeedSwipePhase("dragging");
-    setFeedSwipeOffset(deltaX * SWIPE_DRAG_RESISTANCE);
+    setFeedSwipeOffset(
+      deltaX *
+        (hasAdjacentType ? SWIPE_DRAG_RESISTANCE : SWIPE_EDGE_RESISTANCE),
+    );
   }
 
   function handleFeedPointerUp(event) {
@@ -882,16 +1235,22 @@ export default function GroupFeed({
       resetFeedSwipe();
       return;
     }
+    if (Math.abs(deltaX) >= 4 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      swipeClickBlockUntilRef.current =
+        Date.now() + FEED_SWIPE_CLICK_SUPPRESSION_MS;
+    }
     if (Math.abs(deltaX) < SWIPE_MIN_X || Math.abs(deltaY) > SWIPE_MAX_Y) {
       resetFeedSwipe();
       return;
     }
 
     const direction = deltaX < 0 ? 1 : -1;
-    const ids = moduleTypes.map((type) => type.id);
-    const activeIndex = ids.indexOf(activeType);
-    const nextType = ids[(activeIndex + direction + ids.length) % ids.length];
-    const travelDistance = Math.max(start.width, 1);
+    const destinationType = direction > 0 ? nextType : previousType;
+    if (!destinationType) {
+      resetFeedSwipe();
+      return;
+    }
+    const travelDistance = Math.max(start.width + SWIPE_PANEL_GAP_PX, 1);
 
     // Suppress the synthetic click mobile browsers send after a completed
     // swipe, otherwise the departing card could open as it leaves the screen.
@@ -900,20 +1259,17 @@ export default function GroupFeed({
     setFeedSwipePhase("exiting");
     setFeedSwipeOffset(direction * -travelDistance);
     scheduleFeedSwipe(() => {
-      setActiveType(nextType);
+      // Once the adjacent page has arrived, promote it to the centered panel
+      // without animation so there is no visual jump or duplicated entrance.
+      setActiveType(destinationType);
       setNavigationError("");
       setFeedSwipePhase("preparing");
-      setFeedSwipeOffset(direction * travelDistance);
+      setFeedSwipeOffset(0);
       swipeFrameRef.current = window.requestAnimationFrame(() => {
         swipeFrameRef.current = null;
-        setFeedSwipePhase("entering");
-        setFeedSwipeOffset(0);
-        scheduleFeedSwipe(
-          () => setFeedSwipePhase("idle"),
-          FEED_SWIPE_TRANSITION_MS,
-        );
+        setFeedSwipePhase("idle");
       });
-    }, FEED_SWIPE_TRANSITION_MS);
+    }, feedSwipeTransitionMs());
   }
 
   function openCreateModal() {
@@ -1073,11 +1429,80 @@ export default function GroupFeed({
     return null;
   }
 
+  function renderFeedPanel(type, isActivePanel) {
+    const visibleModules =
+      type === "all"
+        ? feedModules.filter((module) => allTypes.includes(module.type))
+        : feedModules.filter((module) => module.type === type);
+    const activeModules = visibleModules.filter((module) => !module.isArchived);
+    const archivedModules = visibleModules.filter((module) => module.isArchived);
+    const panelFocusIntent = isActivePanel ? focusIntent : null;
+
+    return (
+      <>
+        <div className={styles.feedList}>
+          {activeModules.length === 0 ? (
+            <p className={styles.emptyFeed}>No active modules here yet.</p>
+          ) : (
+            activeModules.map((module) => (
+              <ModuleFeedItem
+                key={`${module.type}:${module.id}`}
+                module={module}
+                focusIntent={panelFocusIntent}
+                onFocusHandled={consumeFocusIntent}
+                canEdit={
+                  module.type === "book-club"
+                    ? false
+                    : module.isEditableBy(user.id)
+                }
+                onEdit={() => setEditingModule(module)}
+              >
+                {(onEdit) => renderModule(module, onEdit)}
+              </ModuleFeedItem>
+            ))
+          )}
+        </div>
+
+        {archivedModules.length > 0 && (
+          <div className={styles.feedArchiveSection}>
+            <button
+              type="button"
+              onClick={() => setArchivedOpen((current) => !current)}
+              className={styles.feedArchiveToggle}
+              aria-expanded={archivedOpen}
+            >
+              <span>Archived ({archivedModules.length})</span>
+              <span aria-hidden="true">{archivedOpen ? "▴" : "▾"}</span>
+            </button>
+            {archivedOpen && (
+              <div className={styles.feedList}>
+                {archivedModules.map((module) => (
+                  <ModuleFeedItem
+                    key={`${module.type}:${module.id}`}
+                    module={module}
+                    focusIntent={panelFocusIntent}
+                    onFocusHandled={consumeFocusIntent}
+                    canEdit={
+                      module.type === "book-club"
+                        ? false
+                        : module.isEditableBy(user.id)
+                    }
+                    onEdit={() => setEditingModule(module)}
+                  >
+                    {(onEdit) => renderModule(module, onEdit)}
+                  </ModuleFeedItem>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    );
+  }
+
   const createTitle = createType
     ? CREATE_LABEL_BY_TYPE[createType]
     : "Create a module";
-  const activeTypeLabel =
-    moduleTypes.find((type) => type.id === activeType)?.label ?? "Modules";
   const createLabel =
     activeType === "all" ? "Create a module" : CREATE_LABEL_BY_TYPE[activeType];
   const canCreateModule = showStandardModules || showBookClub;
@@ -1098,7 +1523,7 @@ export default function GroupFeed({
       <div className={styles.shell}>
         <ModuleNav
           activeType={activeType}
-          modules={feedModules}
+          counts={moduleCounts}
           moduleTypes={moduleTypes}
           drawerOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
@@ -1109,6 +1534,56 @@ export default function GroupFeed({
           onAllTypesChange={setAllTypes}
           onReorderType={reorderModuleType}
         />
+
+        <div
+          ref={stickyHeaderRef}
+          className={cx(
+            styles.feedStickyHeader,
+            feedHeaderStuck ? styles.feedStickyHeaderStuck : "",
+          )}
+          data-feed-sticky-header
+        >
+          <div className={styles.feedHeader}>
+            <h2 className={styles.feedTitle}>Group Feed</h2>
+            {canCreateModule &&
+              (activeType !== "book-club" || canAdministerBookClub) && (
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className={styles.createInlineButton}
+                  aria-label={createLabel}
+                  title={createLabel}
+                >
+                  +
+                </button>
+              )}
+          </div>
+          <div className={styles.feedCategoryRow}>
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              className={styles.feedMenuButton}
+              aria-label="Open feed menu"
+              aria-controls="group-feed-menu"
+              aria-expanded={drawerOpen}
+            >
+              <span className={styles.feedMenuIcon} aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+            </button>
+            <ModuleTabs
+              activeType={activeType}
+              counts={moduleCounts}
+              moduleTypes={moduleTypes}
+              onSelect={selectModuleType}
+              swipeOffset={feedSwipeOffset}
+              swipePhase={feedSwipePhase}
+              swipeTravelDistance={feedSwipeTravelDistance}
+            />
+          </div>
+        </div>
 
         <main
           className={styles.feedColumn}
@@ -1121,95 +1596,70 @@ export default function GroupFeed({
             resetFeedSwipe();
           }}
         >
-          <div className={styles.feedViewport}>
+          <div
+            className={styles.feedViewport}
+            data-feed-swipe-phase={feedSwipePhase}
+          >
+            {showAdjacentPanels && previousType ? (
+              <div
+                className={cx(
+                  styles.feedPanel,
+                  styles.feedPanelAdjacent,
+                  feedSwipePhase === "dragging" ||
+                    feedSwipePhase === "preparing"
+                    ? styles.feedPanelDirect
+                    : "",
+                )}
+                style={{
+                  transform: `translate3d(calc(-100% - ${SWIPE_PANEL_GAP_PX}px + ${feedSwipeOffset}px), 0, 0)`,
+                }}
+                data-feed-panel-type={previousType}
+                aria-hidden="true"
+                inert=""
+              >
+                {renderFeedPanel(previousType, false)}
+              </div>
+            ) : null}
+
             <div
+              id={`feed-panel-${activeType}`}
+              role="tabpanel"
+              aria-labelledby={`feed-tab-${activeType}`}
               className={cx(
-                styles.feedSlide,
+                styles.feedPanel,
                 feedSwipePhase === "dragging" ||
                   feedSwipePhase === "preparing"
-                  ? styles.feedSlideDirect
+                  ? styles.feedPanelDirect
                   : "",
               )}
-              style={{ transform: `translateX(${feedSwipeOffset}px)` }}
-              data-feed-swipe-phase={feedSwipePhase}
+              style={{
+                transform: `translate3d(${feedSwipeOffset}px, 0, 0)`,
+              }}
+              data-feed-panel-type={activeType}
             >
-              <div className={styles.feedHeader}>
-                <div>
-                  <p className={styles.feedEyebrow}>Group feed</p>
-                  <h2 className={styles.feedTitle}>{activeTypeLabel}</h2>
-                </div>
-                <div className={styles.feedHeaderActions}>
-                  <button
-                    type="button"
-                    onClick={() => setDrawerOpen(true)}
-                    className={styles.feedFilterButton}
-                    aria-label="Filter modules"
-                  >
-                    Filter
-                  </button>
-                  {canCreateModule && (activeType !== "book-club" || canAdministerBookClub) && (
-                    <button
-                      type="button"
-                      onClick={openCreateModal}
-                      className={styles.createInlineButton}
-                      aria-label={createLabel}
-                      title={createLabel}
-                    >
-                      +
-                    </button>
-                  )}
-                </div>
-              </div>
+              {renderFeedPanel(activeType, true)}
+            </div>
 
-          <div className={styles.feedList}>
-            {activeModules.length === 0 ? (
-              <p className={styles.emptyFeed}>No active modules here yet.</p>
-            ) : (
-              activeModules.map((module) => (
-                <ModuleFeedItem
-                  key={`${module.type}:${module.id}`}
-                  module={module}
-                  focusIntent={focusIntent}
-                  onFocusHandled={consumeFocusIntent}
-                  canEdit={module.type === "book-club" ? false : module.isEditableBy(user.id)}
-                  onEdit={() => setEditingModule(module)}
-                >
-                  {(onEdit) => renderModule(module, onEdit)}
-                </ModuleFeedItem>
-              ))
-            )}
-          </div>
-
-          {archivedModules.length > 0 && (
-            <div className={styles.feedArchiveSection}>
-              <button
-                type="button"
-                onClick={() => setArchivedOpen((current) => !current)}
-                className={styles.feedArchiveToggle}
-                aria-expanded={archivedOpen}
+            {showAdjacentPanels && nextType ? (
+              <div
+                className={cx(
+                  styles.feedPanel,
+                  styles.feedPanelAdjacent,
+                  feedSwipePhase === "dragging" ||
+                    feedSwipePhase === "preparing"
+                    ? styles.feedPanelDirect
+                    : "",
+                )}
+                style={{
+                  transform: `translate3d(calc(100% + ${SWIPE_PANEL_GAP_PX}px + ${feedSwipeOffset}px), 0, 0)`,
+                }}
+                data-feed-panel-type={nextType}
+                aria-hidden="true"
+                inert=""
               >
-                <span>Archived ({archivedModules.length})</span>
-                <span aria-hidden="true">{archivedOpen ? "▴" : "▾"}</span>
-              </button>
-              {archivedOpen && (
-                <div className={styles.feedList}>
-                  {archivedModules.map((module) => (
-                    <ModuleFeedItem
-                      key={`${module.type}:${module.id}`}
-                      module={module}
-                      focusIntent={focusIntent}
-                      onFocusHandled={consumeFocusIntent}
-                      canEdit={module.type === "book-club" ? false : module.isEditableBy(user.id)}
-                      onEdit={() => setEditingModule(module)}
-                    >
-                      {(onEdit) => renderModule(module, onEdit)}
-                    </ModuleFeedItem>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-            </div>
+                {renderFeedPanel(nextType, false)}
+              </div>
+            ) : null}
           </div>
         </main>
       </div>

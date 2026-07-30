@@ -11,6 +11,7 @@ import {
   setCommentLiked,
 } from "../../api/activities.js";
 import FeedComments from "../comments/FeedComments.jsx";
+import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import ModuleEditButton from "./ModuleEditButton.jsx";
 import { activityTimeLabel, relativeTime } from "../../utils/time.js";
 import { cx } from "../../utils/classNames.js";
@@ -36,6 +37,7 @@ export default function ProposeActivity({
   const [archivingId, setArchivingId] = useState(null);
   const [restoringId, setRestoringId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const { confirm, confirmationDialog } = useConfirmDialog();
   useExpandOnModuleFocus(setExpandedId);
 
   function toggleExpanded(id) {
@@ -46,6 +48,12 @@ export default function ProposeActivity({
 
   async function handleDelete(activity) {
     if (deletingId) return;
+    const confirmed = await confirm({
+      title: `Delete ${activity.text}?`,
+      message: "This permanently removes the activity and its comments.",
+      confirmLabel: "Delete activity",
+    });
+    if (!confirmed) return;
     setDeletingId(activity.id);
     setError("");
     try {
@@ -56,6 +64,19 @@ export default function ProposeActivity({
     } finally {
       setDeletingId(null);
     }
+  }
+
+  async function handleLiveToggle(activity) {
+    if (!activity.isLive) {
+      onLiveTransition(activity, "start");
+      return;
+    }
+    const confirmed = await confirm({
+      title: `End ${activity.text}?`,
+      message: "This stops the live activity for everyone in the group.",
+      confirmLabel: "End activity",
+    });
+    if (confirmed) onLiveTransition(activity, "end");
   }
 
   async function handleArchive(activity) {
@@ -195,7 +216,7 @@ export default function ProposeActivity({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                onLiveTransition(activity, activity.isLive ? "end" : "start");
+                handleLiveToggle(activity);
               }}
               disabled={Boolean(transitioningId)}
               className={cx(
@@ -338,6 +359,7 @@ export default function ProposeActivity({
           activities.map(renderActivity)
         )}
       </div>
+      {confirmationDialog}
     </section>
   );
 }

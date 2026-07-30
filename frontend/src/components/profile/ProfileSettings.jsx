@@ -9,6 +9,7 @@ import { useTheme } from '../../context/ThemeContext.jsx'
 import { THEME_DEFINITIONS, themeDefinition } from '../../models/themes.js'
 import { cx } from '../../utils/classNames.js'
 import { ROLE, ROLE_LABEL, isAdmin, isAdminIn, roleOf } from '../../utils/roles.js'
+import { useConfirmDialog } from '../ui/useConfirmDialog.jsx'
 import styles from './ProfileSettings.module.css'
 
 export default function ProfileSettings({
@@ -28,6 +29,7 @@ export default function ProfileSettings({
   const [pendingMemberId, setPendingMemberId] = useState('')
   const [displayError, setDisplayError] = useState('')
   const [updatingDisplay, setUpdatingDisplay] = useState(false)
+  const { confirm, confirmationDialog } = useConfirmDialog()
 
   // Admin is per-group. Prefer the current-group response so profile controls
   // do not disappear while the independently loaded roster is refreshing.
@@ -63,7 +65,12 @@ export default function ProfileSettings({
   async function handleDeleteAccount() {
     const password = window.prompt('Enter your password to delete this account.')
     if (!password) return
-    if (!window.confirm('Delete this account? This cannot be undone.')) return
+    const confirmed = await confirm({
+      title: 'Delete your account?',
+      message: 'This permanently removes your account and cannot be undone.',
+      confirmLabel: 'Delete account',
+    })
+    if (!confirmed) return
     try {
       setError('')
       await onDeleteAccount(password)
@@ -93,8 +100,13 @@ export default function ProfileSettings({
     )
   }
 
-  function handleRemoveMember(member) {
-    if (!window.confirm(`Remove ${member.name} from this group?`)) return undefined
+  async function handleRemoveMember(member) {
+    const confirmed = await confirm({
+      title: `Remove ${member.name}?`,
+      message: `This removes ${member.name} from ${group?.name || 'this group'}.`,
+      confirmLabel: 'Remove member',
+    })
+    if (!confirmed) return
     return runMemberAction(member.id, () => removeGroupMember(user.id, member.id))
   }
 
@@ -323,6 +335,7 @@ export default function ProfileSettings({
           Delete account
         </button>
       </section>
+      {confirmationDialog}
     </div>
   )
 }

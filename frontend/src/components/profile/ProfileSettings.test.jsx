@@ -77,10 +77,11 @@ describe("ProfileSettings member administration", () => {
   it("lets an admin remove a plain member and re-renders the returned roster", async () => {
     const next = [{ id: "andre", name: "Andre", role: "admin" }];
     removeGroupMember.mockResolvedValue(next);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     const { onRoommatesChange } = renderPanel(roster("admin"));
 
     await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(removeGroupMember).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Remove member" }));
 
     await waitFor(() => expect(onRoommatesChange).toHaveBeenCalledWith(next));
     expect(removeGroupMember).toHaveBeenCalledWith("andre", "kayla");

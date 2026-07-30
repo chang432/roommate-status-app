@@ -10,6 +10,7 @@ import {
   setRequestCommentLiked,
 } from "../../api/requests.js";
 import FeedComments from "../comments/FeedComments.jsx";
+import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import ModuleEditButton from "./ModuleEditButton.jsx";
 import { relativeTime } from "../../utils/time.js";
 import { cx } from "../../utils/classNames.js";
@@ -54,6 +55,7 @@ export default function RequestFeature({
   const [archivingId, setArchivingId] = useState(null);
   const [restoringId, setRestoringId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const { confirm, confirmationDialog } = useConfirmDialog();
   useExpandOnModuleFocus(setExpandedId);
 
   function toggleExpanded(id) {
@@ -105,6 +107,12 @@ export default function RequestFeature({
 
   async function handleDelete(requestItem) {
     if (deletingId) return;
+    const confirmed = await confirm({
+      title: `Delete ${requestItem.text}?`,
+      message: "This permanently removes the request, responses, and comments.",
+      confirmLabel: "Delete request",
+    });
+    if (!confirmed) return;
     setDeletingId(requestItem.id);
     setError("");
     try {
@@ -361,6 +369,7 @@ export default function RequestFeature({
           })
         )}
       </div>
+      {confirmationDialog}
     </div>
   );
 }

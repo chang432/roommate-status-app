@@ -23,8 +23,9 @@ function bookClubFixture() {
     createdAt: NOW - 1000,
     updatedAt: NOW - 1000,
     responses: [
-      { userId: 'andre', userName: 'Andre', attendanceStatus: 'attending', chaptersReadThrough: 6 },
-      { userId: 'kayla', userName: 'Kayla', attendanceStatus: 'maybe', chaptersReadThrough: 5 },
+      { userId: 'andre', userName: 'Andre', attendanceStatus: 'attending' },
+      { userId: 'kayla', userName: 'Kayla', attendanceStatus: 'maybe' },
+      { userId: 'ting', userName: 'Ting', attendanceStatus: null },
     ],
   }
   const activeBook = {
@@ -109,6 +110,7 @@ async function mockBookClub(page) {
       payload = [
         { id: 'andre', name: 'Andre', role: 'admin' },
         { id: 'kayla', name: 'Kayla', role: 'member' },
+        { id: 'ting', name: 'Ting', role: 'member' },
       ]
     } else if (path === '/api/book-club') {
       payload = { summary: {
@@ -128,6 +130,12 @@ async function mockBookClub(page) {
       } }
     } else if (path === '/api/book-club/meetings') {
       payload = { meetings: [meeting] }
+    } else if (path.endsWith('/response') && method === 'PUT') {
+      const changes = request.postDataJSON()
+      meeting.responses = meeting.responses.map((response) => response.userId === 'andre'
+        ? { ...response, ...changes }
+        : response)
+      payload = { meeting }
     } else if (path === '/api/activities' || path === '/api/shows') {
       payload = []
     } else if (path === '/api/jam') {
@@ -220,6 +228,12 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await mockBookClub(page)
   await page.goto('/')
 
+  await expect(page.getByRole('heading', { name: 'Group Feed' })).toBeVisible()
+  await expect(page.getByRole('tablist', { name: 'Feed categories' }).getByRole('tab')).toHaveCount(7)
+  await expect(page.getByRole('button', { name: 'Open feed menu' })).toBeVisible()
+  await expect.poll(() => page.locator('[data-feed-sticky-header]').evaluate((element) => (
+    getComputedStyle(element).position
+  ))).toBe('sticky')
   await expect(page.getByRole('button', { name: /Current book The Fifth Season/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /Library All books/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /Book Kayla/ })).toBeVisible()
@@ -236,7 +250,7 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   const addDialog = page.getByRole('dialog', { name: 'Add a book' })
   await addDialog.getByRole('textbox', { name: 'Book title' }).fill('Kindred')
   await addDialog.getByRole('textbox', { name: 'Author' }).fill('Octavia E. Butler')
-  await addDialog.getByRole('button', { name: 'Add book' }).click()
+  await addDialog.getByRole('button', { name: 'Add current book' }).click()
   await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Kindred')
   await page.getByRole('button', { name: '← All books' }).click()
 
@@ -272,9 +286,187 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await page.getByRole('button', { name: 'Close' }).click()
 
   await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  const attendance = page.getByLabel('Member attendance')
+  await expect(attendance.getByRole('listitem')).toHaveCount(3)
+  await expect(page.getByRole('region', { name: 'Pending: 1' })).toContainText('Ting')
+  await page.getByLabel('Your attendance').selectOption('maybe')
+  await expect(page.getByRole('region', { name: 'Maybe: 2' })).toContainText('Andre')
+  await page.waitForTimeout(750)
+  await page.screenshot({ path: testInfo.outputPath('book-club-meeting-tracker-desktop.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Complete meeting' }).click()
+  const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
+  await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await expect(confirmation).toContainText('meeting forum will close')
+  await page.screenshot({ path: testInfo.outputPath('complete-meeting-confirmation-desktop.png'), fullPage: true })
+  await confirmation.getByRole('button', { name: 'Cancel' }).click()
   await page.getByRole('link', { name: 'Forum' }).click()
   await expect(page).toHaveURL(/\?book=active-book&meeting=meeting%23demo/)
   await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Favorite passage')
+})
+
+test('confirms meeting completion safely on desktop', async ({ page }, testInfo) => {
+  await mockBookClub(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  await page.getByRole('button', { name: 'Complete meeting' }).click()
+
+  const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
+  await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await expect(confirmation).toContainText('meeting forum will close')
+  await expect.poll(() => confirmation.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('complete-meeting-confirmation-desktop.png'), fullPage: true })
+
+  await confirmation.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByRole('button', { name: 'Complete meeting' })).toBeVisible()
+})
+
+test('shows the next feed category while swiping on a phone', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockBookClub(page)
+  await page.goto('/')
+
+  const feedMenuButton = page.getByRole('button', { name: 'Open feed menu' })
+  await expect(feedMenuButton).toBeVisible()
+  await feedMenuButton.click()
+  const feedMenu = page.getByLabel('Module types')
+  await expect(feedMenu).toBeInViewport()
+  await feedMenu.getByRole('button', { name: 'Close' }).click()
+
+  const feedTabs = page.getByRole('tablist', { name: 'Feed categories' })
+  const stickyHeader = page.locator('[data-feed-sticky-header]')
+  await expect(feedTabs.getByRole('tab')).toHaveCount(7)
+  await expect.poll(() => stickyHeader.evaluate((element) => (
+    getComputedStyle(element).backgroundColor
+  ))).toBe('rgba(0, 0, 0, 0)')
+  await feedTabs.getByRole('tab', { name: /^TV/ }).click()
+  await expect(feedTabs.getByRole('tab', { name: /^TV/, selected: true })).toBeVisible()
+  const categoryScroller = page.locator('[data-feed-category-scroller]')
+  await categoryScroller.evaluate((element) => element.scrollTo({ left: 0, behavior: 'auto' }))
+  const categoryScrollTargets = await categoryScroller.evaluate((element) => {
+    const activeTab = element.querySelector('[role="tab"][aria-selected="true"]')
+    const nextTab = element.querySelector('[role="tab"][data-module-type="book-club"]')
+    const centeredTarget = (tab) => Math.min(Math.max(
+      tab.offsetLeft - (element.clientWidth - tab.offsetWidth) / 2,
+      0,
+    ), element.scrollWidth - element.clientWidth)
+    return {
+      before: element.scrollLeft,
+      active: centeredTarget(activeTab),
+      next: centeredTarget(nextTab),
+    }
+  })
+  expect(Math.abs(categoryScrollTargets.before - categoryScrollTargets.active)).toBeGreaterThan(5)
+  const feedMain = page.locator('[data-feed-swipe-phase]').locator('..')
+  await feedMain.scrollIntoViewIfNeeded()
+  const feedBox = await feedMain.boundingBox()
+  const swipeStartX = feedBox.x + feedBox.width - 20
+  const swipeY = feedBox.y + Math.min(60, feedBox.height / 2)
+  await page.mouse.move(swipeStartX, swipeY)
+  await page.mouse.down()
+  await page.mouse.move(swipeStartX - 12, swipeY + 1)
+  await page.mouse.move(swipeStartX - 260, swipeY + 4, { steps: 8 })
+
+  const incomingBookClub = page.locator('[data-feed-panel-type="book-club"]')
+  await expect(incomingBookClub.getByText('The Fifth Season').first()).toBeVisible()
+  const currentTv = page.locator('[data-feed-panel-type="tv"]')
+  const currentTvBox = await currentTv.boundingBox()
+  const incomingBookClubBox = await incomingBookClub.boundingBox()
+  const panelGap = incomingBookClubBox.x - (currentTvBox.x + currentTvBox.width)
+  expect(panelGap).toBeGreaterThanOrEqual(15)
+  expect(panelGap).toBeLessThanOrEqual(17)
+  const feedProgress = Math.min(
+    Math.abs(currentTvBox.x - feedBox.x) / (currentTvBox.width + panelGap),
+    1,
+  )
+  const expectedRibbonScroll = categoryScrollTargets.active + (
+    categoryScrollTargets.next - categoryScrollTargets.active
+  ) * feedProgress
+  await expect.poll(async () => Math.abs(
+    await categoryScroller.evaluate((element) => element.scrollLeft) - expectedRibbonScroll
+  )).toBeLessThan(3)
+
+  const indicator = page.locator('[data-feed-category-indicator]')
+  const indicatorBox = await indicator.boundingBox()
+  const tvTabBox = await feedTabs.getByRole('tab', { name: /^TV/ }).boundingBox()
+  const bookClubTabBox = await feedTabs.getByRole('tab', { name: /^Book Club/ }).boundingBox()
+  const indicatorCenter = indicatorBox.x + indicatorBox.width / 2
+  const tvCenter = tvTabBox.x + tvTabBox.width / 2
+  const bookClubCenter = bookClubTabBox.x + bookClubTabBox.width / 2
+  expect(indicatorBox.height).toBe(4)
+  expect(indicatorCenter).toBeGreaterThan(Math.min(tvCenter, bookClubCenter))
+  expect(indicatorCenter).toBeLessThan(Math.max(tvCenter, bookClubCenter))
+  await page.screenshot({ path: testInfo.outputPath('group-feed-swipe-preview-mobile.png') })
+
+  await page.mouse.up()
+  const selectedBookClubTab = feedTabs.getByRole('tab', { name: /^Book Club/, selected: true })
+  await expect(selectedBookClubTab).toBeVisible()
+  await expect(page.locator('[data-feed-panel-type="book-club"]')).toContainText('The Fifth Season')
+  await expect.poll(async () => Math.abs(
+    await categoryScroller.evaluate((element) => element.scrollLeft) - categoryScrollTargets.next
+  )).toBeLessThan(2)
+  await expect.poll(async () => {
+    const activeTabBox = await selectedBookClubTab.boundingBox()
+    const activeIndicatorBox = await indicator.boundingBox()
+    return Math.abs(
+      activeIndicatorBox.x + activeIndicatorBox.width / 2 -
+      (activeTabBox.x + activeTabBox.width / 2)
+    )
+  }).toBeLessThan(2)
+
+  const stickyDocumentTop = await stickyHeader.evaluate((element) => (
+    element.getBoundingClientRect().top + window.scrollY
+  ))
+  await page.locator('[data-feed-panel-type="book-club"]').evaluate((panel) => {
+    const spacer = document.createElement('div')
+    spacer.style.height = '1200px'
+    spacer.setAttribute('aria-hidden', 'true')
+    panel.append(spacer)
+  })
+  await page.evaluate((top) => window.scrollTo(0, top + 300), stickyDocumentTop)
+  await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+  await expect.poll(() => stickyHeader.evaluate((element) => {
+    const background = getComputedStyle(element).backgroundColor
+    return background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)'
+  })).toBe(true)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('group-feed-sticky-mobile.png') })
+})
+
+test('keeps the editorial feed header clear across themes', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await mockBookClub(page)
+  await page.goto('/')
+
+  for (const theme of ['light', 'dark', 'forest']) {
+    await page.evaluate((nextTheme) => localStorage.setItem('roomie-theme', nextTheme), theme)
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+
+    const stickyHeader = page.locator('[data-feed-sticky-header]')
+    await expect.poll(() => stickyHeader.evaluate((element) => (
+      getComputedStyle(element).backgroundColor
+    ))).toBe('rgba(0, 0, 0, 0)')
+    const stickyDocumentTop = await stickyHeader.evaluate((element) => (
+      element.getBoundingClientRect().top + window.scrollY
+    ))
+    await page.locator('[data-feed-panel-type="all"]').evaluate((panel) => {
+      const spacer = document.createElement('div')
+      spacer.style.height = '1000px'
+      spacer.setAttribute('aria-hidden', 'true')
+      panel.append(spacer)
+    })
+    await page.evaluate((top) => window.scrollTo(0, top + 200), stickyDocumentTop)
+    await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+    await expect.poll(() => stickyHeader.evaluate((element) => {
+      const background = getComputedStyle(element).backgroundColor
+      return background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)'
+    })).toBe(true)
+    await expect.poll(() => page.evaluate(() => (
+      document.documentElement.scrollWidth <= window.innerWidth
+    ))).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath(`group-feed-header-${theme}-desktop.png`) })
+  }
 })
 
 test('keeps the two-column cards and library modal usable on a phone', async ({ page }, testInfo) => {
@@ -302,4 +494,23 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   await expect(details.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
   await expect.poll(() => details.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-modal-mobile.png'), fullPage: true })
+
+  await details.getByRole('button', { name: 'Close' }).click()
+  await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  const attendance = page.getByLabel('Member attendance')
+  await expect(attendance.getByRole('listitem')).toHaveCount(3)
+  await expect.poll(() => attendance.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  const forumBox = await page.getByRole('link', { name: 'Forum' }).boundingBox()
+  const reminderBox = await page.getByRole('button', { name: 'Send reminder' }).boundingBox()
+  const completeBox = await page.getByRole('button', { name: 'Complete meeting' }).boundingBox()
+  expect(Math.abs(forumBox.y - reminderBox.y)).toBeLessThan(2)
+  expect(Math.abs(forumBox.y - completeBox.y)).toBeLessThan(2)
+  await page.getByRole('button', { name: 'Complete meeting' }).click()
+  const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
+  await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await expect.poll(() => confirmation.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('complete-meeting-confirmation-mobile.png'), fullPage: true })
+  await confirmation.getByRole('button', { name: 'Cancel' }).click()
+  await page.waitForTimeout(750)
+  await page.screenshot({ path: testInfo.outputPath('book-club-meeting-tracker-mobile.png'), fullPage: true })
 })
