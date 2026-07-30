@@ -126,12 +126,15 @@ def test_members_can_update_past_open_meetings_and_notify(client, monkeypatch):
     )
     response = client.put(
         grouped_path(meeting_path(meeting["id"], "/response"), user_id="sheryl"),
-        json={"attendanceStatus": "attending", "chaptersReadThrough": 6},
+        json={"attendanceStatus": "attending"},
     )
     assert response.status_code == 200
     mine = next(item for item in response.get_json()["meeting"]["responses"] if item["userId"] == "sheryl")
-    assert (mine["attendanceStatus"], mine["chaptersReadThrough"]) == ("attending", 6)
-    assert mine["readingComplete"] is False
+    assert mine == {
+        "userId": "sheryl",
+        "userName": "Sheryl",
+        "attendanceStatus": "attending",
+    }
 
     notifications = []
     monkeypatch.setattr(push, "is_configured", lambda: True)
@@ -146,7 +149,7 @@ def test_members_can_update_past_open_meetings_and_notify(client, monkeypatch):
     assert notifications[0][1]["url"] == module_models.module_url("book-club", meeting["id"])
 
 
-def test_meeting_response_fields_save_independently(client):
+def test_meeting_responses_are_attendance_only(client):
     meeting = create_meeting(client).get_json()["meeting"]
     path = grouped_path(meeting_path(meeting["id"], "/response"), user_id="sheryl")
 
@@ -157,32 +160,44 @@ def test_meeting_response_fields_save_independently(client):
         "userId": "sheryl",
         "userName": "Sheryl",
         "attendanceStatus": None,
-        "chaptersReadThrough": 0,
-        "readingComplete": False,
     }
-
-    chapter_response = client.put(path, json={"chaptersReadThrough": 7})
-    chapter = next(
-        item for item in chapter_response.get_json()["meeting"]["responses"]
-        if item["userId"] == "sheryl"
-    )
-    assert (chapter["attendanceStatus"], chapter["chaptersReadThrough"]) == (None, 7)
 
     attendance_response = client.put(path, json={"attendanceStatus": "maybe"})
     attendance = next(
         item for item in attendance_response.get_json()["meeting"]["responses"]
         if item["userId"] == "sheryl"
     )
-    assert (attendance["attendanceStatus"], attendance["chaptersReadThrough"]) == ("maybe", 7)
+    assert attendance["attendanceStatus"] == "maybe"
 
-    complete_response = client.put(path, json={"readingComplete": True})
-    complete = next(
-        item for item in complete_response.get_json()["meeting"]["responses"]
+    response_id = f"meeting-member#{meeting['id'].split('#', 1)[-1]}#sheryl"
+    book_club._get_table().update_item(
+        Key={"groupId": TEST_GROUP_ID, "id": response_id},
+        UpdateExpression="SET chaptersReadThrough = :chapter, attendanceOnlyLegacyRecord = :legacy",
+        ExpressionAttributeValues={
+            ":chapter": 7,
+            ":legacy": {"hadChaptersReadThrough": True, "chaptersReadThrough": 7},
+        },
+    )
+    refreshed = client.put(path, json={"attendanceStatus": "not_attending"})
+    projected = next(
+        item for item in refreshed.get_json()["meeting"]["responses"]
         if item["userId"] == "sheryl"
     )
-    assert (complete["readingComplete"], complete["chaptersReadThrough"]) == (True, 7)
+    stored = book_club._fetch(TEST_GROUP_ID, response_id)
+    assert projected == {
+        "userId": "sheryl",
+        "userName": "Sheryl",
+        "attendanceStatus": "not_attending",
+    }
+    assert stored["chaptersReadThrough"] == 7
+    assert stored["attendanceOnlyLegacyRecord"]["chaptersReadThrough"] == 7
 
     assert client.put(path, json={}).status_code == 400
+    assert client.put(path, json={"chaptersReadThrough": 7}).status_code == 400
+    assert client.put(path, json={"readingComplete": True}).status_code == 400
+    assert client.put(path, json={
+        "attendanceStatus": "attending", "chaptersReadThrough": 7,
+    }).status_code == 400
 
 
 def test_summary_accepts_legacy_meeting_responses_without_user_id(client):
@@ -201,9 +216,11 @@ def test_summary_accepts_legacy_meeting_responses_without_user_id(client):
     assert response.status_code == 200
     responses = response.get_json()["summary"]["openMeeting"]["responses"]
     sheryl = next(item for item in responses if item["userId"] == "sheryl")
-    assert (sheryl["attendanceStatus"], sheryl["chaptersReadThrough"]) == (
-        "attending", 7
-    )
+    assert sheryl == {
+        "userId": "sheryl",
+        "userName": "Sheryl",
+        "attendanceStatus": "attending",
+    }
 
 
 def test_active_book_collects_member_reviews_and_meeting_history(client):

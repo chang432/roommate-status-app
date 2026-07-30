@@ -6,7 +6,7 @@
   Book, and Snack card grid on the household page. Current Book opens its
   detail, Library opens the complete catalog, and the owner cards open their
   respective orders.
-- Meetings expand directly in the household feed for attendance, progress,
+- Meetings expand directly in the household feed for grouped attendance,
   reminders, editing, and completion. Their Forum link opens the relevant book
   and meeting discussion inside the household library modal.
 - Index zero in each list is the current owner and the default for a new meeting.
@@ -32,8 +32,8 @@
   clears the pointer. Each member can review any book with a 1–5 star rating, required finished/not-finished
   status, and optional note. Legacy star-only ratings remain visible with
   unknown finish status until their author updates them.
-- Members may update their own attendance and reading progress until the
-  meeting is completed, even after its scheduled time.
+- Members may update their own attendance until the meeting is completed, even
+  after its scheduled time.
 - Every meeting has a forum with titled root topics and one reply level.
   Authors may edit or remove their entries, group admins may remove any entry,
   and completion makes the entire forum read-only.
@@ -50,9 +50,8 @@ The existing `RoommateStatus-{dev,main}-book-club` table remains keyed by
   its `bookId` with `config#book-club.activeBookId`.
 - `meeting#<uuid>`: scheduled time, book and owner snapshots, reading target,
   scheduled/completed status, and creator/completer snapshots.
-- `meeting-member#<meetingUuid>#<userId>`: one member-owned response with
-  independently saved attendance, chapter progress, and optional reading
-  completion. Missing attendance is projected as pending.
+- `meeting-member#<meetingUuid>#<userId>`: one member-owned attendance
+  response. Missing attendance is projected as pending.
 - `rating#<bookUuid>#<userId>`: member review with rating, finish status,
   optional note, member snapshot, and lifecycle timestamps. The established ID
   prefix remains because existing star ratings are upgraded in place.
@@ -82,7 +81,10 @@ the author; replies notify thread participants except the author.
 
 `2026-07-29-01-derive-book-completion` removes legacy book `status` fields,
 preserving known historical completion dates and clearing an invalid completion
-date from the configured current title. `2026-07-22-01-book-club-meeting-modules` converts the former cursor-based
+date from the configured current title.
+`2026-07-29-02-remove-book-club-progress` removes obsolete per-member chapter
+and completion fields while retaining reversible legacy records.
+`2026-07-22-01-book-club-meeting-modules` converts the former cursor-based
 rotations and date-derived session IDs to sticky owner lists and stable meeting
 IDs while preserving books, sessions, responses, ratings, and posts. No table
 or index change is required. `2026-07-23-01-align-book-owner-order` aligns the

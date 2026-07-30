@@ -203,8 +203,6 @@ def _project_meeting(item: dict | None, members: list[dict] | None = None, book:
                 "userId": member["id"],
                 "userName": member["name"],
                 "attendanceStatus": responses.get(member["id"], {}).get("attendanceStatus"),
-                "chaptersReadThrough": int(responses.get(member["id"], {}).get("chaptersReadThrough", 0)),
-                "readingComplete": bool(responses.get(member["id"], {}).get("readingComplete", False)),
             }
             for member in members
         ]
@@ -635,23 +633,10 @@ def complete_meeting(group_id: str, meeting_id: str, completer: dict) -> tuple[d
 
 
 def set_response(group_id: str, meeting_id: str, member: dict, changes: dict) -> tuple[dict | None, str | None]:
-    allowed = {"attendanceStatus", "chaptersReadThrough", "readingComplete"}
-    provided = allowed.intersection(changes)
-    if not provided:
-        return None, "An attendance or reading progress update is required."
-    if (
-        "attendanceStatus" in changes
-        and changes["attendanceStatus"] not in {"attending", "maybe", "not_attending"}
-    ):
+    if not isinstance(changes, dict) or set(changes) != {"attendanceStatus"}:
+        return None, "An attendance update is required."
+    if changes["attendanceStatus"] not in {"attending", "maybe", "not_attending"}:
         return None, "Attendance must be attending, maybe, or not_attending."
-    chapters = changes.get("chaptersReadThrough")
-    if (
-        "chaptersReadThrough" in changes
-        and (isinstance(chapters, bool) or not isinstance(chapters, int) or chapters < 0)
-    ):
-        return None, "Chapters read through must be a non-negative integer."
-    if "readingComplete" in changes and not isinstance(changes["readingComplete"], bool):
-        return None, "Reading complete must be true or false."
     meeting = _fetch(group_id, meeting_id)
     if meeting is None:
         return None, "Unknown meeting."
@@ -660,23 +645,23 @@ def set_response(group_id: str, meeting_id: str, member: dict, changes: dict) ->
     now = _now()
     meeting_key = meeting_id.split("#", 1)[-1]
     response_id = f"meeting-member#{meeting_key}#{member['id']}"
-    existing = _fetch(group_id, response_id)
-    response = {
-        "groupId": group_id,
-        "id": response_id,
-        "meetingId": meeting_id,
-        "userId": member["id"],
-        "userName": member["name"],
-        "createdAt": existing.get("createdAt", now) if existing else now,
-        "updatedAt": now,
-    }
-    # Partial writes let each inline control save without resetting its siblings.
-    for field in allowed:
-        if field in changes:
-            response[field] = changes[field]
-        elif existing and field in existing:
-            response[field] = existing[field]
-    _get_table().put_item(Item=response)
+    # Update only the live attendance contract so reversible migration metadata
+    # and not-yet-migrated legacy fields survive the deploy-before-migrate window.
+    _get_table().update_item(
+        Key={"groupId": group_id, "id": response_id},
+        UpdateExpression=(
+            "SET meetingId = :meetingId, userId = :userId, userName = :userName, "
+            "attendanceStatus = :attendance, createdAt = if_not_exists(createdAt, :now), "
+            "updatedAt = :now"
+        ),
+        ExpressionAttributeValues={
+            ":meetingId": meeting_id,
+            ":userId": member["id"],
+            ":userName": member["name"],
+            ":attendance": changes["attendanceStatus"],
+            ":now": now,
+        },
+    )
     return get_meeting(group_id, meeting_id), None
 
 

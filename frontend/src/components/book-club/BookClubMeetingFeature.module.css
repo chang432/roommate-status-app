@@ -15,43 +15,29 @@
 .details dt { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
 .details dd { @apply text-ink; }
 .responses { @apply grid gap-2; }
-.responseHeading { @apply flex flex-wrap items-center justify-between gap-2; }
-.responseHeading h3 { @apply text-[14px] font-semibold text-ink; }
-.attendanceTotals { @apply flex flex-wrap items-center gap-1; }
-.attendanceTotals span { @apply rounded-full border border-line bg-surface-muted px-2 py-1 text-[10px] font-bold text-ink-soft; }
-.attendanceTotals span[data-status="attending"] { @apply border-success-soft-border bg-success-soft text-status-green; }
-.attendanceTotals span[data-status="not_attending"] { @apply border-danger-soft-border bg-danger-soft text-status-red; }
-.responseColumns, .response { grid-template-columns: minmax(4.5rem, 1fr) minmax(6.5rem, .95fr) minmax(8rem, 1.15fr); }
-.responseColumns { @apply grid gap-2 px-2 text-[9.5px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
-.responseList { @apply overflow-hidden; }
-.response { @apply grid min-h-12 items-center gap-2 border-t border-line px-2 py-2 text-xs first:border-t-0; }
-.memberName { @apply flex min-w-0 items-center gap-1 font-semibold text-ink; }
-.memberLabel { @apply min-w-0 truncate; }
+.responseHeading { @apply text-[14px] font-semibold text-ink; }
+.attendanceEditor { @apply grid grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] items-center gap-3 rounded-sm bg-surface-muted px-3 py-2; }
+.attendanceEditor > span { @apply text-xs font-bold text-ink; }
+.attendanceEditor select { @apply min-h-10 w-full rounded-sm border border-line bg-card px-3 text-sm text-ink outline-none focus:border-accent focus:shadow-focus; }
+.attendanceGroups { @apply grid grid-cols-2 gap-x-5 gap-y-3; }
+.attendanceGroup { @apply min-w-0 border-t border-line pt-2; }
+.attendanceGroupHeader { @apply flex items-center justify-between gap-2; }
+.attendanceGroupHeader h4 { @apply flex min-w-0 items-center gap-2 text-xs font-bold text-ink; }
+.attendanceGroupHeader > span { @apply text-xs font-bold tabular-nums text-ink-soft; }
 .attendanceIndicator { @apply h-2 w-2 flex-none rounded-full bg-status-grey; }
-.attendanceIndicator[data-status="attending"] { @apply bg-status-green; }
-.attendanceIndicator[data-status="maybe"] { @apply bg-status-amber; }
-.attendanceIndicator[data-status="not_attending"] { @apply bg-status-red; }
-.memberName small { @apply rounded-full bg-accent-soft px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-accent-deep; }
-.attendanceControl, .progressControls select, .progressControls input { @apply h-8 min-w-0 rounded-sm border border-line bg-surface-muted px-2 text-[11.5px] text-ink outline-none focus:border-accent; }
-.attendanceControl { @apply w-full; }
-.progressControls { @apply grid min-w-0 grid-cols-[minmax(0,1fr)_3rem] gap-1; }
-.progressControls select { @apply w-full; }
-.progressControls select:only-child { grid-column: 1 / -1; }
-.progressControls input { @apply w-full px-1.5 text-center tabular-nums; }
-.attendanceBadge, .progressValue { @apply min-w-0 truncate text-[11.5px] font-semibold text-ink-soft; }
-.attendanceBadge[data-status="attending"] { @apply text-status-green; }
-.attendanceBadge[data-status="not_attending"] { @apply text-status-red; }
-.attendanceBadge[data-status="pending"] { @apply italic; }
-.progressValue { @apply text-ink; }
+.attendanceGroup[data-status="attending"] .attendanceIndicator { @apply bg-status-green; }
+.attendanceGroup[data-status="maybe"] .attendanceIndicator { @apply bg-status-amber; }
+.attendanceGroup[data-status="not_attending"] .attendanceIndicator { @apply bg-status-red; }
+.memberList { @apply mt-1 grid; }
+.memberList li { @apply flex min-w-0 items-center gap-1.5 py-1 text-xs font-semibold text-ink; }
+.memberList li > span { @apply min-w-0 truncate; }
+.memberList small { @apply rounded-full bg-accent-soft px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-accent-deep; }
+.emptyGroup { @apply mt-1 py-1 text-xs italic text-ink-soft; }
 .meetingActions { @apply flex-nowrap; }
 @media (max-width: 520px) {
   .meta { @apply whitespace-normal; }
-  .responseHeading { @apply items-start; }
-  .attendanceTotals { @apply w-full; }
-  .responseColumns, .response { grid-template-columns: minmax(3.8rem, .8fr) minmax(5.6rem, 1fr) minmax(7.3rem, 1.25fr); }
-  .responseColumns, .response { @apply gap-1.5 px-1.5; }
-  .attendanceControl, .progressControls select, .progressControls input { @apply px-1 text-[10.5px]; }
-  .memberName, .attendanceBadge, .progressValue { @apply text-[10.5px]; }
+  .attendanceEditor { @apply grid-cols-1 gap-1.5; }
+  .attendanceGroups { @apply grid-cols-1; }
   .meetingActions { @apply gap-1.5; }
   .meetingActions button, .meetingActions a { @apply min-h-9 whitespace-nowrap px-2 py-1.5 text-[10.5px]; }
 }

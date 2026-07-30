@@ -13,19 +13,19 @@ import ModuleEditButton from "../feed/ModuleEditButton.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import styles from "./BookClubMeetingFeature.module.css";
 
-const ATTENDANCE_LABELS = {
-  attending: "Attending",
-  maybe: "Maybe",
-  not_attending: "Not attending",
-  pending: "Pending",
-};
+const ATTENDANCE_OPTIONS = [
+  { status: "attending", label: "Attending" },
+  { status: "maybe", label: "Maybe" },
+  { status: "not_attending", label: "Not attending" },
+  { status: "pending", label: "Pending" },
+];
 
-function attendanceCounts(responses) {
-  return responses.reduce((counts, response) => {
+function groupAttendance(responses) {
+  return responses.reduce((groups, response) => {
     const status = response.attendanceStatus ?? "pending";
-    counts[status] += 1;
-    return counts;
-  }, { attending: 0, maybe: 0, not_attending: 0, pending: 0 });
+    groups[status].push(response);
+    return groups;
+  }, { attending: [], maybe: [], not_attending: [], pending: [] });
 }
 
 export default function BookClubMeetingFeature({
@@ -86,7 +86,7 @@ export default function BookClubMeetingFeature({
     if (busy) return;
     const confirmed = await confirm({
       title: `Complete meeting for ${meeting.bookTitle}?`,
-      message: "Attendance and reading progress will become read-only, and the meeting forum will close.",
+      message: "Attendance will become read-only, and the meeting forum will close.",
       confirmLabel: "Complete meeting",
     });
     if (!confirmed) return;
@@ -125,7 +125,9 @@ export default function BookClubMeetingFeature({
         const detail = details[meeting.id] || meeting;
         const expanded = expandedId === meeting.id;
         const responses = detail.responses || [];
-        const counts = attendanceCounts(responses);
+        const attendanceGroups = groupAttendance(responses);
+        const viewerResponse = responses.find((response) => response.userId === user.id);
+        const attendanceEditable = Boolean(viewerResponse) && detail.status === "scheduled";
         return (
           <article key={meeting.id} className={styles.card}>
             <button
@@ -150,81 +152,55 @@ export default function BookClubMeetingFeature({
                     <div><dt>Snack owner</dt><dd>{detail.snackOwnerName}</dd></div>
                   </dl>
                   <div className={styles.responses}>
-                    <div className={styles.responseHeading}>
-                      <h3>Attendance and progress</h3>
-                      <div className={styles.attendanceTotals} aria-label="Attendance totals">
-                        {Object.entries(ATTENDANCE_LABELS).map(([status, label]) => (
-                          <span key={status} data-status={status}>{counts[status]} {label}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className={styles.responseColumns} aria-hidden="true">
-                      <span>Member</span><span>Attendance</span><span>Progress</span>
-                    </div>
-                    <div className={styles.responseList} role="list" aria-label="Member attendance and progress">
-                      {responses.map((response) => {
-                        const mine = response.userId === user.id;
-                        const editable = mine && detail.status === "scheduled";
-                        const attendance = response.attendanceStatus ?? "pending";
+                    <h3 className={styles.responseHeading}>Attendance</h3>
+                    {attendanceEditable ? (
+                      <label className={styles.attendanceEditor}>
+                        <span>Your attendance</span>
+                        <select
+                          aria-label="Your attendance"
+                          value={viewerResponse.attendanceStatus ?? ""}
+                          disabled={busy}
+                          onChange={(event) => saveResponse(detail, { attendanceStatus: event.target.value })}
+                        >
+                          <option value="" disabled>Pending</option>
+                          <option value="attending">Attending</option>
+                          <option value="maybe">Maybe</option>
+                          <option value="not_attending">Not attending</option>
+                        </select>
+                      </label>
+                    ) : null}
+                    <div className={styles.attendanceGroups} aria-label="Member attendance">
+                      {ATTENDANCE_OPTIONS.map(({ status, label }) => {
+                        const members = attendanceGroups[status];
                         return (
-                          <div
-                            className={styles.response}
-                            data-attendance={attendance}
-                            key={response.userId}
-                            role="listitem"
+                          <section
+                            className={styles.attendanceGroup}
+                            data-status={status}
+                            key={status}
+                            aria-label={`${label}: ${members.length}`}
                           >
-                            <span className={styles.memberName} title={response.userName}>
-                              <span
-                                aria-hidden="true"
-                                className={styles.attendanceIndicator}
-                                data-status={attendance}
-                              />
-                              <span className={styles.memberLabel}>{response.userName}</span>
-                              {mine ? <small>You</small> : null}
-                            </span>
-                            {editable ? (
-                              <select
-                                className={styles.attendanceControl}
-                                aria-label="Your attendance"
-                                value={response.attendanceStatus ?? ""}
-                                disabled={busy}
-                                onChange={(event) => saveResponse(detail, { attendanceStatus: event.target.value })}
-                              >
-                                <option value="" disabled>Pending</option>
-                                <option value="attending">Attending</option>
-                                <option value="maybe">Maybe</option>
-                                <option value="not_attending">Not attending</option>
-                              </select>
-                            ) : (
-                              <span className={styles.attendanceBadge} data-status={attendance}>{ATTENDANCE_LABELS[attendance]}</span>
-                            )}
-                            {editable ? (
-                              <span className={styles.progressControls}>
-                                <select
-                                  aria-label="Your reading progress mode"
-                                  value={response.readingComplete ? "complete" : "chapter"}
-                                  disabled={busy}
-                                  onChange={(event) => saveResponse(detail, { readingComplete: event.target.value === "complete" })}
-                                >
-                                  <option value="chapter">Chapter</option>
-                                  <option value="complete">Complete</option>
-                                </select>
-                                {!response.readingComplete ? (
-                                  <input
-                                    key={`${response.userId}-${response.chaptersReadThrough}`}
-                                    aria-label="Chapters read through"
-                                    type="number"
-                                    min="0"
-                                    defaultValue={response.chaptersReadThrough}
-                                    disabled={busy}
-                                    onBlur={(event) => saveResponse(detail, { chaptersReadThrough: Number(event.target.value) })}
-                                  />
-                                ) : null}
+                            <header className={styles.attendanceGroupHeader}>
+                              <h4>
+                                <span aria-hidden="true" className={styles.attendanceIndicator} />
+                                {label}
+                              </h4>
+                              <span aria-label={`${members.length} ${members.length === 1 ? "member" : "members"}`}>
+                                {members.length}
                               </span>
+                            </header>
+                            {members.length ? (
+                              <ul className={styles.memberList}>
+                                {members.map((response) => (
+                                  <li key={response.userId}>
+                                    <span title={response.userName}>{response.userName}</span>
+                                    {response.userId === user.id ? <small>You</small> : null}
+                                  </li>
+                                ))}
+                              </ul>
                             ) : (
-                              <span className={styles.progressValue}>{response.readingComplete ? "Complete" : `Chapter ${response.chaptersReadThrough}`}</span>
+                              <p className={styles.emptyGroup}>No one yet</p>
                             )}
-                          </div>
+                          </section>
                         );
                       })}
                     </div>

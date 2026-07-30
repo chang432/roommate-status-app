@@ -23,9 +23,9 @@ function bookClubFixture() {
     createdAt: NOW - 1000,
     updatedAt: NOW - 1000,
     responses: [
-      { userId: 'andre', userName: 'Andre', attendanceStatus: 'attending', chaptersReadThrough: 6, readingComplete: false },
-      { userId: 'kayla', userName: 'Kayla', attendanceStatus: 'maybe', chaptersReadThrough: 5, readingComplete: true },
-      { userId: 'ting', userName: 'Ting', attendanceStatus: null, chaptersReadThrough: 0, readingComplete: false },
+      { userId: 'andre', userName: 'Andre', attendanceStatus: 'attending' },
+      { userId: 'kayla', userName: 'Kayla', attendanceStatus: 'maybe' },
+      { userId: 'ting', userName: 'Ting', attendanceStatus: null },
     ],
   }
   const activeBook = {
@@ -244,7 +244,7 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   const addDialog = page.getByRole('dialog', { name: 'Add a book' })
   await addDialog.getByRole('textbox', { name: 'Book title' }).fill('Kindred')
   await addDialog.getByRole('textbox', { name: 'Author' }).fill('Octavia E. Butler')
-  await addDialog.getByRole('button', { name: 'Add book' }).click()
+  await addDialog.getByRole('button', { name: 'Add current book' }).click()
   await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Kindred')
   await page.getByRole('button', { name: '← All books' }).click()
 
@@ -280,11 +280,11 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await page.getByRole('button', { name: 'Close' }).click()
 
   await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
-  const responseList = page.getByRole('list', { name: 'Member attendance and progress' })
-  await expect(responseList.getByRole('listitem')).toHaveCount(3)
-  await expect(page.getByLabel('Attendance totals')).toContainText('1 Pending')
-  await page.getByLabel('Your reading progress mode').selectOption('complete')
-  await expect(page.getByLabel('Your reading progress mode')).toHaveValue('complete')
+  const attendance = page.getByLabel('Member attendance')
+  await expect(attendance.getByRole('listitem')).toHaveCount(3)
+  await expect(page.getByRole('region', { name: 'Pending: 1' })).toContainText('Ting')
+  await page.getByLabel('Your attendance').selectOption('maybe')
+  await expect(page.getByRole('region', { name: 'Maybe: 2' })).toContainText('Andre')
   await page.waitForTimeout(750)
   await page.screenshot({ path: testInfo.outputPath('book-club-meeting-tracker-desktop.png'), fullPage: true })
   await page.getByRole('button', { name: 'Complete meeting' }).click()
@@ -343,9 +343,9 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
 
   await details.getByRole('button', { name: 'Close' }).click()
   await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
-  const responseList = page.getByRole('list', { name: 'Member attendance and progress' })
-  await expect(responseList.getByRole('listitem')).toHaveCount(3)
-  await expect.poll(() => responseList.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  const attendance = page.getByLabel('Member attendance')
+  await expect(attendance.getByRole('listitem')).toHaveCount(3)
+  await expect.poll(() => attendance.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   const forumBox = await page.getByRole('link', { name: 'Forum' }).boundingBox()
   const reminderBox = await page.getByRole('button', { name: 'Send reminder' }).boundingBox()
   const completeBox = await page.getByRole('button', { name: 'Complete meeting' }).boundingBox()

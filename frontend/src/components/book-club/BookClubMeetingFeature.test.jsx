@@ -34,26 +34,18 @@ const MEETING = {
     userId: "andre",
     userName: "Andre",
     attendanceStatus: "maybe",
-    chaptersReadThrough: 4,
-    readingComplete: false,
   }, {
     userId: "kayla",
     userName: "Kayla",
     attendanceStatus: "attending",
-    chaptersReadThrough: 8,
-    readingComplete: true,
   }, {
     userId: "ting",
     userName: "Ting",
     attendanceStatus: "not_attending",
-    chaptersReadThrough: 0,
-    readingComplete: false,
   }, {
     userId: "sheryl",
     userName: "Sheryl",
     attendanceStatus: null,
-    chaptersReadThrough: 3,
-    readingComplete: false,
   }],
 };
 
@@ -158,53 +150,43 @@ describe("BookClubMeetingFeature", () => {
       "meeting#1",
       { attendanceStatus: "attending" },
     );
-    const responseList = screen.getByRole("list", { name: "Member attendance and progress" });
-    const andreRow = within(responseList).getByText("Andre").closest('[role="listitem"]');
-    await waitFor(() => expect(andreRow).toHaveAttribute("data-attendance", "attending"));
+    await waitFor(() => {
+      expect(within(screen.getByRole("region", { name: "Attending: 2" })).getByText("Andre"))
+        .toBeInTheDocument();
+    });
   });
 
-  it("shows one member row and an attendance total for every response", async () => {
+  it("groups every member by attendance status with explicit counts", async () => {
     renderMeeting();
     await userEvent.click(screen.getByRole("button", {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
 
-    const responseList = screen.getByRole("list", { name: "Member attendance and progress" });
-    const memberRows = within(responseList).getAllByRole("listitem");
-    expect(memberRows).toHaveLength(4);
-    expect(memberRows.map((row) => row.dataset.attendance)).toEqual([
-      "maybe",
-      "attending",
-      "not_attending",
-      "pending",
-    ]);
-    expect(screen.getByLabelText("Attendance totals")).toHaveTextContent(
-      "1 Attending1 Maybe1 Not attending1 Pending",
-    );
-    const kaylaRow = within(responseList).getByText("Kayla").closest('[role="listitem"]');
-    expect(within(kaylaRow).getByText("Complete")).toBeInTheDocument();
+    const attendance = screen.getByLabelText("Member attendance");
+    expect(within(screen.getByRole("region", { name: "Attending: 1" })).getByText("Kayla"))
+      .toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Maybe: 1" })).getByText("Andre"))
+      .toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Not attending: 1" })).getByText("Ting"))
+      .toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Pending: 1" })).getByText("Sheryl"))
+      .toBeInTheDocument();
+    expect(within(attendance).getAllByRole("listitem")).toHaveLength(4);
+    expect(within(screen.getByRole("region", { name: "Maybe: 1" })).getByText("You"))
+      .toBeInTheDocument();
   });
 
-  it("saves chapter progress and completion mode independently", async () => {
+  it("keeps completed meeting attendance read-only", async () => {
+    getBookClubMeeting.mockResolvedValueOnce({ meeting: { ...MEETING, status: "completed" } });
     renderMeeting();
     await userEvent.click(screen.getByRole("button", {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
 
-    const chapter = screen.getByLabelText("Chapters read through");
-    await userEvent.clear(chapter);
-    await userEvent.type(chapter, "7");
-    await userEvent.tab();
-    expect(setBookClubResponse).toHaveBeenCalledWith(
-      "andre", "meeting#1", { chaptersReadThrough: 7 },
-    );
-
-    await userEvent.selectOptions(screen.getByLabelText("Your reading progress mode"), "complete");
-    expect(setBookClubResponse).toHaveBeenCalledWith(
-      "andre", "meeting#1", { readingComplete: true },
-    );
+    await waitFor(() => expect(screen.queryByLabelText("Your attendance")).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Member attendance")).toBeInTheDocument();
   });
 
   it("expands a meeting targeted by a household notification", async () => {
