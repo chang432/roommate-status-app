@@ -205,6 +205,9 @@ describe("GroupFeed module focus", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Movie night");
+    expect(
+      screen.getByRole("heading", { name: "Group Feed" }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Create a module" }));
 
     const themedTypes = ["events", "requests", "checklists", "polls", "tv"];
@@ -603,7 +606,7 @@ describe("GroupFeed module focus", () => {
       '[data-feed-panel-type="events"]',
     );
     expect(incomingPanel).toHaveStyle({
-      transform: "translate3d(calc(100% + -85px), 0, 0)",
+      transform: "translate3d(calc(100% + 16px + -85px), 0, 0)",
     });
     expect(within(incomingPanel).getByText("Movie night")).toBeInTheDocument();
     fireEvent.pointerUp(card, {
@@ -616,6 +619,77 @@ describe("GroupFeed module focus", () => {
     expect(
       await screen.findByRole("tab", { name: /^Events/, selected: true }),
     ).toBeInTheDocument();
+  });
+
+  it("moves the category underline with an in-progress swipe", async () => {
+    renderFeed("/", [feedItem("events"), feedItem("requests")]);
+
+    await screen.findByText("Movie night");
+    const tabList = screen.getByRole("tablist", { name: "Feed categories" });
+    const allContent = within(
+      screen.getByRole("tab", { name: /^All/ }),
+    ).getByText("All").parentElement;
+    const eventsContent = within(
+      screen.getByRole("tab", { name: /^Events/ }),
+    ).getByText("Events").parentElement;
+    const rect = (left, width) => ({
+      left,
+      right: left + width,
+      top: 0,
+      bottom: 20,
+      x: left,
+      y: 0,
+      width,
+      height: 20,
+      toJSON: () => ({}),
+    });
+    tabList.getBoundingClientRect = vi.fn(() => rect(0, 500));
+    allContent.getBoundingClientRect = vi.fn(() => rect(10, 40));
+    eventsContent.getBoundingClientRect = vi.fn(() => rect(110, 70));
+    fireEvent(window, new Event("resize"));
+
+    const indicator = document.querySelector(
+      "[data-feed-category-indicator]",
+    );
+    await waitFor(() =>
+      expect(indicator).toHaveStyle({
+        transform: "translate3d(10px, 0, 0)",
+        width: "40px",
+      }),
+    );
+
+    const feedMain = document.querySelector(
+      "[data-feed-swipe-phase]",
+    ).parentElement;
+    feedMain.getBoundingClientRect = vi.fn(() => rect(0, 184));
+    const card = cardForText("Movie night");
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 124,
+    });
+
+    expect(indicator).toHaveStyle({
+      transform: "translate3d(52.5px, 0, 0)",
+      width: "52.75px",
+    });
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 150,
+      clientY: 124,
+    });
+    expect(indicator).toHaveStyle({
+      transform: "translate3d(10px, 0, 0)",
+      width: "40px",
+    });
   });
 
   it("snaps an incomplete swipe back while keeping the adjacent page visible", async () => {

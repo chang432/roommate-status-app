@@ -228,7 +228,7 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await mockBookClub(page)
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { name: 'Group feed' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Group Feed' })).toBeVisible()
   await expect(page.getByRole('tablist', { name: 'Feed categories' }).getByRole('tab')).toHaveCount(7)
   await expect(page.getByRole('button', { name: 'Open feed menu' })).toBeVisible()
   await expect.poll(() => page.locator('[data-feed-sticky-header]').evaluate((element) => (
@@ -334,7 +334,11 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   await feedMenu.getByRole('button', { name: 'Close' }).click()
 
   const feedTabs = page.getByRole('tablist', { name: 'Feed categories' })
+  const stickyHeader = page.locator('[data-feed-sticky-header]')
   await expect(feedTabs.getByRole('tab')).toHaveCount(7)
+  await expect.poll(() => stickyHeader.evaluate((element) => (
+    getComputedStyle(element).backgroundColor
+  ))).toBe('rgba(0, 0, 0, 0)')
   await feedTabs.getByRole('tab', { name: /^TV/ }).click()
   const feedMain = page.locator('[data-feed-swipe-phase]').locator('..')
   await feedMain.scrollIntoViewIfNeeded()
@@ -347,13 +351,38 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
 
   const incomingBookClub = page.locator('[data-feed-panel-type="book-club"]')
   await expect(incomingBookClub.getByText('The Fifth Season').first()).toBeVisible()
+  const currentTv = page.locator('[data-feed-panel-type="tv"]')
+  const currentTvBox = await currentTv.boundingBox()
+  const incomingBookClubBox = await incomingBookClub.boundingBox()
+  const panelGap = incomingBookClubBox.x - (currentTvBox.x + currentTvBox.width)
+  expect(panelGap).toBeGreaterThanOrEqual(15)
+  expect(panelGap).toBeLessThanOrEqual(17)
+
+  const indicator = page.locator('[data-feed-category-indicator]')
+  const indicatorBox = await indicator.boundingBox()
+  const tvTabBox = await feedTabs.getByRole('tab', { name: /^TV/ }).boundingBox()
+  const bookClubTabBox = await feedTabs.getByRole('tab', { name: /^Book Club/ }).boundingBox()
+  const indicatorCenter = indicatorBox.x + indicatorBox.width / 2
+  const tvCenter = tvTabBox.x + tvTabBox.width / 2
+  const bookClubCenter = bookClubTabBox.x + bookClubTabBox.width / 2
+  expect(indicatorBox.height).toBe(4)
+  expect(indicatorCenter).toBeGreaterThan(Math.min(tvCenter, bookClubCenter))
+  expect(indicatorCenter).toBeLessThan(Math.max(tvCenter, bookClubCenter))
   await page.screenshot({ path: testInfo.outputPath('group-feed-swipe-preview-mobile.png') })
 
   await page.mouse.up()
-  await expect(feedTabs.getByRole('tab', { name: /^Book Club/, selected: true })).toBeVisible()
+  const selectedBookClubTab = feedTabs.getByRole('tab', { name: /^Book Club/, selected: true })
+  await expect(selectedBookClubTab).toBeVisible()
   await expect(page.locator('[data-feed-panel-type="book-club"]')).toContainText('The Fifth Season')
+  await expect.poll(async () => {
+    const activeTabBox = await selectedBookClubTab.boundingBox()
+    const activeIndicatorBox = await indicator.boundingBox()
+    return Math.abs(
+      activeIndicatorBox.x + activeIndicatorBox.width / 2 -
+      (activeTabBox.x + activeTabBox.width / 2)
+    )
+  }).toBeLessThan(2)
 
-  const stickyHeader = page.locator('[data-feed-sticky-header]')
   const stickyDocumentTop = await stickyHeader.evaluate((element) => (
     element.getBoundingClientRect().top + window.scrollY
   ))
@@ -365,8 +394,48 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   })
   await page.evaluate((top) => window.scrollTo(0, top + 300), stickyDocumentTop)
   await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+  await expect.poll(() => stickyHeader.evaluate((element) => {
+    const background = getComputedStyle(element).backgroundColor
+    return background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)'
+  })).toBe(true)
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('group-feed-sticky-mobile.png') })
+})
+
+test('keeps the editorial feed header clear across themes', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await mockBookClub(page)
+  await page.goto('/')
+
+  for (const theme of ['light', 'dark', 'forest']) {
+    await page.evaluate((nextTheme) => localStorage.setItem('roomie-theme', nextTheme), theme)
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+
+    const stickyHeader = page.locator('[data-feed-sticky-header]')
+    await expect.poll(() => stickyHeader.evaluate((element) => (
+      getComputedStyle(element).backgroundColor
+    ))).toBe('rgba(0, 0, 0, 0)')
+    const stickyDocumentTop = await stickyHeader.evaluate((element) => (
+      element.getBoundingClientRect().top + window.scrollY
+    ))
+    await page.locator('[data-feed-panel-type="all"]').evaluate((panel) => {
+      const spacer = document.createElement('div')
+      spacer.style.height = '1000px'
+      spacer.setAttribute('aria-hidden', 'true')
+      panel.append(spacer)
+    })
+    await page.evaluate((top) => window.scrollTo(0, top + 200), stickyDocumentTop)
+    await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+    await expect.poll(() => stickyHeader.evaluate((element) => {
+      const background = getComputedStyle(element).backgroundColor
+      return background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)'
+    })).toBe(true)
+    await expect.poll(() => page.evaluate(() => (
+      document.documentElement.scrollWidth <= window.innerWidth
+    ))).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath(`group-feed-header-${theme}-desktop.png`) })
+  }
 })
 
 test('keeps the two-column cards and library modal usable on a phone', async ({ page }, testInfo) => {

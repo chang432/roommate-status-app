@@ -47,6 +47,7 @@ const SWIPE_MIN_X = 64;
 const SWIPE_MAX_Y = 48;
 const SWIPE_DRAG_RESISTANCE = 0.85;
 const SWIPE_EDGE_RESISTANCE = 0.18;
+const SWIPE_PANEL_GAP_PX = 16;
 const FEED_SWIPE_TRANSITION_MS = 220;
 const FEED_SWIPE_CLICK_SUPPRESSION_MS = FEED_SWIPE_TRANSITION_MS * 2;
 
@@ -123,9 +124,51 @@ function getModuleCounts(modules, allTypes) {
   return counts;
 }
 
-function ModuleTabs({ activeType, counts, moduleTypes, onSelect }) {
+function ModuleTabs({
+  activeType,
+  counts,
+  moduleTypes,
+  onSelect,
+  swipeOffset,
+  swipePhase,
+  swipeTravelDistance,
+}) {
   const scrollerRef = useRef(null);
+  const tabsRef = useRef(null);
   const tabRefs = useRef(new Map());
+  const [tabMetrics, setTabMetrics] = useState({});
+
+  useLayoutEffect(() => {
+    const tabs = tabsRef.current;
+    if (!tabs) return undefined;
+
+    function measureTabs() {
+      const tabsRect = tabs.getBoundingClientRect();
+      const nextMetrics = {};
+      tabRefs.current.forEach((tab, typeId) => {
+        const content = tab.querySelector("[data-feed-tab-content]");
+        if (!content) return;
+        const contentRect = content.getBoundingClientRect();
+        nextMetrics[typeId] = {
+          left: contentRect.left - tabsRect.left,
+          width: contentRect.width,
+        };
+      });
+      setTabMetrics(nextMetrics);
+    }
+
+    measureTabs();
+    window.addEventListener("resize", measureTabs);
+    const observer = window.ResizeObserver
+      ? new window.ResizeObserver(measureTabs)
+      : null;
+    observer?.observe(tabs);
+    tabRefs.current.forEach((tab) => observer?.observe(tab));
+    return () => {
+      window.removeEventListener("resize", measureTabs);
+      observer?.disconnect();
+    };
+  }, [counts, moduleTypes]);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -161,9 +204,36 @@ function ModuleTabs({ activeType, counts, moduleTypes, onSelect }) {
     tabRefs.current.get(nextType)?.focus();
   }
 
+  const activeIndex = moduleTypes.findIndex((type) => type.id === activeType);
+  const adjacentType =
+    swipeOffset < 0
+      ? moduleTypes[activeIndex + 1]?.id
+      : moduleTypes[activeIndex - 1]?.id;
+  const activeMetric = tabMetrics[activeType];
+  const adjacentMetric = tabMetrics[adjacentType];
+  const progress = adjacentMetric
+    ? Math.min(Math.abs(swipeOffset) / Math.max(swipeTravelDistance, 1), 1)
+    : 0;
+  // The underline follows the same normalized distance as the feed page, so
+  // it stays attached to the reader's finger through differently sized tabs.
+  const indicator = activeMetric
+    ? {
+        left:
+          activeMetric.left +
+          ((adjacentMetric?.left ?? activeMetric.left) - activeMetric.left) *
+            progress,
+        width:
+          activeMetric.width +
+          ((adjacentMetric?.width ?? activeMetric.width) -
+            activeMetric.width) *
+            progress,
+      }
+    : { left: 0, width: 0 };
+
   return (
     <div ref={scrollerRef} className={styles.feedCategoryScroller}>
       <div
+        ref={tabsRef}
         className={styles.feedCategoryTabs}
         role="tablist"
         aria-label="Feed categories"
@@ -190,10 +260,32 @@ function ModuleTabs({ activeType, counts, moduleTypes, onSelect }) {
             )}
             data-module-type={type.id === "all" ? undefined : type.id}
           >
-            <span>{type.label}</span>
-            <span className={styles.feedCategoryCount}>{counts[type.id] ?? 0}</span>
+            <span
+              className={styles.feedCategoryTabContent}
+              data-feed-tab-content
+            >
+              <span>{type.label}</span>
+              <span className={styles.feedCategoryCount}>
+                {counts[type.id] ?? 0}
+              </span>
+            </span>
           </button>
         ))}
+        <span
+          aria-hidden="true"
+          className={cx(
+            styles.feedCategoryIndicator,
+            swipePhase === "dragging" || swipePhase === "preparing"
+              ? styles.feedCategoryIndicatorDirect
+              : "",
+          )}
+          style={{
+            transform: `translate3d(${indicator.left}px, 0, 0)`,
+            width: `${indicator.width}px`,
+            opacity: indicator.width > 0 ? 1 : 0,
+          }}
+          data-feed-category-indicator
+        />
       </div>
     </div>
   );
@@ -627,8 +719,11 @@ export default function GroupFeed({
   const swipeTimersRef = useRef([]);
   const swipeFrameRef = useRef(null);
   const swipeClickBlockUntilRef = useRef(0);
+  const stickyHeaderRef = useRef(null);
   const [feedSwipeOffset, setFeedSwipeOffset] = useState(0);
   const [feedSwipePhase, setFeedSwipePhase] = useState("idle");
+  const [feedSwipeTravelDistance, setFeedSwipeTravelDistance] = useState(1);
+  const [feedHeaderStuck, setFeedHeaderStuck] = useState(false);
   const canAdministerBookClub = isAdminIn(roommates, user.id);
 
   const enabledTypeIds = useMemo(() => {
@@ -845,6 +940,34 @@ export default function GroupFeed({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [drawerOpen]);
 
+  useEffect(() => {
+    if (loading) return undefined;
+    const header = stickyHeaderRef.current;
+    if (!header) return undefined;
+    let frameId = null;
+
+    function updateStickyState() {
+      frameId = null;
+      setFeedHeaderStuck(
+        window.scrollY > 0 && header.getBoundingClientRect().top <= 0,
+      );
+    }
+
+    function scheduleStickyUpdate() {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(updateStickyState);
+    }
+
+    updateStickyState();
+    window.addEventListener("scroll", scheduleStickyUpdate, { passive: true });
+    window.addEventListener("resize", scheduleStickyUpdate);
+    return () => {
+      window.removeEventListener("scroll", scheduleStickyUpdate);
+      window.removeEventListener("resize", scheduleStickyUpdate);
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
+  }, [loading]);
+
   useEffect(
     () => () => {
       swipeTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
@@ -936,12 +1059,16 @@ export default function GroupFeed({
     if (feedSwipePhase !== "idle") return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     if (event.target.closest?.(INTERACTIVE_SELECTOR)) return;
+    const panelWidth = event.currentTarget.getBoundingClientRect().width;
     swipeStartRef.current = {
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      width: event.currentTarget.getBoundingClientRect().width,
+      width: panelWidth,
     };
+    setFeedSwipeTravelDistance(
+      Math.max(panelWidth + SWIPE_PANEL_GAP_PX, 1),
+    );
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }
 
@@ -1000,7 +1127,7 @@ export default function GroupFeed({
       resetFeedSwipe();
       return;
     }
-    const travelDistance = Math.max(start.width, 1);
+    const travelDistance = Math.max(start.width + SWIPE_PANEL_GAP_PX, 1);
 
     // Suppress the synthetic click mobile browsers send after a completed
     // swipe, otherwise the departing card could open as it leaves the screen.
@@ -1285,8 +1412,30 @@ export default function GroupFeed({
           onReorderType={reorderModuleType}
         />
 
-        <div className={styles.feedStickyHeader} data-feed-sticky-header>
+        <div
+          ref={stickyHeaderRef}
+          className={cx(
+            styles.feedStickyHeader,
+            feedHeaderStuck ? styles.feedStickyHeaderStuck : "",
+          )}
+          data-feed-sticky-header
+        >
           <div className={styles.feedHeader}>
+            <h2 className={styles.feedTitle}>Group Feed</h2>
+            {canCreateModule &&
+              (activeType !== "book-club" || canAdministerBookClub) && (
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className={styles.createInlineButton}
+                  aria-label={createLabel}
+                  title={createLabel}
+                >
+                  +
+                </button>
+              )}
+          </div>
+          <div className={styles.feedCategoryRow}>
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
@@ -1301,26 +1450,16 @@ export default function GroupFeed({
                 <span />
               </span>
             </button>
-            <h2 className={styles.feedTitle}>Group feed</h2>
-            {canCreateModule &&
-              (activeType !== "book-club" || canAdministerBookClub) && (
-                <button
-                  type="button"
-                  onClick={openCreateModal}
-                  className={styles.createInlineButton}
-                  aria-label={createLabel}
-                  title={createLabel}
-                >
-                  +
-                </button>
-              )}
+            <ModuleTabs
+              activeType={activeType}
+              counts={moduleCounts}
+              moduleTypes={moduleTypes}
+              onSelect={selectModuleType}
+              swipeOffset={feedSwipeOffset}
+              swipePhase={feedSwipePhase}
+              swipeTravelDistance={feedSwipeTravelDistance}
+            />
           </div>
-          <ModuleTabs
-            activeType={activeType}
-            counts={moduleCounts}
-            moduleTypes={moduleTypes}
-            onSelect={selectModuleType}
-          />
         </div>
 
         <main
@@ -1349,7 +1488,7 @@ export default function GroupFeed({
                     : "",
                 )}
                 style={{
-                  transform: `translate3d(calc(-100% + ${feedSwipeOffset}px), 0, 0)`,
+                  transform: `translate3d(calc(-100% - ${SWIPE_PANEL_GAP_PX}px + ${feedSwipeOffset}px), 0, 0)`,
                 }}
                 data-feed-panel-type={previousType}
                 aria-hidden="true"
@@ -1389,7 +1528,7 @@ export default function GroupFeed({
                     : "",
                 )}
                 style={{
-                  transform: `translate3d(calc(100% + ${feedSwipeOffset}px), 0, 0)`,
+                  transform: `translate3d(calc(100% + ${SWIPE_PANEL_GAP_PX}px + ${feedSwipeOffset}px), 0, 0)`,
                 }}
                 data-feed-panel-type={nextType}
                 aria-hidden="true"

@@ -204,12 +204,6 @@
   color: var(--module-text);
 }
 
-.feedCategoryTabActive.modulePalette {
-  border-color: var(--module-border);
-  background-color: var(--module-bg);
-  color: var(--module-text);
-}
-
 .feedColumn {
   @apply min-w-0 touch-pan-y pb-24;
 }
@@ -237,15 +231,23 @@
 }
 
 .feedStickyHeader {
-  @apply sticky top-0 z-30 mb-4 rounded-sm border border-line bg-card px-3 pb-2 pt-3 shadow-soft;
+  @apply sticky top-0 z-30 mx-[-18px] mb-4 bg-transparent px-[18px] pt-3;
+}
+
+.feedStickyHeaderStuck {
+  @apply bg-bg-top;
 }
 
 .feedHeader {
-  @apply flex items-center gap-3 pb-3;
+  @apply flex items-center gap-3 px-1 pb-2;
+}
+
+.feedCategoryRow {
+  @apply flex min-w-0 items-end border-b-2 border-line;
 }
 
 .feedMenuButton {
-  @apply grid h-11 w-11 flex-none place-items-center rounded-full border border-line bg-card text-ink-soft transition hover:border-accent hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-4 focus:ring-accent-soft;
+  @apply grid h-11 w-11 flex-none place-items-center bg-transparent text-ink-soft transition hover:text-ink focus:outline-none focus:ring-4 focus:ring-inset focus:ring-accent-soft;
 }
 
 .feedMenuIcon {
@@ -261,7 +263,7 @@
 }
 
 .feedCategoryScroller {
-  @apply min-w-0 overflow-x-auto overscroll-x-contain;
+  @apply min-w-0 flex-1 overflow-x-auto overscroll-x-contain;
   scrollbar-width: none;
 }
 
@@ -270,19 +272,34 @@
 }
 
 .feedCategoryTabs {
-  @apply flex w-max min-w-full items-center gap-2;
+  @apply relative flex w-max min-w-full items-center gap-1;
 }
 
 .feedCategoryTab {
-  @apply flex min-h-10 flex-none items-center gap-2 whitespace-nowrap rounded-sm border border-transparent px-3 py-2 text-[13px] font-black text-ink-soft transition hover:border-line hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-4 focus:ring-accent-soft;
+  @apply flex min-h-11 flex-none items-center whitespace-nowrap px-3 py-2 text-[13px] font-black text-ink-soft transition-colors hover:text-ink focus:outline-none focus:ring-4 focus:ring-inset focus:ring-accent-soft;
 }
 
 .feedCategoryTabActive {
-  @apply border-accent bg-accent-soft text-ink;
+  @apply text-ink;
+}
+
+.feedCategoryTabContent {
+  @apply flex items-center gap-2;
 }
 
 .feedCategoryCount {
   @apply rounded-full bg-surface-muted px-2 py-1 text-[11px] leading-none text-ink-soft;
+}
+
+.feedCategoryIndicator {
+  @apply pointer-events-none absolute bottom-0 h-1 rounded-full bg-ink opacity-0 transition-[transform,width,opacity];
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, width;
+}
+
+.feedCategoryIndicatorDirect {
+  transition: none;
 }
 
 .feedList {
@@ -317,7 +334,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .feedPanel {
+  .feedPanel,
+  .feedCategoryIndicator {
     transition: none;
   }
 }
