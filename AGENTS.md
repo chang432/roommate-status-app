@@ -26,6 +26,20 @@ If any requested feature doesn't make sense in terms of the existing code struct
 - If the same or very similar logic appears in more than one place, consolidate it into a shared function/component and update callers.
 - Keep modules focused on one responsibility so future changes can be made in one place.
 
+## Design and UI
+- Keep the interface clean, modern, calm, and uncluttered while preserving the app's warm, homey visual identity. Use clear hierarchy, deliberate whitespace, consistent alignment, and restrained decoration.
+- Treat `frontend/src/styles/themes.css`, `frontend/tailwind.config.js`, `frontend/src/styles/components.css`, and reusable components under `frontend/src/components/ui/` as the design-system sources of truth. Inspect them and nearby completed patterns before creating new UI.
+- Reuse existing semantic tokens, shared classes, and UI components. If a visual or interaction pattern is needed in more than one place, extract or extend a shared primitive instead of duplicating component-specific styling.
+- Do not add raw colors or one-off theme branches in components. Use semantic theme tokens, and update the complete theme token contract when a genuinely new visual role is required.
+- Do not assume the nearest first-iteration component is a good pattern. When local styling conflicts with the shared system, move the changed surface and the nearby feature module toward the shared pattern rather than preserving inconsistency.
+- Keep visual treatments purposeful: prefer spacing and subtle dividers over nested cards, repeated borders, excessive pills, heavy shadows, or multiple competing accent colors. Match established typography, spacing, radii, density, and action placement.
+- Use a consistent action hierarchy: one clear primary action, neutral styling for secondary actions, and danger styling only for destructive or difficult-to-reverse actions. Use the shared form and module action layouts wherever applicable.
+- Design responsive behavior intentionally. Controls must remain readable and usable without horizontal overflow, action wrapping must be deliberate, and touch targets must remain practical at phone widths.
+- Build accessible interactions with semantic elements, programmatic labels, visible focus states, keyboard support, sufficient contrast, and status information that does not rely on color alone. Respect reduced-motion preferences for nonessential animation.
+- Provide coherent loading, empty, error, disabled, read-only, and success states when the flow can enter them. Preserve user context and make the result of an action clear.
+- For every user-visible UI change, verify the affected flow in a real browser at representative desktop and phone widths. Exercise the primary interaction states, check for clipping and horizontal overflow, and inspect screenshots when the existing E2E harness supports them.
+- Keep cleanup scoped to the requested surface and its nearby feature module. Do not redesign unrelated screens unless the user explicitly expands the scope.
+
 ## Forward-only Changes
 - When implementing updates, avoid adding backward-compatibility paths for outdated code unless explicitly requested by the user.
 - Choose one clear direction for the codebase and remove obsolete branches/toggles instead of preserving them behind flags.
