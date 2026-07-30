@@ -142,6 +142,8 @@ describe("BookClub cards and library", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: /Current book Parable of the Sower/ }));
     await userEvent.click(screen.getByRole("button", { name: "Complete book" }));
+    expect(completeBookClubBook).not.toHaveBeenCalled();
+    await userEvent.click(within(screen.getByRole("dialog", { name: /Complete Parable/ })).getByRole("button", { name: "Complete book" }));
     expect(completeBookClubBook).toHaveBeenCalledWith("andre", "book-1");
   });
 
@@ -155,6 +157,7 @@ describe("BookClub cards and library", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: /Current book Parable of the Sower/ }));
     await userEvent.click(screen.getByRole("button", { name: "Complete book" }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: /Complete Parable/ })).getByRole("button", { name: "Complete book" }));
     expect(completeBookClubBook).toHaveBeenCalledWith("andre", ACTIVE_BOOK.id);
     expect(await screen.findByText("Complete the open meeting before completing the current book.")).toBeInTheDocument();
   });

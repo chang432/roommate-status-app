@@ -287,9 +287,32 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await expect(page.getByLabel('Your reading progress mode')).toHaveValue('complete')
   await page.waitForTimeout(750)
   await page.screenshot({ path: testInfo.outputPath('book-club-meeting-tracker-desktop.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Complete meeting' }).click()
+  const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
+  await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await expect(confirmation).toContainText('meeting forum will close')
+  await page.screenshot({ path: testInfo.outputPath('complete-meeting-confirmation-desktop.png'), fullPage: true })
+  await confirmation.getByRole('button', { name: 'Cancel' }).click()
   await page.getByRole('link', { name: 'Forum' }).click()
   await expect(page).toHaveURL(/\?book=active-book&meeting=meeting%23demo/)
   await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Favorite passage')
+})
+
+test('confirms meeting completion safely on desktop', async ({ page }, testInfo) => {
+  await mockBookClub(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  await page.getByRole('button', { name: 'Complete meeting' }).click()
+
+  const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
+  await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await expect(confirmation).toContainText('meeting forum will close')
+  await expect.poll(() => confirmation.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('complete-meeting-confirmation-desktop.png'), fullPage: true })
+
+  await confirmation.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByRole('button', { name: 'Complete meeting' })).toBeVisible()
 })
 
 test('keeps the two-column cards and library modal usable on a phone', async ({ page }, testInfo) => {
@@ -328,6 +351,12 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   const completeBox = await page.getByRole('button', { name: 'Complete meeting' }).boundingBox()
   expect(Math.abs(forumBox.y - reminderBox.y)).toBeLessThan(2)
   expect(Math.abs(forumBox.y - completeBox.y)).toBeLessThan(2)
+  await page.getByRole('button', { name: 'Complete meeting' }).click()
+  const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
+  await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await expect.poll(() => confirmation.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('complete-meeting-confirmation-mobile.png'), fullPage: true })
+  await confirmation.getByRole('button', { name: 'Cancel' }).click()
   await page.waitForTimeout(750)
   await page.screenshot({ path: testInfo.outputPath('book-club-meeting-tracker-mobile.png'), fullPage: true })
 })

@@ -15,6 +15,7 @@ import { initialOf } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
 import { relativeTime } from "../../utils/time.js";
 import ModuleEditButton from "./ModuleEditButton.jsx";
+import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import styles from "./ChecklistFeature.module.css";
 
 function ChecklistItemEditor({
@@ -78,6 +79,7 @@ export default function ChecklistFeature({
   const [archivingId, setArchivingId] = useState(null);
   const [restoringId, setRestoringId] = useState(null);
   const [deletingChecklistId, setDeletingChecklistId] = useState(null);
+  const { confirm, confirmationDialog } = useConfirmDialog();
   useExpandOnModuleFocus(setExpandedId);
 
   const cancelAdding = useCallback(() => {
@@ -175,6 +177,12 @@ export default function ChecklistFeature({
 
   async function handleDeleteItem(checklist, item) {
     if (busyItemIds.includes(item.id)) return;
+    const confirmed = await confirm({
+      title: `Delete ${item.text}?`,
+      message: "This permanently removes the checklist item.",
+      confirmLabel: "Delete item",
+    });
+    if (!confirmed) return;
     markItemBusy(item.id);
     setError("");
     try {
@@ -218,6 +226,12 @@ export default function ChecklistFeature({
 
   async function handleDeleteChecklist(checklist) {
     if (deletingChecklistId) return;
+    const confirmed = await confirm({
+      title: `Delete ${checklist.title}?`,
+      message: "This permanently removes the checklist and all of its items.",
+      confirmLabel: "Delete checklist",
+    });
+    if (!confirmed) return;
     setDeletingChecklistId(checklist.id);
     setError("");
     try {
@@ -466,6 +480,7 @@ export default function ChecklistFeature({
           })
         )}
       </div>
+      {confirmationDialog}
     </div>
   );
 }

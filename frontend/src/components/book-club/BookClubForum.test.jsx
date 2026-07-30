@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import BookClubForum from "./BookClubForum.jsx";
 import {
   createBookClubForumEntry,
+  deleteBookClubForumEntry,
   getBookClubForum,
 } from "../../api/bookClub.js";
 
@@ -13,6 +14,7 @@ vi.mock("../../context/AuthContext.jsx", () => ({
 vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   ...(await importOriginal()),
   createBookClubForumEntry: vi.fn(),
+  deleteBookClubForumEntry: vi.fn(),
   getBookClubForum: vi.fn(),
 }));
 
@@ -88,5 +90,38 @@ describe("BookClubForum", () => {
     expect(screen.getByRole("heading", { name: "Favorite passage" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reply" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Start a topic" })).not.toBeInTheDocument();
+  });
+
+  it("confirms before permanently removing a topic", async () => {
+    const forum = {
+      meetingId: MEETING.id,
+      locked: false,
+      threads: [{
+        id: "forum#1",
+        title: "Favorite passage",
+        body: "Which scene stayed with you?",
+        authorId: "andre",
+        authorName: "Andre",
+        createdAt: 1,
+        updatedAt: 1,
+        lastActivityAt: 1,
+        replies: [],
+      }],
+    };
+    getBookClubForum.mockResolvedValue({ forum });
+    deleteBookClubForumEntry.mockResolvedValue({
+      forum: { ...forum, threads: [] },
+    });
+    render(<BookClubForum meeting={MEETING} canAdminister={false} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    expect(deleteBookClubForumEntry).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Remove topic" }));
+
+    expect(deleteBookClubForumEntry).toHaveBeenCalledWith(
+      "andre",
+      "meeting#1",
+      "forum#1",
+    );
   });
 });

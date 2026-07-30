@@ -3,7 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import BookClubMeetingFeature from "./BookClubMeetingFeature.jsx";
-import { getBookClubMeeting, setBookClubResponse } from "../../api/bookClub.js";
+import {
+  completeBookClubMeeting,
+  getBookClubMeeting,
+  setBookClubResponse,
+} from "../../api/bookClub.js";
 import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
@@ -13,6 +17,7 @@ vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   ...(await importOriginal()),
   getBookClubMeeting: vi.fn(),
   setBookClubResponse: vi.fn(),
+  completeBookClubMeeting: vi.fn(),
 }));
 
 const MEETING = {
@@ -113,6 +118,22 @@ describe("BookClubMeetingFeature", () => {
     expect(screen.getByRole("button", { name: "Complete meeting" })).toHaveClass(
       "ui-pillDanger",
     );
+  });
+
+  it("requires explicit confirmation before completing a meeting", async () => {
+    completeBookClubMeeting.mockResolvedValue({});
+    renderMeeting({ canAdminister: true });
+    await userEvent.click(screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Complete meeting" }));
+    expect(completeBookClubMeeting).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    await userEvent.click(within(screen.getByRole("dialog", { name: /Complete meeting/ })).getByRole("button", { name: "Complete meeting" }));
+    expect(completeBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");
   });
 
   it("updates the viewer response inline", async () => {

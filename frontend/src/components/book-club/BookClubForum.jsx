@@ -7,6 +7,7 @@ import {
 } from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { relativeTime } from "../../utils/time.js";
+import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import styles from "./BookClubForum.module.css";
 
 export default function BookClubForum({ meeting, canAdminister, focusThreadId }) {
@@ -20,7 +21,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
   const [replyTo, setReplyTo] = useState(null);
   const [replyBody, setReplyBody] = useState("");
   const [editing, setEditing] = useState(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const { confirm, confirmationDialog } = useConfirmDialog();
 
   const loadForum = useCallback(async () => {
     try {
@@ -108,14 +109,20 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
     }
   }
 
-  async function removeEntry(entryId) {
+  async function removeEntry(entry) {
     if (busy) return;
+    const kind = entry.parentPostId ? "reply" : "topic";
+    const confirmed = await confirm({
+      title: `Remove this ${kind}?`,
+      message: `This permanently removes the ${kind} from the meeting forum.`,
+      confirmLabel: `Remove ${kind}`,
+    });
+    if (!confirmed) return;
     setBusy(true);
     setError("");
     try {
-      const response = await deleteBookClubForumEntry(user.id, meeting.id, entryId);
+      const response = await deleteBookClubForumEntry(user.id, meeting.id, entry.id);
       setForum(response.forum);
-      setConfirmDeleteId(null);
     } catch (err) {
       setError(err.message || "Could not remove the forum entry.");
     } finally {
@@ -136,14 +143,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
             isReply: Boolean(entry.parentPostId),
           })}>Edit</button>
         )}
-        {confirmDeleteId === entry.id ? (
-          <>
-            <button type="button" className={styles.danger} disabled={busy} onClick={() => removeEntry(entry.id)}>Confirm remove</button>
-            <button type="button" onClick={() => setConfirmDeleteId(null)}>Cancel</button>
-          </>
-        ) : (
-          <button type="button" onClick={() => setConfirmDeleteId(entry.id)}>Remove</button>
-        )}
+        <button type="button" disabled={busy} onClick={() => removeEntry(entry)}>Remove</button>
       </div>
     );
   }
@@ -226,6 +226,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
           </div>
         </form>
       )}
+      {confirmationDialog}
     </section>
   );
 }

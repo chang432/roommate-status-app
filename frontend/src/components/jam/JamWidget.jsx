@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { cx } from '../../utils/classNames.js'
 import { relativeTime } from '../../utils/time.js'
 import SwipeActionRow from '../ui/SwipeActionRow.jsx'
+import { useConfirmDialog } from '../ui/useConfirmDialog.jsx'
 import styles from './JamWidget.module.css'
 
 function Waveform() {
@@ -123,11 +124,18 @@ export default function JamWidget({
   const { user } = useAuth()
   const [ending, setEnding] = useState(false)
   const [error, setError] = useState('')
+  const { confirm, confirmationDialog } = useConfirmDialog()
 
   if (!jam) return null
 
   async function handleEnd() {
     if (ending) return
+    const confirmed = await confirm({
+      title: `Delete ${jam.hostName}'s Jam?`,
+      message: 'This removes the shared Jam for everyone in the group.',
+      confirmLabel: 'Delete Jam',
+    })
+    if (!confirmed) return
     setEnding(true)
     setError('')
     try {
@@ -140,18 +148,19 @@ export default function JamWidget({
   }
 
   return (
-    <SwipeActionRow
-      actions={[
-        {
-          label: ending ? 'Deleting…' : 'Delete',
-          pendingLabel: ending ? 'Deleting…' : 'Delete',
-          tone: 'danger',
-          disabled: ending,
-          onClick: handleEnd,
-        },
-      ]}
-    >
-      <section className={styles.wrap} aria-label="Spotify Jam">
+    <>
+      <SwipeActionRow
+        actions={[
+          {
+            label: ending ? 'Deleting…' : 'Delete',
+            pendingLabel: ending ? 'Deleting…' : 'Delete',
+            tone: 'danger',
+            disabled: ending,
+            onClick: handleEnd,
+          },
+        ]}
+      >
+        <section className={styles.wrap} aria-label="Spotify Jam">
         <div className={styles.row}>
           <div
             className={styles.titleBlock}
@@ -197,7 +206,9 @@ export default function JamWidget({
         </div>
 
         {error ? <p className={cx('ui-errorText', styles.error)}>{error}</p> : null}
-      </section>
-    </SwipeActionRow>
+        </section>
+      </SwipeActionRow>
+      {confirmationDialog}
+    </>
   )
 }

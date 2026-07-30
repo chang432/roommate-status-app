@@ -10,6 +10,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { useExpandOnModuleFocus } from "../../context/ModuleFocusContext.jsx";
 import { exactDateTime } from "../../utils/time.js";
 import ModuleEditButton from "../feed/ModuleEditButton.jsx";
+import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import styles from "./BookClubMeetingFeature.module.css";
 
 const ATTENDANCE_LABELS = {
@@ -39,6 +40,7 @@ export default function BookClubMeetingFeature({
   const [details, setDetails] = useState({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const { confirm, confirmationDialog } = useConfirmDialog();
 
   const loadMeetingDetails = useCallback(async (meetingId) => {
     try {
@@ -82,6 +84,12 @@ export default function BookClubMeetingFeature({
 
   async function complete(meeting) {
     if (busy) return;
+    const confirmed = await confirm({
+      title: `Complete meeting for ${meeting.bookTitle}?`,
+      message: "Attendance and reading progress will become read-only, and the meeting forum will close.",
+      confirmLabel: "Complete meeting",
+    });
+    if (!confirmed) return;
     setBusy(true);
     setError("");
     try {
@@ -258,6 +266,7 @@ export default function BookClubMeetingFeature({
           </article>
         );
       })}
+      {confirmationDialog}
     </div>
   );
 }

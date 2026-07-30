@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { isAdminIn } from "../../utils/roles.js";
 import { OPEN_BOOK_LIBRARY_ADD_EVENT } from "../../utils/bookClubEvents.js";
 import ModalShell from "../ui/ModalShell.jsx";
+import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import BookClubBookForm from "./BookClubBookForm.jsx";
 import BookClubLibrary from "./BookClubLibrary.jsx";
 import styles from "./BookClub.module.css";
@@ -53,6 +54,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   const [selectedBookId, setSelectedBookId] = useState(null);
   const [bookEditor, setBookEditor] = useState(null);
   const [completingBook, setCompletingBook] = useState(false);
+  const { confirm, confirmationDialog } = useConfirmDialog();
   const canAdminister = isAdminIn(roommates, user?.id);
 
   const loadSummary = useCallback(async () => {
@@ -161,6 +163,13 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
 
   async function completeBook(bookId) {
     if (!bookId || completingBook) return;
+    const book = books.find((candidate) => candidate.id === bookId) ?? activeBook;
+    const confirmed = await confirm({
+      title: `Complete ${book?.title || "this book"}?`,
+      message: "This moves the book to the completed library and closes its active reading cycle.",
+      confirmLabel: "Complete book",
+    });
+    if (!confirmed) return;
     setCompletingBook(true);
     setError("");
     try {
@@ -272,6 +281,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
           )}
         </ModalShell>
       )}
+      {confirmationDialog}
     </section>
   );
 }

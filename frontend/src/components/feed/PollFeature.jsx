@@ -12,6 +12,7 @@ import {
 import FeedComments from "../comments/FeedComments.jsx";
 import Avatar from "../ui/Avatar.jsx";
 import PeoplePopover from "../ui/PeoplePopover.jsx";
+import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useExpandOnModuleFocus } from "../../context/ModuleFocusContext.jsx";
 import { avatarColor } from "../../utils/avatar.js";
@@ -71,6 +72,7 @@ export default function PollFeature({
   const [commentText, setCommentText] = useState("");
   const [likingCommentIds, setLikingCommentIds] = useState([]);
   const [openLikesCommentId, setOpenLikesCommentId] = useState(null);
+  const { confirm, confirmationDialog } = useConfirmDialog();
 
   const closeTransientUi = useCallback(() => {
     setEditing(null);
@@ -92,6 +94,15 @@ export default function PollFeature({
     } finally {
       setBusy("");
     }
+  }
+
+  async function handleDelete(poll) {
+    const confirmed = await confirm({
+      title: `Delete ${poll.title}?`,
+      message: "This permanently removes the poll, its votes, and comments.",
+      confirmLabel: "Delete poll",
+    });
+    if (confirmed) await mutate("delete", () => deletePoll(poll.id, user.id));
   }
 
   function toggleExpanded(id) {
@@ -372,9 +383,7 @@ export default function PollFeature({
                       type="button"
                       className="ui-pillButton ui-pillDanger ui-moduleActionButton"
                       disabled={Boolean(busy)}
-                      onClick={() =>
-                        mutate("delete", () => deletePoll(poll.id, user.id))
-                      }
+                      onClick={() => handleDelete(poll)}
                     >
                       Delete
                     </button>
@@ -385,6 +394,7 @@ export default function PollFeature({
           </article>
         );
       })}
+      {confirmationDialog}
     </div>
   );
 }
