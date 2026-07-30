@@ -159,9 +159,20 @@ export default function BookClubMeetingFeature({
                         const editable = mine && detail.status === "scheduled";
                         const attendance = response.attendanceStatus ?? "pending";
                         return (
-                          <div className={styles.response} key={response.userId} role="listitem">
+                          <div
+                            className={styles.response}
+                            data-attendance={attendance}
+                            key={response.userId}
+                            role="listitem"
+                          >
                             <span className={styles.memberName} title={response.userName}>
-                              {response.userName}{mine ? <small>You</small> : null}
+                              <span
+                                aria-hidden="true"
+                                className={styles.attendanceIndicator}
+                                data-status={attendance}
+                              />
+                              <span className={styles.memberLabel}>{response.userName}</span>
+                              {mine ? <small>You</small> : null}
                             </span>
                             {editable ? (
                               <select
@@ -210,14 +221,33 @@ export default function BookClubMeetingFeature({
                       })}
                     </div>
                   </div>
-                  <div className={styles.meetingActions}>
-                    <Link to={`/?book=${encodeURIComponent(meeting.bookId)}&meeting=${encodeURIComponent(meeting.id)}`}>Forum</Link>
+                  <div className={`ui-moduleActionRow ${styles.meetingActions}`}>
+                    <Link
+                      className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                      to={`/?book=${encodeURIComponent(meeting.bookId)}&meeting=${encodeURIComponent(meeting.id)}`}
+                    >
+                      Forum
+                    </Link>
                     {detail.status === "scheduled" && (
                       <>
-                        <button type="button" disabled={busy} onClick={() => notify(detail)}>Send reminder</button>
+                        <button
+                          type="button"
+                          className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                          disabled={busy}
+                          onClick={() => notify(detail)}
+                        >
+                          Send reminder
+                        </button>
                         <ModuleEditButton onEdit={onEdit} disabled={busy} />
                         {canAdminister && (
-                          <button type="button" disabled={busy} onClick={() => complete(detail)}>Complete meeting</button>
+                          <button
+                            type="button"
+                            className="ui-pillButton ui-pillDanger ui-moduleActionButton"
+                            disabled={busy}
+                            onClick={() => complete(detail)}
+                          >
+                            Complete meeting
+                          </button>
                         )}
                       </>
                     )}

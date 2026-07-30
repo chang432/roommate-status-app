@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -104,12 +104,28 @@ describe("BookClubMeetingFeature", () => {
     }));
 
     expect(screen.getByRole("button", { name: "Send reminder" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send reminder" })).toHaveClass(
+      "ui-pillSecondary",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Complete meeting" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Forum" })).toHaveClass("ui-pillSecondary");
+    expect(screen.getByRole("button", { name: "Complete meeting" })).toHaveClass(
+      "ui-pillDanger",
+    );
   });
 
   it("updates the viewer response inline", async () => {
+    setBookClubResponse.mockResolvedValueOnce({
+      meeting: {
+        ...MEETING,
+        responses: MEETING.responses.map((response) => (
+          response.userId === "andre"
+            ? { ...response, attendanceStatus: "attending" }
+            : response
+        )),
+      },
+    });
     renderMeeting();
     await userEvent.click(screen.getByRole("button", {
       name: /The Left Hand of Darkness/,
@@ -121,6 +137,9 @@ describe("BookClubMeetingFeature", () => {
       "meeting#1",
       { attendanceStatus: "attending" },
     );
+    const responseList = screen.getByRole("list", { name: "Member attendance and progress" });
+    const andreRow = within(responseList).getByText("Andre").closest('[role="listitem"]');
+    await waitFor(() => expect(andreRow).toHaveAttribute("data-attendance", "attending"));
   });
 
   it("shows one member row and an attendance total for every response", async () => {
@@ -131,7 +150,14 @@ describe("BookClubMeetingFeature", () => {
     }));
 
     const responseList = screen.getByRole("list", { name: "Member attendance and progress" });
-    expect(within(responseList).getAllByRole("listitem")).toHaveLength(4);
+    const memberRows = within(responseList).getAllByRole("listitem");
+    expect(memberRows).toHaveLength(4);
+    expect(memberRows.map((row) => row.dataset.attendance)).toEqual([
+      "maybe",
+      "attending",
+      "not_attending",
+      "pending",
+    ]);
     expect(screen.getByLabelText("Attendance totals")).toHaveTextContent(
       "1 Attending1 Maybe1 Not attending1 Pending",
     );

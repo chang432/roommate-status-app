@@ -23,9 +23,14 @@
 .attendanceTotals span[data-status="not_attending"] { @apply border-danger-soft-border bg-danger-soft text-status-red; }
 .responseColumns, .response { grid-template-columns: minmax(4.5rem, 1fr) minmax(6.5rem, .95fr) minmax(8rem, 1.15fr); }
 .responseColumns { @apply grid gap-2 px-2 text-[9.5px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
-.responseList { @apply overflow-hidden rounded-sm border border-line bg-card; }
+.responseList { @apply overflow-hidden; }
 .response { @apply grid min-h-12 items-center gap-2 border-t border-line px-2 py-2 text-xs first:border-t-0; }
-.memberName { @apply flex min-w-0 items-center gap-1 truncate font-semibold text-ink; }
+.memberName { @apply flex min-w-0 items-center gap-1 font-semibold text-ink; }
+.memberLabel { @apply min-w-0 truncate; }
+.attendanceIndicator { @apply h-2 w-2 flex-none rounded-full bg-status-grey; }
+.attendanceIndicator[data-status="attending"] { @apply bg-status-green; }
+.attendanceIndicator[data-status="maybe"] { @apply bg-status-amber; }
+.attendanceIndicator[data-status="not_attending"] { @apply bg-status-red; }
 .memberName small { @apply rounded-full bg-accent-soft px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-accent-deep; }
 .attendanceControl, .progressControls select, .progressControls input { @apply h-8 min-w-0 rounded-sm border border-line bg-surface-muted px-2 text-[11.5px] text-ink outline-none focus:border-accent; }
 .attendanceControl { @apply w-full; }
@@ -38,8 +43,7 @@
 .attendanceBadge[data-status="not_attending"] { @apply text-status-red; }
 .attendanceBadge[data-status="pending"] { @apply italic; }
 .progressValue { @apply text-ink; }
-.meetingActions { @apply flex flex-wrap gap-2 border-t border-line pt-3; }
-.meetingActions button, .meetingActions a { @apply min-h-10 rounded-full border border-accent px-4 py-2 text-sm font-bold text-accent-deep hover:bg-accent-soft disabled:opacity-50; }
+.meetingActions { @apply flex-nowrap; }
 @media (max-width: 520px) {
   .meta { @apply whitespace-normal; }
   .responseHeading { @apply items-start; }
@@ -48,4 +52,6 @@
   .responseColumns, .response { @apply gap-1.5 px-1.5; }
   .attendanceControl, .progressControls select, .progressControls input { @apply px-1 text-[10.5px]; }
   .memberName, .attendanceBadge, .progressValue { @apply text-[10.5px]; }
+  .meetingActions { @apply gap-1.5; }
+  .meetingActions button, .meetingActions a { @apply min-h-9 whitespace-nowrap px-2 py-1.5 text-[10.5px]; }
 }
