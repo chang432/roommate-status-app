@@ -228,6 +228,12 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await mockBookClub(page)
   await page.goto('/')
 
+  await expect(page.getByRole('heading', { name: 'Group feed' })).toBeVisible()
+  await expect(page.getByRole('tablist', { name: 'Feed categories' }).getByRole('tab')).toHaveCount(7)
+  await expect(page.getByRole('button', { name: 'Open feed menu' })).toBeVisible()
+  await expect.poll(() => page.locator('[data-feed-sticky-header]').evaluate((element) => (
+    getComputedStyle(element).position
+  ))).toBe('sticky')
   await expect(page.getByRole('button', { name: /Current book The Fifth Season/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /Library All books/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /Book Kayla/ })).toBeVisible()
@@ -313,6 +319,54 @@ test('confirms meeting completion safely on desktop', async ({ page }, testInfo)
 
   await confirmation.getByRole('button', { name: 'Cancel' }).click()
   await expect(page.getByRole('button', { name: 'Complete meeting' })).toBeVisible()
+})
+
+test('shows the next feed category while swiping on a phone', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockBookClub(page)
+  await page.goto('/')
+
+  const feedMenuButton = page.getByRole('button', { name: 'Open feed menu' })
+  await expect(feedMenuButton).toBeVisible()
+  await feedMenuButton.click()
+  const feedMenu = page.getByLabel('Module types')
+  await expect(feedMenu).toBeInViewport()
+  await feedMenu.getByRole('button', { name: 'Close' }).click()
+
+  const feedTabs = page.getByRole('tablist', { name: 'Feed categories' })
+  await expect(feedTabs.getByRole('tab')).toHaveCount(7)
+  await feedTabs.getByRole('tab', { name: /^TV/ }).click()
+  const feedMain = page.locator('[data-feed-swipe-phase]').locator('..')
+  await feedMain.scrollIntoViewIfNeeded()
+  const feedBox = await feedMain.boundingBox()
+  const swipeStartX = feedBox.x + feedBox.width - 20
+  const swipeY = feedBox.y + Math.min(60, feedBox.height / 2)
+  await page.mouse.move(swipeStartX, swipeY)
+  await page.mouse.down()
+  await page.mouse.move(swipeStartX - 260, swipeY + 4, { steps: 8 })
+
+  const incomingBookClub = page.locator('[data-feed-panel-type="book-club"]')
+  await expect(incomingBookClub.getByText('The Fifth Season').first()).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('group-feed-swipe-preview-mobile.png') })
+
+  await page.mouse.up()
+  await expect(feedTabs.getByRole('tab', { name: /^Book Club/, selected: true })).toBeVisible()
+  await expect(page.locator('[data-feed-panel-type="book-club"]')).toContainText('The Fifth Season')
+
+  const stickyHeader = page.locator('[data-feed-sticky-header]')
+  const stickyDocumentTop = await stickyHeader.evaluate((element) => (
+    element.getBoundingClientRect().top + window.scrollY
+  ))
+  await page.locator('[data-feed-panel-type="book-club"]').evaluate((panel) => {
+    const spacer = document.createElement('div')
+    spacer.style.height = '1200px'
+    spacer.setAttribute('aria-hidden', 'true')
+    panel.append(spacer)
+  })
+  await page.evaluate((top) => window.scrollTo(0, top + 300), stickyDocumentTop)
+  await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('group-feed-sticky-mobile.png') })
 })
 
 test('keeps the two-column cards and library modal usable on a phone', async ({ page }, testInfo) => {

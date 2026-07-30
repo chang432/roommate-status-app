@@ -156,10 +156,9 @@ function cardForText(text) {
   return screen.getByText(text).closest('[role="button"]');
 }
 
-function moduleNavEditButton() {
-  return within(screen.getByLabelText("Module types")).getByRole("button", {
-    name: "Edit",
-  });
+async function openModuleNav(user) {
+  await user.click(screen.getByRole("button", { name: "Open feed menu" }));
+  return screen.getByLabelText("Module types");
 }
 
 describe("GroupFeed module focus", () => {
@@ -212,12 +211,12 @@ describe("GroupFeed module focus", () => {
     themedTypes.forEach((type) => {
       expect(
         document.querySelectorAll(`[data-module-type="${type}"]`),
-      ).toHaveLength(3);
+      ).toHaveLength(4);
     });
     expect(
       document.querySelectorAll('[data-module-type="spotify"]'),
     ).toHaveLength(0);
-    expect(screen.getByRole("button", { name: /^All/ })).not.toHaveAttribute(
+    expect(screen.getByRole("tab", { name: /^All/ })).not.toHaveAttribute(
       "data-module-type",
     );
   });
@@ -235,8 +234,8 @@ describe("GroupFeed module focus", () => {
       expanded: false,
     })).toBeInTheDocument();
     expect(screen.queryByText("Movie night")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Book Club/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Events/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Book Club/ })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Events/ })).not.toBeInTheDocument();
   });
 
   it("makes polls available in a Book Club-only group", async () => {
@@ -247,11 +246,7 @@ describe("GroupFeed module focus", () => {
     );
 
     expect(await screen.findByText("Dinner?")).toBeInTheDocument();
-    expect(
-      within(screen.getByLabelText("Module types")).getByRole("button", {
-        name: /^Polls/,
-      }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^Polls/ })).toBeInTheDocument();
     expect(screen.queryByText("Movie night")).not.toBeInTheDocument();
   });
 
@@ -288,7 +283,10 @@ describe("GroupFeed module focus", () => {
     expect(
       await screen.findByText("The Left Hand of Darkness"),
     ).toBeInTheDocument();
-    await user.click(moduleNavEditButton());
+    const moduleNav = await openModuleNav(user);
+    await user.click(
+      within(moduleNav).getByRole("button", { name: "Edit" }),
+    );
     await user.click(screen.getByRole("button", { name: /^All/ }));
     await user.click(screen.getByRole("checkbox", { name: "Book Club" }));
     expect(screen.queryByText("The Left Hand of Darkness")).not.toBeInTheDocument();
@@ -364,7 +362,7 @@ describe("GroupFeed module focus", () => {
   it("handles filter-only and unknown module destinations without scrolling", async () => {
     renderFeed("/?module=tv", [feedItem("tv")]);
     expect(
-      await screen.findByRole("heading", { name: "TV" }),
+      await screen.findByRole("tab", { name: /^TV/, selected: true }),
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(""),
@@ -598,9 +596,16 @@ describe("GroupFeed module focus", () => {
       clientX: 80,
       clientY: 126,
     });
-    expect(document.querySelector('[data-feed-swipe-phase="dragging"]')).toHaveStyle(
-      { transform: "translateX(-85px)" },
+    expect(
+      document.querySelector('[data-feed-panel-type="all"]'),
+    ).toHaveStyle({ transform: "translate3d(-85px, 0, 0)" });
+    const incomingPanel = document.querySelector(
+      '[data-feed-panel-type="events"]',
     );
+    expect(incomingPanel).toHaveStyle({
+      transform: "translate3d(calc(100% + -85px), 0, 0)",
+    });
+    expect(within(incomingPanel).getByText("Movie night")).toBeInTheDocument();
     fireEvent.pointerUp(card, {
       pointerId: 1,
       pointerType: "touch",
@@ -609,8 +614,106 @@ describe("GroupFeed module focus", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "Events" }),
+      await screen.findByRole("tab", { name: /^Events/, selected: true }),
     ).toBeInTheDocument();
+  });
+
+  it("snaps an incomplete swipe back while keeping the adjacent page visible", async () => {
+    renderFeed("/", [feedItem("events"), feedItem("requests")]);
+
+    await screen.findByText("Movie night");
+    const card = cardForText("Movie night");
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 150,
+      clientY: 123,
+    });
+
+    const incomingPanel = document.querySelector(
+      '[data-feed-panel-type="events"]',
+    );
+    expect(within(incomingPanel).getByText("Movie night")).toBeInTheDocument();
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 150,
+      clientY: 123,
+    });
+
+    expect(document.querySelector('[data-feed-panel-type="all"]')).toHaveStyle({
+      transform: "translate3d(0px, 0, 0)",
+    });
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-feed-swipe-phase="idle"]'),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("tab", { name: /^All/, selected: true })).toBeInTheDocument();
+  });
+
+  it("resists outward swipes at the first category without wrapping", async () => {
+    renderFeed("/", [feedItem("events")]);
+
+    await screen.findByText("Movie night");
+    const card = cardForText("Movie night");
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 124,
+    });
+
+    expect(document.querySelector('[data-feed-panel-type="all"]')).toHaveStyle({
+      transform: "translate3d(18px, 0, 0)",
+    });
+    expect(
+      document.querySelector('[data-feed-panel-type="tv"]'),
+    ).not.toBeInTheDocument();
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 124,
+    });
+
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-feed-swipe-phase="idle"]'),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("tab", { name: /^All/, selected: true })).toBeInTheDocument();
+  });
+
+  it("supports arrow-key navigation across category tabs", async () => {
+    renderFeed("/", [feedItem("events"), feedItem("requests")]);
+
+    await screen.findByText("Movie night");
+    const allTab = screen.getByRole("tab", { name: /^All/ });
+    allTab.focus();
+    fireEvent.keyDown(allTab, { key: "ArrowRight" });
+
+    const eventsTab = screen.getByRole("tab", {
+      name: /^Events/,
+      selected: true,
+    });
+    expect(eventsTab).toHaveFocus();
+    expect(screen.getByRole("tabpanel")).toHaveAttribute(
+      "aria-labelledby",
+      eventsTab.id,
+    );
   });
 
   it("supports touch drag ordering in filter edit mode", async () => {
@@ -618,7 +721,10 @@ describe("GroupFeed module focus", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Movie night");
-    await user.click(moduleNavEditButton());
+    const moduleNav = await openModuleNav(user);
+    await user.click(
+      within(moduleNav).getByRole("button", { name: "Edit" }),
+    );
     const requestDropTarget = document.querySelector(
       '[data-module-drop-type="requests"]',
     );
@@ -655,6 +761,7 @@ describe("GroupFeed module focus", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
     const card = cardForText("Movie night");
     fireEvent.pointerDown(card, {
       pointerId: 2,
@@ -676,7 +783,7 @@ describe("GroupFeed module focus", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "Requests" }),
+      await screen.findByRole("tab", { name: /^Requests/, selected: true }),
     ).toBeInTheDocument();
   });
 
