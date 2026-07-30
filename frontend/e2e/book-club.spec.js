@@ -343,15 +343,20 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   await expect(feedTabs.getByRole('tab', { name: /^TV/, selected: true })).toBeVisible()
   const categoryScroller = page.locator('[data-feed-category-scroller]')
   await categoryScroller.evaluate((element) => element.scrollTo({ left: 0, behavior: 'auto' }))
-  const expectedCategoryScroll = await categoryScroller.evaluate((element) => {
+  const categoryScrollTargets = await categoryScroller.evaluate((element) => {
     const activeTab = element.querySelector('[role="tab"][aria-selected="true"]')
-    const centered = activeTab.offsetLeft - (element.clientWidth - activeTab.offsetWidth) / 2
+    const nextTab = element.querySelector('[role="tab"][data-module-type="book-club"]')
+    const centeredTarget = (tab) => Math.min(Math.max(
+      tab.offsetLeft - (element.clientWidth - tab.offsetWidth) / 2,
+      0,
+    ), element.scrollWidth - element.clientWidth)
     return {
       before: element.scrollLeft,
-      target: Math.min(Math.max(centered, 0), element.scrollWidth - element.clientWidth),
+      active: centeredTarget(activeTab),
+      next: centeredTarget(nextTab),
     }
   })
-  expect(Math.abs(expectedCategoryScroll.before - expectedCategoryScroll.target)).toBeGreaterThan(5)
+  expect(Math.abs(categoryScrollTargets.before - categoryScrollTargets.active)).toBeGreaterThan(5)
   const feedMain = page.locator('[data-feed-swipe-phase]').locator('..')
   await feedMain.scrollIntoViewIfNeeded()
   const feedBox = await feedMain.boundingBox()
@@ -360,10 +365,6 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   await page.mouse.move(swipeStartX, swipeY)
   await page.mouse.down()
   await page.mouse.move(swipeStartX - 12, swipeY + 1)
-  await expect.poll(async () => Math.abs(
-    await categoryScroller.evaluate((element) => element.scrollLeft) -
-    expectedCategoryScroll.target
-  )).toBeLessThan(2)
   await page.mouse.move(swipeStartX - 260, swipeY + 4, { steps: 8 })
 
   const incomingBookClub = page.locator('[data-feed-panel-type="book-club"]')
@@ -374,6 +375,16 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   const panelGap = incomingBookClubBox.x - (currentTvBox.x + currentTvBox.width)
   expect(panelGap).toBeGreaterThanOrEqual(15)
   expect(panelGap).toBeLessThanOrEqual(17)
+  const feedProgress = Math.min(
+    Math.abs(currentTvBox.x - feedBox.x) / (currentTvBox.width + panelGap),
+    1,
+  )
+  const expectedRibbonScroll = categoryScrollTargets.active + (
+    categoryScrollTargets.next - categoryScrollTargets.active
+  ) * feedProgress
+  await expect.poll(async () => Math.abs(
+    await categoryScroller.evaluate((element) => element.scrollLeft) - expectedRibbonScroll
+  )).toBeLessThan(3)
 
   const indicator = page.locator('[data-feed-category-indicator]')
   const indicatorBox = await indicator.boundingBox()
@@ -391,6 +402,9 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   const selectedBookClubTab = feedTabs.getByRole('tab', { name: /^Book Club/, selected: true })
   await expect(selectedBookClubTab).toBeVisible()
   await expect(page.locator('[data-feed-panel-type="book-club"]')).toContainText('The Fifth Season')
+  await expect.poll(async () => Math.abs(
+    await categoryScroller.evaluate((element) => element.scrollLeft) - categoryScrollTargets.next
+  )).toBeLessThan(2)
   await expect.poll(async () => {
     const activeTabBox = await selectedBookClubTab.boundingBox()
     const activeIndicatorBox = await indicator.boundingBox()

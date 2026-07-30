@@ -136,7 +136,66 @@ function ModuleTabs({
   const scrollerRef = useRef(null);
   const tabsRef = useRef(null);
   const tabRefs = useRef(new Map());
+  const ribbonFrameRef = useRef(null);
   const [tabMetrics, setTabMetrics] = useState({});
+  const activeIndex = moduleTypes.findIndex((type) => type.id === activeType);
+
+  const categoryScrollTarget = useCallback((typeId) => {
+    const scroller = scrollerRef.current;
+    const tab = tabRefs.current.get(typeId);
+    if (!scroller || !tab) return null;
+
+    const centeredLeft =
+      tab.offsetLeft - (scroller.clientWidth - tab.offsetWidth) / 2;
+    const maxScrollLeft = Math.max(
+      scroller.scrollWidth - scroller.clientWidth,
+      0,
+    );
+    return Math.min(Math.max(centeredLeft, 0), maxScrollLeft);
+  }, []);
+
+  const cancelRibbonAnimation = useCallback(() => {
+    if (ribbonFrameRef.current === null) return;
+    window.cancelAnimationFrame(ribbonFrameRef.current);
+    ribbonFrameRef.current = null;
+  }, []);
+
+  const setRibbonScroll = useCallback((left) => {
+    if (scrollerRef.current) scrollerRef.current.scrollLeft = left;
+  }, []);
+
+  const animateRibbonScroll = useCallback(
+    (destination) => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      cancelRibbonAnimation();
+
+      const duration = feedSwipeTransitionMs();
+      const startLeft = scroller.scrollLeft;
+      if (!duration || Math.abs(destination - startLeft) < 0.5) {
+        setRibbonScroll(destination);
+        return;
+      }
+
+      let startTime = null;
+      function advance(timestamp) {
+        startTime ??= timestamp;
+        const progress = Math.min((timestamp - startTime) / duration, 1);
+        const easedProgress = 1 - (1 - progress) ** 3;
+        setRibbonScroll(
+          startLeft + (destination - startLeft) * easedProgress,
+        );
+        if (progress < 1) {
+          ribbonFrameRef.current = window.requestAnimationFrame(advance);
+        } else {
+          ribbonFrameRef.current = null;
+          setRibbonScroll(destination);
+        }
+      }
+      ribbonFrameRef.current = window.requestAnimationFrame(advance);
+    },
+    [cancelRibbonAnimation, setRibbonScroll],
+  );
 
   const alignActiveTab = useCallback(
     ({ force = false, immediate = false } = {}) => {
@@ -156,15 +215,10 @@ function ModuleTabs({
         return;
       }
 
-      // Center middle categories while allowing the browser's natural first
-      // and last positions to remain anchored to their nearest ribbon edge.
-      const centeredLeft =
-        tabStart - (scroller.clientWidth - tab.offsetWidth) / 2;
-      const maxScrollLeft = Math.max(
-        scroller.scrollWidth - scroller.clientWidth,
-        0,
-      );
-      const left = Math.min(Math.max(centeredLeft, 0), maxScrollLeft);
+      // Center middle categories while allowing the first and last positions
+      // to remain anchored to their nearest ribbon edge.
+      const left = categoryScrollTarget(activeType);
+      if (left === null) return;
       const prefersReducedMotion = window.matchMedia?.(
         "(prefers-reduced-motion: reduce)",
       ).matches;
@@ -173,7 +227,7 @@ function ModuleTabs({
       if (scroller.scrollTo) scroller.scrollTo({ left, behavior });
       else scroller.scrollLeft = left;
     },
-    [activeType],
+    [activeType, categoryScrollTarget],
   );
 
   useLayoutEffect(() => {
@@ -213,9 +267,48 @@ function ModuleTabs({
   }, [activeType, alignActiveTab, moduleTypes]);
 
   useLayoutEffect(() => {
-    if (swipePhase !== "dragging") return;
-    alignActiveTab({ force: true, immediate: true });
-  }, [alignActiveTab, swipePhase]);
+    const activeTarget = categoryScrollTarget(activeType);
+    if (activeTarget === null) return;
+    const adjacentType =
+      swipeOffset < 0
+        ? moduleTypes[activeIndex + 1]?.id
+        : moduleTypes[activeIndex - 1]?.id;
+    const adjacentTarget =
+      categoryScrollTarget(adjacentType) ?? activeTarget;
+
+    if (swipePhase === "dragging") {
+      cancelRibbonAnimation();
+      const progress = Math.min(
+        Math.abs(swipeOffset) / Math.max(swipeTravelDistance, 1),
+        1,
+      );
+      // Mirror the page track's normalized drag so the selected category
+      // travels with the reader's finger instead of jumping after release.
+      setRibbonScroll(
+        activeTarget + (adjacentTarget - activeTarget) * progress,
+      );
+    } else if (swipePhase === "exiting") {
+      animateRibbonScroll(adjacentTarget);
+    } else if (swipePhase === "settling") {
+      animateRibbonScroll(activeTarget);
+    } else if (swipePhase === "preparing") {
+      cancelRibbonAnimation();
+      setRibbonScroll(activeTarget);
+    }
+  }, [
+    activeIndex,
+    activeType,
+    animateRibbonScroll,
+    cancelRibbonAnimation,
+    categoryScrollTarget,
+    moduleTypes,
+    setRibbonScroll,
+    swipeOffset,
+    swipePhase,
+    swipeTravelDistance,
+  ]);
+
+  useEffect(() => cancelRibbonAnimation, [cancelRibbonAnimation]);
 
   function handleKeyDown(event, index) {
     let nextIndex = null;
@@ -231,7 +324,6 @@ function ModuleTabs({
     tabRefs.current.get(nextType)?.focus();
   }
 
-  const activeIndex = moduleTypes.findIndex((type) => type.id === activeType);
   const adjacentType =
     swipeOffset < 0
       ? moduleTypes[activeIndex + 1]?.id
