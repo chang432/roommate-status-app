@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { cwd } from 'node:process'
 import { describe, expect, it } from 'vitest'
-import { MODULE_DEFINITIONS } from '../models/modules.js'
+import { FEED_MODULE_REGISTRY } from '../components/feed/feedModuleRegistry.jsx'
 import { THEME_DEFINITIONS } from '../models/themes.js'
 
 const css = readFileSync(`${cwd()}/src/styles/themes.css`, 'utf8')
@@ -68,7 +68,7 @@ describe('theme token contract', () => {
   it.each(selectableThemes)('$label keeps primary and module text readable', ({ id }) => {
     const tokens = themeTokens(id)
     expect(contrast(tokens['--color-ink'], tokens['--color-card'])).toBeGreaterThanOrEqual(4.5)
-    Object.keys(MODULE_DEFINITIONS).forEach((moduleId) => {
+    Object.keys(FEED_MODULE_REGISTRY).forEach((moduleId) => {
       expect(contrast(
         tokens[`--color-module-${moduleId}-text`],
         tokens[`--color-module-${moduleId}-bg`],

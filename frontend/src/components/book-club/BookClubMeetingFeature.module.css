@@ -4,10 +4,6 @@
 .headerText { @apply min-w-0 flex-1; }
 .title { @apply block truncate text-sm font-semibold text-ink; }
 .meta { @apply mt-0.5 block text-xs text-ink-soft; }
-.expandedRegion { @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none; }
-.expanded { grid-template-rows: 1fr; }
-.collapsed { grid-template-rows: 0fr; }
-.expandedInner { @apply min-h-0 overflow-hidden; }
 .detailsPanel { @apply mt-3 grid gap-3 border-t border-line pt-3 text-sm text-ink; }
 .bookTitle { @apply rounded border border-accent-soft bg-accent-soft px-3 py-2 font-semibold; }
 .details { @apply grid gap-2; }

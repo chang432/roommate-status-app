@@ -19,7 +19,20 @@ import { avatarColor } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
 import { relativeTime } from "../../utils/time.js";
 import ModuleEditButton from "./ModuleEditButton.jsx";
+import ExpandableCardRegion from "./ExpandableCardRegion.jsx";
 import styles from "./PollFeature.module.css";
+
+const VOTER_AVATAR_PREVIEW_LIMIT = 3;
+
+function uniqueVoterCount(options) {
+  // Polls are multi-select, so one roommate may appear on several options.
+  return new Set(options.flatMap((option) => option.voterIds ?? [])).size;
+}
+
+function voterSummary(count) {
+  if (count === 0) return "No votes yet";
+  return `${count} ${count === 1 ? "voter" : "voters"}`;
+}
 
 function OptionEditor({ value, onChange, onSubmit, onCancel, busy }) {
   return (
@@ -31,6 +44,7 @@ function OptionEditor({ value, onChange, onSubmit, onCancel, busy }) {
         maxLength={280}
         autoFocus
         className={cx("ui-textInput", styles.optionEditorInput)}
+        aria-label="Edit poll option"
       />
       <button
         type="submit"
@@ -56,7 +70,7 @@ function OptionEditor({ value, onChange, onSubmit, onCancel, busy }) {
 }
 
 export default function PollFeature({
-  polls,
+  poll,
   roommates,
   onPollsChange,
   moduleTag,
@@ -127,12 +141,7 @@ export default function PollFeature({
     try {
       const liked = (comment.likedByIds ?? []).includes(user.id);
       await onPollsChange(
-        await setPollCommentLiked(
-          poll.id,
-          comment.id,
-          user.id,
-          !liked,
-        ),
+        await setPollCommentLiked(poll.id, comment.id, user.id, !liked),
       );
     } catch (requestError) {
       setError(requestError.message || "Could not update the comment like.");
@@ -143,257 +152,235 @@ export default function PollFeature({
     }
   }
 
+  const expanded = expandedId === poll.id;
+  const creator = poll.createdById === user.id;
+  const participation = voterSummary(uniqueVoterCount(poll.options));
+
   return (
     <div className={styles.wrap}>
-      {error && <p className="ui-errorText">{error}</p>}
-      {polls.map((poll) => {
-        const expanded = expandedId === poll.id;
-        const creator = poll.createdById === user.id;
-        return (
-          <article
-            className={cx(styles.card, poll.isArchived && styles.archived)}
-            key={poll.id}
-          >
+      {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
+      <article className={cx(styles.card, poll.isArchived && styles.archived)}>
+        <button
+          type="button"
+          className={styles.summary}
+          aria-expanded={expanded}
+          onClick={() => toggleExpanded(poll.id)}
+        >
+          <span className={styles.summaryText}>
+            <span className={styles.titleRow}>
+              {moduleTag}
+              <strong className={styles.title}>{poll.title}</strong>
+            </span>
+            <span className={styles.meta}>
+              {poll.createdBy} · {relativeTime(poll.createdAt)}
+            </span>
+          </span>
+          <span className={styles.participation}>{participation}</span>
+        </button>
+
+        <ExpandableCardRegion expanded={expanded} className={styles.panel}>
+          {poll.options.length === 0 ? (
+            <p className={styles.empty}>No options yet. Add the first one.</p>
+          ) : (
+            <ul className={styles.options}>
+              {poll.options.map((option) => {
+                const selected = option.voterIds.includes(user.id);
+                const isEditing = editing?.id === option.id;
+                const voters = option.voters.map((person, index) => ({
+                  ...person,
+                  color: avatarColor(index),
+                }));
+                return (
+                  <li
+                    className={cx(
+                      styles.option,
+                      selected && styles.optionSelected,
+                    )}
+                    key={option.id}
+                  >
+                    {isEditing ? (
+                      <OptionEditor
+                        value={editing.text}
+                        onChange={(text) => setEditing({ ...editing, text })}
+                        onSubmit={async (event) => {
+                          event.preventDefault();
+                          const text = editing.text.trim();
+                          if (!text) return;
+                          const saved = await mutate(`edit-${option.id}`, () =>
+                            editPollOption(poll.id, option.id, user.id, text),
+                          );
+                          if (saved) setEditing(null);
+                        }}
+                        onCancel={() => setEditing(null)}
+                        busy={busy === `edit-${option.id}`}
+                      />
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className={cx(
+                            styles.voteButton,
+                            selected && styles.voteButtonSelected,
+                          )}
+                          disabled={poll.isArchived || Boolean(busy)}
+                          onClick={() =>
+                            mutate(`vote-${option.id}`, () =>
+                              setPollVote(
+                                poll.id,
+                                option.id,
+                                user.id,
+                                !selected,
+                              ),
+                            )
+                          }
+                          aria-pressed={selected}
+                          aria-label={
+                            selected
+                              ? `Remove vote from ${option.text}`
+                              : `Vote for ${option.text}`
+                          }
+                        >
+                          ✓
+                        </button>
+                        {creator && !poll.isArchived ? (
+                          <button
+                            type="button"
+                            className={styles.optionText}
+                            onClick={() =>
+                              setEditing({
+                                id: option.id,
+                                text: option.text,
+                              })
+                            }
+                          >
+                            {option.text}
+                          </button>
+                        ) : (
+                          <span className={styles.optionText}>
+                            {option.text}
+                          </span>
+                        )}
+                        <PeoplePopover
+                          people={voters}
+                          open={openVotersOptionId === option.id}
+                          onOpenChange={(open) =>
+                            setOpenVotersOptionId(open ? option.id : null)
+                          }
+                          heading="Voted by"
+                          dialogLabel={`People who voted for ${option.text}`}
+                          buttonLabel={`View ${voters.length} ${
+                            voters.length === 1 ? "person" : "people"
+                          } who voted for ${option.text}`}
+                          disabled={voters.length === 0}
+                          triggerClassName={styles.voterTrigger}
+                        >
+                          <span className={styles.voteCount}>
+                            {voters.length}
+                          </span>
+                          <span
+                            className={styles.voterAvatars}
+                            aria-hidden="true"
+                          >
+                            {voters
+                              .slice(0, VOTER_AVATAR_PREVIEW_LIMIT)
+                              .map((person) => (
+                                <Avatar
+                                  key={person.id}
+                                  name={person.name}
+                                  color={person.color}
+                                  size={24}
+                                />
+                              ))}
+                          </span>
+                        </PeoplePopover>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {!poll.isArchived && (
+            <form
+              className={styles.addOption}
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const text = newOption.trim();
+                if (!text) return;
+                const saved = await mutate("add", () =>
+                  addPollOption(poll.id, user.id, text),
+                );
+                if (saved) setNewOption("");
+              }}
+            >
+              <input
+                className="ui-textInput"
+                maxLength={280}
+                value={newOption}
+                onChange={(event) => setNewOption(event.target.value)}
+                placeholder="Add an option"
+                aria-label="Add poll option"
+              />
+              <button
+                type="submit"
+                className="ui-pillButton ui-pillSecondary"
+                disabled={!newOption.trim() || Boolean(busy)}
+              >
+                {busy === "add" ? "Adding…" : "Add"}
+              </button>
+            </form>
+          )}
+
+          <FeedComments
+            comments={poll.comments ?? []}
+            commentText={commentText}
+            onCommentTextChange={setCommentText}
+            onSubmitComment={(event) => handleComment(event, poll)}
+            roommates={roommates}
+            user={user}
+            commenting={busy === `comment-${poll.id}`}
+            likingCommentIds={likingCommentIds}
+            onToggleLike={(comment) => handleCommentLike(poll, comment)}
+            openLikesCommentId={openLikesCommentId}
+            onOpenLikesChange={setOpenLikesCommentId}
+            open={expanded}
+            readOnly={poll.isArchived}
+          />
+
+          <div className="ui-moduleActionRow">
+            <ModuleEditButton onEdit={onEdit} disabled={Boolean(busy)} />
             <button
               type="button"
-              className={styles.summary}
-              aria-expanded={expanded}
-              onClick={() => toggleExpanded(poll.id)}
+              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+              disabled={Boolean(busy)}
+              onClick={() =>
+                mutate(poll.isArchived ? "restore" : "archive", () =>
+                  poll.isArchived
+                    ? restorePoll(poll.id, user.id)
+                    : archivePoll(poll.id, user.id),
+                )
+              }
             >
-              <span className={styles.summaryText}>
-                <span className={styles.titleRow}>
-                  {moduleTag}
-                  <strong>{poll.title}</strong>
-                </span>
-                <span className={styles.meta}>
-                  {poll.createdBy} · {relativeTime(poll.createdAt)}
-                </span>
-              </span>
+              {busy === "restore"
+                ? "Restoring…"
+                : busy === "archive"
+                  ? "Archiving…"
+                  : poll.isArchived
+                    ? "Restore"
+                    : "Archive"}
             </button>
-
-            <div
-              className={cx(
-                styles.expandedRegion,
-                expanded ? styles.expanded : styles.collapsed,
-              )}
+            <button
+              type="button"
+              className="ui-pillButton ui-pillDanger ui-moduleActionButton"
+              disabled={Boolean(busy)}
+              onClick={() => handleDelete(poll)}
             >
-              <div
-                className={styles.expandedInner}
-                {...(!expanded ? { inert: "" } : {})}
-              >
-                <div className={styles.panel}>
-                  {poll.options.length === 0 ? (
-                    <p className={styles.empty}>
-                      No options yet. Add the first one.
-                    </p>
-                  ) : (
-                    <ul className={styles.options}>
-                      {poll.options.map((option) => {
-                        const selected = option.voterIds.includes(user.id);
-                        const isEditing = editing?.id === option.id;
-                        const voters = option.voters.map((person, index) => ({
-                          ...person,
-                          color: avatarColor(index),
-                        }));
-                        return (
-                          <li
-                            className={cx(
-                              styles.option,
-                              selected && styles.optionSelected,
-                            )}
-                            key={option.id}
-                          >
-                            {isEditing ? (
-                              <OptionEditor
-                                value={editing.text}
-                                onChange={(text) =>
-                                  setEditing({ ...editing, text })
-                                }
-                                onSubmit={async (event) => {
-                                  event.preventDefault();
-                                  const text = editing.text.trim();
-                                  if (!text) return;
-                                  const saved = await mutate(
-                                    `edit-${option.id}`,
-                                    () =>
-                                      editPollOption(
-                                        poll.id,
-                                        option.id,
-                                        user.id,
-                                        text,
-                                      ),
-                                  );
-                                  if (saved) setEditing(null);
-                                }}
-                                onCancel={() => setEditing(null)}
-                                busy={busy === `edit-${option.id}`}
-                              />
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  className={cx(
-                                    styles.voteButton,
-                                    selected && styles.voteButtonSelected,
-                                  )}
-                                  disabled={poll.isArchived || Boolean(busy)}
-                                  onClick={() =>
-                                    mutate(`vote-${option.id}`, () =>
-                                      setPollVote(
-                                        poll.id,
-                                        option.id,
-                                        user.id,
-                                        !selected,
-                                      ),
-                                    )
-                                  }
-                                  aria-pressed={selected}
-                                  aria-label={
-                                    selected
-                                      ? `Remove vote from ${option.text}`
-                                      : `Vote for ${option.text}`
-                                  }
-                                >
-                                  ✓
-                                </button>
-                                {creator && !poll.isArchived ? (
-                                  <button
-                                    type="button"
-                                    className={styles.optionText}
-                                    onClick={() =>
-                                      setEditing({
-                                        id: option.id,
-                                        text: option.text,
-                                      })
-                                    }
-                                  >
-                                    {option.text}
-                                  </button>
-                                ) : (
-                                  <span className={styles.optionText}>
-                                    {option.text}
-                                  </span>
-                                )}
-                                <PeoplePopover
-                                  people={voters}
-                                  open={openVotersOptionId === option.id}
-                                  onOpenChange={(open) =>
-                                    setOpenVotersOptionId(
-                                      open ? option.id : null,
-                                    )
-                                  }
-                                  heading="Voted by"
-                                  dialogLabel={`People who voted for ${option.text}`}
-                                  buttonLabel={`View ${voters.length} ${
-                                    voters.length === 1 ? "person" : "people"
-                                  } who voted for ${option.text}`}
-                                  disabled={voters.length === 0}
-                                  triggerClassName={styles.voterTrigger}
-                                >
-                                  <span className={styles.voteCount}>
-                                    {voters.length}
-                                  </span>
-                                  <span className={styles.voterAvatars}>
-                                    {voters.map((person) => (
-                                      <Avatar
-                                        key={person.id}
-                                        name={person.name}
-                                        color={person.color}
-                                        size={24}
-                                      />
-                                    ))}
-                                  </span>
-                                </PeoplePopover>
-                              </>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-
-                  {!poll.isArchived && (
-                    <form
-                      className={styles.addOption}
-                      onSubmit={async (event) => {
-                        event.preventDefault();
-                        const text = newOption.trim();
-                        if (!text) return;
-                        const saved = await mutate("add", () =>
-                          addPollOption(poll.id, user.id, text),
-                        );
-                        if (saved) setNewOption("");
-                      }}
-                    >
-                      <input
-                        className="ui-textInput"
-                        maxLength={280}
-                        value={newOption}
-                        onChange={(event) => setNewOption(event.target.value)}
-                        placeholder="Add an option"
-                      />
-                      <button
-                        type="submit"
-                        className="ui-pillButton ui-pillSecondary"
-                        disabled={!newOption.trim() || Boolean(busy)}
-                      >
-                        Add
-                      </button>
-                    </form>
-                  )}
-
-                  <FeedComments
-                    comments={poll.comments ?? []}
-                    commentText={commentText}
-                    onCommentTextChange={setCommentText}
-                    onSubmitComment={(event) => handleComment(event, poll)}
-                    roommates={roommates}
-                    user={user}
-                    commenting={busy === `comment-${poll.id}`}
-                    likingCommentIds={likingCommentIds}
-                    onToggleLike={(comment) =>
-                      handleCommentLike(poll, comment)
-                    }
-                    openLikesCommentId={openLikesCommentId}
-                    onOpenLikesChange={setOpenLikesCommentId}
-                    open={expanded}
-                    readOnly={poll.isArchived}
-                  />
-
-                  <div className="ui-moduleActionRow">
-                    <ModuleEditButton
-                      onEdit={onEdit}
-                      disabled={Boolean(busy)}
-                    />
-                    <button
-                      type="button"
-                      className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-                      disabled={Boolean(busy)}
-                      onClick={() =>
-                        mutate(poll.isArchived ? "restore" : "archive", () =>
-                          poll.isArchived
-                            ? restorePoll(poll.id, user.id)
-                            : archivePoll(poll.id, user.id),
-                        )
-                      }
-                    >
-                      {poll.isArchived ? "Restore" : "Archive"}
-                    </button>
-                    <button
-                      type="button"
-                      className="ui-pillButton ui-pillDanger ui-moduleActionButton"
-                      disabled={Boolean(busy)}
-                      onClick={() => handleDelete(poll)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </article>
-        );
-      })}
+              {busy === "delete" ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </ExpandableCardRegion>
+      </article>
       {confirmationDialog}
     </div>
   );

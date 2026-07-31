@@ -13,12 +13,13 @@ import {
 import FeedComments from "../comments/FeedComments.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import ModuleEditButton from "./ModuleEditButton.jsx";
+import ExpandableCardRegion from "./ExpandableCardRegion.jsx";
 import { activityTimeLabel, relativeTime } from "../../utils/time.js";
 import { cx } from "../../utils/classNames.js";
 import styles from "./ProposeActivity.module.css";
 
 export default function ProposeActivity({
-  activities,
+  activity,
   onActivitiesChange,
   transitioningId,
   onLiveTransition,
@@ -170,7 +171,6 @@ export default function ProposeActivity({
     const isArchived = Boolean(activity.isArchived || activity.isExpired);
     return (
       <div
-        key={activity.id}
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
@@ -255,111 +255,90 @@ export default function ProposeActivity({
           )}
         </div>
 
-        <div
-          className={cx(
-            styles.expandedRegion,
-            expanded ? styles.expanded : styles.collapsed,
-          )}
-        >
+        <ExpandableCardRegion expanded={expanded} className={styles.panel}>
+          <p className={styles.panelTitle}>Who’s in</p>
+          <div className={styles.memberList}>
+            {members.map((name) => (
+              <span key={name} className={styles.memberPill}>
+                {name}
+              </span>
+            ))}
+          </div>
+
+          <FeedComments
+            comments={comments}
+            commentText={commentText}
+            onCommentTextChange={setCommentText}
+            onSubmitComment={(event) => handleComment(event, activity)}
+            roommates={roommates}
+            user={user}
+            commenting={commentingId === activity.id}
+            likingCommentIds={likingCommentIds}
+            onToggleLike={(comment) => handleCommentLike(activity, comment)}
+            openLikesCommentId={openLikesCommentId}
+            onOpenLikesChange={setOpenLikesCommentId}
+            open={expanded}
+            readOnly={isArchived}
+          />
+
           <div
-            className={styles.expandedInner}
-            {...(!expanded ? { inert: "" } : {})}
+            className="ui-moduleActionRow"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
           >
-            <div className={styles.panel}>
-              <p className={styles.panelTitle}>Who’s in</p>
-              <div className={styles.memberList}>
-                {members.map((name) => (
-                  <span key={name} className={styles.memberPill}>
-                    {name}
-                  </span>
-                ))}
-              </div>
-
-              <FeedComments
-                comments={comments}
-                commentText={commentText}
-                onCommentTextChange={setCommentText}
-                onSubmitComment={(event) => handleComment(event, activity)}
-                roommates={roommates}
-                user={user}
-                commenting={commentingId === activity.id}
-                likingCommentIds={likingCommentIds}
-                onToggleLike={(comment) => handleCommentLike(activity, comment)}
-                openLikesCommentId={openLikesCommentId}
-                onOpenLikesChange={setOpenLikesCommentId}
-                open={expanded}
-                readOnly={isArchived}
+            {isArchived && (
+              <span className={styles.deletePrompt}>
+                {activity.isArchived ? "Archived event" : "Expired event"}
+              </span>
+            )}
+            <div className={styles.actionButtonRow}>
+              <ModuleEditButton
+                onEdit={onEdit}
+                disabled={Boolean(restoringId || archivingId || deletingId)}
               />
-
-              <div
-                className="ui-moduleActionRow"
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => event.stopPropagation()}
-              >
-                {isArchived && (
-                  <span className={styles.deletePrompt}>
-                    {activity.isArchived ? "Archived event" : "Expired event"}
-                  </span>
+              {isArchived ? (
+                <button
+                  type="button"
+                  onClick={() => handleRestore(activity)}
+                  disabled={Boolean(restoringId || deletingId)}
+                  className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                >
+                  {restoringId === activity.id ? "Restoring…" : "Restore"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleArchive(activity)}
+                  disabled={Boolean(archivingId || deletingId)}
+                  className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                >
+                  {archivingId === activity.id ? "Archiving…" : "Archive"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleDelete(activity)}
+                disabled={Boolean(
+                  (isArchived ? restoringId : archivingId) ||
+                    deletingId ||
+                    activity.isLive,
                 )}
-                <div className={styles.actionButtonRow}>
-                  <ModuleEditButton
-                    onEdit={onEdit}
-                    disabled={Boolean(
-                      restoringId || archivingId || deletingId,
-                    )}
-                  />
-                  {isArchived ? (
-                    <button
-                      type="button"
-                      onClick={() => handleRestore(activity)}
-                      disabled={Boolean(restoringId || deletingId)}
-                      className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-                    >
-                      {restoringId === activity.id ? "Restoring…" : "Restore"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleArchive(activity)}
-                      disabled={Boolean(archivingId || deletingId)}
-                      className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-                    >
-                      {archivingId === activity.id ? "Archiving…" : "Archive"}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(activity)}
-                    disabled={Boolean(
-                      (isArchived ? restoringId : archivingId) ||
-                      deletingId ||
-                      activity.isLive,
-                    )}
-                    className="ui-pillButton ui-pillDanger ui-moduleActionButton"
-                  >
-                    {deletingId === activity.id ? "Deleting…" : "Delete"}
-                  </button>
-                </div>
-              </div>
+                className="ui-pillButton ui-pillDanger ui-moduleActionButton"
+              >
+                {deletingId === activity.id ? "Deleting…" : "Delete"}
+              </button>
             </div>
           </div>
-        </div>
+        </ExpandableCardRegion>
       </div>
     );
   }
 
   return (
-    <section className={styles.section}>
+    <>
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
-
-      <div className={styles.list}>
-        {activities.length === 0 ? (
-          <p className={styles.empty}>No current activities.</p>
-        ) : (
-          activities.map(renderActivity)
-        )}
-      </div>
+      {renderActivity(activity)}
       {confirmationDialog}
-    </section>
+    </>
   );
 }

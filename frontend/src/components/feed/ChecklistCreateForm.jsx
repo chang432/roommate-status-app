@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { createChecklist } from "../../api/checklists.js";
+import RepeatableTextFields from "../ui/RepeatableTextFields.jsx";
 import { cx } from "../../utils/classNames.js";
 import styles from "./ChecklistCreateForm.module.css";
 
@@ -16,20 +17,6 @@ export default function ChecklistCreateForm({
   const [error, setError] = useState("");
 
   const cleanedItems = items.map((item) => item.trim()).filter(Boolean);
-
-  function updateItem(index, value) {
-    setItems((current) =>
-      current.map((item, itemIndex) => (itemIndex === index ? value : item)),
-    );
-  }
-
-  function removeItem(index) {
-    setItems((current) =>
-      current.length === 1
-        ? [""]
-        : current.filter((_, itemIndex) => itemIndex !== index),
-    );
-  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -67,41 +54,15 @@ export default function ChecklistCreateForm({
           />
         </label>
 
-        <div className={styles.field}>
-          <span className={styles.fieldLabel}>Items</span>
-          <div className={styles.items}>
-            {items.map((item, index) => (
-              <div key={index} className={styles.itemRow}>
-                <input
-                  type="text"
-                  value={item}
-                  onChange={(event) => updateItem(index, event.target.value)}
-                  maxLength={280}
-                  placeholder="Add an item"
-                  className={cx("ui-textInput", styles.input)}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeItem(index)}
-                  disabled={sending}
-                  className={styles.removeItem}
-                  aria-label="Remove checklist item"
-                  title="Remove"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => setItems((current) => [...current, ""])}
-            disabled={sending}
-            className={cx("ui-pillButton ui-pillSecondary", styles.addItem)}
-          >
-            Add item
-          </button>
-        </div>
+        <RepeatableTextFields
+          label="Items"
+          itemLabel="Checklist item"
+          values={items}
+          onChange={setItems}
+          addLabel="Add item"
+          placeholder="Add an item"
+          disabled={sending}
+        />
       </div>
 
       {error ? (

@@ -15,6 +15,7 @@ import {
 import ModalShell from "../ui/ModalShell.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import ModuleEditButton from "./ModuleEditButton.jsx";
+import ExpandableCardRegion from "./ExpandableCardRegion.jsx";
 import { initialOf } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
 import { relativeTime } from "../../utils/time.js";
@@ -194,7 +195,7 @@ function WatcherRow({
 }
 
 export default function ShowTrackerFeature({
-  shows,
+  show,
   onShowsChange,
   moduleTag,
   onEdit,
@@ -276,7 +277,8 @@ export default function ShowTrackerFeature({
     if (deletingShowId) return;
     const confirmed = await confirm({
       title: `Delete ${show.title}?`,
-      message: "This permanently removes the show and every watcher's saved progress.",
+      message:
+        "This permanently removes the show and every watcher's saved progress.",
       confirmLabel: "Delete show",
     });
     if (!confirmed) return;
@@ -407,7 +409,6 @@ export default function ShowTrackerFeature({
     );
     return (
       <div
-        key={show.id}
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
@@ -481,94 +482,83 @@ export default function ShowTrackerFeature({
           )}
         </div>
 
-        <div
-          className={cx(
-            styles.expandedRegion,
-            expanded ? styles.expanded : styles.collapsed,
-          )}
-        >
+        <ExpandableCardRegion expanded={expanded} className={styles.panel}>
           <div
-            className={styles.expandedInner}
-            {...(!expanded ? { inert: "" } : {})}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
           >
+            {show.members.length === 0 ? (
+              <p className={styles.watchersEmpty}>
+                {isArchived
+                  ? "No watchers."
+                  : "No one's watching yet — tap Join to start tracking."}
+              </p>
+            ) : (
+              <ul className={styles.watchers}>
+                {orderedMembers.map((member) => (
+                  <WatcherRow
+                    key={member.id}
+                    member={member}
+                    busy={busyMemberIds.includes(member.id)}
+                    readOnly={isArchived}
+                    onAdjust={(target, field, delta) =>
+                      handleAdjust(show, target, field, delta)
+                    }
+                    onSetProgress={(target, field, value) =>
+                      handleSetProgress(show, target, field, value)
+                    }
+                    onRemove={(target) => handleRemove(show, target)}
+                  />
+                ))}
+              </ul>
+            )}
             <div
-              className={styles.panel}
+              className="ui-moduleActionRow"
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
             >
-              {show.members.length === 0 ? (
-                <p className={styles.watchersEmpty}>
-                  {isArchived
-                    ? "No watchers."
-                    : "No one's watching yet — tap Join to start tracking."}
-                </p>
-              ) : (
-                <ul className={styles.watchers}>
-                  {orderedMembers.map((member) => (
-                    <WatcherRow
-                      key={member.id}
-                      member={member}
-                      busy={busyMemberIds.includes(member.id)}
-                      readOnly={isArchived}
-                      onAdjust={(target, field, delta) =>
-                        handleAdjust(show, target, field, delta)
-                      }
-                      onSetProgress={(target, field, value) =>
-                        handleSetProgress(show, target, field, value)
-                      }
-                      onRemove={(target) => handleRemove(show, target)}
-                    />
-                  ))}
-                </ul>
-              )}
-              <div
-                className="ui-moduleActionRow"
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => event.stopPropagation()}
-              >
-                <span className={styles.showActionText}>
-                  {isArchived ? "Archived show" : "Show actions"}
-                </span>
-                <ModuleEditButton
-                  onEdit={onEdit}
-                  disabled={Boolean(
-                    restoringShowId || archivingShowId || deletingShowId,
-                  )}
-                />
-                {isArchived ? (
-                  <button
-                    type="button"
-                    onClick={() => handleRestore(show)}
-                    disabled={Boolean(restoringShowId || deletingShowId)}
-                    className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-                  >
-                    {restoringShowId === show.id ? "Restoring…" : "Restore"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleArchive(show)}
-                    disabled={Boolean(archivingShowId || deletingShowId)}
-                    className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-                  >
-                    {archivingShowId === show.id ? "Archiving…" : "Archive"}
-                  </button>
+              <span className={styles.showActionText}>
+                {isArchived ? "Archived show" : "Show actions"}
+              </span>
+              <ModuleEditButton
+                onEdit={onEdit}
+                disabled={Boolean(
+                  restoringShowId || archivingShowId || deletingShowId,
                 )}
+              />
+              {isArchived ? (
                 <button
                   type="button"
-                  onClick={() => handleDelete(show)}
-                  disabled={Boolean(
-                    (isArchived ? restoringShowId : archivingShowId) ||
-                    deletingShowId,
-                  )}
-                  className="ui-pillButton ui-pillDanger ui-moduleActionButton"
+                  onClick={() => handleRestore(show)}
+                  disabled={Boolean(restoringShowId || deletingShowId)}
+                  className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
                 >
-                  {deletingShowId === show.id ? "Deleting…" : "Delete"}
+                  {restoringShowId === show.id ? "Restoring…" : "Restore"}
                 </button>
-              </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleArchive(show)}
+                  disabled={Boolean(archivingShowId || deletingShowId)}
+                  className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                >
+                  {archivingShowId === show.id ? "Archiving…" : "Archive"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleDelete(show)}
+                disabled={Boolean(
+                  (isArchived ? restoringShowId : archivingShowId) ||
+                    deletingShowId,
+                )}
+                className="ui-pillButton ui-pillDanger ui-moduleActionButton"
+              >
+                {deletingShowId === show.id ? "Deleting…" : "Delete"}
+              </button>
             </div>
           </div>
-        </div>
+        </ExpandableCardRegion>
       </div>
     );
   }
@@ -643,13 +633,7 @@ export default function ShowTrackerFeature({
         </ModalShell>
       )}
 
-      <div className={styles.list}>
-        {shows.length === 0 ? (
-          <p className={styles.empty}>No shows yet. Add one to get started.</p>
-        ) : (
-          shows.map(renderShow)
-        )}
-      </div>
+      {renderShow(show)}
       {confirmationDialog}
     </div>
   );

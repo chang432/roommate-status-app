@@ -18,22 +18,6 @@
   @apply w-full min-w-0 px-[14px] py-[12px] text-[14px];
 }
 
-.items {
-  @apply space-y-2;
-}
-
-.itemRow {
-  @apply flex items-center gap-2;
-}
-
-.removeItem {
-  @apply grid h-[36px] w-[36px] flex-none place-items-center rounded-full border border-line bg-card text-[20px] font-bold leading-none text-ink-soft transition hover:bg-surface-hover disabled:opacity-60;
-}
-
-.addItem {
-  @apply mt-3 px-[13px] py-[8px] text-[12.5px];
-}
-
 .error {
   @apply mt-1;
 }

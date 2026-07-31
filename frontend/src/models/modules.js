@@ -1,129 +1,25 @@
-export const MODULE_DEFINITIONS = {
-  events: {
-    id: 'events',
-    label: 'Events',
-    shortLabel: 'Events',
-    ownerField: 'proposedById',
-    edit: {
-      label: 'Edit event',
-      field: 'text',
-      fieldLabel: 'Event',
-      schedule: true,
-    },
-  },
-  requests: {
-    id: 'requests',
-    label: 'Requests',
-    shortLabel: 'Requests',
-    ownerField: 'requesterId',
-    edit: {
-      label: 'Edit request',
-      field: 'text',
-      fieldLabel: 'Request',
-      recipients: true,
-    },
-  },
-  checklists: {
-    id: 'checklists',
-    label: 'Checklists',
-    shortLabel: 'Lists',
-    ownerField: 'createdById',
-    edit: {
-      label: 'Edit checklist',
-      field: 'title',
-      fieldLabel: 'Checklist title',
-    },
-  },
-  polls: {
-    id: 'polls',
-    label: 'Polls',
-    shortLabel: 'Polls',
-    ownerField: 'createdById',
-    edit: {
-      label: 'Edit poll',
-      field: 'title',
-      fieldLabel: 'Poll title',
-    },
-  },
-  tv: {
-    id: 'tv',
-    label: 'TV',
-    shortLabel: 'TV',
-    ownerField: 'createdById',
-    edit: { label: 'Edit show', field: 'title', fieldLabel: 'Show title' },
-  },
-  spotify: {
-    id: 'spotify',
-    label: 'Spotify',
-    shortLabel: 'Spotify',
-    ownerField: 'hostId',
-    edit: {
-      label: 'Edit Spotify Jam',
-      field: 'link',
-      fieldLabel: 'Spotify Jam link',
-      inputType: 'url',
-    },
-  },
-  'book-club': {
-    id: 'book-club',
-    label: 'Book Club',
-    shortLabel: 'Books',
-    ownerField: null,
-    edit: { label: 'Edit Book Club meeting' },
-  },
-}
-
-export const MODULE_TYPES = [
-  { id: 'all', label: 'All', shortLabel: 'All' },
-  ...Object.values(MODULE_DEFINITIONS)
-    .filter(({ id }) => id !== 'spotify')
-    .map(({ id, label, shortLabel }) => ({
-    id,
-    label,
-    shortLabel,
-  })),
-]
-
-const MODULE_CLASS_BY_TYPE = {}
-
-export class BaseModule {
-  constructor(feedItem) {
-    this.id = feedItem.id
-    this.type = feedItem.type
-    this.createdAt = Number(feedItem.createdAt)
-    this.updatedAt = Number(feedItem.updatedAt ?? feedItem.createdAt)
-    this.sortAt = Number(feedItem.sortAt ?? this.updatedAt ?? this.createdAt)
-    this.title = feedItem.title || 'Module'
-    this.subtitle = feedItem.subtitle || ''
-    this.actor = feedItem.actor || 'Someone'
-    this.isArchived = Boolean(feedItem.isArchived)
-    this.payload = feedItem.payload || {}
-  }
-
-  get typeLabel() {
-    return MODULE_TYPES.find((type) => type.id === this.type)?.shortLabel ?? this.type
-  }
-
-  get ownerId() {
-    const ownerField = MODULE_DEFINITIONS[this.type]?.ownerField
-    return ownerField ? this.payload[ownerField] : null
-  }
-
-  isEditableBy(userId) {
-    return !this.isArchived && this.ownerId === userId
-  }
-}
-
 export function createModule(feedItem) {
-  const ModuleClass = MODULE_CLASS_BY_TYPE[feedItem.type] ?? BaseModule
-  return new ModuleClass(feedItem)
+  const createdAt = Number(feedItem.createdAt);
+  const updatedAt = Number(feedItem.updatedAt ?? feedItem.createdAt);
+
+  return {
+    id: feedItem.id,
+    type: feedItem.type,
+    createdAt,
+    updatedAt,
+    sortAt: Number(feedItem.sortAt ?? updatedAt ?? createdAt),
+    title: feedItem.title || "Module",
+    subtitle: feedItem.subtitle || "",
+    actor: feedItem.actor || "Someone",
+    isArchived: Boolean(feedItem.isArchived),
+    payload: feedItem.payload || {},
+  };
 }
 
 export function createModules(feedItems) {
   return feedItems
     .map(createModule)
-    // Most recently edited first (top), least recent last (bottom). `sortAt`
-    // tracks the last material update, so a freshly-edited module rises to the
-    // top of the feed.
-    .sort((a, b) => b.sortAt - a.sortAt || b.createdAt - a.createdAt)
+    // A material edit updates sortAt and intentionally returns that module to
+    // the top; createdAt is a deterministic fallback for equal timestamps.
+    .sort((a, b) => b.sortAt - a.sortAt || b.createdAt - a.createdAt);
 }

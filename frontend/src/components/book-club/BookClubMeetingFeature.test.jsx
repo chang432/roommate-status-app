@@ -54,7 +54,7 @@ function renderMeeting({ intent = null, canAdminister = false, onEdit = vi.fn() 
     <MemoryRouter>
       <ModuleFocusProvider intent={intent}>
         <BookClubMeetingFeature
-          meetings={[MEETING]}
+          meeting={MEETING}
           moduleTag={<span>Book Club</span>}
           onEdit={onEdit}
           canAdminister={canAdminister}

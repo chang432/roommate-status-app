@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPoll } from "../../api/polls.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import RepeatableTextFields from "../ui/RepeatableTextFields.jsx";
 import { cx } from "../../utils/classNames.js";
 import styles from "./PollCreateForm.module.css";
 
@@ -29,64 +30,49 @@ export default function PollCreateForm({ onPollsChange, onSuccess, onCancel }) {
 
   return (
     <form onSubmit={submit} className={styles.form}>
-      <label className={styles.field}>
-        <span>Poll title</span>
-        <input
-          className="ui-textInput"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          maxLength={280}
-          placeholder="What should we do?"
+      <div className={styles.fields}>
+        <label className={styles.field}>
+          <span className={styles.fieldLabel}>Poll title</span>
+          <input
+            type="text"
+            className={cx("ui-textInput", styles.input)}
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            maxLength={280}
+            placeholder="What should we do?"
+            disabled={sending}
+          />
+        </label>
+        <RepeatableTextFields
+          label="Options (optional)"
+          itemLabel="Poll option"
+          values={options}
+          onChange={setOptions}
+          addLabel="Add option"
+          placeholder="Add an option"
+          disabled={sending}
+          maxItems={50}
         />
-      </label>
-      <div className={styles.field}>
-        <span>Options (optional)</span>
-        {options.map((option, index) => (
-          <div className={styles.optionRow} key={index}>
-            <input
-              className="ui-textInput"
-              value={option}
-              onChange={(event) =>
-                setOptions((current) =>
-                  current.map((value, optionIndex) =>
-                    optionIndex === index ? event.target.value : value,
-                  ),
-                )
-              }
-              maxLength={280}
-              placeholder="Add an option"
-            />
-            <button
-              type="button"
-              className="ui-pillButton ui-pillDangerSoft"
-              onClick={() =>
-                setOptions((current) =>
-                  current.length === 1
-                    ? [""]
-                    : current.filter((_, optionIndex) => optionIndex !== index),
-                )
-              }
-              aria-label="Remove option"
-            >
-              ×
-            </button>
-          </div>
-        ))}
+      </div>
+
+      {error ? (
+        <p className={cx("ui-errorText", styles.error)}>{error}</p>
+      ) : null}
+
+      <div className="ui-formActions">
         <button
           type="button"
-          className={cx("ui-pillButton ui-pillSecondary", styles.add)}
-          onClick={() => setOptions((current) => [...current, ""])}
-          disabled={options.length >= 50}
+          className="ui-secondaryButton ui-formActionButton"
+          onClick={onCancel}
+          disabled={sending}
         >
-          Add option
-        </button>
-      </div>
-      {error && <p className="ui-errorText">{error}</p>}
-      <div className="ui-formActions">
-        <button type="button" className="ui-secondaryButton ui-formActionButton" onClick={onCancel}>
           Cancel
         </button>
-        <button type="submit" className="ui-primaryButton ui-formActionButton" disabled={!title.trim() || sending}>
+        <button
+          type="submit"
+          className="ui-primaryButton ui-formActionButton"
+          disabled={!title.trim() || sending}
+        >
           {sending ? "Posting…" : "Post poll"}
         </button>
       </div>

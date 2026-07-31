@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import Brandmark from "../components/ui/Brandmark.jsx";
 import BookClub from "../components/book-club/BookClub.jsx";
 import EnableNotifications from "../components/profile/EnableNotifications.jsx";
-import GroupFeed from "../components/feed/GroupFeed.jsx";
+import { GroupFeedView } from "../components/feed/GroupFeed.jsx";
 import JamWidget, { JamShareForm } from "../components/jam/JamWidget.jsx";
 import GroupSwitcherDrawer from "../components/groups/GroupSwitcherDrawer.jsx";
 import HouseholdRoster from "../components/household/HouseholdRoster.jsx";
@@ -13,11 +13,11 @@ import NotificationBanner from "../components/ui/NotificationBanner.jsx";
 import ProfileSettings from "../components/profile/ProfileSettings.jsx";
 import PullToRefreshIndicator from "../components/ui/PullToRefreshIndicator.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { endActivity, getActivities, startActivity } from "../api/activities.js";
+import { endActivity, startActivity } from "../api/activities.js";
 import { getGroups } from "../api/groups.js";
-import { getJam } from "../api/jam.js";
 import { getRoommates } from "../api/roommates.js";
-import { endWatchparty, getShows } from "../api/shows.js";
+import { endWatchparty } from "../api/shows.js";
+import useGroupModules from "../hooks/useGroupModules.js";
 import { cx } from "../utils/classNames.js";
 import { usePullToRefresh } from "../utils/usePullToRefresh.js";
 import {
@@ -27,8 +27,6 @@ import {
 } from "../utils/status.js";
 import styles from "./StatusPage.module.css";
 
-const ACTIVITY_POLL_INTERVAL_MS = 5000;
-
 export default function StatusPage() {
   const { user, logout, deleteAccount, joinGroup, createGroup, selectGroup } =
     useAuth();
@@ -36,11 +34,7 @@ export default function StatusPage() {
   const feedRef = useRef(null);
 
   const [roommates, setRoommates] = useState([]);
-  const [activities, setActivities] = useState([]);
-  const [shows, setShows] = useState([]);
-  const [jam, setJam] = useState(null);
   const [statusLoadedGroupId, setStatusLoadedGroupId] = useState(null);
-  const [feedLoadedGroupId, setFeedLoadedGroupId] = useState(null);
   const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
   const [transitioningId, setTransitioningId] = useState(null);
@@ -52,6 +46,12 @@ export default function StatusPage() {
   const [groupsError, setGroupsError] = useState("");
   const [bookClubRefreshToken, setBookClubRefreshToken] = useState(0);
   const activeGroupIdRef = useRef(user.activeGroupId);
+  const {
+    modules,
+    loading: modulesLoading,
+    error: modulesError,
+    refreshModules,
+  } = useGroupModules(user.id, user.activeGroupId);
 
   // Ignore a response for a group the user has already left. This keeps an
   // older, slower request from replacing the newly selected household's data.
@@ -106,112 +106,41 @@ export default function StatusPage() {
     }
   }, [user.activeGroupId, user.id]);
 
-  const loadActivities = useCallback(async () => {
-    const groupId = user.activeGroupId;
-    try {
-      const nextActivities = await getActivities(user.id, groupId);
-      if (activeGroupIdRef.current === groupId) {
-        setActivities(nextActivities);
-        setLiveError("");
-      }
-    } catch {
-      if (activeGroupIdRef.current === groupId) {
-        setLiveError("Could not load household events.");
-      }
-    }
-  }, [user.activeGroupId, user.id]);
-
-  const loadJam = useCallback(async () => {
-    const groupId = user.activeGroupId;
-    try {
-      const nextJam = await getJam(user.id);
-      if (activeGroupIdRef.current === groupId) setJam(nextJam);
-    } catch {
-      if (activeGroupIdRef.current === groupId) setJam(null);
-    }
-  }, [user.activeGroupId, user.id]);
-
-  const loadShows = useCallback(async () => {
-    const groupId = user.activeGroupId;
-    try {
-      const nextShows = await getShows(user.id);
-      if (activeGroupIdRef.current === groupId) setShows(nextShows);
-    } catch {
-      if (activeGroupIdRef.current === groupId) setShows([]);
-    }
-  }, [user.activeGroupId, user.id]);
-
-  const loadAll = useCallback(async () => {
-    await Promise.all([
-      loadRoommates(),
-      loadActivities(),
-      loadJam(),
-      loadShows(),
-    ]);
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadRoommates(), refreshModules()]);
     // Book Club owns its fetch so it can advance an overdue meeting. Bump this
     // token after each page refresh to include it in pull-to-refresh as well.
     setBookClubRefreshToken((token) => token + 1);
-  }, [loadActivities, loadJam, loadRoommates, loadShows]);
+  }, [loadRoommates, refreshModules]);
 
   useEffect(() => {
     let isCurrent = true;
-    loadAll().finally(() => {
+    loadRoommates().finally(() => {
       if (isCurrent) setStatusLoadedGroupId(user.activeGroupId);
     });
     return () => {
       isCurrent = false;
     };
-  }, [loadAll, user.activeGroupId]);
+  }, [loadRoommates, user.activeGroupId]);
 
-  useEffect(() => {
-    let pollId = null;
+  const { pull, refreshing, threshold } = usePullToRefresh(refreshAll);
 
-    function startPolling() {
-      if (pollId !== null || document.visibilityState !== "visible") return;
-      pollId = window.setInterval(loadActivities, ACTIVITY_POLL_INTERVAL_MS);
-    }
-
-    function stopPolling() {
-      if (pollId === null) return;
-      window.clearInterval(pollId);
-      pollId = null;
-    }
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === "visible") {
-        loadActivities();
-        startPolling();
-      } else {
-        stopPolling();
-      }
-    }
-
-    function handleServiceWorkerMessage(event) {
-      if (event.data?.type === "activities-changed") loadActivities();
-      if (event.data?.type === "jam-changed") loadJam();
-      if (event.data?.type === "shows-changed") loadShows();
-    }
-
-    startPolling();
-    window.addEventListener("roomie:shows-changed", loadShows);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    navigator.serviceWorker?.addEventListener(
-      "message",
-      handleServiceWorkerMessage,
-    );
-
-    return () => {
-      stopPolling();
-      window.removeEventListener("roomie:shows-changed", loadShows);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      navigator.serviceWorker?.removeEventListener(
-        "message",
-        handleServiceWorkerMessage,
-      );
-    };
-  }, [loadActivities, loadJam, loadShows]);
-
-  const { pull, refreshing, threshold } = usePullToRefresh(loadAll);
+  const activities = useMemo(
+    () =>
+      modules
+        .filter((module) => module.type === "events")
+        .map((module) => module.payload),
+    [modules],
+  );
+  const shows = useMemo(
+    () =>
+      modules
+        .filter((module) => module.type === "tv")
+        .map((module) => module.payload),
+    [modules],
+  );
+  const jam =
+    modules.find((module) => module.type === "spotify")?.payload ?? null;
 
   const displayedRoommates = useMemo(
     () => decorateRoommatesWithActivityStatus(roommates, activities),
@@ -232,11 +161,7 @@ export default function StatusPage() {
   const groupDataLoading =
     groupsLoading ||
     statusLoadedGroupId !== user.activeGroupId ||
-    ((showFeed || showBookClub) && feedLoadedGroupId !== user.activeGroupId);
-
-  const handleActivitiesChange = useCallback((updated) => {
-    setActivities(updated);
-  }, []);
+    modulesLoading;
 
   async function handleLiveTransition(activity, action) {
     if (transitioningId) return;
@@ -244,7 +169,8 @@ export default function StatusPage() {
     setLiveError("");
     try {
       const transition = action === "start" ? startActivity : endActivity;
-      handleActivitiesChange(await transition(activity.id, user.id));
+      await transition(activity.id, user.id);
+      await refreshModules();
     } catch (err) {
       setLiveError(err.message || `Could not ${action} the event. Try again.`);
     } finally {
@@ -257,8 +183,8 @@ export default function StatusPage() {
     setTransitioningId(show.id);
     setLiveError("");
     try {
-      setShows(await endWatchparty(show.id, user.id));
-      window.dispatchEvent(new Event("roomie:shows-changed"));
+      await endWatchparty(show.id, user.id);
+      await refreshModules();
     } catch (err) {
       setLiveError(err.message || "Could not end the watchparty. Try again.");
     } finally {
@@ -272,22 +198,11 @@ export default function StatusPage() {
     feedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  const handleGroupFeedLoadStateChange = useCallback((groupId, isLoading) => {
-    if (isLoading) {
-      setFeedLoadedGroupId((loadedGroupId) =>
-        loadedGroupId === groupId ? null : loadedGroupId,
-      );
-      return;
-    }
-    setFeedLoadedGroupId(groupId);
-  }, []);
-
   const handleGroupSelect = useCallback(
     (groupId) => {
       setGroupDrawerOpen(false);
       if (groupId === user.activeGroupId) return;
       setStatusLoadedGroupId(null);
-      setFeedLoadedGroupId(null);
       selectGroup(groupId);
     },
     [selectGroup, user.activeGroupId],
@@ -441,7 +356,11 @@ export default function StatusPage() {
 
         {jam && (
           <div hidden={groupDataLoading}>
-            <JamWidget jam={jam} onJamChange={setJam} onReplace={openJamModal} />
+            <JamWidget
+              jam={jam}
+              onJamChange={refreshModules}
+              onReplace={openJamModal}
+            />
           </div>
         )}
 
@@ -455,9 +374,12 @@ export default function StatusPage() {
 
         {(showFeed || showBookClub) && (
           <div ref={feedRef} hidden={groupDataLoading}>
-            <GroupFeed
+            <GroupFeedView
               roommates={displayedRoommates}
-              onLoadStateChange={handleGroupFeedLoadStateChange}
+              modules={modules}
+              loading={modulesLoading}
+              error={modulesError}
+              refreshModules={refreshModules}
               showStandardModules={showFeed}
               showBookClub={showBookClub}
             />
@@ -494,7 +416,7 @@ export default function StatusPage() {
           >
             <JamShareForm
               currentJam={jam}
-              onJamChange={setJam}
+              onJamChange={refreshModules}
               onSuccess={() => setJamModalOpen(false)}
             />
           </ModalShell>

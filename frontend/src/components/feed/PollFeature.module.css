@@ -1,9 +1,13 @@
 .wrap {
-  @apply min-w-0 space-y-2;
+  @apply min-w-0;
+}
+
+.error {
+  @apply mb-[14px];
 }
 
 .card {
-  @apply rounded-sm border border-line bg-card px-[14px] py-[10px];
+  @apply rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft;
 }
 
 .archived {
@@ -11,7 +15,7 @@
 }
 
 .summary {
-  @apply flex w-full items-center gap-3 text-left;
+  @apply flex w-full min-w-0 cursor-pointer items-center gap-[10px] rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft;
 }
 
 .summaryText {
@@ -19,36 +23,27 @@
 }
 
 .titleRow {
-  @apply flex min-w-0 flex-wrap items-center gap-2 text-[14px] text-ink;
+  @apply flex min-w-0 flex-wrap items-center gap-[7px];
 }
 
-.titleRow strong {
-  @apply truncate;
+.title {
+  @apply truncate text-[14px] font-semibold text-ink;
 }
 
-.meta,
+.meta {
+  @apply mt-[2px] block text-[12px] text-ink-soft;
+}
+
+.participation {
+  @apply flex-none whitespace-nowrap text-[12px] font-bold text-ink-soft;
+}
+
 .empty {
-  @apply mt-1 block text-[12px] text-ink-soft;
-}
-
-.expandedRegion {
-  @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none;
-}
-
-.expanded {
-  grid-template-rows: 1fr;
-}
-
-.collapsed {
-  grid-template-rows: 0fr;
-}
-
-.expandedInner {
-  @apply min-h-0 overflow-hidden;
+  @apply text-[13px] text-ink-soft;
 }
 
 .panel {
-  @apply mt-3 border-t border-line pt-3;
+  @apply mt-[12px] border-t border-line pt-[12px];
 }
 
 .options {
@@ -72,7 +67,7 @@
 }
 
 .optionText {
-  @apply min-w-0 flex-1 text-left text-[14px] font-medium text-ink transition;
+  @apply min-w-0 flex-1 break-words text-left text-[14px] font-medium text-ink transition;
 }
 
 button.optionText {
@@ -96,7 +91,7 @@ button.optionText {
 }
 
 .optionEditorInput {
-  @apply min-w-[180px] flex-1 px-[11px] py-[8px] text-[13.5px];
+  @apply min-w-[180px] flex-1 px-[11px] py-[8px] text-[13.5px] max-[420px]:basis-full;
 }
 
 .iconAction {
@@ -108,5 +103,9 @@ button.optionText {
 }
 
 .addOption input {
-  @apply min-w-[180px] flex-1;
+  @apply min-w-[180px] flex-1 px-[11px] py-[8px] text-[13.5px];
+}
+
+.addOption button {
+  @apply px-[13px] py-[7px] text-[12.5px];
 }

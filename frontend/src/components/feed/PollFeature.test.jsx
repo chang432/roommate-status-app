@@ -59,7 +59,7 @@ function renderPoll(overrides = {}) {
   const onPollsChange = vi.fn().mockResolvedValue();
   render(
     <PollFeature
-      polls={[poll]}
+      poll={poll}
       roommates={ROOMMATES}
       onPollsChange={onPollsChange}
       moduleTag={<span>Polls</span>}
@@ -89,6 +89,49 @@ describe("PollFeature", () => {
     await userEvent.click(header);
     expect(header).toHaveAttribute("aria-expanded", "true");
     expect(document.querySelector("[inert]")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["No votes yet", []],
+    [
+      "1 voter",
+      [
+        {
+          id: "thai",
+          text: "Thai",
+          voterIds: ["andre"],
+          voters: [ROOMMATES[0]],
+        },
+        {
+          id: "pizza",
+          text: "Pizza",
+          voterIds: ["andre"],
+          voters: [ROOMMATES[0]],
+        },
+      ],
+    ],
+    [
+      "2 voters",
+      [
+        {
+          id: "thai",
+          text: "Thai",
+          voterIds: ["andre", "kayla"],
+          voters: ROOMMATES,
+        },
+        {
+          id: "pizza",
+          text: "Pizza",
+          voterIds: ["andre"],
+          voters: [ROOMMATES[0]],
+        },
+      ],
+    ],
+  ])("summarizes unique participation as %s", (summary, options) => {
+    renderPoll({ options });
+    expect(
+      screen.getByRole("button", { name: /Polls Dinner/ }),
+    ).toHaveTextContent(summary);
   });
 
   it("separates voting from creator tap-to-edit", async () => {
@@ -138,6 +181,37 @@ describe("PollFeature", () => {
     expect(dialog).toHaveTextContent("Kayla");
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
+  });
+
+  it("caps the inline avatar preview while keeping every voter inspectable", async () => {
+    const voters = [
+      ...ROOMMATES,
+      { id: "sam", name: "Sam" },
+      { id: "priya", name: "Priya" },
+    ];
+    renderPoll({
+      options: [
+        {
+          id: "thai",
+          text: "Thai",
+          voterIds: voters.map((person) => person.id),
+          voters,
+        },
+      ],
+    });
+    await userEvent.click(screen.getByRole("button", { name: /Polls Dinner/ }));
+    const trigger = screen.getByRole("button", {
+      name: "View 4 people who voted for Thai",
+    });
+    expect(trigger.querySelector('[aria-hidden="true"]').children).toHaveLength(
+      3,
+    );
+
+    await userEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", {
+      name: "People who voted for Thai",
+    });
+    for (const voter of voters) expect(dialog).toHaveTextContent(voter.name);
   });
 
   it("closes option editors and voter popovers when the poll collapses", async () => {
