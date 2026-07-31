@@ -24,11 +24,10 @@ import BookClubMeetingForm from "../book-club/BookClubMeetingForm.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
 import { endActivity, startActivity } from "../../api/activities.js";
-import { getFeed } from "../../api/feed.js";
+import useGroupModules from "../../hooks/useGroupModules.js";
 import {
   MODULE_TYPES,
   MODULE_DEFINITIONS,
-  createModules,
 } from "../../models/modules.js";
 import { cx } from "../../utils/classNames.js";
 import {
@@ -40,7 +39,6 @@ import { isAdminIn } from "../../utils/roles.js";
 // status section on the same page.
 import styles from "../../pages/StatusPage.module.css";
 
-const FEED_POLL_INTERVAL_MS = 5000;
 const MODULE_PREFERENCE_VERSION = 3;
 const SWIPE_MIN_X = 64;
 const SWIPE_HORIZONTAL_LOCK_PX = 4;
@@ -819,16 +817,29 @@ function ModuleFeedItem({
 // The group feed, rendered inline below the status section. Owns its own feed
 // polling and create/filter UI; `roommates` come from the parent status page so
 // we don't double-fetch the household.
-export default function GroupFeed({
+export default function GroupFeed({ onLoadStateChange, ...props }) {
+  const { user } = useAuth();
+  const moduleState = useGroupModules(user.id, user.activeGroupId);
+
+  useEffect(() => {
+    onLoadStateChange?.(user.activeGroupId, moduleState.loading);
+  }, [moduleState.loading, onLoadStateChange, user.activeGroupId]);
+
+  return <GroupFeedView {...props} {...moduleState} />;
+}
+
+export function GroupFeedView({
   roommates,
-  onLoadStateChange,
+  modules,
+  loading,
+  error: feedError,
+  refreshModules,
   showStandardModules = true,
   showBookClub = false,
 }) {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [modules, setModules] = useState([]);
   const [activeType, setActiveType] = useState("all");
   const [moduleOrder, setModuleOrder] = useState(
     () => readModulePreferences(user.id, user.activeGroupId).order,
@@ -838,8 +849,7 @@ export default function GroupFeed({
   );
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [moduleNavEditing, setModuleNavEditing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [liveError, setLiveError] = useState("");
+  const [mutationError, setMutationError] = useState("");
   const [navigationError, setNavigationError] = useState("");
   const [transitioningId, setTransitioningId] = useState(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -912,82 +922,6 @@ export default function GroupFeed({
       }),
     );
   }, [allTypes, moduleOrder, user.activeGroupId, user.id]);
-
-  const loadFeed = useCallback(async () => {
-    try {
-      setModules(
-        createModules(await getFeed(user.id, "all", user.activeGroupId)),
-      );
-      setLiveError("");
-    } catch {
-      setLiveError("Could not load the group feed.");
-    }
-  }, [user.activeGroupId, user.id]);
-
-  useEffect(() => {
-    let isCurrent = true;
-    const groupId = user.activeGroupId;
-    setLoading(true);
-    onLoadStateChange?.(groupId, true);
-    loadFeed().finally(() => {
-      if (!isCurrent) return;
-      setLoading(false);
-      onLoadStateChange?.(groupId, false);
-    });
-    return () => {
-      isCurrent = false;
-    };
-  }, [loadFeed, onLoadStateChange, user.activeGroupId]);
-
-  useEffect(() => {
-    let pollId = null;
-
-    function startPolling() {
-      if (pollId !== null || document.visibilityState !== "visible") return;
-      pollId = window.setInterval(loadFeed, FEED_POLL_INTERVAL_MS);
-    }
-
-    function stopPolling() {
-      if (pollId === null) return;
-      window.clearInterval(pollId);
-      pollId = null;
-    }
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === "visible") {
-        loadFeed();
-        startPolling();
-      } else {
-        stopPolling();
-      }
-    }
-
-    // Any feature change ("activities-changed", "requests-changed", …) just
-    // refreshes the unified feed.
-    function handleServiceWorkerMessage(event) {
-      if (event.data?.type?.endsWith("-changed")) loadFeed();
-    }
-
-    startPolling();
-    window.addEventListener("focus", loadFeed);
-    window.addEventListener("roomie:book-club-changed", loadFeed);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    navigator.serviceWorker?.addEventListener(
-      "message",
-      handleServiceWorkerMessage,
-    );
-
-    return () => {
-      stopPolling();
-      window.removeEventListener("focus", loadFeed);
-      window.removeEventListener("roomie:book-club-changed", loadFeed);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      navigator.serviceWorker?.removeEventListener(
-        "message",
-        handleServiceWorkerMessage,
-      );
-    };
-  }, [loadFeed]);
 
   const feedModules = useMemo(
     () =>
@@ -1075,7 +1009,7 @@ export default function GroupFeed({
       consumeFocusIntent(focusIntent.token);
       return;
     }
-    if (loading || liveError) return;
+    if (loading || feedError || mutationError) return;
 
     const target = modules.find(
       (module) =>
@@ -1092,8 +1026,9 @@ export default function GroupFeed({
   }, [
     consumeFocusIntent,
     focusIntent,
-    liveError,
+    feedError,
     loading,
+    mutationError,
     moduleTypeIds,
     modules,
   ]);
@@ -1272,25 +1207,28 @@ export default function GroupFeed({
 
   // Every mutation surfaces through the unified feed, so each change handler
   // just refreshes it.
-  const handleActivitiesChange = useCallback(() => loadFeed(), [loadFeed]);
-  const handleRequestsChange = useCallback(() => loadFeed(), [loadFeed]);
-  const handleChecklistsChange = useCallback(() => loadFeed(), [loadFeed]);
-  const handlePollsChange = useCallback(() => loadFeed(), [loadFeed]);
+  const handleActivitiesChange = useCallback(
+    () => refreshModules(),
+    [refreshModules],
+  );
+  const handleRequestsChange = handleActivitiesChange;
+  const handleChecklistsChange = handleActivitiesChange;
+  const handlePollsChange = handleActivitiesChange;
   const handleShowsChange = useCallback(() => {
     window.dispatchEvent(new Event("roomie:shows-changed"));
-    loadFeed();
-  }, [loadFeed]);
+    refreshModules();
+  }, [refreshModules]);
 
   async function handleLiveTransition(activity, action) {
     if (transitioningId) return;
     setTransitioningId(activity.id);
-    setLiveError("");
+    setMutationError("");
     try {
       const transition = action === "start" ? startActivity : endActivity;
       await transition(activity.id, user.id);
-      loadFeed();
+      refreshModules();
     } catch (err) {
-      setLiveError(err.message || `Could not ${action} the event. Try again.`);
+      setMutationError(err.message || `Could not ${action} the event. Try again.`);
     } finally {
       setTransitioningId(null);
     }
@@ -1698,7 +1636,7 @@ export default function GroupFeed({
         <BookClubMeetingForm
           roommates={roommates}
           onSaved={async () => {
-            await loadFeed();
+            await refreshModules();
             setCreateModalOpen(false);
           }}
           onCancel={() => setCreateModalOpen(false)}
@@ -1778,7 +1716,7 @@ export default function GroupFeed({
           moduleTag={moduleTag}
           onEdit={onEdit}
           canAdminister={canAdministerBookClub}
-          onChanged={loadFeed}
+          onChanged={refreshModules}
         />
       );
     }
@@ -1887,8 +1825,10 @@ export default function GroupFeed({
 
   return (
     <section className={styles.feedSection}>
-      {liveError && (
-        <p className={cx("ui-errorBox", styles.pageError)}>{liveError}</p>
+      {(feedError || mutationError) && (
+        <p className={cx("ui-errorBox", styles.pageError)}>
+          {feedError || mutationError}
+        </p>
       )}
       {navigationError && (
         <p className={cx("ui-errorBox", styles.pageError)}>{navigationError}</p>
@@ -2037,7 +1977,7 @@ export default function GroupFeed({
               meeting={editingModule.payload}
               roommates={roommates}
               onSaved={async () => {
-                await loadFeed();
+                await refreshModules();
                 setEditingModule(null);
               }}
               onCancel={() => setEditingModule(null)}
@@ -2047,7 +1987,7 @@ export default function GroupFeed({
               module={editingModule}
               roommates={roommates}
               onSaved={async () => {
-                await loadFeed();
+                await refreshModules();
                 setEditingModule(null);
               }}
               onCancel={() => setEditingModule(null)}
