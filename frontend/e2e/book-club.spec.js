@@ -541,9 +541,10 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   ), { top: feedShellTop, offset: tvScrollOffset })).toBeLessThan(2)
   await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
 
+  const tvReturnScrollOffset = 180
   await page.evaluate(
     ({ top, offset }) => window.scrollTo(0, top + offset),
-    { top: feedShellTop, offset: 180 },
+    { top: feedShellTop, offset: tvReturnScrollOffset },
   )
   const returnPoint = await feedSwipePoint(-260)
   await page.mouse.move(returnPoint.x, returnPoint.y)
@@ -572,9 +573,112 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
     )
   ))).toBe(true)
 
-  await feedTabs.getByRole('tab', { name: /^Events/ }).click()
-  await expect(feedTabs.getByRole('tab', { name: /^Events/, selected: true })).toBeVisible()
-  await expect(page.getByText('No active modules here yet.')).toBeVisible()
+  const unpinnedScrollTop = Math.max(feedShellTop - 80, 0)
+  await page.evaluate((top) => window.scrollTo(0, top), unpinnedScrollTop)
+  const unpinnedHeaderY = (await stickyHeader.boundingBox()).y
+  expect(unpinnedHeaderY).toBeGreaterThan(5)
+  const unpinnedWindowScroll = await page.evaluate(() => window.scrollY)
+
+  const unpinnedReturnPoint = await feedSwipePoint(260)
+  await page.mouse.move(unpinnedReturnPoint.x, unpinnedReturnPoint.y)
+  await page.mouse.down()
+  await page.mouse.move(
+    unpinnedReturnPoint.x + 260,
+    unpinnedReturnPoint.y + 4,
+    { steps: 8 },
+  )
+  const unpinnedTv = page.locator('[data-feed-panel-type="tv"]')
+  await unpinnedTv.evaluate((panel) => {
+    window.__unpinnedFeedPanel = panel
+    window.__feedAnchorFrames = []
+    function sampleAnchor() {
+      const header = document.querySelector('[data-feed-sticky-header]')
+      const phase = document.querySelector('[data-feed-swipe-phase]')
+        ?.dataset.feedSwipePhase
+      window.__feedAnchorFrames.push({
+        headerY: header.getBoundingClientRect().y,
+        scrollY: window.scrollY,
+        phase,
+      })
+      if (phase !== 'idle') window.requestAnimationFrame(sampleAnchor)
+    }
+    window.requestAnimationFrame(sampleAnchor)
+  })
+  await page.mouse.up()
+  await expect(feedTabs.getByRole('tab', { name: /^TV/, selected: true })).toBeVisible()
+  const unpinnedHandoff = await page.evaluate(() => ({
+    samePanel: window.__unpinnedFeedPanel === document.querySelector(
+      '[data-feed-panel-type="tv"]',
+    ),
+    frames: window.__feedAnchorFrames,
+    panelTransform: document.querySelector(
+      '[data-feed-panel-type="tv"]',
+    ).style.transform,
+  }))
+  expect(unpinnedHandoff.samePanel).toBe(true)
+  expect(unpinnedHandoff.frames.length).toBeGreaterThan(2)
+  expect(
+    Math.max(...unpinnedHandoff.frames.map(({ headerY }) => headerY)) -
+    Math.min(...unpinnedHandoff.frames.map(({ headerY }) => headerY))
+  ).toBeLessThan(2)
+  expect(
+    Math.max(...unpinnedHandoff.frames.map(({ scrollY }) => scrollY)) -
+    Math.min(...unpinnedHandoff.frames.map(({ scrollY }) => scrollY))
+  ).toBeLessThan(2)
+  expect(Math.abs((await stickyHeader.boundingBox()).y - unpinnedHeaderY)).toBeLessThan(2)
+  expect(Math.abs(await page.evaluate(() => window.scrollY) - unpinnedWindowScroll)).toBeLessThan(2)
+  expect(unpinnedHandoff.panelTransform).toContain(
+    `-${tvReturnScrollOffset}px`,
+  )
+
+  const prePinGap = 4
+  await page.evaluate(
+    ({ top, gap }) => window.scrollTo(0, top - gap),
+    { top: feedShellTop, gap: prePinGap },
+  )
+  await expect.poll(async () => Math.round(
+    (await stickyHeader.boundingBox()).y,
+  )).toBe(prePinGap)
+  const tvYBeforePin = (await unpinnedTv.boundingBox()).y
+  await page.evaluate((top) => window.scrollTo(0, top), feedShellTop)
+  await expect.poll(() => page.evaluate(({ top, offset }) => (
+    Math.abs(window.scrollY - (top + offset))
+  ), { top: feedShellTop, offset: tvReturnScrollOffset })).toBeLessThan(2)
+  await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+  expect(
+    Math.abs((await unpinnedTv.boundingBox()).y - tvYBeforePin + prePinGap),
+  ).toBeLessThan(2)
+  expect(await unpinnedTv.evaluate((panel) => panel.style.transform)).toBe(
+    'translate3d(0px, 0px, 0px)',
+  )
+
+  const emptySwipePoint = await feedSwipePoint(260)
+  await page.mouse.move(emptySwipePoint.x, emptySwipePoint.y)
+  await page.mouse.down()
+  await page.mouse.move(emptySwipePoint.x + 260, emptySwipePoint.y + 4, {
+    steps: 8,
+  })
+  const incomingEmptyPolls = page.locator('[data-feed-panel-type="polls"]')
+  const incomingEmptyMessage = incomingEmptyPolls.getByText(
+    'No active modules here yet.',
+  )
+  const [emptyPreviewBox, stickyPreviewBox] = await Promise.all([
+    incomingEmptyMessage.boundingBox(),
+    stickyHeader.boundingBox(),
+  ])
+  expect(emptyPreviewBox.y).toBeGreaterThanOrEqual(
+    stickyPreviewBox.y + stickyPreviewBox.height - 1,
+  )
+  expect(emptyPreviewBox.y + emptyPreviewBox.height).toBeLessThanOrEqual(844)
+  await page.mouse.up()
+  await expect(feedTabs.getByRole('tab', { name: /^Polls/, selected: true })).toBeVisible()
+  await expect(incomingEmptyMessage).toBeVisible()
+  const emptyFinalBox = await incomingEmptyMessage.boundingBox()
+  const stickyFinalBox = await stickyHeader.boundingBox()
+  expect(emptyFinalBox.y).toBeGreaterThanOrEqual(
+    stickyFinalBox.y + stickyFinalBox.height - 1,
+  )
+  expect(emptyFinalBox.y + emptyFinalBox.height).toBeLessThanOrEqual(844)
   await expect.poll(() => page.evaluate((top) => Math.abs(
     document.documentElement.scrollHeight - window.innerHeight - top
   ), feedShellTop)).toBeLessThan(2)
@@ -582,8 +686,8 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   await expect.poll(() => page.evaluate((top) => (
     Math.abs(window.scrollY - top)
   ), feedShellTop)).toBeLessThan(2)
-  await swipeActivePanel(-260)
-  await expect(feedTabs.getByRole('tab', { name: /^Requests/, selected: true })).toBeVisible()
+  await swipeActivePanel(260)
+  await expect(feedTabs.getByRole('tab', { name: /^Checklists/, selected: true })).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('group-feed-sticky-mobile.png') })
 })

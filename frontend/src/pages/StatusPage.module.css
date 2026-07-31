@@ -217,6 +217,12 @@
   overflow-x: clip;
 }
 
+.feedViewportAnchored {
+  /* Saved category content can be offset beneath an unpinned title; clip the
+     scrolled-away portion so it never paints over the sticky feed controls. */
+  overflow: clip;
+}
+
 .feedPanel {
   @apply min-w-0 will-change-transform;
   transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);

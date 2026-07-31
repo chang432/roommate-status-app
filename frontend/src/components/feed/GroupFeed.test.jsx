@@ -784,6 +784,111 @@ describe("GroupFeed module focus", () => {
     });
   });
 
+  it("restores saved content relative to an unpinned feed title", async () => {
+    renderFeed("/", [feedItem("events")]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Movie night");
+    const shell = document.querySelector("[data-feed-shell]");
+    shell.getBoundingClientRect = vi.fn(() => feedShellRectAt(300));
+    Object.defineProperty(document.documentElement, "scrollHeight", {
+      configurable: true,
+      value: 2400,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+    });
+    window.scrollTo = vi.fn(({ top }) => setWindowScrollY(top));
+
+    setWindowScrollY(620);
+    await user.click(screen.getByRole("tab", { name: /^Events/ }));
+    setWindowScrollY(480);
+    await user.click(screen.getByRole("tab", { name: /^All/ }));
+
+    setWindowScrollY(100);
+    window.scrollTo.mockClear();
+    await user.click(screen.getByRole("tab", { name: /^Events/ }));
+
+    const eventsPanel = document.querySelector(
+      '[data-feed-panel-type="events"]',
+    );
+    expect(window.scrollTo).not.toHaveBeenCalled();
+    expect(eventsPanel).toHaveStyle({
+      transform: "translate3d(0px, -180px, 0)",
+    });
+
+    setWindowScrollY(300);
+    fireEvent.scroll(window);
+    await waitFor(() =>
+      expect(window.scrollTo).toHaveBeenLastCalledWith({
+        top: 480,
+        left: 0,
+        behavior: "auto",
+      }),
+    );
+    expect(eventsPanel).toHaveStyle({
+      transform: "translate3d(0px, 0, 0)",
+    });
+  });
+
+  it("drops a stale saved offset when its category becomes empty", async () => {
+    renderFeed("/", [feedItem("events")]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Movie night");
+    const shell = document.querySelector("[data-feed-shell]");
+    shell.getBoundingClientRect = vi.fn(() => feedShellRectAt(300));
+    Object.defineProperty(document.documentElement, "scrollHeight", {
+      configurable: true,
+      value: 2400,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+    });
+    window.scrollTo = vi.fn(({ top }) => setWindowScrollY(top));
+
+    setWindowScrollY(620);
+    await user.click(screen.getByRole("tab", { name: /^Events/ }));
+    setWindowScrollY(480);
+    await user.click(screen.getByRole("tab", { name: /^All/ }));
+
+    getFeed.mockResolvedValue([]);
+    fireEvent.focus(window);
+    await waitFor(() =>
+      expect(screen.queryByText("Movie night")).not.toBeInTheDocument(),
+    );
+    setWindowScrollY(100);
+
+    const feedMain = document.querySelector(
+      "[data-feed-swipe-phase]",
+    ).parentElement;
+    feedMain.getBoundingClientRect = vi.fn(() => ({ width: 184 }));
+    fireEvent.pointerDown(feedMain, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(feedMain, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 124,
+    });
+
+    const incomingEvents = document.querySelector(
+      '[data-feed-panel-type="events"]',
+    );
+    expect(incomingEvents).toHaveStyle({
+      transform: "translate3d(calc(100% + 16px + -85px), 0, 0)",
+    });
+    expect(
+      within(incomingEvents).getByText("No active modules here yet."),
+    ).toBeInTheDocument();
+  });
+
   it("moves the category underline with an in-progress swipe", async () => {
     renderFeed("/", [feedItem("events"), feedItem("requests")]);
 

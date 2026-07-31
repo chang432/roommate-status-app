@@ -124,6 +124,12 @@ function getModuleCounts(modules, allTypes) {
   return counts;
 }
 
+function modulesForCategory(modules, allTypes, type) {
+  return type === "all"
+    ? modules.filter((module) => allTypes.includes(module.type))
+    : modules.filter((module) => module.type === type);
+}
+
 function ModuleTabs({
   activeType,
   counts,
@@ -846,11 +852,18 @@ export default function GroupFeed({
   const stickyHeaderRef = useRef(null);
   const categoryScrollPositionsRef = useRef(new Map());
   const pendingCategoryScrollRef = useRef(null);
+  const deferredCategoryOffsetRef = useRef(null);
+  const pendingDeferredConversionRef = useRef(null);
+  const deferredConversionFrameRef = useRef(null);
   const feedSwipeScrollSnapshotRef = useRef(null);
   const [feedSwipeOffset, setFeedSwipeOffset] = useState(0);
   const [feedSwipePhase, setFeedSwipePhase] = useState("idle");
   const [feedSwipeTravelDistance, setFeedSwipeTravelDistance] = useState(1);
   const [feedSwipeScrollSnapshot, setFeedSwipeScrollSnapshot] = useState(null);
+  const [deferredCategoryOffset, setDeferredCategoryOffsetState] =
+    useState(null);
+  const [convertingDeferredOffset, setConvertingDeferredOffset] =
+    useState(false);
   const [feedHeaderStuck, setFeedHeaderStuck] = useState(false);
   const canAdministerBookClub = isAdminIn(roommates, user.id);
 
@@ -882,6 +895,7 @@ export default function GroupFeed({
     setAllTypes(nextPreferences.allTypes);
     categoryScrollPositionsRef.current.clear();
     pendingCategoryScrollRef.current = null;
+    setDeferredCategoryOffset(null);
   }, [user.activeGroupId, user.id]);
 
   useEffect(() => {
@@ -983,6 +997,20 @@ export default function GroupFeed({
     () => getModuleCounts(feedModules, allTypes),
     [allTypes, feedModules],
   );
+
+  const restorableTypeIds = useMemo(() => {
+    const result = new Set();
+    moduleTypes.forEach(({ id }) => {
+      const typeModules = modulesForCategory(feedModules, allTypes, id);
+      if (
+        typeModules.some((module) => !module.isArchived) ||
+        (archivedOpen && typeModules.some((module) => module.isArchived))
+      ) {
+        result.add(id);
+      }
+    });
+    return result;
+  }, [allTypes, archivedOpen, feedModules, moduleTypes]);
   const activeTypeIndex = moduleTypes.findIndex(
     (type) => type.id === activeType,
   );
@@ -1073,6 +1101,18 @@ export default function GroupFeed({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [drawerOpen]);
 
+  useEffect(() => {
+    categoryScrollPositionsRef.current.forEach((_, type) => {
+      if (!restorableTypeIds.has(type)) {
+        categoryScrollPositionsRef.current.delete(type);
+      }
+    });
+    const deferredOffset = deferredCategoryOffsetRef.current;
+    if (deferredOffset && !restorableTypeIds.has(deferredOffset.type)) {
+      setDeferredCategoryOffset(null);
+    }
+  }, [restorableTypeIds]);
+
   useLayoutEffect(() => {
     const pendingScroll = pendingCategoryScrollRef.current;
     const shell = feedShellRef.current;
@@ -1091,6 +1131,29 @@ export default function GroupFeed({
     });
   }, [activeType]);
 
+  useLayoutEffect(() => {
+    const conversion = pendingDeferredConversionRef.current;
+    if (!conversion || deferredCategoryOffset !== null) return;
+
+    pendingDeferredConversionRef.current = null;
+    const maxScrollTop = Math.max(
+      document.documentElement.scrollHeight - window.innerHeight,
+      0,
+    );
+    window.scrollTo({
+      top: Math.min(conversion.top, maxScrollTop),
+      left: window.scrollX,
+      behavior: "auto",
+    });
+    if (deferredConversionFrameRef.current !== null) {
+      window.cancelAnimationFrame(deferredConversionFrameRef.current);
+    }
+    deferredConversionFrameRef.current = window.requestAnimationFrame(() => {
+      deferredConversionFrameRef.current = null;
+      setConvertingDeferredOffset(false);
+    });
+  }, [deferredCategoryOffset]);
+
   useEffect(() => {
     if (loading) return undefined;
     const header = stickyHeaderRef.current;
@@ -1099,9 +1162,24 @@ export default function GroupFeed({
 
     function updateStickyState() {
       frameId = null;
-      setFeedHeaderStuck(
-        window.scrollY > 0 && header.getBoundingClientRect().top <= 0,
-      );
+      const headerIsStuck =
+        window.scrollY > 0 && header.getBoundingClientRect().top <= 0;
+      setFeedHeaderStuck(headerIsStuck);
+
+      const deferredOffset = deferredCategoryOffsetRef.current;
+      const shell = feedShellRef.current;
+      if (!deferredOffset || !shell) return;
+      const shellTop = shell.getBoundingClientRect().top + window.scrollY;
+      if (window.scrollY < shellTop - 1) return;
+
+      // Convert the panel-only offset into document scroll at the sticky
+      // boundary. Clearing the transform and adding the same amount to the
+      // page scroll in one layout commit keeps both title and content still.
+      pendingDeferredConversionRef.current = {
+        top: window.scrollY + deferredOffset.offset,
+      };
+      setConvertingDeferredOffset(true);
+      setDeferredCategoryOffset(null);
     }
 
     function scheduleStickyUpdate() {
@@ -1125,6 +1203,9 @@ export default function GroupFeed({
       swipeTimersRef.current = [];
       if (swipeFrameRef.current !== null) {
         window.cancelAnimationFrame(swipeFrameRef.current);
+      }
+      if (deferredConversionFrameRef.current !== null) {
+        window.cancelAnimationFrame(deferredConversionFrameRef.current);
       }
     },
     [],
@@ -1156,15 +1237,35 @@ export default function GroupFeed({
     }
   }
 
+  function setDeferredCategoryOffset(value) {
+    deferredCategoryOffsetRef.current = value;
+    setDeferredCategoryOffsetState(value);
+  }
+
+  function categoryScrollOffset(type) {
+    if (!restorableTypeIds.has(type)) return 0;
+    return categoryScrollPositionsRef.current.get(type) ?? 0;
+  }
+
   function currentCategoryScrollSnapshot() {
     const shell = feedShellRef.current;
-    if (!shell) return { hasEnteredFeed: false, offset: 0 };
+    if (!shell) {
+      return { hasEnteredFeed: false, pageOffset: 0, logicalOffset: 0 };
+    }
 
     const shellTop = shell.getBoundingClientRect().top + window.scrollY;
     const hasEnteredFeed = window.scrollY >= shellTop - 1;
+    const pageOffset = hasEnteredFeed
+      ? Math.max(window.scrollY - shellTop, 0)
+      : 0;
+    const deferredOffset =
+      deferredCategoryOffsetRef.current?.type === activeType
+        ? deferredCategoryOffsetRef.current.offset
+        : 0;
     return {
       hasEnteredFeed,
-      offset: hasEnteredFeed ? Math.max(window.scrollY - shellTop, 0) : 0,
+      pageOffset,
+      logicalOffset: deferredOffset + pageOffset,
     };
   }
 
@@ -1174,8 +1275,13 @@ export default function GroupFeed({
     }
 
     const snapshot = currentCategoryScrollSnapshot();
-    if (snapshot.hasEnteredFeed) {
-      categoryScrollPositionsRef.current.set(activeType, snapshot.offset);
+    if (restorableTypeIds.has(activeType)) {
+      categoryScrollPositionsRef.current.set(
+        activeType,
+        snapshot.logicalOffset,
+      );
+    } else {
+      categoryScrollPositionsRef.current.delete(activeType);
     }
     feedSwipeScrollSnapshotRef.current = snapshot;
     setFeedSwipeScrollSnapshot(snapshot);
@@ -1191,18 +1297,31 @@ export default function GroupFeed({
     if (type === activeType) return;
 
     const snapshot = scrollSnapshot ?? currentCategoryScrollSnapshot();
-    const destinationWasVisited = categoryScrollPositionsRef.current.has(type);
+    const destinationOffset = categoryScrollOffset(type);
 
-    if (snapshot.hasEnteredFeed) {
-      categoryScrollPositionsRef.current.set(activeType, snapshot.offset);
+    if (restorableTypeIds.has(activeType)) {
+      categoryScrollPositionsRef.current.set(
+        activeType,
+        snapshot.logicalOffset,
+      );
+    } else {
+      categoryScrollPositionsRef.current.delete(activeType);
     }
-    if (snapshot.hasEnteredFeed || destinationWasVisited) {
+    if (snapshot.hasEnteredFeed) {
       // Restore in the destination's layout commit so the keyed incoming panel
       // keeps the same viewport position through its promotion to active.
       pendingCategoryScrollRef.current = {
         type,
-        offset: categoryScrollPositionsRef.current.get(type) ?? 0,
+        offset: destinationOffset,
       };
+      setDeferredCategoryOffset(null);
+    } else {
+      // Before the title is sticky, preserve the page position and express the
+      // saved category position relative to the title inside the clipped panel.
+      pendingCategoryScrollRef.current = null;
+      setDeferredCategoryOffset(
+        destinationOffset > 0 ? { type, offset: destinationOffset } : null,
+      );
     }
 
     setActiveType(type);
@@ -1517,10 +1636,7 @@ export default function GroupFeed({
   }
 
   function renderFeedPanel(type, isActivePanel) {
-    const visibleModules =
-      type === "all"
-        ? feedModules.filter((module) => allTypes.includes(module.type))
-        : feedModules.filter((module) => module.type === type);
+    const visibleModules = modulesForCategory(feedModules, allTypes, type);
     const activeModules = visibleModules.filter((module) => !module.isArchived);
     const archivedModules = visibleModules.filter((module) => module.isArchived);
     const panelFocusIntent = isActivePanel ? focusIntent : null;
@@ -1595,11 +1711,13 @@ export default function GroupFeed({
   const canCreateModule = showStandardModules || showBookClub;
 
   function panelVerticalOffset(type) {
-    if (!feedSwipeScrollSnapshot?.hasEnteredFeed || type === activeType) return 0;
-    return (
-      feedSwipeScrollSnapshot.offset -
-      (categoryScrollPositionsRef.current.get(type) ?? 0)
-    );
+    if (type === activeType) {
+      return deferredCategoryOffset?.type === type
+        ? -deferredCategoryOffset.offset
+        : 0;
+    }
+    if (!feedSwipeScrollSnapshot) return 0;
+    return feedSwipeScrollSnapshot.pageOffset - categoryScrollOffset(type);
   }
 
   function panelHorizontalOffset(type) {
@@ -1703,7 +1821,14 @@ export default function GroupFeed({
           }}
         >
           <div
-            className={styles.feedViewport}
+            className={cx(
+              styles.feedViewport,
+              deferredCategoryOffset ||
+                (feedSwipeScrollSnapshot &&
+                  !feedSwipeScrollSnapshot.hasEnteredFeed)
+                ? styles.feedViewportAnchored
+                : "",
+            )}
             data-feed-swipe-phase={feedSwipePhase}
           >
             {visiblePanelTypes.map((type) => {
@@ -1719,7 +1844,8 @@ export default function GroupFeed({
                     styles.feedPanel,
                     isActivePanel ? "" : styles.feedPanelAdjacent,
                     feedSwipePhase === "dragging" ||
-                      feedSwipePhase === "preparing"
+                      feedSwipePhase === "preparing" ||
+                      (isActivePanel && convertingDeferredOffset)
                       ? styles.feedPanelDirect
                       : "",
                   )}
