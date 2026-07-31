@@ -75,7 +75,12 @@ function bookClubFixture() {
   return { meeting, activeBook, completedBook }
 }
 
-async function mockBookClub(page, { tvFeedCount = 0, bookClubFeedCount = 0 } = {}) {
+async function mockBookClub(page, {
+  tvFeedCount = 0,
+  archivedTvFeedCount = 0,
+  bookClubFeedCount = 0,
+  viewerIsAdmin = true,
+} = {}) {
   const { meeting, activeBook, completedBook } = bookClubFixture()
   let books = [activeBook, completedBook]
   const forums = {
@@ -87,19 +92,22 @@ async function mockBookClub(page, { tvFeedCount = 0, bookClubFeedCount = 0 } = {
     title: meeting.bookTitle, subtitle: 'Book Club meeting',
     actor: meeting.createdByName, isArchived: false, payload: meeting,
   }]
-  for (let index = 0; index < tvFeedCount; index += 1) {
-    const id = `show-${index}`
-    feedItems.push({
-      id, type: 'tv', createdAt: NOW - index, updatedAt: NOW - index,
-      sortAt: NOW - index, title: `Show ${index + 1}`, subtitle: 'TV',
-      actor: 'Andre', isArchived: false,
-      payload: {
-        id, title: `Show ${index + 1}`, createdBy: 'Andre',
-        createdById: 'andre', members: [], createdAt: NOW - index,
-        updatedAt: NOW - index, isArchived: false,
-      },
-    })
+  function addTvFeedItems(count, isArchived = false) {
+    for (let index = 0; index < count; index += 1) {
+      const title = `${isArchived ? 'Archived ' : ''}Show ${index + 1}`
+      const id = `${isArchived ? 'archived-' : ''}show-${index}`
+      feedItems.push({
+        id, type: 'tv', createdAt: NOW - index, updatedAt: NOW - index,
+        sortAt: NOW - index, title, subtitle: 'TV', actor: 'Andre', isArchived,
+        payload: {
+          id, title, createdBy: 'Andre', createdById: 'andre', members: [],
+          createdAt: NOW - index, updatedAt: NOW - index, isArchived,
+        },
+      })
+    }
   }
+  addTvFeedItems(tvFeedCount)
+  addTvFeedItems(archivedTvFeedCount, true)
   for (let index = 0; index < bookClubFeedCount; index += 1) {
     const id = `meeting-extra-${index}`
     const extraMeeting = {
@@ -140,11 +148,11 @@ async function mockBookClub(page, { tvFeedCount = 0, bookClubFeedCount = 0 } = {
     } else if (path === '/api/groups/current') {
       payload = { group: {
         groupId: 'book-club', name: 'Book Club', showBookClub: true,
-        showRoster: true, showFeed: true, viewerIsAdmin: true,
+        showRoster: true, showFeed: true, viewerIsAdmin,
       } }
     } else if (path === '/api/roommates') {
       payload = [
-        { id: 'andre', name: 'Andre', role: 'admin' },
+        { id: 'andre', name: 'Andre', role: viewerIsAdmin ? 'admin' : 'member' },
         { id: 'kayla', name: 'Kayla', role: 'member' },
         { id: 'ting', name: 'Ting', role: 'member' },
       ]
@@ -766,6 +774,155 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   await expect(page.getByText('Show 20', { exact: true })).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('group-feed-sticky-mobile.png') })
+})
+
+test('swipes categories from the blank feed canvas below Archived', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockBookClub(page, { tvFeedCount: 1, archivedTvFeedCount: 1 })
+  await page.goto('/')
+
+  const feedTabs = page.getByRole('tablist', { name: 'Feed categories' })
+  await feedTabs.getByRole('tab', { name: /^TV/ }).click()
+  await expect(feedTabs.getByRole('tab', { name: /^TV/, selected: true })).toBeVisible()
+
+  const feedShell = page.locator('[data-feed-shell]')
+  const swipeSurface = page.locator('[data-feed-swipe-surface]')
+  const stickyHeader = page.locator('[data-feed-sticky-header]')
+  const archiveToggle = page.getByRole('button', { name: /^Archived \(1\)/ })
+  await archiveToggle.click()
+  await expect(page.getByText('Archived Show 1', { exact: true })).toBeVisible()
+  await archiveToggle.click()
+  await expect(page.getByText('Archived Show 1', { exact: true })).not.toBeVisible()
+  const feedShellTop = await feedShell.evaluate((element) => (
+    element.getBoundingClientRect().top + window.scrollY
+  ))
+  await page.evaluate((top) => window.scrollTo(0, top), feedShellTop)
+  await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+
+  const [surfaceBox, shellBox, archiveBox] = await Promise.all([
+    swipeSurface.boundingBox(),
+    feedShell.boundingBox(),
+    archiveToggle.boundingBox(),
+  ])
+  expect(surfaceBox.y + surfaceBox.height).toBeGreaterThanOrEqual(
+    shellBox.y + shellBox.height - 1,
+  )
+  const swipeY = archiveBox.y + archiveBox.height + 32
+  expect(swipeY).toBeLessThan(surfaceBox.y + surfaceBox.height - 20)
+  expect(await page.evaluate(({ x, y }) => (
+    document.elementFromPoint(x, y)?.closest('[data-feed-swipe-surface]') !== null
+  ), { x: surfaceBox.x + surfaceBox.width / 2, y: swipeY })).toBe(true)
+  await page.screenshot({
+    path: testInfo.outputPath('group-feed-blank-canvas-mobile.png'),
+  })
+
+  const swipeStartX = surfaceBox.x + surfaceBox.width - 20
+  await page.mouse.move(swipeStartX, swipeY)
+  await page.mouse.down()
+  await page.mouse.move(swipeStartX - 260, swipeY + 4, { steps: 8 })
+  await page.mouse.up()
+
+  await expect(
+    feedTabs.getByRole('tab', { name: /^Book Club/, selected: true }),
+  ).toBeVisible()
+  await expect.poll(() => page.evaluate(() => (
+    document.documentElement.scrollWidth <= window.innerWidth
+  ))).toBe(true)
+})
+
+test('keeps category focus and create permissions visually stable', async ({ page }, testInfo) => {
+  await mockBookClub(page, { tvFeedCount: 1, viewerIsAdmin: false })
+
+  for (const viewport of [
+    { name: 'desktop', width: 1280, height: 800 },
+    { name: 'phone', width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await page.goto('/')
+
+    const feedTabs = page.getByRole('tablist', { name: 'Feed categories' })
+    const allTab = feedTabs.getByRole('tab', { name: /^All/ })
+    const tvTab = feedTabs.getByRole('tab', { name: /^TV/ })
+    const bookClubTab = feedTabs.getByRole('tab', { name: /^Book Club/ })
+    const titleRow = page.locator('[data-feed-title-row]')
+    const categoryRow = page.locator('[data-feed-category-row]')
+    const createSlot = page.locator('[data-feed-create-slot]')
+    const heading = page.getByRole('heading', { name: 'Group Feed' })
+    const feedShell = page.locator('[data-feed-shell]')
+    const stickyHeader = page.locator('[data-feed-sticky-header]')
+
+    await expect(allTab).toHaveAttribute('aria-selected', 'true')
+    await expect(createSlot.getByRole('button', { name: 'Create a module' })).toBeVisible()
+    const feedShellTop = await feedShell.evaluate((element) => (
+      element.getBoundingClientRect().top + window.scrollY
+    ))
+    await page.evaluate((top) => window.scrollTo(0, top), feedShellTop)
+    await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+
+    const feedGeometry = async () => {
+      const [titleRowBox, categoryRowBox, createSlotBox, headingBox, panelBox] =
+        await Promise.all([
+          titleRow.boundingBox(),
+          categoryRow.boundingBox(),
+          createSlot.boundingBox(),
+          heading.boundingBox(),
+          page.getByRole('tabpanel').boundingBox(),
+        ])
+      return {
+        titleRowY: titleRowBox.y,
+        titleRowHeight: titleRowBox.height,
+        categoryRowY: categoryRowBox.y,
+        createSlotX: createSlotBox.x,
+        createSlotY: createSlotBox.y,
+        headingX: headingBox.x,
+        headingY: headingBox.y,
+        panelY: panelBox.y,
+      }
+    }
+
+    const expectStableGeometry = (actual, expected) => {
+      Object.keys(expected).forEach((key) => {
+        expect(Math.abs(actual[key] - expected[key]), key).toBeLessThan(1)
+      })
+    }
+
+    const baselineGeometry = await feedGeometry()
+    const pointerShadowBefore = await bookClubTab.evaluate((element) => (
+      getComputedStyle(element).boxShadow
+    ))
+    const textColorBefore = await bookClubTab.evaluate((element) => (
+      getComputedStyle(element).color
+    ))
+    const keyboardShadowBefore = await tvTab.evaluate((element) => (
+      getComputedStyle(element).boxShadow
+    ))
+
+    await bookClubTab.click()
+    await expect(bookClubTab).toHaveAttribute('aria-selected', 'true')
+    await expect(createSlot.getByRole('button')).toHaveCount(0)
+    expectStableGeometry(await feedGeometry(), baselineGeometry)
+    expect(await bookClubTab.evaluate((element) => (
+      getComputedStyle(element).boxShadow
+    ))).toBe(pointerShadowBefore)
+    await expect.poll(() => bookClubTab.evaluate((element) => (
+      getComputedStyle(element).color
+    ))).not.toBe(textColorBefore)
+    await page.screenshot({
+      path: testInfo.outputPath(`group-feed-permissions-${viewport.name}.png`),
+    })
+
+    await bookClubTab.press('ArrowLeft')
+    await expect(tvTab).toBeFocused()
+    await expect(tvTab).toHaveAttribute('aria-selected', 'true')
+    await expect(createSlot.getByRole('button', { name: 'Add a show' })).toBeVisible()
+    expectStableGeometry(await feedGeometry(), baselineGeometry)
+    await expect.poll(() => tvTab.evaluate((element) => (
+      getComputedStyle(element).boxShadow
+    ))).not.toBe(keyboardShadowBefore)
+    await expect.poll(() => page.evaluate(() => (
+      document.documentElement.scrollWidth <= window.innerWidth
+    ))).toBe(true)
+  }
 })
 
 test('keeps the editorial feed header clear across themes', async ({ page }, testInfo) => {

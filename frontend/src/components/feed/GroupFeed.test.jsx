@@ -247,6 +247,31 @@ describe("GroupFeed module focus", () => {
     );
   });
 
+  it("keeps the create action slot mounted when category permissions change", async () => {
+    renderFeed(
+      "/",
+      [feedItem("tv"), feedItem("book-club")],
+      { showBookClub: true },
+    );
+    const user = userEvent.setup();
+
+    await screen.findByText("Severance");
+    const createSlot = document.querySelector("[data-feed-create-slot]");
+    expect(
+      within(createSlot).getByRole("button", { name: "Create a module" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /^Book Club/ }));
+    expect(document.querySelector("[data-feed-create-slot]")).toBe(createSlot);
+    expect(within(createSlot).queryByRole("button")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /^TV/ }));
+    expect(document.querySelector("[data-feed-create-slot]")).toBe(createSlot);
+    expect(
+      within(createSlot).getByRole("button", { name: "Add a show" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders a Book Club-only group without leaking standard modules", async () => {
     renderFeed(
       "/",

@@ -59,7 +59,7 @@
 }
 
 .shell {
-  @apply min-w-0;
+  @apply flex min-w-0 flex-col;
   /* The page contributes 4rem of bottom padding, so subtract it here to keep
      an empty feed pinned without creating a blank vertical scroll range. */
   min-height: calc(100vh - 4rem);
@@ -209,7 +209,7 @@
 }
 
 .feedColumn {
-  @apply min-w-0 touch-pan-y pb-24;
+  @apply min-w-0 flex-1 touch-pan-y pb-24;
 }
 
 .feedViewport {
@@ -287,7 +287,7 @@
 }
 
 .feedCategoryTab {
-  @apply flex min-h-11 flex-none items-center whitespace-nowrap px-3 py-2 text-[13px] font-black text-ink-soft transition-colors hover:text-ink focus:outline-none focus:ring-4 focus:ring-inset focus:ring-accent-soft;
+  @apply flex min-h-11 flex-none items-center whitespace-nowrap px-3 py-2 text-[13px] font-black text-ink-soft transition-colors hover:text-ink focus:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-accent-soft;
 }
 
 .feedCategoryTabActive {
@@ -342,6 +342,10 @@
 
 .createInlineButton {
   @apply grid h-11 w-11 flex-none place-items-center rounded-full bg-solid-accent text-[26px] font-black leading-none text-on-strong shadow-soft transition hover:scale-105 hover:bg-solid-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft;
+}
+
+.createInlineSlot {
+  @apply h-11 w-11 flex-none;
 }
 
 @media (prefers-reduced-motion: reduce) {
