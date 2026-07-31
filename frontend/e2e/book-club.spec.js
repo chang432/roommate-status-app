@@ -433,10 +433,15 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
 
   const feedBox = await feedMain.boundingBox()
   const { x: swipeStartX, y: swipeY } = await feedSwipePoint(-260)
+  const pinnedScrollBeforeSwipe = await page.evaluate(() => window.scrollY)
   await page.mouse.move(swipeStartX, swipeY)
   await page.mouse.down()
   await page.mouse.move(swipeStartX - 12, swipeY + 1)
-  await page.mouse.move(swipeStartX - 260, swipeY + 4, { steps: 8 })
+  await page.mouse.move(swipeStartX - 260, swipeY + 140, { steps: 8 })
+  await expect.poll(() => page.evaluate((top) => (
+    Math.abs(window.scrollY - top)
+  ), pinnedScrollBeforeSwipe)).toBeLessThan(2)
+  await expect(stickyHeader).toHaveAttribute('data-feed-pinned', '')
 
   const incomingBookClub = page.locator('[data-feed-panel-type="book-club"]')
   await expect(incomingBookClub.getByText('The Fifth Season').first()).toBeVisible()

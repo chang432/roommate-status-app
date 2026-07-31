@@ -640,8 +640,14 @@ describe("GroupFeed module focus", () => {
     fireEvent.pointerMove(card, {
       pointerId: 1,
       pointerType: "touch",
+      clientX: 150,
+      clientY: 121,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
       clientX: 80,
-      clientY: 126,
+      clientY: 320,
     });
     expect(
       document.querySelector('[data-feed-panel-type="all"]'),
@@ -660,7 +666,7 @@ describe("GroupFeed module focus", () => {
       pointerId: 1,
       pointerType: "touch",
       clientX: 80,
-      clientY: 126,
+      clientY: 320,
     });
     fireEvent.transitionEnd(
       document.querySelector('[data-feed-panel-type="all"]'),
@@ -674,6 +680,46 @@ describe("GroupFeed module focus", () => {
       document.querySelector('[data-feed-panel-type="events"]'),
     ).toBe(incomingPanel);
     expect(scroller.scrollLeft).toBe(120);
+  });
+
+  it("finishes a horizontally locked swipe from its last position on pointer cancel", async () => {
+    renderFeed("/", [feedItem("events")]);
+
+    await screen.findByText("Movie night");
+    const card = cardForText("Movie night");
+    document.querySelector(
+      "[data-feed-swipe-phase]",
+    ).parentElement.getBoundingClientRect = vi.fn(() => ({ width: 184 }));
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 150,
+      clientY: 121,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 320,
+    });
+    fireEvent.pointerCancel(card, {
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    fireEvent.transitionEnd(
+      document.querySelector('[data-feed-panel-type="all"]'),
+      { propertyName: "transform" },
+    );
+
+    expect(
+      await screen.findByRole("tab", { name: /^Events/, selected: true }),
+    ).toBeInTheDocument();
   });
 
   it("does not move the page when categories change before the feed is reached", async () => {
@@ -751,6 +797,9 @@ describe("GroupFeed module focus", () => {
     setWindowScrollY(620);
     await user.click(screen.getByRole("tab", { name: /^Events/ }));
     setWindowScrollY(480);
+    fireEvent.scroll(window);
+    const header = document.querySelector("[data-feed-sticky-header]");
+    await waitFor(() => expect(header).toHaveAttribute("data-feed-pinned"));
 
     const card = cardForText("Movie night");
     document.querySelector(
@@ -765,8 +814,22 @@ describe("GroupFeed module focus", () => {
     fireEvent.pointerMove(card, {
       pointerId: 1,
       pointerType: "touch",
+      clientX: 110,
+      clientY: 121,
+    });
+    setWindowScrollY(297);
+    fireEvent.scroll(window);
+    expect(header).toHaveAttribute("data-feed-pinned");
+    expect(window.scrollTo).toHaveBeenLastCalledWith({
+      top: 480,
+      left: 0,
+      behavior: "auto",
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
       clientX: 180,
-      clientY: 124,
+      clientY: 500,
     });
 
     const incomingAll = document.querySelector(
@@ -780,7 +843,7 @@ describe("GroupFeed module focus", () => {
       pointerId: 1,
       pointerType: "touch",
       clientX: 180,
-      clientY: 124,
+      clientY: 500,
     });
 
     await screen.findByRole("tab", { name: /^All/, selected: true });
@@ -1128,7 +1191,16 @@ describe("GroupFeed module focus", () => {
       clientX: 178,
       clientY: 160,
     });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 162,
+    });
     expect(scroller.scrollTo).not.toHaveBeenCalled();
+    expect(
+      document.querySelector('[data-feed-swipe-phase="idle"]'),
+    ).toBeInTheDocument();
   });
 
   it("snaps an incomplete swipe back while keeping the adjacent page visible", async () => {
@@ -1170,6 +1242,13 @@ describe("GroupFeed module focus", () => {
       clientY: 123,
     });
     expect(scroller.scrollLeft).toBeCloseTo(15.3, 3);
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 150,
+      clientY: 300,
+    });
+    expect(scroller.scrollLeft).toBeCloseTo(15.3, 3);
 
     const incomingPanel = document.querySelector(
       '[data-feed-panel-type="events"]',
@@ -1179,7 +1258,7 @@ describe("GroupFeed module focus", () => {
       pointerId: 1,
       pointerType: "touch",
       clientX: 150,
-      clientY: 123,
+      clientY: 300,
     });
 
     const activePanel = document.querySelector('[data-feed-panel-type="all"]');

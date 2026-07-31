@@ -44,10 +44,12 @@ const FEED_POLL_INTERVAL_MS = 5000;
 const MODULE_PREFERENCE_VERSION = 3;
 const INTERACTIVE_SELECTOR = "button, a, input, textarea, select";
 const SWIPE_MIN_X = 64;
-const SWIPE_MAX_Y = 48;
+const SWIPE_HORIZONTAL_LOCK_PX = 4;
+const SWIPE_VERTICAL_LOCK_PX = 10;
 const SWIPE_DRAG_RESISTANCE = 0.85;
 const SWIPE_EDGE_RESISTANCE = 0.18;
 const SWIPE_PANEL_GAP_PX = 16;
+const FEED_PIN_TOLERANCE_PX = 1;
 const FEED_SWIPE_TRANSITION_MS = 220;
 const FEED_SWIPE_FALLBACK_BUFFER_MS = 120;
 const FEED_SWIPE_CLICK_SUPPRESSION_MS = FEED_SWIPE_TRANSITION_MS * 2;
@@ -1192,9 +1194,37 @@ export default function GroupFeed({
     }
 
     function updateStickyState() {
-      const headerIsPinned =
-        window.scrollY > 0 && header.getBoundingClientRect().top <= 0;
+      const shellTop = shell.getBoundingClientRect().top + window.scrollY;
+      let headerIsPinned =
+        window.scrollY > 0 &&
+        window.scrollY >= shellTop - FEED_PIN_TOLERANCE_PX;
       const wasPinned = feedHeaderPinnedRef.current;
+      const swipeSnapshot = feedSwipeScrollSnapshotRef.current;
+
+      if (wasPinned && !headerIsPinned && swipeSnapshot?.hasEnteredFeed) {
+        // A horizontal gesture owns the page axis through its handoff. Browser
+        // touch drift and short-panel relayouts must not end the pinned session.
+        const activeGesture = swipeStartRef.current;
+        const maxScrollTop = Math.max(
+          document.documentElement.scrollHeight - window.innerHeight,
+          0,
+        );
+        const anchoredTop =
+          activeGesture?.axis === "horizontal"
+            ? activeGesture.scrollTop
+            : Math.min(shellTop + swipeSnapshot.pageOffset, maxScrollTop);
+        if (
+          Math.abs(window.scrollY - anchoredTop) > FEED_PIN_TOLERANCE_PX
+        ) {
+          window.scrollTo({
+            top: anchoredTop,
+            left: window.scrollX,
+            behavior: "auto",
+          });
+        }
+        headerIsPinned = true;
+      }
+
       feedHeaderPinnedRef.current = headerIsPinned;
       header.toggleAttribute("data-feed-pinned", headerIsPinned);
 
@@ -1483,6 +1513,9 @@ export default function GroupFeed({
       x: event.clientX,
       y: event.clientY,
       width: panelWidth,
+      axis: null,
+      lastDeltaX: 0,
+      scrollTop: window.scrollY,
     };
     setFeedSwipeTravelDistance(
       Math.max(panelWidth + SWIPE_PANEL_GAP_PX, 1),
@@ -1497,14 +1530,37 @@ export default function GroupFeed({
     const deltaY = event.clientY - start.y;
     if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
 
-    // Let vertical movement remain native page scrolling; only a horizontal
-    // gesture moves the feed panel with the finger.
-    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 10) {
-      swipeStartRef.current = null;
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
-      return;
+    if (start.axis === null) {
+      if (
+        Math.abs(deltaX) >= SWIPE_HORIZONTAL_LOCK_PX &&
+        Math.abs(deltaX) > Math.abs(deltaY)
+      ) {
+        // Axis ownership is one-way: once horizontal wins, later vertical
+        // movement cannot cancel the category swipe or move the page.
+        start.axis = "horizontal";
+      } else if (
+        Math.abs(deltaY) >= SWIPE_VERTICAL_LOCK_PX &&
+        Math.abs(deltaY) > Math.abs(deltaX)
+      ) {
+        swipeStartRef.current = null;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+        return;
+      } else {
+        return;
+      }
     }
-    if (Math.abs(deltaX) < 4) return;
+
+    event.preventDefault();
+    start.lastDeltaX = deltaX;
+    if (
+      Math.abs(window.scrollY - start.scrollTop) > FEED_PIN_TOLERANCE_PX
+    ) {
+      window.scrollTo({
+        top: start.scrollTop,
+        left: window.scrollX,
+        behavior: "auto",
+      });
+    }
 
     const direction = deltaX < 0 ? 1 : -1;
     const destinationType = direction > 0 ? nextType : previousType;
@@ -1518,26 +1574,22 @@ export default function GroupFeed({
     );
   }
 
-  function handleFeedPointerUp(event) {
+  function finishFeedPointerGesture(event, cancelled = false) {
     const start = swipeStartRef.current;
     swipeStartRef.current = null;
     if (!start || start.pointerId !== event.pointerId) return;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
-    const deltaX = event.clientX - start.x;
-    const deltaY = event.clientY - start.y;
-    // A pointer event without coordinates yields NaN deltas, and every
-    // comparison against NaN is false — so the distance guards below would fall
-    // through and `deltaX < 0` would pick the backwards direction. Treat a
-    // non-measurable gesture as no gesture.
-    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) {
-      resetFeedSwipe();
-      return;
-    }
-    if (Math.abs(deltaX) >= 4 && Math.abs(deltaX) > Math.abs(deltaY)) {
-      swipeClickBlockUntilRef.current =
-        Date.now() + FEED_SWIPE_CLICK_SUPPRESSION_MS;
-    }
-    if (Math.abs(deltaX) < SWIPE_MIN_X || Math.abs(deltaY) > SWIPE_MAX_Y) {
+    if (start.axis !== "horizontal") return;
+
+    event.preventDefault();
+    const measuredDeltaX = event.clientX - start.x;
+    const deltaX =
+      !cancelled && Number.isFinite(measuredDeltaX)
+        ? measuredDeltaX
+        : start.lastDeltaX;
+    swipeClickBlockUntilRef.current =
+      Date.now() + FEED_SWIPE_CLICK_SUPPRESSION_MS;
+    if (!Number.isFinite(deltaX) || Math.abs(deltaX) < SWIPE_MIN_X) {
       resetFeedSwipe();
       return;
     }
@@ -1565,6 +1617,14 @@ export default function GroupFeed({
       scrollSnapshot,
     };
     scheduleFeedSwipeFallback();
+  }
+
+  function handleFeedPointerUp(event) {
+    finishFeedPointerGesture(event);
+  }
+
+  function handleFeedPointerCancel(event) {
+    finishFeedPointerGesture(event, true);
   }
 
   function openCreateModal() {
@@ -1901,10 +1961,7 @@ export default function GroupFeed({
           onPointerMove={handleFeedPointerMove}
           onPointerUp={handleFeedPointerUp}
           onClickCapture={handleFeedClickCapture}
-          onPointerCancel={() => {
-            swipeStartRef.current = null;
-            resetFeedSwipe();
-          }}
+          onPointerCancel={handleFeedPointerCancel}
         >
           <div
             className={cx(
