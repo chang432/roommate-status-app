@@ -19,6 +19,11 @@ vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   setBookClubResponse: vi.fn(),
   completeBookClubMeeting: vi.fn(),
 }));
+vi.mock("./BookClubForum.jsx", () => ({
+  default: ({ meeting }) => (
+    <div data-testid={`discussion-${meeting.id}`}>Discussion for {meeting.readingTarget}</div>
+  ),
+}));
 
 const MEETING = {
   id: "meeting#1",
@@ -73,7 +78,7 @@ describe("BookClubMeetingFeature", () => {
   });
   afterEach(() => cleanup());
 
-  it("restores expandable meeting details and a focused forum link", async () => {
+  it("shows collapsed attendance and discussion with a full-book link", async () => {
     renderMeeting();
 
     const header = screen.getByRole("button", {
@@ -86,9 +91,26 @@ describe("BookClubMeetingFeature", () => {
     expect(header).toHaveAttribute("aria-expanded", "true");
     expect(getBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");
     expect(screen.getByText("Chapter 8")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Forum" })).toHaveAttribute(
+    const attendance = screen.getByRole("region", { name: "Attendance" });
+    const discussion = screen.getByRole("region", { name: "Discussion" });
+    const attendanceToggle = within(attendance).getByRole("button", { name: /Attendance/ });
+    const discussionToggle = within(discussion).getByRole("button", { name: /Discussion/ });
+
+    expect(attendanceToggle).toHaveAttribute("aria-expanded", "false");
+    expect(discussionToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByLabelText("Member attendance").closest("[inert]"))
+      .toBeInTheDocument();
+    expect(screen.queryByTestId("discussion-meeting#1")).not.toBeInTheDocument();
+
+    await userEvent.click(attendanceToggle);
+    expect(attendanceToggle).toHaveAttribute("aria-expanded", "true");
+    expect(discussionToggle).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(discussionToggle);
+    expect(screen.getByTestId("discussion-meeting#1")).toHaveTextContent("Chapter 8");
+    expect(screen.getByRole("link", { name: "View book" })).toHaveAttribute(
       "href",
-      "/?book=book-1&meeting=meeting%231",
+      "/?book=book-1",
     );
   });
 
@@ -106,7 +128,7 @@ describe("BookClubMeetingFeature", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("link", { name: "Forum" })).toHaveClass("ui-pillSecondary");
+    expect(screen.getByRole("link", { name: "View book" })).toHaveClass("ui-pillSecondary");
     expect(screen.getByRole("button", { name: "Complete meeting" })).toHaveClass(
       "ui-pillDanger",
     );
@@ -144,6 +166,7 @@ describe("BookClubMeetingFeature", () => {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
+    await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
     await userEvent.selectOptions(screen.getByLabelText("Your attendance"), "attending");
     expect(setBookClubResponse).toHaveBeenCalledWith(
       "andre",
@@ -162,6 +185,7 @@ describe("BookClubMeetingFeature", () => {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
+    await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
 
     const attendance = screen.getByLabelText("Member attendance");
     expect(within(screen.getByRole("region", { name: "Attending: 1" })).getByText("Kayla"))
@@ -184,6 +208,7 @@ describe("BookClubMeetingFeature", () => {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
+    await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
 
     await waitFor(() => expect(screen.queryByLabelText("Your attendance")).not.toBeInTheDocument());
     expect(screen.getByLabelText("Member attendance")).toBeInTheDocument();

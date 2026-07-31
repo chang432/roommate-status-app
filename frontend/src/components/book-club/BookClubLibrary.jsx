@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { reviewBookClubBook } from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { exactDateTime } from "../../utils/time.js";
 import BookClubDisclosure from "./BookClubDisclosure.jsx";
-import BookClubForum from "./BookClubForum.jsx";
+import BookClubMeetingDiscussion from "./BookClubMeetingDiscussion.jsx";
 import styles from "./BookClubLibrary.module.css";
 
 function bookDate(book) {
@@ -29,38 +28,6 @@ function stars(value) {
 function statusLabel(book) {
   if (book.isCurrent) return "Current";
   return "Completed";
-}
-
-function MeetingDiscussion({ meeting, canAdminister, focusThreadId, initiallyOpen }) {
-  const [open, setOpen] = useState(initiallyOpen);
-  const [hasOpened, setHasOpened] = useState(initiallyOpen);
-  useEffect(() => {
-    if (initiallyOpen) {
-      setOpen(true);
-      setHasOpened(true);
-    }
-  }, [initiallyOpen]);
-
-  function toggle() {
-    setOpen((value) => {
-      if (!value) setHasOpened(true);
-      return !value;
-    });
-  }
-
-  return (
-    <BookClubDisclosure
-      className={styles.meetingForum}
-      title={exactDateTime(meeting.scheduledAt)}
-      description={meeting.status === "scheduled" ? "Open meeting" : "Completed meeting"}
-      badge={meeting.readingTarget}
-      open={open}
-      onToggle={toggle}
-    >
-      {/* Avoid fetching every historical forum until its meeting is opened. */}
-      {hasOpened ? <BookClubForum meeting={meeting} canAdminister={canAdminister} focusThreadId={focusThreadId} /> : null}
-    </BookClubDisclosure>
-  );
 }
 
 function BookDetail({
@@ -208,10 +175,11 @@ function BookDetail({
         {!book.meetings.length && <p className={styles.muted}>No meetings have been scheduled for this book.</p>}
         <div className={styles.meetingForums}>
           {book.meetings.map((meeting) => (
-            <MeetingDiscussion
+            <BookClubMeetingDiscussion
               key={meeting.id}
               meeting={meeting}
               canAdminister={canAdminister}
+              className={styles.meetingForum}
               initiallyOpen={focusMeetingId === meeting.id}
               focusThreadId={focusMeetingId === meeting.id ? focusThreadId : null}
             />

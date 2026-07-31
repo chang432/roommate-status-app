@@ -29,7 +29,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
       setForum(response.forum);
       setError("");
     } catch (err) {
-      setError(err.message || "Could not load the meeting forum.");
+      setError(err.message || "Could not load the meeting discussion.");
     }
   }, [meeting.id, user.id]);
 
@@ -114,7 +114,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
     const kind = entry.parentPostId ? "reply" : "topic";
     const confirmed = await confirm({
       title: `Remove this ${kind}?`,
-      message: `This permanently removes the ${kind} from the meeting forum.`,
+      message: `This permanently removes the ${kind} from the meeting discussion.`,
       confirmLabel: `Remove ${kind}`,
     });
     if (!confirmed) return;
@@ -168,7 +168,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
             {!editing.isReply && (
               <input aria-label="Topic title" maxLength={120} required value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} />
             )}
-            <textarea aria-label="Forum post" maxLength={editing.isReply ? 1000 : 2000} required value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} />
+            <textarea aria-label="Discussion post" maxLength={editing.isReply ? 1000 : 2000} required value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} />
             <div>
               <button type="submit" className={`ui-primaryButton ${styles.primaryAction}`} disabled={busy}>Save</button>
               <button type="button" onClick={() => setEditing(null)}>Cancel</button>
@@ -187,10 +187,10 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
   }
 
   return (
-    <section className={styles.forumPanel} aria-label={`${meeting.bookTitle} forum`}>
+    <section className={styles.forumPanel} aria-label={`${meeting.bookTitle} discussion`}>
       {error && <p className="ui-errorBox">{error}</p>}
       {!forum && !error && <p className={styles.forumState}>Loading discussion…</p>}
-      {forum?.locked && <p className={styles.locked}>This forum closed when the meeting was completed.</p>}
+      {forum?.locked && <p className={styles.locked}>This discussion closed when the meeting was completed.</p>}
       {forum && !forum.threads.length && <p className={styles.forumState}>No topics yet. Start the conversation before the meeting.</p>}
       <div className={styles.threads}>
         {forum?.threads.map((thread) => (

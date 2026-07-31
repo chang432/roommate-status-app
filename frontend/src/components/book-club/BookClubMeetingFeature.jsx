@@ -12,6 +12,8 @@ import { exactDateTime } from "../../utils/time.js";
 import ModuleEditButton from "../feed/ModuleEditButton.jsx";
 import ExpandableCardRegion from "../feed/ExpandableCardRegion.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
+import BookClubDisclosure from "./BookClubDisclosure.jsx";
+import BookClubMeetingDiscussion from "./BookClubMeetingDiscussion.jsx";
 import styles from "./BookClubMeetingFeature.module.css";
 
 const ATTENDANCE_OPTIONS = [
@@ -42,6 +44,7 @@ export default function BookClubMeetingFeature({
   const { user } = useAuth();
   const [expandedId, setExpandedId] = useState(null);
   const [details, setDetails] = useState({});
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const { confirm, confirmationDialog } = useConfirmDialog();
@@ -100,7 +103,7 @@ export default function BookClubMeetingFeature({
     const confirmed = await confirm({
       title: `Complete meeting for ${meeting.bookTitle}?`,
       message:
-        "Attendance will become read-only, and the meeting forum will close.",
+        "Attendance will become read-only, and the meeting discussion will close.",
       confirmLabel: "Complete meeting",
     });
     if (!confirmed) return;
@@ -180,84 +183,100 @@ export default function BookClubMeetingFeature({
               <dd>{detail.snackOwnerName}</dd>
             </div>
           </dl>
-          <div className={styles.responses}>
-            <h3 className={styles.responseHeading}>Attendance</h3>
-            {attendanceEditable ? (
-              <label className={styles.attendanceEditor}>
-                <span>Your attendance</span>
-                <select
-                  aria-label="Your attendance"
-                  value={viewerResponse.attendanceStatus ?? ""}
-                  disabled={busy}
-                  onChange={(event) =>
-                    saveResponse(detail, {
-                      attendanceStatus: event.target.value,
-                    })
-                  }
-                >
-                  <option value="" disabled>
-                    Pending
-                  </option>
-                  <option value="attending">Attending</option>
-                  <option value="maybe">Maybe</option>
-                  <option value="not_attending">Not attending</option>
-                </select>
-              </label>
-            ) : null}
-            <div
-              className={styles.attendanceGroups}
-              aria-label="Member attendance"
-            >
-              {ATTENDANCE_OPTIONS.map(({ status, label }) => {
-                const members = attendanceGroups[status];
-                return (
-                  <section
-                    className={styles.attendanceGroup}
-                    data-status={status}
-                    key={status}
-                    aria-label={`${label}: ${members.length}`}
+          <BookClubDisclosure
+            className={styles.meetingSection}
+            title="Attendance"
+            description="Your RSVP and household responses"
+            badge={`${responses.length} ${responses.length === 1 ? "member" : "members"}`}
+            open={attendanceOpen}
+            onToggle={() => setAttendanceOpen((value) => !value)}
+          >
+            <div className={styles.attendanceContent}>
+              {attendanceEditable ? (
+                <label className={styles.attendanceEditor}>
+                  <span>Your attendance</span>
+                  <select
+                    aria-label="Your attendance"
+                    value={viewerResponse.attendanceStatus ?? ""}
+                    disabled={busy}
+                    onChange={(event) =>
+                      saveResponse(detail, {
+                        attendanceStatus: event.target.value,
+                      })
+                    }
                   >
-                    <header className={styles.attendanceGroupHeader}>
-                      <h4>
+                    <option value="" disabled>
+                      Pending
+                    </option>
+                    <option value="attending">Attending</option>
+                    <option value="maybe">Maybe</option>
+                    <option value="not_attending">Not attending</option>
+                  </select>
+                </label>
+              ) : null}
+              <div
+                className={styles.attendanceGroups}
+                aria-label="Member attendance"
+              >
+                {ATTENDANCE_OPTIONS.map(({ status, label }) => {
+                  const members = attendanceGroups[status];
+                  return (
+                    <section
+                      className={styles.attendanceGroup}
+                      data-status={status}
+                      key={status}
+                      aria-label={`${label}: ${members.length}`}
+                    >
+                      <header className={styles.attendanceGroupHeader}>
+                        <h4>
+                          <span
+                            aria-hidden="true"
+                            className={styles.attendanceIndicator}
+                          />
+                          {label}
+                        </h4>
                         <span
-                          aria-hidden="true"
-                          className={styles.attendanceIndicator}
-                        />
-                        {label}
-                      </h4>
-                      <span
-                        aria-label={`${members.length} ${members.length === 1 ? "member" : "members"}`}
-                      >
-                        {members.length}
-                      </span>
-                    </header>
-                    {members.length ? (
-                      <ul className={styles.memberList}>
-                        {members.map((response) => (
-                          <li key={response.userId}>
-                            <span title={response.userName}>
-                              {response.userName}
-                            </span>
-                            {response.userId === user.id ? (
-                              <small>You</small>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className={styles.emptyGroup}>No one yet</p>
-                    )}
-                  </section>
-                );
-              })}
+                          aria-label={`${members.length} ${members.length === 1 ? "member" : "members"}`}
+                        >
+                          {members.length}
+                        </span>
+                      </header>
+                      {members.length ? (
+                        <ul className={styles.memberList}>
+                          {members.map((response) => (
+                            <li key={response.userId}>
+                              <span title={response.userName}>
+                                {response.userName}
+                              </span>
+                              {response.userId === user.id ? (
+                                <small>You</small>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className={styles.emptyGroup}>No one yet</p>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </BookClubDisclosure>
+          <BookClubMeetingDiscussion
+            meeting={detail}
+            canAdminister={canAdminister}
+            className={styles.meetingSection}
+            title="Discussion"
+            description="Topics and replies for this meeting"
+            badge={null}
+          />
           <div className={`ui-moduleActionRow ${styles.meetingActions}`}>
             <Link
               className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-              to={`/?book=${encodeURIComponent(meeting.bookId)}&meeting=${encodeURIComponent(meeting.id)}`}
+              to={`/?book=${encodeURIComponent(meeting.bookId)}`}
             >
-              Forum
+              View book
             </Link>
             {detail.status === "scheduled" && (
               <>

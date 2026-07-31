@@ -10,8 +10,8 @@
 .details div { @apply grid grid-cols-[7rem_1fr] gap-2; }
 .details dt { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
 .details dd { @apply text-ink; }
-.responses { @apply grid gap-2; }
-.responseHeading { @apply text-[14px] font-semibold text-ink; }
+.meetingSection { @apply bg-surface-muted; }
+.attendanceContent { @apply grid gap-3; }
 .attendanceEditor { @apply grid grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] items-center gap-3 rounded-sm bg-surface-muted px-3 py-2; }
 .attendanceEditor > span { @apply text-xs font-bold text-ink; }
 .attendanceEditor select { @apply min-h-10 w-full rounded-sm border border-line bg-card px-3 text-sm text-ink outline-none focus:border-accent focus:shadow-focus; }

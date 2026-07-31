@@ -43,12 +43,13 @@ availability to hang out. Built from the mockups in `../mockups`.
   current title first and completed titles by recency, aggregate ratings,
   collapsible reviews, and collapsible meeting discussions. Admins add the
   current title and schedule meetings for it; members can correct catalog books.
-  Meeting cards group household RSVPs by attendance and keep each member's own
-  response control in a stable, dedicated position.
+  Meeting cards keep attendance and their meeting discussion in separate,
+  collapsible sections, with each member's own RSVP control in a stable,
+  dedicated position and a separate action for opening the full book detail.
   When no title is current, an admin can restore a completed title from its edit
   form.
   Members review current or completed books with
-  1–5 stars, finish status, and an optional note; completed meeting forums
+  1–5 stars, finish status, and an optional note; completed meeting discussions
   remain read-only.
 - **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, archive or restore requests, and open

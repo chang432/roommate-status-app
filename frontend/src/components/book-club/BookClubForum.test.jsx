@@ -64,7 +64,7 @@ describe("BookClubForum", () => {
     expect(screen.getByRole("button", { name: "New topic" })).toBeInTheDocument();
   });
 
-  it("keeps a completed meeting forum visible but read-only", async () => {
+  it("keeps a completed meeting discussion visible but read-only", async () => {
     getBookClubForum.mockResolvedValue({
       forum: {
         meetingId: MEETING.id,
@@ -85,7 +85,7 @@ describe("BookClubForum", () => {
     render(<BookClubForum meeting={{ ...MEETING, status: "completed" }} canAdminister />);
 
     expect(await screen.findByText(
-      "This forum closed when the meeting was completed.",
+      "This discussion closed when the meeting was completed.",
     )).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Favorite passage" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reply" })).not.toBeInTheDocument();

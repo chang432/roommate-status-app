@@ -6,9 +6,9 @@
   Book, and Snack card grid on the household page. Current Book opens its
   detail, Library opens the complete catalog, and the owner cards open their
   respective orders.
-- Meetings expand directly in the household feed for grouped attendance,
-  reminders, editing, and completion. Their Forum link opens the relevant book
-  and meeting discussion inside the household library modal.
+- Meetings expand directly in the household feed for collapsible attendance and
+  discussion, reminders, editing, and completion. Their View book link opens
+  the complete book detail inside the household library modal.
 - Index zero in each list is the current owner and the default for a new meeting.
   Neither list advances automatically. An admin selection moves that member to
   the front while preserving everyone else's relative order.
