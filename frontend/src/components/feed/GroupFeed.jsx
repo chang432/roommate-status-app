@@ -850,6 +850,7 @@ export default function GroupFeed({
   const swipeClickBlockUntilRef = useRef(0);
   const feedShellRef = useRef(null);
   const stickyHeaderRef = useRef(null);
+  const feedHeaderPinnedRef = useRef(false);
   const categoryScrollPositionsRef = useRef(new Map());
   const pendingCategoryScrollRef = useRef(null);
   const deferredCategoryOffsetRef = useRef(null);
@@ -864,7 +865,6 @@ export default function GroupFeed({
     useState(null);
   const [convertingDeferredOffset, setConvertingDeferredOffset] =
     useState(false);
-  const [feedHeaderStuck, setFeedHeaderStuck] = useState(false);
   const canAdministerBookClub = isAdminIn(roommates, user.id);
 
   const enabledTypeIds = useMemo(() => {
@@ -1157,20 +1157,49 @@ export default function GroupFeed({
   useEffect(() => {
     if (loading) return undefined;
     const header = stickyHeaderRef.current;
-    if (!header) return undefined;
-    let frameId = null;
+    const shell = feedShellRef.current;
+    if (!header || !shell) return undefined;
+
+    function resetCategoryScrollState() {
+      categoryScrollPositionsRef.current.clear();
+      pendingCategoryScrollRef.current = null;
+      pendingDeferredConversionRef.current = null;
+      setDeferredCategoryOffset(null);
+      setConvertingDeferredOffset(false);
+
+      if (deferredConversionFrameRef.current !== null) {
+        window.cancelAnimationFrame(deferredConversionFrameRef.current);
+        deferredConversionFrameRef.current = null;
+      }
+      swipeTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      swipeTimersRef.current = [];
+      if (swipeFrameRef.current !== null) {
+        window.cancelAnimationFrame(swipeFrameRef.current);
+        swipeFrameRef.current = null;
+      }
+      swipeStartRef.current = null;
+      feedSwipeScrollSnapshotRef.current = null;
+      setFeedSwipeScrollSnapshot(null);
+      setFeedSwipeOffset(0);
+      setFeedSwipePhase("idle");
+    }
 
     function updateStickyState() {
-      frameId = null;
-      const headerIsStuck =
+      const headerIsPinned =
         window.scrollY > 0 && header.getBoundingClientRect().top <= 0;
-      setFeedHeaderStuck(headerIsStuck);
+      const wasPinned = feedHeaderPinnedRef.current;
+      feedHeaderPinnedRef.current = headerIsPinned;
+      header.toggleAttribute("data-feed-pinned", headerIsPinned);
+
+      if (wasPinned && !headerIsPinned) {
+        // Saved positions belong to the pinned feed session. Once the title
+        // leaves the viewport edge, every category starts fresh from its top.
+        resetCategoryScrollState();
+        return;
+      }
 
       const deferredOffset = deferredCategoryOffsetRef.current;
-      const shell = feedShellRef.current;
-      if (!deferredOffset || !shell) return;
-      const shellTop = shell.getBoundingClientRect().top + window.scrollY;
-      if (window.scrollY < shellTop - 1) return;
+      if (!headerIsPinned || !deferredOffset) return;
 
       // Convert the panel-only offset into document scroll at the sticky
       // boundary. Clearing the transform and adding the same amount to the
@@ -1182,18 +1211,12 @@ export default function GroupFeed({
       setDeferredCategoryOffset(null);
     }
 
-    function scheduleStickyUpdate() {
-      if (frameId !== null) return;
-      frameId = window.requestAnimationFrame(updateStickyState);
-    }
-
     updateStickyState();
-    window.addEventListener("scroll", scheduleStickyUpdate, { passive: true });
-    window.addEventListener("resize", scheduleStickyUpdate);
+    window.addEventListener("scroll", updateStickyState, { passive: true });
+    window.addEventListener("resize", updateStickyState);
     return () => {
-      window.removeEventListener("scroll", scheduleStickyUpdate);
-      window.removeEventListener("resize", scheduleStickyUpdate);
-      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      window.removeEventListener("scroll", updateStickyState);
+      window.removeEventListener("resize", updateStickyState);
     };
   }, [loading]);
 
@@ -1761,10 +1784,7 @@ export default function GroupFeed({
 
         <div
           ref={stickyHeaderRef}
-          className={cx(
-            styles.feedStickyHeader,
-            feedHeaderStuck ? styles.feedStickyHeaderStuck : "",
-          )}
+          className={styles.feedStickyHeader}
           data-feed-sticky-header
         >
           <div className={styles.feedHeader}>
@@ -1824,6 +1844,7 @@ export default function GroupFeed({
             className={cx(
               styles.feedViewport,
               deferredCategoryOffset ||
+                convertingDeferredOffset ||
                 (feedSwipeScrollSnapshot &&
                   !feedSwipeScrollSnapshot.hasEnteredFeed)
                 ? styles.feedViewportAnchored

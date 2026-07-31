@@ -367,6 +367,7 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   const feedTabs = page.getByRole('tablist', { name: 'Feed categories' })
   const stickyHeader = page.locator('[data-feed-sticky-header]')
   await expect(feedTabs.getByRole('tab')).toHaveCount(7)
+  await expect(stickyHeader).not.toHaveAttribute('data-feed-pinned')
   await expect.poll(() => stickyHeader.evaluate((element) => (
     getComputedStyle(element).backgroundColor
   ))).toBe('rgba(0, 0, 0, 0)')
@@ -399,6 +400,7 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
     { top: feedShellTop, offset: tvScrollOffset },
   )
   await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+  await expect(stickyHeader).toHaveAttribute('data-feed-pinned', '')
 
   async function feedSwipePoint(deltaX) {
     const activeFeedBox = await feedMain.boundingBox()
@@ -472,9 +474,16 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
     window.__feedPanelFrames = []
     function samplePanel() {
       const rect = panel.getBoundingClientRect()
+      const header = document.querySelector('[data-feed-sticky-header]')
       const phase = document.querySelector('[data-feed-swipe-phase]')
         ?.dataset.feedSwipePhase
-      window.__feedPanelFrames.push({ x: rect.x, y: rect.y, phase })
+      window.__feedPanelFrames.push({
+        x: rect.x,
+        y: rect.y,
+        phase,
+        headerPinned: header.hasAttribute('data-feed-pinned'),
+        headerBackground: getComputedStyle(header).backgroundColor,
+      })
       if (phase !== 'idle') window.requestAnimationFrame(samplePanel)
     }
     window.requestAnimationFrame(samplePanel)
@@ -510,6 +519,11 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   }
   const firstHandoffYs = firstHandoff.frames.map(({ y }) => y)
   expect(Math.max(...firstHandoffYs) - Math.min(...firstHandoffYs)).toBeLessThan(2)
+  expect(firstHandoff.frames.every(({ headerPinned, headerBackground }) => (
+    headerPinned &&
+    headerBackground !== 'transparent' &&
+    headerBackground !== 'rgba(0, 0, 0, 0)'
+  ))).toBe(true)
 
   await expect.poll(() => page.evaluate((top) => (
     Math.abs(window.scrollY - top)
@@ -577,6 +591,10 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   await page.evaluate((top) => window.scrollTo(0, top), unpinnedScrollTop)
   const unpinnedHeaderY = (await stickyHeader.boundingBox()).y
   expect(unpinnedHeaderY).toBeGreaterThan(5)
+  await expect(stickyHeader).not.toHaveAttribute('data-feed-pinned')
+  await expect.poll(() => stickyHeader.evaluate((element) => (
+    getComputedStyle(element).backgroundColor
+  ))).toBe('rgba(0, 0, 0, 0)')
   const unpinnedWindowScroll = await page.evaluate(() => window.scrollY)
 
   const unpinnedReturnPoint = await feedSwipePoint(260)
@@ -599,6 +617,8 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
         headerY: header.getBoundingClientRect().y,
         scrollY: window.scrollY,
         phase,
+        headerPinned: header.hasAttribute('data-feed-pinned'),
+        headerBackground: getComputedStyle(header).backgroundColor,
       })
       if (phase !== 'idle') window.requestAnimationFrame(sampleAnchor)
     }
@@ -625,11 +645,12 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
     Math.max(...unpinnedHandoff.frames.map(({ scrollY }) => scrollY)) -
     Math.min(...unpinnedHandoff.frames.map(({ scrollY }) => scrollY))
   ).toBeLessThan(2)
+  expect(unpinnedHandoff.frames.every(({ headerPinned, headerBackground }) => (
+    !headerPinned && headerBackground === 'rgba(0, 0, 0, 0)'
+  ))).toBe(true)
   expect(Math.abs((await stickyHeader.boundingBox()).y - unpinnedHeaderY)).toBeLessThan(2)
   expect(Math.abs(await page.evaluate(() => window.scrollY) - unpinnedWindowScroll)).toBeLessThan(2)
-  expect(unpinnedHandoff.panelTransform).toContain(
-    `-${tvReturnScrollOffset}px`,
-  )
+  expect(unpinnedHandoff.panelTransform).toBe('translate3d(0px, 0px, 0px)')
 
   const prePinGap = 4
   await page.evaluate(
@@ -641,10 +662,11 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   )).toBe(prePinGap)
   const tvYBeforePin = (await unpinnedTv.boundingBox()).y
   await page.evaluate((top) => window.scrollTo(0, top), feedShellTop)
-  await expect.poll(() => page.evaluate(({ top, offset }) => (
-    Math.abs(window.scrollY - (top + offset))
-  ), { top: feedShellTop, offset: tvReturnScrollOffset })).toBeLessThan(2)
+  await expect.poll(() => page.evaluate((top) => (
+    Math.abs(window.scrollY - top)
+  ), feedShellTop)).toBeLessThan(2)
   await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+  await expect(stickyHeader).toHaveAttribute('data-feed-pinned', '')
   expect(
     Math.abs((await unpinnedTv.boundingBox()).y - tvYBeforePin + prePinGap),
   ).toBeLessThan(2)
@@ -703,6 +725,7 @@ test('keeps the editorial feed header clear across themes', async ({ page }, tes
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
 
     const stickyHeader = page.locator('[data-feed-sticky-header]')
+    await expect(stickyHeader).not.toHaveAttribute('data-feed-pinned')
     await expect.poll(() => stickyHeader.evaluate((element) => (
       getComputedStyle(element).backgroundColor
     ))).toBe('rgba(0, 0, 0, 0)')
@@ -717,14 +740,20 @@ test('keeps the editorial feed header clear across themes', async ({ page }, tes
     })
     await page.evaluate((top) => window.scrollTo(0, top + 200), stickyDocumentTop)
     await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+    await expect(stickyHeader).toHaveAttribute('data-feed-pinned', '')
     await expect.poll(() => stickyHeader.evaluate((element) => {
       const background = getComputedStyle(element).backgroundColor
       return background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)'
     })).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath(`group-feed-header-${theme}-desktop.png`) })
+    await page.evaluate((top) => window.scrollTo(0, Math.max(top - 20, 0)), stickyDocumentTop)
+    await expect(stickyHeader).not.toHaveAttribute('data-feed-pinned')
+    await expect.poll(() => stickyHeader.evaluate((element) => (
+      getComputedStyle(element).backgroundColor
+    ))).toBe('rgba(0, 0, 0, 0)')
     await expect.poll(() => page.evaluate(() => (
       document.documentElement.scrollWidth <= window.innerWidth
     ))).toBe(true)
-    await page.screenshot({ path: testInfo.outputPath(`group-feed-header-${theme}-desktop.png`) })
   }
 })
 

@@ -784,13 +784,19 @@ describe("GroupFeed module focus", () => {
     });
   });
 
-  it("restores saved content relative to an unpinned feed title", async () => {
+  it("clears every saved category position when the feed title unpins", async () => {
     renderFeed("/", [feedItem("events")]);
     const user = userEvent.setup();
 
     await screen.findByText("Movie night");
     const shell = document.querySelector("[data-feed-shell]");
+    const header = document.querySelector("[data-feed-sticky-header]");
     shell.getBoundingClientRect = vi.fn(() => feedShellRectAt(300));
+    header.getBoundingClientRect = vi.fn(() => ({
+      ...feedShellRectAt(300),
+      bottom: 400 - window.scrollY,
+      height: 100,
+    }));
     Object.defineProperty(document.documentElement, "scrollHeight", {
       configurable: true,
       value: 2400,
@@ -802,11 +808,17 @@ describe("GroupFeed module focus", () => {
     window.scrollTo = vi.fn(({ top }) => setWindowScrollY(top));
 
     setWindowScrollY(620);
+    fireEvent.scroll(window);
+    await waitFor(() => expect(header).toHaveAttribute("data-feed-pinned"));
     await user.click(screen.getByRole("tab", { name: /^Events/ }));
     setWindowScrollY(480);
     await user.click(screen.getByRole("tab", { name: /^All/ }));
 
     setWindowScrollY(100);
+    fireEvent.scroll(window);
+    await waitFor(() =>
+      expect(header).not.toHaveAttribute("data-feed-pinned"),
+    );
     window.scrollTo.mockClear();
     await user.click(screen.getByRole("tab", { name: /^Events/ }));
 
@@ -815,20 +827,17 @@ describe("GroupFeed module focus", () => {
     );
     expect(window.scrollTo).not.toHaveBeenCalled();
     expect(eventsPanel).toHaveStyle({
-      transform: "translate3d(0px, -180px, 0)",
+      transform: "translate3d(0px, 0, 0)",
     });
 
-    setWindowScrollY(300);
+    setWindowScrollY(480);
     fireEvent.scroll(window);
-    await waitFor(() =>
-      expect(window.scrollTo).toHaveBeenLastCalledWith({
-        top: 480,
-        left: 0,
-        behavior: "auto",
-      }),
-    );
-    expect(eventsPanel).toHaveStyle({
-      transform: "translate3d(0px, 0, 0)",
+    await waitFor(() => expect(header).toHaveAttribute("data-feed-pinned"));
+    await user.click(screen.getByRole("tab", { name: /^All/ }));
+    expect(window.scrollTo).toHaveBeenLastCalledWith({
+      top: 300,
+      left: 0,
+      behavior: "auto",
     });
   });
 
