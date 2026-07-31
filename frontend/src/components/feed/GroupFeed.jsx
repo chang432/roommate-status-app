@@ -49,6 +49,7 @@ const SWIPE_DRAG_RESISTANCE = 0.85;
 const SWIPE_EDGE_RESISTANCE = 0.18;
 const SWIPE_PANEL_GAP_PX = 16;
 const FEED_SWIPE_TRANSITION_MS = 220;
+const FEED_SWIPE_FALLBACK_BUFFER_MS = 120;
 const FEED_SWIPE_CLICK_SUPPRESSION_MS = FEED_SWIPE_TRANSITION_MS * 2;
 
 function feedSwipeTransitionMs() {
@@ -847,6 +848,7 @@ export default function GroupFeed({
   const swipeStartRef = useRef(null);
   const swipeTimersRef = useRef([]);
   const swipeFrameRef = useRef(null);
+  const pendingFeedSwipeRef = useRef(null);
   const swipeClickBlockUntilRef = useRef(0);
   const feedShellRef = useRef(null);
   const stickyHeaderRef = useRef(null);
@@ -861,6 +863,7 @@ export default function GroupFeed({
   const [feedSwipePhase, setFeedSwipePhase] = useState("idle");
   const [feedSwipeTravelDistance, setFeedSwipeTravelDistance] = useState(1);
   const [feedSwipeScrollSnapshot, setFeedSwipeScrollSnapshot] = useState(null);
+  const [feedSwipeTargetType, setFeedSwipeTargetTypeState] = useState(null);
   const [deferredCategoryOffset, setDeferredCategoryOffsetState] =
     useState(null);
   const [convertingDeferredOffset, setConvertingDeferredOffset] =
@@ -1017,8 +1020,10 @@ export default function GroupFeed({
   const previousType = moduleTypes[activeTypeIndex - 1]?.id ?? null;
   const nextType = moduleTypes[activeTypeIndex + 1]?.id ?? null;
   const showAdjacentPanels = feedSwipePhase !== "idle";
-  const visiblePanelTypes = showAdjacentPanels
-    ? [previousType, activeType, nextType].filter(Boolean)
+  const visiblePanelTypes = showAdjacentPanels && feedSwipeTargetType
+    ? [activeType, feedSwipeTargetType].filter(
+        (type, index, types) => types.indexOf(type) === index,
+      )
     : [activeType];
 
   const focusIntent = useMemo(
@@ -1177,9 +1182,11 @@ export default function GroupFeed({
         window.cancelAnimationFrame(swipeFrameRef.current);
         swipeFrameRef.current = null;
       }
+      pendingFeedSwipeRef.current = null;
       swipeStartRef.current = null;
       feedSwipeScrollSnapshotRef.current = null;
       setFeedSwipeScrollSnapshot(null);
+      setFeedSwipeTargetTypeState(null);
       setFeedSwipeOffset(0);
       setFeedSwipePhase("idle");
     }
@@ -1316,6 +1323,19 @@ export default function GroupFeed({
     setFeedSwipeScrollSnapshot(null);
   }
 
+  function setFeedSwipeTargetType(type) {
+    setFeedSwipeTargetTypeState(type);
+  }
+
+  function clearScheduledFeedSwipe() {
+    swipeTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    swipeTimersRef.current = [];
+    if (swipeFrameRef.current !== null) {
+      window.cancelAnimationFrame(swipeFrameRef.current);
+      swipeFrameRef.current = null;
+    }
+  }
+
   function changeModuleType(type, scrollSnapshot = null) {
     if (type === activeType) return;
 
@@ -1352,14 +1372,11 @@ export default function GroupFeed({
   }
 
   function selectModuleType(type) {
-    swipeTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
-    swipeTimersRef.current = [];
-    if (swipeFrameRef.current !== null) {
-      window.cancelAnimationFrame(swipeFrameRef.current);
-      swipeFrameRef.current = null;
-    }
+    clearScheduledFeedSwipe();
+    pendingFeedSwipeRef.current = null;
     swipeStartRef.current = null;
     clearSwipeScrollSnapshot();
+    setFeedSwipeTargetType(null);
     setFeedSwipeOffset(0);
     setFeedSwipePhase("idle");
     changeModuleType(type);
@@ -1388,14 +1405,66 @@ export default function GroupFeed({
     swipeTimersRef.current.push(timerId);
   }
 
-  function resetFeedSwipe() {
-    if (feedSwipePhase === "idle") return;
-    setFeedSwipePhase("settling");
-    setFeedSwipeOffset(0);
-    scheduleFeedSwipe(() => {
+  function finishFeedSwipeTransition() {
+    const pendingSwipe = pendingFeedSwipeRef.current;
+    if (!pendingSwipe) return;
+
+    pendingFeedSwipeRef.current = null;
+    swipeTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    swipeTimersRef.current = [];
+
+    if (pendingSwipe.kind === "reset") {
       setFeedSwipePhase("idle");
       clearSwipeScrollSnapshot();
-    }, feedSwipeTransitionMs());
+      setFeedSwipeTargetType(null);
+      return;
+    }
+
+    // The browser has painted the final transform frame. Promote the same
+    // incoming panel without replaying its horizontal motion.
+    changeModuleType(pendingSwipe.destinationType, pendingSwipe.scrollSnapshot);
+    setFeedSwipePhase("preparing");
+    setFeedSwipeOffset(0);
+    swipeFrameRef.current = window.requestAnimationFrame(() => {
+      // Keep transition:none committed for a painted frame before removing the
+      // outgoing panel; otherwise Chromium can resume the old vertical
+      // transform and make the promoted page shake.
+      swipeFrameRef.current = window.requestAnimationFrame(() => {
+        swipeFrameRef.current = null;
+        setFeedSwipePhase("idle");
+        clearSwipeScrollSnapshot();
+        setFeedSwipeTargetType(null);
+      });
+    });
+  }
+
+  function scheduleFeedSwipeFallback() {
+    const transitionMs = feedSwipeTransitionMs();
+    scheduleFeedSwipe(
+      finishFeedSwipeTransition,
+      transitionMs === 0
+        ? 0
+        : transitionMs + FEED_SWIPE_FALLBACK_BUFFER_MS,
+    );
+  }
+
+  function resetFeedSwipe() {
+    if (feedSwipePhase === "idle") return;
+    pendingFeedSwipeRef.current = { kind: "reset" };
+    setFeedSwipePhase("settling");
+    setFeedSwipeOffset(0);
+    scheduleFeedSwipeFallback();
+  }
+
+  function handleFeedPanelTransitionEnd(event) {
+    if (
+      event.target !== event.currentTarget ||
+      event.propertyName !== "transform" ||
+      (feedSwipePhase !== "exiting" && feedSwipePhase !== "settling")
+    ) {
+      return;
+    }
+    finishFeedSwipeTransition();
   }
 
   function handleFeedClickCapture(event) {
@@ -1438,8 +1507,10 @@ export default function GroupFeed({
     if (Math.abs(deltaX) < 4) return;
 
     const direction = deltaX < 0 ? 1 : -1;
-    const hasAdjacentType = direction > 0 ? Boolean(nextType) : Boolean(previousType);
+    const destinationType = direction > 0 ? nextType : previousType;
+    const hasAdjacentType = Boolean(destinationType);
     rememberSwipeScrollSnapshot();
+    setFeedSwipeTargetType(destinationType);
     setFeedSwipePhase("dragging");
     setFeedSwipeOffset(
       deltaX *
@@ -1485,20 +1556,15 @@ export default function GroupFeed({
       Date.now() + FEED_SWIPE_CLICK_SUPPRESSION_MS;
     setFeedSwipePhase("exiting");
     setFeedSwipeOffset(direction * -travelDistance);
+    setFeedSwipeTargetType(destinationType);
     const scrollSnapshot =
       feedSwipeScrollSnapshotRef.current ?? rememberSwipeScrollSnapshot();
-    scheduleFeedSwipe(() => {
-      // Once the adjacent page has arrived, promote it to the centered panel
-      // without animation so there is no visual jump or duplicated entrance.
-      changeModuleType(destinationType, scrollSnapshot);
-      setFeedSwipePhase("preparing");
-      setFeedSwipeOffset(0);
-      swipeFrameRef.current = window.requestAnimationFrame(() => {
-        swipeFrameRef.current = null;
-        setFeedSwipePhase("idle");
-        clearSwipeScrollSnapshot();
-      });
-    }, feedSwipeTransitionMs());
+    pendingFeedSwipeRef.current = {
+      kind: "commit",
+      destinationType,
+      scrollSnapshot,
+    };
+    scheduleFeedSwipeFallback();
   }
 
   function openCreateModal() {
@@ -1861,6 +1927,9 @@ export default function GroupFeed({
                   id={isActivePanel ? `feed-panel-${type}` : undefined}
                   role={isActivePanel ? "tabpanel" : undefined}
                   aria-labelledby={isActivePanel ? `feed-tab-${type}` : undefined}
+                  onTransitionEnd={
+                    isActivePanel ? handleFeedPanelTransitionEnd : undefined
+                  }
                   className={cx(
                     styles.feedPanel,
                     isActivePanel ? "" : styles.feedPanelAdjacent,

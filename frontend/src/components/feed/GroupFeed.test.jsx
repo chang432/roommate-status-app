@@ -653,16 +653,26 @@ describe("GroupFeed module focus", () => {
       transform: "translate3d(calc(100% + 16px + -85px), 0, 0)",
     });
     expect(within(incomingPanel).getByText("Movie night")).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-feed-panel-type="requests"]'),
+    ).not.toBeInTheDocument();
     fireEvent.pointerUp(card, {
       pointerId: 1,
       pointerType: "touch",
       clientX: 80,
       clientY: 126,
     });
+    fireEvent.transitionEnd(
+      document.querySelector('[data-feed-panel-type="all"]'),
+      { propertyName: "transform" },
+    );
 
     expect(
       await screen.findByRole("tab", { name: /^Events/, selected: true }),
     ).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-feed-panel-type="events"]'),
+    ).toBe(incomingPanel);
     expect(scroller.scrollLeft).toBe(120);
   });
 
@@ -1172,9 +1182,11 @@ describe("GroupFeed module focus", () => {
       clientY: 123,
     });
 
-    expect(document.querySelector('[data-feed-panel-type="all"]')).toHaveStyle({
+    const activePanel = document.querySelector('[data-feed-panel-type="all"]');
+    expect(activePanel).toHaveStyle({
       transform: "translate3d(0px, 0, 0)",
     });
+    fireEvent.transitionEnd(activePanel, { propertyName: "transform" });
     await waitFor(() =>
       expect(
         document.querySelector('[data-feed-swipe-phase="idle"]'),

@@ -708,8 +708,57 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   await expect.poll(() => page.evaluate((top) => (
     Math.abs(window.scrollY - top)
   ), feedShellTop)).toBeLessThan(2)
-  await swipeActivePanel(260)
-  await expect(feedTabs.getByRole('tab', { name: /^Checklists/, selected: true })).toBeVisible()
+
+  const shortToLongPoint = await feedSwipePoint(-260)
+  await page.mouse.move(shortToLongPoint.x, shortToLongPoint.y)
+  await page.mouse.down()
+  await page.mouse.move(
+    shortToLongPoint.x - 260,
+    shortToLongPoint.y + 4,
+    { steps: 8 },
+  )
+  const incomingLongTv = page.locator('[data-feed-panel-type="tv"]')
+  await incomingLongTv.evaluate((panel) => {
+    window.__shortToLongPanel = panel
+    window.__shortToLongFrames = []
+    function sampleShortToLong() {
+      const viewport = document.querySelector('[data-feed-swipe-phase]')
+      const phase = viewport?.dataset.feedSwipePhase
+      window.__shortToLongFrames.push({
+        x: panel.getBoundingClientRect().x,
+        viewportHeight: viewport.getBoundingClientRect().height,
+        panelHeight: panel.scrollHeight,
+        documentHeight: document.documentElement.scrollHeight,
+        phase,
+      })
+      if (phase !== 'idle') window.requestAnimationFrame(sampleShortToLong)
+    }
+    window.requestAnimationFrame(sampleShortToLong)
+  })
+  await page.mouse.up()
+  await expect(feedTabs.getByRole('tab', { name: /^TV/, selected: true })).toBeVisible()
+  const shortToLongHandoff = await page.evaluate(() => ({
+    samePanel: window.__shortToLongPanel === document.querySelector(
+      '[data-feed-panel-type="tv"]',
+    ),
+    frames: window.__shortToLongFrames,
+  }))
+  expect(shortToLongHandoff.samePanel).toBe(true)
+  expect(shortToLongHandoff.frames.length).toBeGreaterThan(2)
+  for (let index = 1; index < shortToLongHandoff.frames.length; index += 1) {
+    expect(shortToLongHandoff.frames[index].x).toBeLessThanOrEqual(
+      shortToLongHandoff.frames[index - 1].x + 1,
+    )
+  }
+  expect(shortToLongHandoff.frames.every(({ viewportHeight, panelHeight }) => (
+    viewportHeight >= panelHeight - 1
+  ))).toBe(true)
+  expect(
+    Math.max(...shortToLongHandoff.frames.map(({ documentHeight }) => documentHeight)) -
+    Math.min(...shortToLongHandoff.frames.map(({ documentHeight }) => documentHeight)),
+  ).toBeLessThan(2)
+  await page.getByText('Show 20', { exact: true }).scrollIntoViewIfNeeded()
+  await expect(page.getByText('Show 20', { exact: true })).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('group-feed-sticky-mobile.png') })
 })
