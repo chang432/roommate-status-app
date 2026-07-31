@@ -106,6 +106,7 @@ export function GroupFeedView({
         version: MODULE_PREFERENCE_VERSION,
         order: moduleOrder,
         allTypes,
+        knownTypes: moduleOrder,
       }),
     );
   }, [allTypes, moduleOrder, user.activeGroupId, user.id]);

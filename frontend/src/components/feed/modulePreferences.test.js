@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   modulePreferenceKey,
+  normalizeModulePreferences,
   readModulePreferences,
   sanitizeAllTypes,
   sanitizeModuleOrder,
@@ -40,12 +41,37 @@ describe("module preferences", () => {
       KEY,
       JSON.stringify({
         version: 3,
-        order: ["events", "book-club", "polls"],
+        order: [
+          "events",
+          "requests",
+          "checklists",
+          "polls",
+          "tv",
+          "book-club",
+        ],
         allTypes: ["events"],
       }),
     );
     expect(readModulePreferences("andre", "shire").allTypes).toEqual([
       "events",
+    ]);
+  });
+
+  it("selects future registry types once without reviving known exclusions", () => {
+    const preferences = normalizeModulePreferences(
+      {
+        order: ["events", "polls"],
+        allTypes: ["events"],
+        knownTypes: ["events", "polls"],
+      },
+      ["events", "polls", "new-module"],
+    );
+
+    expect(preferences.allTypes).toEqual(["events", "new-module"]);
+    expect(preferences.knownTypes).toEqual([
+      "events",
+      "polls",
+      "new-module",
     ]);
   });
 });

@@ -320,7 +320,7 @@ describe("GroupFeed module focus", () => {
     ).toBeInTheDocument();
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(MODULE_PREFERENCE_KEY));
-      expect(stored.version).toBe(3);
+      expect(stored.version).toBe(4);
       expect(stored.allTypes).toContain("book-club");
       expect(stored.allTypes).toContain("polls");
     });
@@ -343,7 +343,7 @@ describe("GroupFeed module focus", () => {
     expect(screen.queryByText("The Left Hand of Darkness")).not.toBeInTheDocument();
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(MODULE_PREFERENCE_KEY));
-      expect(stored.version).toBe(3);
+      expect(stored.version).toBe(4);
       expect(stored.allTypes).not.toContain("book-club");
     });
 
