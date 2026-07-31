@@ -10,7 +10,7 @@ import { relativeTime } from "../../utils/time.js";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import styles from "./BookClubForum.module.css";
 
-export default function BookClubForum({ meeting, canAdminister, focusThreadId }) {
+export default function BookClubForum({ meeting, canAdminister, focusThreadId, variant = "card" }) {
   const { user } = useAuth();
   const [forum, setForum] = useState(null);
   const [error, setError] = useState("");
@@ -187,7 +187,10 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId })
   }
 
   return (
-    <section className={styles.forumPanel} aria-label={`${meeting.bookTitle} discussion`}>
+    <section
+      className={`${styles.forumPanel} ${variant === "flat" ? styles.flatForum : ""}`}
+      aria-label={`${meeting.bookTitle} discussion`}
+    >
       {error && <p className="ui-errorBox">{error}</p>}
       {!forum && !error && <p className={styles.forumState}>Loading discussion…</p>}
       {forum?.locked && <p className={styles.locked}>This discussion closed when the meeting was completed.</p>}

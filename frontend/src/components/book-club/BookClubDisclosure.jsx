@@ -8,9 +8,15 @@ export default function BookClubDisclosure({
   onToggle,
   children,
   className = "",
+  variant = "card",
 }) {
+  const flat = variant === "flat";
+
   return (
-    <section className={`${styles.disclosure} ${className}`} aria-label={title}>
+    <section
+      className={`${styles.disclosure} ${flat ? styles.flat : ""} ${className}`}
+      aria-label={title}
+    >
       <button
         type="button"
         className={styles.summary}
@@ -26,7 +32,9 @@ export default function BookClubDisclosure({
       </button>
       <div className={`${styles.expandedRegion} ${open ? styles.expanded : styles.collapsed}`}>
         <div className={styles.expandedInner} {...(!open ? { inert: "" } : {})}>
-          <div className={styles.panel}>{children}</div>
+          <div className={`${styles.panel} ${flat ? styles.flatPanel : ""}`}>
+            {children}
+          </div>
         </div>
       </div>
     </section>

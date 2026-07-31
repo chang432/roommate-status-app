@@ -63,8 +63,6 @@
 .finishStatus { @apply mt-1 text-[11.5px] font-semibold text-ink-soft; }
 .muted { @apply rounded-sm bg-surface-muted p-3 text-[13px] text-ink-soft; }
 .meetingForums { @apply grid gap-[10px]; }
-.meetingForum { @apply bg-surface-muted; }
-.meetingForum > div > section { @apply rounded-none border-0 shadow-none; }
 
 @media (max-width: 520px) {
   .detailHeader dl { @apply grid-cols-2 gap-y-3; }

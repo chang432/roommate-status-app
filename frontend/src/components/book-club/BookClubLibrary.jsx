@@ -180,6 +180,7 @@ function BookDetail({
               meeting={meeting}
               canAdminister={canAdminister}
               className={styles.meetingForum}
+              variant="flat"
               initiallyOpen={focusMeetingId === meeting.id}
               focusThreadId={focusMeetingId === meeting.id ? focusThreadId : null}
             />

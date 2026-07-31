@@ -185,8 +185,8 @@ export default function BookClubMeetingFeature({
           </dl>
           <BookClubDisclosure
             className={styles.meetingSection}
+            variant="flat"
             title="Attendance"
-            description="Your RSVP and household responses"
             badge={`${responses.length} ${responses.length === 1 ? "member" : "members"}`}
             open={attendanceOpen}
             onToggle={() => setAttendanceOpen((value) => !value)}
@@ -194,9 +194,9 @@ export default function BookClubMeetingFeature({
             <div className={styles.attendanceContent}>
               {attendanceEditable ? (
                 <label className={styles.attendanceEditor}>
-                  <span>Your attendance</span>
+                  <span>Your RSVP</span>
                   <select
-                    aria-label="Your attendance"
+                    aria-label="Your RSVP"
                     value={viewerResponse.attendanceStatus ?? ""}
                     disabled={busy}
                     onChange={(event) =>
@@ -267,8 +267,9 @@ export default function BookClubMeetingFeature({
             meeting={detail}
             canAdminister={canAdminister}
             className={styles.meetingSection}
+            variant="flat"
             title="Discussion"
-            description="Topics and replies for this meeting"
+            description={null}
             badge={null}
           />
           <div className={`ui-moduleActionRow ${styles.meetingActions}`}>

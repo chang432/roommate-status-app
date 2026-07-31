@@ -357,7 +357,7 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   const attendance = page.getByLabel('Member attendance')
   await expect(attendance.getByRole('listitem')).toHaveCount(3)
   await expect(page.getByRole('region', { name: 'Pending: 1' })).toContainText('Ting')
-  await page.getByLabel('Your attendance').selectOption('maybe')
+  await page.getByLabel('Your RSVP').selectOption('maybe')
   await expect(page.getByRole('region', { name: 'Maybe: 2' })).toContainText('Andre')
   await discussionSection.getByRole('button', { name: /Discussion/ }).click()
   await expect(discussionSection.getByText('Favorite passage')).toBeVisible()

@@ -12,6 +12,7 @@ export default function BookClubMeetingDiscussion({
   description,
   badge,
   className = "",
+  variant = "card",
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const [hasOpened, setHasOpened] = useState(initiallyOpen);
@@ -32,13 +33,16 @@ export default function BookClubMeetingDiscussion({
   }
 
   const disclosureTitle = title ?? exactDateTime(meeting.scheduledAt);
-  const disclosureDescription = description
-    ?? (meeting.status === "scheduled" ? "Open meeting" : "Completed meeting");
+  // `null` intentionally suppresses secondary copy in compact meeting cards.
+  const disclosureDescription = description !== undefined
+    ? description
+    : (meeting.status === "scheduled" ? "Open meeting" : "Completed meeting");
   const disclosureBadge = badge === undefined ? meeting.readingTarget : badge;
 
   return (
     <BookClubDisclosure
       className={className}
+      variant={variant}
       title={disclosureTitle}
       description={disclosureDescription}
       badge={disclosureBadge}
@@ -50,6 +54,7 @@ export default function BookClubMeetingDiscussion({
           meeting={meeting}
           canAdminister={canAdminister}
           focusThreadId={focusThreadId}
+          variant={variant}
         />
       ) : null}
     </BookClubDisclosure>

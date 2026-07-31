@@ -167,7 +167,7 @@ describe("BookClubMeetingFeature", () => {
       expanded: false,
     }));
     await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
-    await userEvent.selectOptions(screen.getByLabelText("Your attendance"), "attending");
+    await userEvent.selectOptions(screen.getByLabelText("Your RSVP"), "attending");
     expect(setBookClubResponse).toHaveBeenCalledWith(
       "andre",
       "meeting#1",
@@ -210,7 +210,7 @@ describe("BookClubMeetingFeature", () => {
     }));
     await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
 
-    await waitFor(() => expect(screen.queryByLabelText("Your attendance")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText("Your RSVP")).not.toBeInTheDocument());
     expect(screen.getByLabelText("Member attendance")).toBeInTheDocument();
   });
 
