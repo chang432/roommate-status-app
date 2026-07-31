@@ -1,19 +1,23 @@
 .form {
+  @apply space-y-5;
+}
+
+.fields {
   @apply space-y-4;
 }
 
 .field {
-  @apply flex flex-col gap-2 text-[13px] font-semibold text-ink;
+  @apply block min-w-0;
 }
 
-.optionRow {
-  @apply flex gap-2;
+.fieldLabel {
+  @apply mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
 }
 
-.optionRow input {
-  @apply min-w-0 flex-1;
+.input {
+  @apply w-full min-w-0 px-[14px] py-[12px] text-[14px];
 }
 
-.add {
-  @apply self-start px-3 py-2 text-[12px];
+.error {
+  @apply mt-1;
 }

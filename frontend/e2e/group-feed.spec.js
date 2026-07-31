@@ -62,7 +62,23 @@ function feedFixture() {
       title: 'Dinner?',
       createdBy: 'Andre',
       createdById: 'andre',
-      options: [{ id: 'option-1', text: 'Tacos', voters: [], voterIds: [] }],
+      options: [
+        {
+          id: 'option-1',
+          text: 'Tacos',
+          voters: [
+            { id: 'andre', name: 'Andre' },
+            { id: 'kayla', name: 'Kayla' },
+          ],
+          voterIds: ['andre', 'kayla'],
+        },
+        {
+          id: 'option-2',
+          text: 'Pizza',
+          voters: [{ id: 'andre', name: 'Andre' }],
+          voterIds: ['andre'],
+        },
+      ],
       comments: [],
     }),
     feedItem('tv', {
@@ -127,6 +143,18 @@ async function expectNoHorizontalOverflow(page) {
   expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewport)
 }
 
+async function expectExpandedCardSettled(cardToggle) {
+  await expect(cardToggle).toHaveAttribute('aria-expanded', 'true')
+  await expect.poll(() => cardToggle.locator('xpath=..').evaluate((card) => {
+    const expandableRegion = card.lastElementChild
+    const expandableContent = expandableRegion.firstElementChild
+    return Math.abs(
+      expandableRegion.getBoundingClientRect().height
+        - expandableContent.scrollHeight,
+    ) < 1
+  })).toBe(true)
+}
+
 test('keeps every registered feed card usable at desktop and phone widths', async ({
   page,
 }, testInfo) => {
@@ -148,9 +176,16 @@ test('keeps every registered feed card usable at desktop and phone widths', asyn
     await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click()
     const cardToggle = page.getByRole('button', { name: new RegExp(card) })
     await expect(cardToggle).toBeVisible()
+    if (tab === 'Polls') await expect(cardToggle).toContainText('2 voters')
     await cardToggle.click()
     await expect(cardToggle).toHaveAttribute('aria-expanded', 'true')
   }
+
+  await page.getByRole('tab', { name: /^Polls/ }).click()
+  const desktopPollCard = page.getByRole('button', { name: /Dinner\?/ })
+  await desktopPollCard.click()
+  await expectExpandedCardSettled(desktopPollCard)
+  await expectNoHorizontalOverflow(page)
 
   await page.screenshot({
     path: testInfo.outputPath('group-feed-desktop.png'),
@@ -161,14 +196,39 @@ test('keeps every registered feed card usable at desktop and phone widths', asyn
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Group Feed' })).toBeVisible()
   await expectNoHorizontalOverflow(page)
-  await page.getByRole('tab', { name: /^Requests/ }).click()
-  await expect(page.getByRole('button', { name: /Pick up milk/ })).toBeVisible()
-  await page.getByRole('button', { name: 'Create a request' }).click()
-  await expect(page.getByRole('dialog', { name: 'Create a request' })).toBeVisible()
+  await page.getByRole('tab', { name: /^Polls/ }).click()
+  const pollCard = page.getByRole('button', { name: /Dinner\?/ })
+  await expect(pollCard).toContainText('2 voters')
+  await page.getByRole('button', { name: 'Create a poll' }).click()
+  await expect(page.getByRole('dialog', { name: 'Create a poll' })).toBeVisible()
+  await page.getByLabel('Poll title').fill('Weekend plans?')
+  await page.getByRole('textbox', { name: 'Poll option 1', exact: true }).fill('Hike')
+  await page.getByRole('button', { name: 'Add option' }).click()
+  await page.getByRole('textbox', { name: 'Poll option 2', exact: true }).fill('Movie')
+  await expect(page.getByRole('button', { name: 'Post poll' })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible()
+  await expectNoHorizontalOverflow(page)
 
   await page.screenshot({
-    path: testInfo.outputPath('group-feed-phone.png'),
+    path: testInfo.outputPath('poll-create-phone.png'),
+    fullPage: true,
+  })
+
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await pollCard.click()
+  await expectExpandedCardSettled(pollCard)
+  const voteRequest = page.waitForRequest((request) => (
+    request.method() === 'DELETE'
+      && new URL(request.url()).pathname
+        === '/api/polls/poll-1/options/option-1/votes'
+  ))
+  await page.getByRole('button', { name: 'Remove vote from Tacos' }).click()
+  await voteRequest
+  await expectExpandedCardSettled(pollCard)
+  await expectNoHorizontalOverflow(page)
+
+  await page.screenshot({
+    path: testInfo.outputPath('poll-card-phone.png'),
     fullPage: true,
   })
 })

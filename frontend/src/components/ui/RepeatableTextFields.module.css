@@ -1,0 +1,27 @@
+.field {
+  @apply block min-w-0;
+}
+
+.fieldLabel {
+  @apply mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-ink-soft;
+}
+
+.items {
+  @apply space-y-2;
+}
+
+.itemRow {
+  @apply flex items-center gap-2;
+}
+
+.input {
+  @apply min-w-0 flex-1 px-[14px] py-[12px] text-[14px];
+}
+
+.removeItem {
+  @apply grid h-[36px] w-[36px] flex-none place-items-center rounded-full border border-line bg-card text-[20px] font-bold leading-none text-ink-soft transition hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.addItem {
+  @apply mt-3 px-[13px] py-[8px] text-[12.5px];
+}

@@ -22,6 +22,18 @@ import ModuleEditButton from "./ModuleEditButton.jsx";
 import ExpandableCardRegion from "./ExpandableCardRegion.jsx";
 import styles from "./PollFeature.module.css";
 
+const VOTER_AVATAR_PREVIEW_LIMIT = 3;
+
+function uniqueVoterCount(options) {
+  // Polls are multi-select, so one roommate may appear on several options.
+  return new Set(options.flatMap((option) => option.voterIds ?? [])).size;
+}
+
+function voterSummary(count) {
+  if (count === 0) return "No votes yet";
+  return `${count} ${count === 1 ? "voter" : "voters"}`;
+}
+
 function OptionEditor({ value, onChange, onSubmit, onCancel, busy }) {
   return (
     <form onSubmit={onSubmit} className={styles.optionEditor}>
@@ -32,6 +44,7 @@ function OptionEditor({ value, onChange, onSubmit, onCancel, busy }) {
         maxLength={280}
         autoFocus
         className={cx("ui-textInput", styles.optionEditorInput)}
+        aria-label="Edit poll option"
       />
       <button
         type="submit"
@@ -141,10 +154,11 @@ export default function PollFeature({
 
   const expanded = expandedId === poll.id;
   const creator = poll.createdById === user.id;
+  const participation = voterSummary(uniqueVoterCount(poll.options));
 
   return (
     <div className={styles.wrap}>
-      {error && <p className="ui-errorText">{error}</p>}
+      {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
       <article className={cx(styles.card, poll.isArchived && styles.archived)}>
         <button
           type="button"
@@ -155,12 +169,13 @@ export default function PollFeature({
           <span className={styles.summaryText}>
             <span className={styles.titleRow}>
               {moduleTag}
-              <strong>{poll.title}</strong>
+              <strong className={styles.title}>{poll.title}</strong>
             </span>
             <span className={styles.meta}>
               {poll.createdBy} · {relativeTime(poll.createdAt)}
             </span>
           </span>
+          <span className={styles.participation}>{participation}</span>
         </button>
 
         <ExpandableCardRegion expanded={expanded} className={styles.panel}>
@@ -262,15 +277,20 @@ export default function PollFeature({
                           <span className={styles.voteCount}>
                             {voters.length}
                           </span>
-                          <span className={styles.voterAvatars}>
-                            {voters.map((person) => (
-                              <Avatar
-                                key={person.id}
-                                name={person.name}
-                                color={person.color}
-                                size={24}
-                              />
-                            ))}
+                          <span
+                            className={styles.voterAvatars}
+                            aria-hidden="true"
+                          >
+                            {voters
+                              .slice(0, VOTER_AVATAR_PREVIEW_LIMIT)
+                              .map((person) => (
+                                <Avatar
+                                  key={person.id}
+                                  name={person.name}
+                                  color={person.color}
+                                  size={24}
+                                />
+                              ))}
                           </span>
                         </PeoplePopover>
                       </>
@@ -300,13 +320,14 @@ export default function PollFeature({
                 value={newOption}
                 onChange={(event) => setNewOption(event.target.value)}
                 placeholder="Add an option"
+                aria-label="Add poll option"
               />
               <button
                 type="submit"
                 className="ui-pillButton ui-pillSecondary"
                 disabled={!newOption.trim() || Boolean(busy)}
               >
-                Add
+                {busy === "add" ? "Adding…" : "Add"}
               </button>
             </form>
           )}
@@ -341,7 +362,13 @@ export default function PollFeature({
                 )
               }
             >
-              {poll.isArchived ? "Restore" : "Archive"}
+              {busy === "restore"
+                ? "Restoring…"
+                : busy === "archive"
+                  ? "Archiving…"
+                  : poll.isArchived
+                    ? "Restore"
+                    : "Archive"}
             </button>
             <button
               type="button"
@@ -349,7 +376,7 @@ export default function PollFeature({
               disabled={Boolean(busy)}
               onClick={() => handleDelete(poll)}
             >
-              Delete
+              {busy === "delete" ? "Deleting…" : "Delete"}
             </button>
           </div>
         </ExpandableCardRegion>
