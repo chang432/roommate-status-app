@@ -156,6 +156,27 @@ function cardForText(text) {
   return screen.getByText(text).closest('[role="button"]');
 }
 
+function setWindowScrollY(top) {
+  Object.defineProperty(window, "scrollY", {
+    configurable: true,
+    value: top,
+  });
+}
+
+function feedShellRectAt(documentTop) {
+  return {
+    top: documentTop - window.scrollY,
+    bottom: documentTop - window.scrollY + 900,
+    left: 0,
+    right: 390,
+    x: 0,
+    y: documentTop - window.scrollY,
+    width: 390,
+    height: 900,
+    toJSON: () => ({}),
+  };
+}
+
 async function openModuleNav(user) {
   await user.click(screen.getByRole("button", { name: "Open feed menu" }));
   return screen.getByLabelText("Module types");
@@ -165,6 +186,8 @@ describe("GroupFeed module focus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    setWindowScrollY(0);
+    window.scrollTo = vi.fn();
     updateModule.mockResolvedValue({ module: {} });
     Element.prototype.scrollIntoView = vi.fn();
   });
@@ -641,6 +664,61 @@ describe("GroupFeed module focus", () => {
       await screen.findByRole("tab", { name: /^Events/, selected: true }),
     ).toBeInTheDocument();
     expect(scroller.scrollLeft).toBe(120);
+  });
+
+  it("does not move the page when categories change before the feed is reached", async () => {
+    renderFeed("/", [feedItem("events")]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Movie night");
+    const shell = document.querySelector("[data-feed-shell]");
+    shell.getBoundingClientRect = vi.fn(() => feedShellRectAt(300));
+    setWindowScrollY(100);
+    window.scrollTo = vi.fn();
+
+    await user.click(screen.getByRole("tab", { name: /^Events/ }));
+
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("opens unseen categories at the feed top and restores prior positions", async () => {
+    renderFeed("/", [feedItem("events")]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Movie night");
+    const shell = document.querySelector("[data-feed-shell]");
+    shell.getBoundingClientRect = vi.fn(() => feedShellRectAt(300));
+    Object.defineProperties(document.documentElement, {
+      scrollHeight: { configurable: true, value: 2400 },
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+    });
+    window.scrollTo = vi.fn(({ top }) => setWindowScrollY(top));
+
+    setWindowScrollY(620);
+    await user.click(screen.getByRole("tab", { name: /^Events/ }));
+    expect(window.scrollTo).toHaveBeenLastCalledWith({
+      top: 300,
+      left: 0,
+      behavior: "auto",
+    });
+
+    setWindowScrollY(480);
+    await user.click(screen.getByRole("tab", { name: /^All/ }));
+    expect(window.scrollTo).toHaveBeenLastCalledWith({
+      top: 620,
+      left: 0,
+      behavior: "auto",
+    });
+
+    await user.click(screen.getByRole("tab", { name: /^Events/ }));
+    expect(window.scrollTo).toHaveBeenLastCalledWith({
+      top: 480,
+      left: 0,
+      behavior: "auto",
+    });
   });
 
   it("moves the category underline with an in-progress swipe", async () => {

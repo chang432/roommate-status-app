@@ -842,7 +842,10 @@ export default function GroupFeed({
   const swipeTimersRef = useRef([]);
   const swipeFrameRef = useRef(null);
   const swipeClickBlockUntilRef = useRef(0);
+  const feedShellRef = useRef(null);
   const stickyHeaderRef = useRef(null);
+  const categoryScrollPositionsRef = useRef(new Map());
+  const pendingCategoryScrollRef = useRef(null);
   const [feedSwipeOffset, setFeedSwipeOffset] = useState(0);
   const [feedSwipePhase, setFeedSwipePhase] = useState("idle");
   const [feedSwipeTravelDistance, setFeedSwipeTravelDistance] = useState(1);
@@ -875,6 +878,8 @@ export default function GroupFeed({
     const nextPreferences = readModulePreferences(user.id, user.activeGroupId);
     setModuleOrder(nextPreferences.order);
     setAllTypes(nextPreferences.allTypes);
+    categoryScrollPositionsRef.current.clear();
+    pendingCategoryScrollRef.current = null;
   }, [user.activeGroupId, user.id]);
 
   useEffect(() => {
@@ -1063,6 +1068,24 @@ export default function GroupFeed({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [drawerOpen]);
 
+  useLayoutEffect(() => {
+    const pendingScroll = pendingCategoryScrollRef.current;
+    const shell = feedShellRef.current;
+    if (!pendingScroll || pendingScroll.type !== activeType || !shell) return;
+
+    pendingCategoryScrollRef.current = null;
+    const shellTop = shell.getBoundingClientRect().top + window.scrollY;
+    const maxScrollTop = Math.max(
+      document.documentElement.scrollHeight - window.innerHeight,
+      0,
+    );
+    window.scrollTo({
+      top: Math.min(shellTop + pendingScroll.offset, maxScrollTop),
+      left: window.scrollX,
+      behavior: "auto",
+    });
+  }, [activeType]);
+
   useEffect(() => {
     if (loading) return undefined;
     const header = stickyHeaderRef.current;
@@ -1128,6 +1151,35 @@ export default function GroupFeed({
     }
   }
 
+  function changeModuleType(type) {
+    if (type === activeType) return;
+
+    const shell = feedShellRef.current;
+    if (shell) {
+      const shellTop = shell.getBoundingClientRect().top + window.scrollY;
+      const hasEnteredFeed = window.scrollY >= shellTop - 1;
+      const destinationWasVisited = categoryScrollPositionsRef.current.has(type);
+
+      if (hasEnteredFeed) {
+        categoryScrollPositionsRef.current.set(
+          activeType,
+          Math.max(window.scrollY - shellTop, 0),
+        );
+      }
+      if (hasEnteredFeed || destinationWasVisited) {
+        // Restore after the destination panel commits so a shorter page cannot
+        // clamp the old category's scroll position between renders.
+        pendingCategoryScrollRef.current = {
+          type,
+          offset: categoryScrollPositionsRef.current.get(type) ?? 0,
+        };
+      }
+    }
+
+    setActiveType(type);
+    setNavigationError("");
+  }
+
   function selectModuleType(type) {
     swipeTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
     swipeTimersRef.current = [];
@@ -1138,8 +1190,7 @@ export default function GroupFeed({
     swipeStartRef.current = null;
     setFeedSwipeOffset(0);
     setFeedSwipePhase("idle");
-    setActiveType(type);
-    setNavigationError("");
+    changeModuleType(type);
     setDrawerOpen(false);
   }
 
@@ -1261,8 +1312,7 @@ export default function GroupFeed({
     scheduleFeedSwipe(() => {
       // Once the adjacent page has arrived, promote it to the centered panel
       // without animation so there is no visual jump or duplicated entrance.
-      setActiveType(destinationType);
-      setNavigationError("");
+      changeModuleType(destinationType);
       setFeedSwipePhase("preparing");
       setFeedSwipeOffset(0);
       swipeFrameRef.current = window.requestAnimationFrame(() => {
@@ -1520,7 +1570,7 @@ export default function GroupFeed({
         <p className={cx("ui-errorBox", styles.pageError)}>{navigationError}</p>
       )}
 
-      <div className={styles.shell}>
+      <div ref={feedShellRef} className={styles.shell} data-feed-shell>
         <ModuleNav
           activeType={activeType}
           counts={moduleCounts}
