@@ -1957,6 +1957,7 @@ export default function GroupFeed({
 
         <main
           className={styles.feedColumn}
+          data-feed-swipe-surface
           onPointerDown={handleFeedPointerDown}
           onPointerMove={handleFeedPointerMove}
           onPointerUp={handleFeedPointerUp}

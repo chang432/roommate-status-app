@@ -75,7 +75,11 @@ function bookClubFixture() {
   return { meeting, activeBook, completedBook }
 }
 
-async function mockBookClub(page, { tvFeedCount = 0, bookClubFeedCount = 0 } = {}) {
+async function mockBookClub(page, {
+  tvFeedCount = 0,
+  archivedTvFeedCount = 0,
+  bookClubFeedCount = 0,
+} = {}) {
   const { meeting, activeBook, completedBook } = bookClubFixture()
   let books = [activeBook, completedBook]
   const forums = {
@@ -87,19 +91,22 @@ async function mockBookClub(page, { tvFeedCount = 0, bookClubFeedCount = 0 } = {
     title: meeting.bookTitle, subtitle: 'Book Club meeting',
     actor: meeting.createdByName, isArchived: false, payload: meeting,
   }]
-  for (let index = 0; index < tvFeedCount; index += 1) {
-    const id = `show-${index}`
-    feedItems.push({
-      id, type: 'tv', createdAt: NOW - index, updatedAt: NOW - index,
-      sortAt: NOW - index, title: `Show ${index + 1}`, subtitle: 'TV',
-      actor: 'Andre', isArchived: false,
-      payload: {
-        id, title: `Show ${index + 1}`, createdBy: 'Andre',
-        createdById: 'andre', members: [], createdAt: NOW - index,
-        updatedAt: NOW - index, isArchived: false,
-      },
-    })
+  function addTvFeedItems(count, isArchived = false) {
+    for (let index = 0; index < count; index += 1) {
+      const title = `${isArchived ? 'Archived ' : ''}Show ${index + 1}`
+      const id = `${isArchived ? 'archived-' : ''}show-${index}`
+      feedItems.push({
+        id, type: 'tv', createdAt: NOW - index, updatedAt: NOW - index,
+        sortAt: NOW - index, title, subtitle: 'TV', actor: 'Andre', isArchived,
+        payload: {
+          id, title, createdBy: 'Andre', createdById: 'andre', members: [],
+          createdAt: NOW - index, updatedAt: NOW - index, isArchived,
+        },
+      })
+    }
   }
+  addTvFeedItems(tvFeedCount)
+  addTvFeedItems(archivedTvFeedCount, true)
   for (let index = 0; index < bookClubFeedCount; index += 1) {
     const id = `meeting-extra-${index}`
     const extraMeeting = {
@@ -766,6 +773,60 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   await expect(page.getByText('Show 20', { exact: true })).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('group-feed-sticky-mobile.png') })
+})
+
+test('swipes categories from the blank feed canvas below Archived', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockBookClub(page, { tvFeedCount: 1, archivedTvFeedCount: 1 })
+  await page.goto('/')
+
+  const feedTabs = page.getByRole('tablist', { name: 'Feed categories' })
+  await feedTabs.getByRole('tab', { name: /^TV/ }).click()
+  await expect(feedTabs.getByRole('tab', { name: /^TV/, selected: true })).toBeVisible()
+
+  const feedShell = page.locator('[data-feed-shell]')
+  const swipeSurface = page.locator('[data-feed-swipe-surface]')
+  const stickyHeader = page.locator('[data-feed-sticky-header]')
+  const archiveToggle = page.getByRole('button', { name: /^Archived \(1\)/ })
+  await archiveToggle.click()
+  await expect(page.getByText('Archived Show 1', { exact: true })).toBeVisible()
+  await archiveToggle.click()
+  await expect(page.getByText('Archived Show 1', { exact: true })).not.toBeVisible()
+  const feedShellTop = await feedShell.evaluate((element) => (
+    element.getBoundingClientRect().top + window.scrollY
+  ))
+  await page.evaluate((top) => window.scrollTo(0, top), feedShellTop)
+  await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+
+  const [surfaceBox, shellBox, archiveBox] = await Promise.all([
+    swipeSurface.boundingBox(),
+    feedShell.boundingBox(),
+    archiveToggle.boundingBox(),
+  ])
+  expect(surfaceBox.y + surfaceBox.height).toBeGreaterThanOrEqual(
+    shellBox.y + shellBox.height - 1,
+  )
+  const swipeY = archiveBox.y + archiveBox.height + 32
+  expect(swipeY).toBeLessThan(surfaceBox.y + surfaceBox.height - 20)
+  expect(await page.evaluate(({ x, y }) => (
+    document.elementFromPoint(x, y)?.closest('[data-feed-swipe-surface]') !== null
+  ), { x: surfaceBox.x + surfaceBox.width / 2, y: swipeY })).toBe(true)
+  await page.screenshot({
+    path: testInfo.outputPath('group-feed-blank-canvas-mobile.png'),
+  })
+
+  const swipeStartX = surfaceBox.x + surfaceBox.width - 20
+  await page.mouse.move(swipeStartX, swipeY)
+  await page.mouse.down()
+  await page.mouse.move(swipeStartX - 260, swipeY + 4, { steps: 8 })
+  await page.mouse.up()
+
+  await expect(
+    feedTabs.getByRole('tab', { name: /^Book Club/, selected: true }),
+  ).toBeVisible()
+  await expect.poll(() => page.evaluate(() => (
+    document.documentElement.scrollWidth <= window.innerWidth
+  ))).toBe(true)
 })
 
 test('keeps the editorial feed header clear across themes', async ({ page }, testInfo) => {
