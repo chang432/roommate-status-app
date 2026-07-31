@@ -42,7 +42,6 @@ import styles from "../../pages/StatusPage.module.css";
 
 const FEED_POLL_INTERVAL_MS = 5000;
 const MODULE_PREFERENCE_VERSION = 3;
-const INTERACTIVE_SELECTOR = "button, a, input, textarea, select";
 const SWIPE_MIN_X = 64;
 const SWIPE_HORIZONTAL_LOCK_PX = 4;
 const SWIPE_VERTICAL_LOCK_PX = 10;
@@ -1506,8 +1505,9 @@ export default function GroupFeed({
   function handleFeedPointerDown(event) {
     if (feedSwipePhase !== "idle") return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
-    if (event.target.closest?.(INTERACTIVE_SELECTOR)) return;
     const panelWidth = event.currentTarget.getBoundingClientRect().width;
+    // Track every surface below the tabs, but leave pointer ownership with the
+    // original control until the movement clearly becomes a horizontal swipe.
     swipeStartRef.current = {
       pointerId: event.pointerId,
       x: event.clientX,
@@ -1520,7 +1520,6 @@ export default function GroupFeed({
     setFeedSwipeTravelDistance(
       Math.max(panelWidth + SWIPE_PANEL_GAP_PX, 1),
     );
-    event.currentTarget.setPointerCapture?.(event.pointerId);
   }
 
   function handleFeedPointerMove(event) {
@@ -1538,12 +1537,12 @@ export default function GroupFeed({
         // Axis ownership is one-way: once horizontal wins, later vertical
         // movement cannot cancel the category swipe or move the page.
         start.axis = "horizontal";
+        event.currentTarget.setPointerCapture?.(event.pointerId);
       } else if (
         Math.abs(deltaY) >= SWIPE_VERTICAL_LOCK_PX &&
         Math.abs(deltaY) > Math.abs(deltaX)
       ) {
         swipeStartRef.current = null;
-        event.currentTarget.releasePointerCapture?.(event.pointerId);
         return;
       } else {
         return;
@@ -1578,7 +1577,9 @@ export default function GroupFeed({
     const start = swipeStartRef.current;
     swipeStartRef.current = null;
     if (!start || start.pointerId !== event.pointerId) return;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     if (start.axis !== "horizontal") return;
 
     event.preventDefault();
