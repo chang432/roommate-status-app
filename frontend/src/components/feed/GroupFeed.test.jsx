@@ -707,6 +707,84 @@ describe("GroupFeed module focus", () => {
     expect(scroller.scrollLeft).toBe(120);
   });
 
+  it("switches filters when swiping on a native Book Club header button", async () => {
+    renderFeed(
+      "/",
+      [feedItem("tv"), feedItem("book-club")],
+      { showBookClub: true },
+    );
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("tab", { name: /^Book Club/ }));
+    const header = screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    });
+    document.querySelector(
+      "[data-feed-swipe-phase]",
+    ).parentElement.getBoundingClientRect = vi.fn(() => ({ width: 184 }));
+
+    fireEvent.pointerDown(header, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(header, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 82,
+      clientY: 150,
+    });
+    fireEvent.pointerUp(header, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 82,
+      clientY: 150,
+    });
+    expect(
+      screen.getByRole("tab", { name: /^Book Club/, selected: true }),
+    ).toBeInTheDocument();
+
+    fireEvent.pointerDown(header, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(header, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 110,
+      clientY: 121,
+    });
+    fireEvent.pointerMove(header, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 124,
+    });
+    expect(
+      document.querySelector('[data-feed-panel-type="book-club"]'),
+    ).toHaveStyle({ transform: "translate3d(85px, 0, 0)" });
+    fireEvent.pointerUp(header, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 124,
+    });
+    fireEvent.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    fireEvent.transitionEnd(
+      document.querySelector('[data-feed-panel-type="book-club"]'),
+      { propertyName: "transform" },
+    );
+
+    expect(
+      await screen.findByRole("tab", { name: /^TV/, selected: true }),
+    ).toBeInTheDocument();
+  });
+
   it("finishes a horizontally locked swipe from its last position on pointer cancel", async () => {
     renderFeed("/", [feedItem("events")]);
 

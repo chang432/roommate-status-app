@@ -263,6 +263,30 @@ async function mockBookClub(page, {
   })
 }
 
+async function dragTouch(page, start, end, steps = 8) {
+  const session = await page.context().newCDPSession(page)
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: start.x, y: start.y, id: 1 }],
+  })
+  for (let step = 1; step <= steps; step += 1) {
+    const progress = step / steps
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{
+        x: start.x + (end.x - start.x) * progress,
+        y: start.y + (end.y - start.y) * progress,
+        id: 1,
+      }],
+    })
+  }
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  })
+  await session.detach()
+}
+
 test('uses the household modal for books, reviews, and discussions', async ({ page }, testInfo) => {
   await mockBookClub(page)
   await page.goto('/')
@@ -828,6 +852,79 @@ test('swipes categories from the blank feed canvas below Archived', async ({ pag
   await expect.poll(() => page.evaluate(() => (
     document.documentElement.scrollWidth <= window.innerWidth
   ))).toBe(true)
+})
+
+test('swipes categories from the clickable Book Club card header', async ({ page }, testInfo) => {
+  await mockBookClub(page, { tvFeedCount: 1 })
+
+  for (const viewport of [
+    { name: 'desktop', width: 1280, height: 800, touch: false },
+    { name: 'phone', width: 390, height: 844, touch: true },
+  ]) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await page.goto('/')
+
+    const feedTabs = page.getByRole('tablist', { name: 'Feed categories' })
+    const bookClubTab = feedTabs.getByRole('tab', { name: /^Book Club/ })
+    const tvTab = feedTabs.getByRole('tab', { name: /^TV/ })
+    await bookClubTab.click()
+    await expect(bookClubTab).toHaveAttribute('aria-selected', 'true')
+
+    const cardHeader = page.locator(
+      '[data-feed-panel-type="book-club"] button[aria-expanded]',
+    ).filter({ hasText: 'The Fifth Season' })
+    await expect(cardHeader).toHaveAttribute('aria-expanded', 'false')
+    await cardHeader.click()
+    await expect(cardHeader).toHaveAttribute('aria-expanded', 'true')
+    await cardHeader.click()
+    await expect(cardHeader).toHaveAttribute('aria-expanded', 'false')
+
+    const feedShell = page.locator('[data-feed-shell]')
+    const stickyHeader = page.locator('[data-feed-sticky-header]')
+    const feedShellTop = await feedShell.evaluate((element) => (
+      element.getBoundingClientRect().top + window.scrollY
+    ))
+    await page.evaluate((top) => window.scrollTo(0, top), feedShellTop)
+    await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+    const scrollBeforeSwipe = await page.evaluate(() => window.scrollY)
+    const cardHeaderBox = await cardHeader.boundingBox()
+    const swipeStart = {
+      x: cardHeaderBox.x + 20,
+      y: cardHeaderBox.y + cardHeaderBox.height / 2,
+    }
+    const swipeEnd = {
+      x: cardHeaderBox.x + cardHeaderBox.width - 20,
+      y: cardHeaderBox.y + cardHeaderBox.height / 2 + 4,
+    }
+    await cardHeader.evaluate((element) => {
+      window.__swipedBookClubHeader = element
+    })
+
+    if (viewport.touch) {
+      await dragTouch(page, swipeStart, swipeEnd)
+    } else {
+      await page.mouse.move(swipeStart.x, swipeStart.y)
+      await page.mouse.down()
+      await page.mouse.move(swipeEnd.x, swipeEnd.y, { steps: 8 })
+      await page.mouse.up()
+    }
+
+    await expect(tvTab).toHaveAttribute('aria-selected', 'true')
+    expect(await page.evaluate(() => (
+      window.__swipedBookClubHeader.getAttribute('aria-expanded')
+    ))).toBe('false')
+    await expect.poll(() => page.evaluate((top) => (
+      Math.abs(window.scrollY - top)
+    ), scrollBeforeSwipe)).toBeLessThan(2)
+    await expect.poll(() => page.evaluate(() => (
+      document.documentElement.scrollWidth <= window.innerWidth
+    ))).toBe(true)
+    await page.screenshot({
+      path: testInfo.outputPath(
+        `group-feed-book-club-card-swipe-${viewport.name}.png`,
+      ),
+    })
+  }
 })
 
 test('keeps category focus and create permissions visually stable', async ({ page }, testInfo) => {
