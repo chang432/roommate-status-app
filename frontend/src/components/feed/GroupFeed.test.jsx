@@ -721,6 +721,69 @@ describe("GroupFeed module focus", () => {
     });
   });
 
+  it("pre-aligns and promotes the saved category without replacing its panel", async () => {
+    renderFeed("/", [feedItem("events")]);
+    const user = userEvent.setup();
+
+    await screen.findByText("Movie night");
+    const shell = document.querySelector("[data-feed-shell]");
+    shell.getBoundingClientRect = vi.fn(() => feedShellRectAt(300));
+    Object.defineProperty(document.documentElement, "scrollHeight", {
+      configurable: true,
+      value: 2400,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+    });
+    window.scrollTo = vi.fn(({ top }) => setWindowScrollY(top));
+
+    setWindowScrollY(620);
+    await user.click(screen.getByRole("tab", { name: /^Events/ }));
+    setWindowScrollY(480);
+
+    const card = cardForText("Movie night");
+    document.querySelector(
+      "[data-feed-swipe-phase]",
+    ).parentElement.getBoundingClientRect = vi.fn(() => ({ width: 184 }));
+    fireEvent.pointerDown(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 80,
+      clientY: 120,
+    });
+    fireEvent.pointerMove(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 124,
+    });
+
+    const incomingAll = document.querySelector(
+      '[data-feed-panel-type="all"]',
+    );
+    expect(incomingAll.style.transform).toBe(
+      "translate3d(calc(-100% - 16px + 85px), -140px, 0)",
+    );
+
+    fireEvent.pointerUp(card, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 124,
+    });
+
+    await screen.findByRole("tab", { name: /^All/, selected: true });
+    expect(document.querySelector('[data-feed-panel-type="all"]')).toBe(
+      incomingAll,
+    );
+    expect(window.scrollTo).toHaveBeenLastCalledWith({
+      top: 620,
+      left: 0,
+      behavior: "auto",
+    });
+  });
+
   it("moves the category underline with an in-progress swipe", async () => {
     renderFeed("/", [feedItem("events"), feedItem("requests")]);
 

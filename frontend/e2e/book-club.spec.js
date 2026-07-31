@@ -415,7 +415,11 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
         const gapEnd = Math.min(cards[index + 1].top, window.innerHeight)
         if (gapEnd - gapStart >= 2) return gapStart + (gapEnd - gapStart) / 2
       }
-      return Math.min(Math.max(headerBottom + 4, 4), window.innerHeight - 20)
+      const panelRect = panel.getBoundingClientRect()
+      return Math.min(
+        Math.max(panelRect.top + Math.min(40, panelRect.height / 2), headerBottom + 4),
+        window.innerHeight - 20,
+      )
     })
     return {
       x: deltaX < 0
@@ -463,6 +467,19 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   expect(indicatorCenter).toBeLessThan(Math.max(tvCenter, bookClubCenter))
   await page.screenshot({ path: testInfo.outputPath('group-feed-swipe-preview-mobile.png') })
 
+  await incomingBookClub.evaluate((panel) => {
+    window.__incomingFeedPanel = panel
+    window.__feedPanelFrames = []
+    function samplePanel() {
+      const rect = panel.getBoundingClientRect()
+      const phase = document.querySelector('[data-feed-swipe-phase]')
+        ?.dataset.feedSwipePhase
+      window.__feedPanelFrames.push({ x: rect.x, y: rect.y, phase })
+      if (phase !== 'idle') window.requestAnimationFrame(samplePanel)
+    }
+    window.requestAnimationFrame(samplePanel)
+  })
+
   await page.mouse.up()
   const selectedBookClubTab = feedTabs.getByRole('tab', { name: /^Book Club/, selected: true })
   await expect(selectedBookClubTab).toBeVisible()
@@ -478,6 +495,21 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
       (activeTabBox.x + activeTabBox.width / 2)
     )
   }).toBeLessThan(2)
+  const firstHandoff = await page.evaluate(() => ({
+    samePanel: window.__incomingFeedPanel === document.querySelector(
+      '[data-feed-panel-type="book-club"]',
+    ),
+    frames: window.__feedPanelFrames,
+  }))
+  expect(firstHandoff.samePanel).toBe(true)
+  expect(firstHandoff.frames.length).toBeGreaterThan(2)
+  for (let index = 1; index < firstHandoff.frames.length; index += 1) {
+    expect(firstHandoff.frames[index].x).toBeLessThanOrEqual(
+      firstHandoff.frames[index - 1].x + 1,
+    )
+  }
+  const firstHandoffYs = firstHandoff.frames.map(({ y }) => y)
+  expect(Math.max(...firstHandoffYs) - Math.min(...firstHandoffYs)).toBeLessThan(2)
 
   await expect.poll(() => page.evaluate((top) => (
     Math.abs(window.scrollY - top)
@@ -513,12 +545,45 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
     ({ top, offset }) => window.scrollTo(0, top + offset),
     { top: feedShellTop, offset: 180 },
   )
-  await swipeActivePanel(-260)
+  const returnPoint = await feedSwipePoint(-260)
+  await page.mouse.move(returnPoint.x, returnPoint.y)
+  await page.mouse.down()
+  await page.mouse.move(returnPoint.x - 260, returnPoint.y + 4, { steps: 8 })
+  const returningBookClub = page.locator('[data-feed-panel-type="book-club"]')
+  const returningBookY = (await returningBookClub.getByText(
+    'The Fifth Season',
+  ).first().boundingBox()).y
+  await returningBookClub.evaluate((panel) => {
+    window.__returningFeedPanel = panel
+  })
+  await page.mouse.up()
   await expect(feedTabs.getByRole('tab', { name: /^Book Club/, selected: true })).toBeVisible()
   await expect.poll(() => page.evaluate(({ top, offset }) => (
     Math.abs(window.scrollY - (top + offset))
   ), { top: feedShellTop, offset: bookClubScrollOffset })).toBeLessThan(2)
   await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+  const restoredBookY = (await page.locator(
+    '[data-feed-panel-type="book-club"]',
+  ).getByText('The Fifth Season').first().boundingBox()).y
+  expect(Math.abs(restoredBookY - returningBookY)).toBeLessThan(2)
+  expect(await page.evaluate(() => (
+    window.__returningFeedPanel === document.querySelector(
+      '[data-feed-panel-type="book-club"]',
+    )
+  ))).toBe(true)
+
+  await feedTabs.getByRole('tab', { name: /^Events/ }).click()
+  await expect(feedTabs.getByRole('tab', { name: /^Events/, selected: true })).toBeVisible()
+  await expect(page.getByText('No active modules here yet.')).toBeVisible()
+  await expect.poll(() => page.evaluate((top) => Math.abs(
+    document.documentElement.scrollHeight - window.innerHeight - top
+  ), feedShellTop)).toBeLessThan(2)
+  await page.evaluate((top) => window.scrollTo(0, top + 200), feedShellTop)
+  await expect.poll(() => page.evaluate((top) => (
+    Math.abs(window.scrollY - top)
+  ), feedShellTop)).toBeLessThan(2)
+  await swipeActivePanel(-260)
+  await expect(feedTabs.getByRole('tab', { name: /^Requests/, selected: true })).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('group-feed-sticky-mobile.png') })
 })

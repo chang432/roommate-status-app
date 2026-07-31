@@ -60,8 +60,10 @@
 
 .shell {
   @apply min-w-0;
-  min-height: 100vh;
-  min-height: 100dvh;
+  /* The page contributes 4rem of bottom padding, so subtract it here to keep
+     an empty feed pinned without creating a blank vertical scroll range. */
+  min-height: calc(100vh - 4rem);
+  min-height: calc(100dvh - 4rem);
 }
 
 .drawerBackdrop {

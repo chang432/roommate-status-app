@@ -846,9 +846,11 @@ export default function GroupFeed({
   const stickyHeaderRef = useRef(null);
   const categoryScrollPositionsRef = useRef(new Map());
   const pendingCategoryScrollRef = useRef(null);
+  const feedSwipeScrollSnapshotRef = useRef(null);
   const [feedSwipeOffset, setFeedSwipeOffset] = useState(0);
   const [feedSwipePhase, setFeedSwipePhase] = useState("idle");
   const [feedSwipeTravelDistance, setFeedSwipeTravelDistance] = useState(1);
+  const [feedSwipeScrollSnapshot, setFeedSwipeScrollSnapshot] = useState(null);
   const [feedHeaderStuck, setFeedHeaderStuck] = useState(false);
   const canAdministerBookClub = isAdminIn(roommates, user.id);
 
@@ -987,6 +989,9 @@ export default function GroupFeed({
   const previousType = moduleTypes[activeTypeIndex - 1]?.id ?? null;
   const nextType = moduleTypes[activeTypeIndex + 1]?.id ?? null;
   const showAdjacentPanels = feedSwipePhase !== "idle";
+  const visiblePanelTypes = showAdjacentPanels
+    ? [previousType, activeType, nextType].filter(Boolean)
+    : [activeType];
 
   const focusIntent = useMemo(
     () => moduleFocusFromSearchParams(searchParams),
@@ -1151,29 +1156,53 @@ export default function GroupFeed({
     }
   }
 
-  function changeModuleType(type) {
+  function currentCategoryScrollSnapshot() {
+    const shell = feedShellRef.current;
+    if (!shell) return { hasEnteredFeed: false, offset: 0 };
+
+    const shellTop = shell.getBoundingClientRect().top + window.scrollY;
+    const hasEnteredFeed = window.scrollY >= shellTop - 1;
+    return {
+      hasEnteredFeed,
+      offset: hasEnteredFeed ? Math.max(window.scrollY - shellTop, 0) : 0,
+    };
+  }
+
+  function rememberSwipeScrollSnapshot() {
+    if (feedSwipeScrollSnapshotRef.current) {
+      return feedSwipeScrollSnapshotRef.current;
+    }
+
+    const snapshot = currentCategoryScrollSnapshot();
+    if (snapshot.hasEnteredFeed) {
+      categoryScrollPositionsRef.current.set(activeType, snapshot.offset);
+    }
+    feedSwipeScrollSnapshotRef.current = snapshot;
+    setFeedSwipeScrollSnapshot(snapshot);
+    return snapshot;
+  }
+
+  function clearSwipeScrollSnapshot() {
+    feedSwipeScrollSnapshotRef.current = null;
+    setFeedSwipeScrollSnapshot(null);
+  }
+
+  function changeModuleType(type, scrollSnapshot = null) {
     if (type === activeType) return;
 
-    const shell = feedShellRef.current;
-    if (shell) {
-      const shellTop = shell.getBoundingClientRect().top + window.scrollY;
-      const hasEnteredFeed = window.scrollY >= shellTop - 1;
-      const destinationWasVisited = categoryScrollPositionsRef.current.has(type);
+    const snapshot = scrollSnapshot ?? currentCategoryScrollSnapshot();
+    const destinationWasVisited = categoryScrollPositionsRef.current.has(type);
 
-      if (hasEnteredFeed) {
-        categoryScrollPositionsRef.current.set(
-          activeType,
-          Math.max(window.scrollY - shellTop, 0),
-        );
-      }
-      if (hasEnteredFeed || destinationWasVisited) {
-        // Restore after the destination panel commits so a shorter page cannot
-        // clamp the old category's scroll position between renders.
-        pendingCategoryScrollRef.current = {
-          type,
-          offset: categoryScrollPositionsRef.current.get(type) ?? 0,
-        };
-      }
+    if (snapshot.hasEnteredFeed) {
+      categoryScrollPositionsRef.current.set(activeType, snapshot.offset);
+    }
+    if (snapshot.hasEnteredFeed || destinationWasVisited) {
+      // Restore in the destination's layout commit so the keyed incoming panel
+      // keeps the same viewport position through its promotion to active.
+      pendingCategoryScrollRef.current = {
+        type,
+        offset: categoryScrollPositionsRef.current.get(type) ?? 0,
+      };
     }
 
     setActiveType(type);
@@ -1188,6 +1217,7 @@ export default function GroupFeed({
       swipeFrameRef.current = null;
     }
     swipeStartRef.current = null;
+    clearSwipeScrollSnapshot();
     setFeedSwipeOffset(0);
     setFeedSwipePhase("idle");
     changeModuleType(type);
@@ -1220,7 +1250,10 @@ export default function GroupFeed({
     if (feedSwipePhase === "idle") return;
     setFeedSwipePhase("settling");
     setFeedSwipeOffset(0);
-    scheduleFeedSwipe(() => setFeedSwipePhase("idle"), feedSwipeTransitionMs());
+    scheduleFeedSwipe(() => {
+      setFeedSwipePhase("idle");
+      clearSwipeScrollSnapshot();
+    }, feedSwipeTransitionMs());
   }
 
   function handleFeedClickCapture(event) {
@@ -1264,6 +1297,7 @@ export default function GroupFeed({
 
     const direction = deltaX < 0 ? 1 : -1;
     const hasAdjacentType = direction > 0 ? Boolean(nextType) : Boolean(previousType);
+    rememberSwipeScrollSnapshot();
     setFeedSwipePhase("dragging");
     setFeedSwipeOffset(
       deltaX *
@@ -1309,15 +1343,18 @@ export default function GroupFeed({
       Date.now() + FEED_SWIPE_CLICK_SUPPRESSION_MS;
     setFeedSwipePhase("exiting");
     setFeedSwipeOffset(direction * -travelDistance);
+    const scrollSnapshot =
+      feedSwipeScrollSnapshotRef.current ?? rememberSwipeScrollSnapshot();
     scheduleFeedSwipe(() => {
       // Once the adjacent page has arrived, promote it to the centered panel
       // without animation so there is no visual jump or duplicated entrance.
-      changeModuleType(destinationType);
+      changeModuleType(destinationType, scrollSnapshot);
       setFeedSwipePhase("preparing");
       setFeedSwipeOffset(0);
       swipeFrameRef.current = window.requestAnimationFrame(() => {
         swipeFrameRef.current = null;
         setFeedSwipePhase("idle");
+        clearSwipeScrollSnapshot();
       });
     }, feedSwipeTransitionMs());
   }
@@ -1557,6 +1594,25 @@ export default function GroupFeed({
     activeType === "all" ? "Create a module" : CREATE_LABEL_BY_TYPE[activeType];
   const canCreateModule = showStandardModules || showBookClub;
 
+  function panelVerticalOffset(type) {
+    if (!feedSwipeScrollSnapshot?.hasEnteredFeed || type === activeType) return 0;
+    return (
+      feedSwipeScrollSnapshot.offset -
+      (categoryScrollPositionsRef.current.get(type) ?? 0)
+    );
+  }
+
+  function panelHorizontalOffset(type) {
+    const typeIndex = moduleTypes.findIndex((moduleType) => moduleType.id === type);
+    if (typeIndex < activeTypeIndex) {
+      return `calc(-100% - ${SWIPE_PANEL_GAP_PX}px + ${feedSwipeOffset}px)`;
+    }
+    if (typeIndex > activeTypeIndex) {
+      return `calc(100% + ${SWIPE_PANEL_GAP_PX}px + ${feedSwipeOffset}px)`;
+    }
+    return `${feedSwipeOffset}px`;
+  }
+
   if (loading) {
     return <p className={styles.loading}>Loading the feed…</p>;
   }
@@ -1650,66 +1706,36 @@ export default function GroupFeed({
             className={styles.feedViewport}
             data-feed-swipe-phase={feedSwipePhase}
           >
-            {showAdjacentPanels && previousType ? (
-              <div
-                className={cx(
-                  styles.feedPanel,
-                  styles.feedPanelAdjacent,
-                  feedSwipePhase === "dragging" ||
-                    feedSwipePhase === "preparing"
-                    ? styles.feedPanelDirect
-                    : "",
-                )}
-                style={{
-                  transform: `translate3d(calc(-100% - ${SWIPE_PANEL_GAP_PX}px + ${feedSwipeOffset}px), 0, 0)`,
-                }}
-                data-feed-panel-type={previousType}
-                aria-hidden="true"
-                inert=""
-              >
-                {renderFeedPanel(previousType, false)}
-              </div>
-            ) : null}
-
-            <div
-              id={`feed-panel-${activeType}`}
-              role="tabpanel"
-              aria-labelledby={`feed-tab-${activeType}`}
-              className={cx(
-                styles.feedPanel,
-                feedSwipePhase === "dragging" ||
-                  feedSwipePhase === "preparing"
-                  ? styles.feedPanelDirect
-                  : "",
-              )}
-              style={{
-                transform: `translate3d(${feedSwipeOffset}px, 0, 0)`,
-              }}
-              data-feed-panel-type={activeType}
-            >
-              {renderFeedPanel(activeType, true)}
-            </div>
-
-            {showAdjacentPanels && nextType ? (
-              <div
-                className={cx(
-                  styles.feedPanel,
-                  styles.feedPanelAdjacent,
-                  feedSwipePhase === "dragging" ||
-                    feedSwipePhase === "preparing"
-                    ? styles.feedPanelDirect
-                    : "",
-                )}
-                style={{
-                  transform: `translate3d(calc(100% + ${SWIPE_PANEL_GAP_PX}px + ${feedSwipeOffset}px), 0, 0)`,
-                }}
-                data-feed-panel-type={nextType}
-                aria-hidden="true"
-                inert=""
-              >
-                {renderFeedPanel(nextType, false)}
-              </div>
-            ) : null}
+            {visiblePanelTypes.map((type) => {
+              const isActivePanel = type === activeType;
+              const verticalOffset = panelVerticalOffset(type);
+              return (
+                <div
+                  key={type}
+                  id={isActivePanel ? `feed-panel-${type}` : undefined}
+                  role={isActivePanel ? "tabpanel" : undefined}
+                  aria-labelledby={isActivePanel ? `feed-tab-${type}` : undefined}
+                  className={cx(
+                    styles.feedPanel,
+                    isActivePanel ? "" : styles.feedPanelAdjacent,
+                    feedSwipePhase === "dragging" ||
+                      feedSwipePhase === "preparing"
+                      ? styles.feedPanelDirect
+                      : "",
+                  )}
+                  style={{
+                    transform: `translate3d(${panelHorizontalOffset(type)}, ${
+                      verticalOffset ? `${verticalOffset}px` : "0"
+                    }, 0)`,
+                  }}
+                  data-feed-panel-type={type}
+                  aria-hidden={isActivePanel ? undefined : "true"}
+                  inert={isActivePanel ? undefined : ""}
+                >
+                  {renderFeedPanel(type, isActivePanel)}
+                </div>
+              );
+            })}
           </div>
         </main>
       </div>
