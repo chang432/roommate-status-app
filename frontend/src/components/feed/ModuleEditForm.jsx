@@ -1,16 +1,20 @@
 import { useState } from 'react'
 import { updateModule } from '../../api/feed.js'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { MODULE_DEFINITIONS } from '../../models/modules.js'
 import { cx } from '../../utils/classNames.js'
 import { fromDateTimeLocal, toDateTimeLocal } from '../../utils/time.js'
 import { RoommateChecklist } from './RequestCreateForm.jsx'
 import styles from './ModuleEditForm.module.css'
 
-export default function ModuleEditForm({ module, roommates, onSaved, onCancel }) {
+export default function ModuleEditForm({
+  module,
+  roommates,
+  editDefinition,
+  onSaved,
+  onCancel,
+}) {
   const { user } = useAuth()
   const payload = module.payload
-  const editDefinition = MODULE_DEFINITIONS[module.type].edit
   const field = editDefinition.field
   const [value, setValue] = useState(payload[field] ?? '')
   const [selectedIds, setSelectedIds] = useState(payload.requestedIds ?? [])

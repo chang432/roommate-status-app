@@ -7,28 +7,26 @@ import {
   useState,
 } from "react";
 import { useSearchParams } from "react-router-dom";
-import ActivityCreateForm from "./ActivityCreateForm.jsx";
-import ChecklistCreateForm from "./ChecklistCreateForm.jsx";
-import ChecklistFeature from "./ChecklistFeature.jsx";
-import PollCreateForm from "./PollCreateForm.jsx";
-import PollFeature from "./PollFeature.jsx";
 import ModalShell from "../ui/ModalShell.jsx";
-import ModuleEditForm from "./ModuleEditForm.jsx";
-import ProposeActivity from "./ProposeActivity.jsx";
-import RequestCreateForm from "./RequestCreateForm.jsx";
-import RequestFeature from "./RequestFeature.jsx";
-import ShowCreateForm from "./ShowCreateForm.jsx";
-import ShowTrackerFeature from "./ShowTrackerFeature.jsx";
-import BookClubMeetingFeature from "../book-club/BookClubMeetingFeature.jsx";
-import BookClubMeetingForm from "../book-club/BookClubMeetingForm.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
 import { endActivity, startActivity } from "../../api/activities.js";
 import useGroupModules from "../../hooks/useGroupModules.js";
 import {
-  MODULE_TYPES,
-  MODULE_DEFINITIONS,
-} from "../../models/modules.js";
+  FEED_MODULE_REGISTRY,
+  FEED_MODULE_TYPES,
+  canCreateFeedModule,
+  canEditFeedModule,
+  isFeedModuleEnabled,
+  renderFeedModuleEdit,
+} from "./feedModuleRegistry.jsx";
+import {
+  MODULE_PREFERENCE_VERSION,
+  modulePreferenceKey,
+  readModulePreferences,
+  sanitizeAllTypes,
+} from "./modulePreferences.js";
+import { getModuleCounts, modulesForCategory } from "./moduleSelectors.js";
 import { cx } from "../../utils/classNames.js";
 import {
   moduleFocusFromSearchParams,
@@ -39,7 +37,6 @@ import { isAdminIn } from "../../utils/roles.js";
 // status section on the same page.
 import styles from "../../pages/StatusPage.module.css";
 
-const MODULE_PREFERENCE_VERSION = 3;
 const SWIPE_MIN_X = 64;
 const SWIPE_HORIZONTAL_LOCK_PX = 4;
 const SWIPE_VERTICAL_LOCK_PX = 10;
@@ -55,79 +52,6 @@ function feedSwipeTransitionMs() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     ? 0
     : FEED_SWIPE_TRANSITION_MS;
-}
-
-const CREATE_LABEL_BY_TYPE = {
-  events: "Create an event",
-  requests: "Create a request",
-  checklists: "Create a checklist",
-  polls: "Create a poll",
-  tv: "Add a show",
-  "book-club": "Create a Book Club meeting",
-};
-
-function modulePreferenceKey(userId, groupId) {
-  return `roomie-module-preferences:${userId}:${groupId}`;
-}
-
-function sanitizeModuleOrder(value) {
-  const available = MODULE_TYPES.filter((type) => type.id !== "all").map(
-    (type) => type.id,
-  );
-  const seen = new Set();
-  const ordered = Array.isArray(value)
-    ? value.filter(
-        (id) => available.includes(id) && !seen.has(id) && seen.add(id),
-      )
-    : [];
-  return [...ordered, ...available.filter((id) => !seen.has(id))];
-}
-
-function sanitizeAllTypes(value, orderedTypes) {
-  const selected = Array.isArray(value)
-    ? value.filter((id) => orderedTypes.includes(id))
-    : orderedTypes;
-  return selected.length > 0 ? selected : [orderedTypes[0]].filter(Boolean);
-}
-
-function readModulePreferences(userId, groupId) {
-  try {
-    const stored = JSON.parse(
-      localStorage.getItem(modulePreferenceKey(userId, groupId)) || "null",
-    );
-    const order = sanitizeModuleOrder(stored?.order);
-    const allTypes = sanitizeAllTypes(stored?.allTypes, order);
-    const version = stored?.version ?? 1;
-    // Each newly introduced module is defaulted on exactly once; the version
-    // marker preserves a user's later explicit deselection.
-    if (version < 2 && !allTypes.includes("book-club")) {
-      allTypes.push("book-club");
-    }
-    if (version < 3 && !allTypes.includes("polls")) allTypes.push("polls");
-    return { order, allTypes };
-  } catch {
-    const order = sanitizeModuleOrder(null);
-    return { order, allTypes: sanitizeAllTypes(null, order) };
-  }
-}
-
-function getModuleCounts(modules, allTypes) {
-  const counts = modules.reduce((result, module) => {
-    if (!module.isArchived) {
-      result[module.type] = (result[module.type] ?? 0) + 1;
-    }
-    return result;
-  }, {});
-  counts.all = modules.filter(
-    (module) => !module.isArchived && allTypes.includes(module.type),
-  ).length;
-  return counts;
-}
-
-function modulesForCategory(modules, allTypes, type) {
-  return type === "all"
-    ? modules.filter((module) => allTypes.includes(module.type))
-    : modules.filter((module) => module.type === type);
 }
 
 function ModuleTabs({
@@ -772,12 +696,13 @@ function ModuleNav({
 }
 
 function ModuleTag({ module }) {
+  const definition = FEED_MODULE_REGISTRY[module.type];
   return (
     <span
       className={cx(styles.modulePalette, styles.moduleType)}
       data-module-type={module.type}
     >
-      {module.typeLabel}
+      {definition?.shortLabel ?? module.type}
     </span>
   );
 }
@@ -882,17 +807,20 @@ export function GroupFeedView({
   const canAdministerBookClub = isAdminIn(roommates, user.id);
 
   const enabledTypeIds = useMemo(() => {
-    const ids = new Set();
-    if (showStandardModules) {
-      ["events", "requests", "checklists", "tv"].forEach((id) => ids.add(id));
-    }
-    if (showBookClub) ids.add("book-club");
-    if (showStandardModules || showBookClub) ids.add("polls");
-    return ids;
+    return new Set(
+      Object.values(FEED_MODULE_REGISTRY)
+        .filter((definition) =>
+          isFeedModuleEnabled(definition, {
+            showBookClub,
+            showStandardModules,
+          }),
+        )
+        .map((definition) => definition.id),
+    );
   }, [showBookClub, showStandardModules]);
 
   const moduleTypes = useMemo(() => {
-    const byId = new Map(MODULE_TYPES.map((type) => [type.id, type]));
+    const byId = new Map(FEED_MODULE_TYPES.map((type) => [type.id, type]));
     return [
       byId.get("all"),
       ...moduleOrder.map((id) => byId.get(id)).filter((type) => type && enabledTypeIds.has(type.id)),
@@ -1211,13 +1139,14 @@ export function GroupFeedView({
     () => refreshModules(),
     [refreshModules],
   );
-  const handleRequestsChange = handleActivitiesChange;
-  const handleChecklistsChange = handleActivitiesChange;
-  const handlePollsChange = handleActivitiesChange;
   const handleShowsChange = useCallback(() => {
     window.dispatchEvent(new Event("roomie:shows-changed"));
     refreshModules();
   }, [refreshModules]);
+
+  function moduleChangeHandler(type) {
+    return type === "tv" ? handleShowsChange : handleActivitiesChange;
+  }
 
   async function handleLiveTransition(activity, action) {
     if (transitioningId) return;
@@ -1567,7 +1496,13 @@ export function GroupFeedView({
   }
 
   function openCreateModal() {
-    if (activeType === "book-club" && !canAdministerBookClub) return;
+    const definition = FEED_MODULE_REGISTRY[activeType];
+    if (
+      definition &&
+      !canCreateFeedModule(definition, { canAdministerBookClub })
+    ) {
+      return;
+    }
     setCreateType(activeType === "all" ? null : activeType);
     setCreateModalOpen(true);
   }
@@ -1578,7 +1513,11 @@ export function GroupFeedView({
         <div className={styles.createPicker}>
           {moduleTypes
             .filter((type) => type.id !== "all")
-            .filter((type) => type.id !== "book-club" || canAdministerBookClub)
+            .filter((type) =>
+              canCreateFeedModule(FEED_MODULE_REGISTRY[type.id], {
+                canAdministerBookClub,
+              }),
+            )
             .map((type) => (
               <button
                 key={type.id}
@@ -1587,140 +1526,35 @@ export function GroupFeedView({
                 className={cx(styles.modulePalette, styles.createPickerButton)}
                 data-module-type={type.id}
               >
-                {CREATE_LABEL_BY_TYPE[type.id]}
+                {FEED_MODULE_REGISTRY[type.id].createLabel}
               </button>
             ))}
         </div>
       );
     }
 
-    if (createType === "requests") {
-      return (
-        <RequestCreateForm
-          roommates={roommates}
-          onRequestsChange={handleRequestsChange}
-          onSuccess={() => setCreateModalOpen(false)}
-          onCancel={() => setCreateModalOpen(false)}
-        />
-      );
-    }
-    if (createType === "checklists") {
-      return (
-        <ChecklistCreateForm
-          onChecklistsChange={handleChecklistsChange}
-          onSuccess={() => setCreateModalOpen(false)}
-          onCancel={() => setCreateModalOpen(false)}
-        />
-      );
-    }
-    if (createType === "polls") {
-      return (
-        <PollCreateForm
-          onPollsChange={handlePollsChange}
-          onSuccess={() => setCreateModalOpen(false)}
-          onCancel={() => setCreateModalOpen(false)}
-        />
-      );
-    }
-    if (createType === "tv") {
-      return (
-        <ShowCreateForm
-          onShowsChange={handleShowsChange}
-          onSuccess={() => setCreateModalOpen(false)}
-          onCancel={() => setCreateModalOpen(false)}
-        />
-      );
-    }
-    if (createType === "book-club") {
-      return (
-        <BookClubMeetingForm
-          roommates={roommates}
-          onSaved={async () => {
-            await refreshModules();
-            setCreateModalOpen(false);
-          }}
-          onCancel={() => setCreateModalOpen(false)}
-        />
-      );
-    }
-    return (
-      <ActivityCreateForm
-        onActivitiesChange={handleActivitiesChange}
-        onSuccess={() => setCreateModalOpen(false)}
-        onCancel={() => setCreateModalOpen(false)}
-      />
-    );
+    const definition = FEED_MODULE_REGISTRY[createType];
+    return definition.renderCreate({
+      roommates,
+      onChanged: moduleChangeHandler(createType),
+      onClose: () => setCreateModalOpen(false),
+    });
   }
 
   function renderModule(module, onEdit) {
+    const definition = FEED_MODULE_REGISTRY[module.type];
+    if (!definition) return null;
     const moduleTag = <ModuleTag module={module} />;
-    if (module.type === "events") {
-      return (
-        <ProposeActivity
-          activities={[module.payload]}
-          onActivitiesChange={handleActivitiesChange}
-          transitioningId={transitioningId}
-          onLiveTransition={handleLiveTransition}
-          roommates={roommates}
-          moduleTag={moduleTag}
-          onEdit={onEdit}
-        />
-      );
-    }
-    if (module.type === "requests") {
-      return (
-        <RequestFeature
-          requests={[module.payload]}
-          onRequestsChange={handleRequestsChange}
-          roommates={roommates}
-          moduleTag={moduleTag}
-          onEdit={onEdit}
-        />
-      );
-    }
-    if (module.type === "checklists") {
-      return (
-        <ChecklistFeature
-          checklists={[module.payload]}
-          onChecklistsChange={handleChecklistsChange}
-          moduleTag={moduleTag}
-          onEdit={onEdit}
-        />
-      );
-    }
-    if (module.type === "polls") {
-      return (
-        <PollFeature
-          polls={[module.payload]}
-          roommates={roommates}
-          onPollsChange={handlePollsChange}
-          moduleTag={moduleTag}
-          onEdit={onEdit}
-        />
-      );
-    }
-    if (module.type === "tv") {
-      return (
-        <ShowTrackerFeature
-          shows={[module.payload]}
-          onShowsChange={handleShowsChange}
-          moduleTag={moduleTag}
-          onEdit={onEdit}
-        />
-      );
-    }
-    if (module.type === "book-club") {
-      return (
-        <BookClubMeetingFeature
-          meetings={[module.payload]}
-          moduleTag={moduleTag}
-          onEdit={onEdit}
-          canAdminister={canAdministerBookClub}
-          onChanged={refreshModules}
-        />
-      );
-    }
-    return null;
+    return definition.renderCard({
+      module,
+      moduleTag,
+      onChanged: moduleChangeHandler(module.type),
+      onEdit,
+      onLiveTransition: handleLiveTransition,
+      roommates,
+      transitioningId,
+      canAdministerBookClub,
+    });
   }
 
   function renderFeedPanel(type, isActivePanel) {
@@ -1741,11 +1575,11 @@ export function GroupFeedView({
                 module={module}
                 focusIntent={panelFocusIntent}
                 onFocusHandled={consumeFocusIntent}
-                canEdit={
-                  module.type === "book-club"
-                    ? false
-                    : module.isEditableBy(user.id)
-                }
+                canEdit={canEditFeedModule(
+                  FEED_MODULE_REGISTRY[module.type],
+                  module,
+                  user.id,
+                )}
                 onEdit={() => setEditingModule(module)}
               >
                 {(onEdit) => renderModule(module, onEdit)}
@@ -1773,11 +1607,11 @@ export function GroupFeedView({
                     module={module}
                     focusIntent={panelFocusIntent}
                     onFocusHandled={consumeFocusIntent}
-                    canEdit={
-                      module.type === "book-club"
-                        ? false
-                        : module.isEditableBy(user.id)
-                    }
+                    canEdit={canEditFeedModule(
+                      FEED_MODULE_REGISTRY[module.type],
+                      module,
+                      user.id,
+                    )}
                     onEdit={() => setEditingModule(module)}
                   >
                     {(onEdit) => renderModule(module, onEdit)}
@@ -1792,10 +1626,12 @@ export function GroupFeedView({
   }
 
   const createTitle = createType
-    ? CREATE_LABEL_BY_TYPE[createType]
+    ? FEED_MODULE_REGISTRY[createType].createLabel
     : "Create a module";
   const createLabel =
-    activeType === "all" ? "Create a module" : CREATE_LABEL_BY_TYPE[activeType];
+    activeType === "all"
+      ? "Create a module"
+      : FEED_MODULE_REGISTRY[activeType].createLabel;
   const canCreateModule = showStandardModules || showBookClub;
 
   function panelVerticalOffset(type) {
@@ -1858,7 +1694,10 @@ export function GroupFeedView({
             <h2 className={styles.feedTitle}>Group Feed</h2>
             <div className={styles.createInlineSlot} data-feed-create-slot>
               {canCreateModule &&
-                (activeType !== "book-club" || canAdministerBookClub) && (
+                (activeType === "all" ||
+                  canCreateFeedModule(FEED_MODULE_REGISTRY[activeType], {
+                    canAdministerBookClub,
+                  })) && (
                   <button
                     type="button"
                     onClick={openCreateModal}
@@ -1968,30 +1807,23 @@ export function GroupFeedView({
       )}
       {editingModule && (
         <ModalShell
-          title={MODULE_DEFINITIONS[editingModule.type].edit.label}
+          title={FEED_MODULE_REGISTRY[editingModule.type].edit.label}
           onClose={() => setEditingModule(null)}
           widthClassName={styles.createModal}
         >
-          {editingModule.type === "book-club" ? (
-            <BookClubMeetingForm
-              meeting={editingModule.payload}
-              roommates={roommates}
-              onSaved={async () => {
+          {renderFeedModuleEdit(
+            FEED_MODULE_REGISTRY[editingModule.type],
+            {
+              module: editingModule,
+              roommates,
+              onChanged: refreshModules,
+              onSaved: async () => {
                 await refreshModules();
                 setEditingModule(null);
-              }}
-              onCancel={() => setEditingModule(null)}
-            />
-          ) : (
-            <ModuleEditForm
-              module={editingModule}
-              roommates={roommates}
-              onSaved={async () => {
-                await refreshModules();
-                setEditingModule(null);
-              }}
-              onCancel={() => setEditingModule(null)}
-            />
+              },
+              onClose: () => setEditingModule(null),
+              onCancel: () => setEditingModule(null),
+            },
           )}
         </ModalShell>
       )}
