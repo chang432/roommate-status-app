@@ -15,6 +15,7 @@ import { initialOf } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
 import { relativeTime } from "../../utils/time.js";
 import ModuleEditButton from "./ModuleEditButton.jsx";
+import ExpandableCardRegion from "./ExpandableCardRegion.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import styles from "./ChecklistFeature.module.css";
 
@@ -62,7 +63,7 @@ function ChecklistItemEditor({
 }
 
 export default function ChecklistFeature({
-  checklists,
+  checklist,
   onChecklistsChange,
   moduleTag,
   onEdit,
@@ -244,241 +245,208 @@ export default function ChecklistFeature({
     }
   }
 
+  const expanded = expandedId === checklist.id;
+  const isArchived = checklist.isArchived;
+
   return (
     <div className={styles.wrap}>
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={() => toggleExpanded(checklist.id)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleExpanded(checklist.id);
+          }
+        }}
+        className={cx(styles.card, isArchived ? styles.archivedCard : "")}
+      >
+        <div className={styles.summary}>
+          <div className={styles.summaryText}>
+            <div className={styles.titleRow}>
+              {moduleTag}
+              <p className={styles.title}>{checklist.title}</p>
+            </div>
+            <p className={styles.meta}>
+              {checklist.createdBy} · {relativeTime(checklist.createdAt)}
+            </p>
+          </div>
+          {!isArchived && (
+            <button
+              type="button"
+              disabled={notifyingId === checklist.id}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleNotify(checklist);
+              }}
+              className={styles.notifyButton}
+              aria-label="Notify all about checklist"
+              title="Notify all"
+            >
+              <img src="/bell.png" alt="" className={styles.notifyIcon} />
+            </button>
+          )}
+        </div>
 
-      <div className={styles.list}>
-        {checklists.length === 0 ? (
-          <p className={styles.empty}>No checklists yet.</p>
-        ) : (
-          checklists.map((checklist) => {
-            const expanded = expandedId === checklist.id;
-            const isArchived = checklist.isArchived;
-            return (
-              <div
-                key={checklist.id}
-                role="button"
-                tabIndex={0}
-                aria-expanded={expanded}
-                onClick={() => toggleExpanded(checklist.id)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    toggleExpanded(checklist.id);
-                  }
-                }}
-                className={cx(styles.card, isArchived ? styles.archivedCard : "")}
-              >
-                  <div className={styles.summary}>
-                    <div className={styles.summaryText}>
-                      <div className={styles.titleRow}>
-                        {moduleTag}
-                        <p className={styles.title}>{checklist.title}</p>
-                      </div>
-                      <p className={styles.meta}>
-                        {checklist.createdBy} ·{" "}
-                        {relativeTime(checklist.createdAt)}
-                      </p>
-                    </div>
-                    {!isArchived && (
-                      <button
-                        type="button"
-                        disabled={notifyingId === checklist.id}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleNotify(checklist);
-                        }}
-                        className={styles.notifyButton}
-                        aria-label="Notify all about checklist"
-                        title="Notify all"
-                      >
-                        <img src="/bell.png" alt="" className={styles.notifyIcon} />
-                      </button>
-                    )}
-                  </div>
-
-                  <div
+        <ExpandableCardRegion expanded={expanded} className={styles.panel}>
+          <div
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <ul className={styles.items}>
+              {checklist.items.map((item) => {
+                const checkedByCount = (item.checkedByIds ?? []).length;
+                const checkedByUser = (item.checkedByIds ?? []).includes(
+                  user.id,
+                );
+                const editing = editingItem?.id === item.id;
+                return (
+                  <li
+                    key={item.id}
                     className={cx(
-                      styles.expandedRegion,
-                      expanded ? styles.expanded : styles.collapsed,
+                      styles.item,
+                      checkedByCount > 0 ? styles.itemCovered : "",
                     )}
                   >
-                    <div
-                      className={styles.expandedInner}
-                      {...(!expanded ? { inert: "" } : {})}
-                    >
-                      <div
-                        className={styles.panel}
-                        onClick={(event) => event.stopPropagation()}
-                        onKeyDown={(event) => event.stopPropagation()}
-                      >
-                        <ul className={styles.items}>
-                          {checklist.items.map((item) => {
-                            const checkedByCount = (item.checkedByIds ?? [])
-                              .length;
-                            const checkedByUser = (
-                              item.checkedByIds ?? []
-                            ).includes(user.id);
-                            const editing = editingItem?.id === item.id;
-                            return (
-                              <li
-                                key={item.id}
-                                className={cx(
-                                  styles.item,
-                                  checkedByCount > 0 ? styles.itemCovered : "",
-                                )}
-                              >
-                                {editing ? (
-                                  <ChecklistItemEditor
-                                    value={editingItem.text}
-                                    onChange={(text) =>
-                                      setEditingItem({
-                                        ...editingItem,
-                                        text,
-                                      })
-                                    }
-                                    onSubmit={(event) =>
-                                      handleSaveItem(event, checklist)
-                                    }
-                                    onCancel={cancelEditing}
-                                    onDelete={() =>
-                                      handleDeleteItem(checklist, item)
-                                    }
-                                    busy={busyItemIds.includes(item.id)}
-                                    placeholder="Edit item"
-                                  />
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      disabled={isArchived || busyItemIds.includes(item.id)}
-                                      onClick={() =>
-                                        handleToggleItem(checklist, item)
-                                      }
-                                      className={cx(
-                                        styles.checkButton,
-                                        checkedByUser ? styles.checkButtonOn : "",
-                                      )}
-                                      aria-label={
-                                        checkedByUser
-                                          ? "Uncheck checklist item"
-                                          : "Check off checklist item"
-                                      }
-                                      title={
-                                        checkedByUser ? "Uncheck" : "Check off"
-                                      }
-                                    >
-                                      ✓
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={isArchived}
-                                      onClick={() =>
-                                        setEditingItem({
-                                          id: item.id,
-                                          text: item.text,
-                                        })
-                                      }
-                                      className={styles.itemText}
-                                    >
-                                      {item.text}
-                                    </button>
-                                    <div className={styles.checkedIcons}>
-                                      {(item.checkedBy ?? []).map((person) => (
-                                        <span
-                                          key={person.id}
-                                          className={styles.checkedIcon}
-                                          title={person.name}
-                                        >
-                                          {initialOf(person.name)}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-
-                        {!isArchived &&
-                          (addingChecklistId === checklist.id ? (
-                            <div className={styles.addEditor}>
-                              <ChecklistItemEditor
-                                value={newItemText}
-                                onChange={setNewItemText}
-                                onSubmit={(event) =>
-                                  handleAddItem(event, checklist)
-                                }
-                                onCancel={cancelAdding}
-                                busy={addingId === checklist.id}
-                                placeholder="Add an item"
-                              />
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingItem(null);
-                                setAddingChecklistId(checklist.id);
-                              }}
-                              className={cx(
-                                "ui-pillButton ui-pillSecondary",
-                                styles.addButton,
-                              )}
-                            >
-                              Add item
-                            </button>
-                          ))}
-                        <div
-                          className="ui-moduleActionRow"
-                          onClick={(event) => event.stopPropagation()}
-                          onKeyDown={(event) => event.stopPropagation()}
-                        >
-                          <ModuleEditButton
-                            onEdit={onEdit}
-                            disabled={Boolean(
-                              restoringId
-                              || archivingId
-                              || deletingChecklistId
-                            )}
-                          />
-                          {isArchived ? (
-                            <button
-                              type="button"
-                              onClick={() => handleRestore(checklist)}
-                              disabled={Boolean(restoringId || deletingChecklistId)}
-                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-                            >
-                              {restoringId === checklist.id ? "Restoring…" : "Restore"}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleArchive(checklist)}
-                              disabled={Boolean(archivingId || deletingChecklistId)}
-                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-                            >
-                              {archivingId === checklist.id ? "Archiving…" : "Archive"}
-                            </button>
+                    {editing ? (
+                      <ChecklistItemEditor
+                        value={editingItem.text}
+                        onChange={(text) =>
+                          setEditingItem({
+                            ...editingItem,
+                            text,
+                          })
+                        }
+                        onSubmit={(event) => handleSaveItem(event, checklist)}
+                        onCancel={cancelEditing}
+                        onDelete={() => handleDeleteItem(checklist, item)}
+                        busy={busyItemIds.includes(item.id)}
+                        placeholder="Edit item"
+                      />
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          disabled={isArchived || busyItemIds.includes(item.id)}
+                          onClick={() => handleToggleItem(checklist, item)}
+                          className={cx(
+                            styles.checkButton,
+                            checkedByUser ? styles.checkButtonOn : "",
                           )}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteChecklist(checklist)}
-                            disabled={Boolean((isArchived ? restoringId : archivingId) || deletingChecklistId)}
-                            className="ui-pillButton ui-pillDanger ui-moduleActionButton"
-                          >
-                            {deletingChecklistId === checklist.id ? "Deleting…" : "Delete"}
-                          </button>
+                          aria-label={
+                            checkedByUser
+                              ? "Uncheck checklist item"
+                              : "Check off checklist item"
+                          }
+                          title={checkedByUser ? "Uncheck" : "Check off"}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isArchived}
+                          onClick={() =>
+                            setEditingItem({
+                              id: item.id,
+                              text: item.text,
+                            })
+                          }
+                          className={styles.itemText}
+                        >
+                          {item.text}
+                        </button>
+                        <div className={styles.checkedIcons}>
+                          {(item.checkedBy ?? []).map((person) => (
+                            <span
+                              key={person.id}
+                              className={styles.checkedIcon}
+                              title={person.name}
+                            >
+                              {initialOf(person.name)}
+                            </span>
+                          ))}
                         </div>
-                      </div>
-                    </div>
-                  </div>
-              </div>
-            );
-          })
-        )}
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+
+            {!isArchived &&
+              (addingChecklistId === checklist.id ? (
+                <div className={styles.addEditor}>
+                  <ChecklistItemEditor
+                    value={newItemText}
+                    onChange={setNewItemText}
+                    onSubmit={(event) => handleAddItem(event, checklist)}
+                    onCancel={cancelAdding}
+                    busy={addingId === checklist.id}
+                    placeholder="Add an item"
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingItem(null);
+                    setAddingChecklistId(checklist.id);
+                  }}
+                  className={cx(
+                    "ui-pillButton ui-pillSecondary",
+                    styles.addButton,
+                  )}
+                >
+                  Add item
+                </button>
+              ))}
+            <div
+              className="ui-moduleActionRow"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <ModuleEditButton
+                onEdit={onEdit}
+                disabled={Boolean(
+                  restoringId || archivingId || deletingChecklistId,
+                )}
+              />
+              {isArchived ? (
+                <button
+                  type="button"
+                  onClick={() => handleRestore(checklist)}
+                  disabled={Boolean(restoringId || deletingChecklistId)}
+                  className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                >
+                  {restoringId === checklist.id ? "Restoring…" : "Restore"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleArchive(checklist)}
+                  disabled={Boolean(archivingId || deletingChecklistId)}
+                  className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                >
+                  {archivingId === checklist.id ? "Archiving…" : "Archive"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleDeleteChecklist(checklist)}
+                disabled={Boolean(
+                  (isArchived ? restoringId : archivingId) ||
+                    deletingChecklistId,
+                )}
+                className="ui-pillButton ui-pillDanger ui-moduleActionButton"
+              >
+                {deletingChecklistId === checklist.id ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </ExpandableCardRegion>
       </div>
       {confirmationDialog}
     </div>

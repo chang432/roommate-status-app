@@ -31,22 +31,6 @@
   @apply mt-1 block text-[12px] text-ink-soft;
 }
 
-.expandedRegion {
-  @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none;
-}
-
-.expanded {
-  grid-template-rows: 1fr;
-}
-
-.collapsed {
-  grid-template-rows: 0fr;
-}
-
-.expandedInner {
-  @apply min-h-0 overflow-hidden;
-}
-
 .panel {
   @apply mt-3 border-t border-line pt-3;
 }

@@ -12,6 +12,7 @@ import {
 import FeedComments from "../comments/FeedComments.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import ModuleEditButton from "./ModuleEditButton.jsx";
+import ExpandableCardRegion from "./ExpandableCardRegion.jsx";
 import { relativeTime } from "../../utils/time.js";
 import { cx } from "../../utils/classNames.js";
 import styles from "./RequestFeature.module.css";
@@ -38,7 +39,7 @@ function responseActionClass(currentResponse, action) {
 }
 
 export default function RequestFeature({
-  requests,
+  request,
   onRequestsChange,
   roommates,
   moduleTag,
@@ -166,208 +167,174 @@ export default function RequestFeature({
     }
   }
 
+  const requestItem = request;
+  const expanded = expandedId === requestItem.id;
+  const requestedSelf = requestItem.requested.find(
+    (person) => person.id === user.id,
+  );
+  const isArchived = requestItem.isArchived;
+  const showRequesterIcons = !isArchived;
+
   return (
     <div className={styles.wrap}>
       {error && <p className={cx("ui-errorText", styles.error)}>{error}</p>}
-
-      <div className={styles.list}>
-        {requests.length === 0 ? (
-          <p className={styles.empty}>No requests yet.</p>
-        ) : (
-          requests.map((requestItem) => {
-            const expanded = expandedId === requestItem.id;
-            const requestedSelf = requestItem.requested.find(
-              (person) => person.id === user.id,
-            );
-            const isArchived = requestItem.isArchived;
-            const showRequesterIcons = !isArchived;
-            return (
-              <div
-                key={requestItem.id}
-                role="button"
-                tabIndex={0}
-                aria-expanded={expanded}
-                onClick={() => toggleExpanded(requestItem.id)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    toggleExpanded(requestItem.id);
-                  }
-                }}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={() => toggleExpanded(requestItem.id)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleExpanded(requestItem.id);
+          }
+        }}
+        className={cx(styles.card, isArchived ? styles.completedCard : "")}
+      >
+        <div className={styles.summary}>
+          <div className={styles.summaryText}>
+            <div className={styles.titleRow}>
+              {moduleTag}
+              <p className={styles.requestText}>{requestItem.text}</p>
+            </div>
+            <p className={styles.meta}>
+              {requestItem.requester} · {relativeTime(requestItem.createdAt)}
+            </p>
+          </div>
+          {showRequesterIcons && (
+            <div className={styles.responseIcons}>
+              {requestItem.requested.map((person) => (
+                <span
+                  key={person.id}
+                  className={cx(
+                    styles.responseIcon,
+                    RESPONSE_CLASS[person.response] ?? styles.responsePending,
+                  )}
+                  title={`${person.name}: ${person.response}`}
+                >
+                  {person.name.slice(0, 1)}
+                </span>
+              ))}
+            </div>
+          )}
+          {requestedSelf && !isArchived && (
+            <div
+              className={styles.summaryActions}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                disabled={respondingId === requestItem.id}
+                onClick={() => handleResponse(requestItem, "accepted")}
                 className={cx(
-                  styles.card,
-                  isArchived ? styles.completedCard : "",
+                  styles.iconAction,
+                  responseActionClass(requestedSelf.response, "accepted"),
+                )}
+                aria-label="Accept request"
+                title="Accept"
+              >
+                ✓
+              </button>
+              <button
+                type="button"
+                disabled={respondingId === requestItem.id}
+                onClick={() => handleResponse(requestItem, "denied")}
+                className={cx(
+                  styles.iconAction,
+                  responseActionClass(requestedSelf.response, "denied"),
+                )}
+                aria-label="Deny request"
+                title="Deny"
+              >
+                ×
+              </button>
+            </div>
+          )}
+        </div>
+
+        <ExpandableCardRegion expanded={expanded} className={styles.panel}>
+          <p className={styles.panelTitle}>Responses</p>
+          <div className={styles.responseList}>
+            {requestItem.requested.map((person) => (
+              <span
+                key={person.id}
+                className={cx(
+                  styles.responsePill,
+                  isArchived ? styles.completedResponsePill : "",
+                  isArchived
+                    ? (RESPONSE_OUTLINE_CLASS[person.response] ??
+                        styles.responseOutlinePending)
+                    : (RESPONSE_CLASS[person.response] ??
+                        styles.responsePending),
                 )}
               >
-                  <div className={styles.summary}>
-                    <div className={styles.summaryText}>
-                      <div className={styles.titleRow}>
-                        {moduleTag}
-                        <p className={styles.requestText}>{requestItem.text}</p>
-                      </div>
-                      <p className={styles.meta}>
-                        {requestItem.requester} ·{" "}
-                        {relativeTime(requestItem.createdAt)}
-                      </p>
-                    </div>
-                    {showRequesterIcons && (
-                      <div className={styles.responseIcons}>
-                        {requestItem.requested.map((person) => (
-                          <span
-                            key={person.id}
-                            className={cx(
-                              styles.responseIcon,
-                              RESPONSE_CLASS[person.response] ??
-                                styles.responsePending,
-                            )}
-                            title={`${person.name}: ${person.response}`}
-                          >
-                            {person.name.slice(0, 1)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {requestedSelf && !isArchived && (
-                      <div
-                        className={styles.summaryActions}
-                        onClick={(event) => event.stopPropagation()}
-                        onKeyDown={(event) => event.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          disabled={respondingId === requestItem.id}
-                          onClick={() => handleResponse(requestItem, "accepted")}
-                          className={cx(
-                            styles.iconAction,
-                            responseActionClass(
-                              requestedSelf.response,
-                              "accepted",
-                            ),
-                          )}
-                          aria-label="Accept request"
-                          title="Accept"
-                        >
-                          ✓
-                        </button>
-                        <button
-                          type="button"
-                          disabled={respondingId === requestItem.id}
-                          onClick={() => handleResponse(requestItem, "denied")}
-                          className={cx(
-                            styles.iconAction,
-                            responseActionClass(requestedSelf.response, "denied"),
-                          )}
-                          aria-label="Deny request"
-                          title="Deny"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                {person.name}
+              </span>
+            ))}
+          </div>
 
-                  <div
-                    className={cx(
-                      styles.expandedRegion,
-                      expanded ? styles.expanded : styles.collapsed,
-                    )}
-                  >
-                    <div
-                      className={styles.expandedInner}
-                      {...(!expanded ? { inert: "" } : {})}
-                    >
-                      <div className={styles.panel}>
-                        <p className={styles.panelTitle}>Responses</p>
-                        <div className={styles.responseList}>
-                          {requestItem.requested.map((person) => (
-                            <span
-                              key={person.id}
-                              className={cx(
-                                styles.responsePill,
-                                isArchived ? styles.completedResponsePill : "",
-                                isArchived
-                                  ? (RESPONSE_OUTLINE_CLASS[person.response] ??
-                                      styles.responseOutlinePending)
-                                  : (RESPONSE_CLASS[person.response] ??
-                                      styles.responsePending),
-                              )}
-                            >
-                              {person.name}
-                            </span>
-                          ))}
-                        </div>
+          <FeedComments
+            comments={requestItem.comments ?? []}
+            commentText={commentText}
+            onCommentTextChange={setCommentText}
+            onSubmitComment={(event) => handleComment(event, requestItem)}
+            roommates={roommates}
+            user={user}
+            commenting={commentingId === requestItem.id}
+            likingCommentIds={likingCommentIds}
+            onToggleLike={(comment) => handleCommentLike(requestItem, comment)}
+            openLikesCommentId={openLikesCommentId}
+            onOpenLikesChange={setOpenLikesCommentId}
+            open={expanded}
+            readOnly={isArchived}
+          />
 
-                        <FeedComments
-                          comments={requestItem.comments ?? []}
-                          commentText={commentText}
-                          onCommentTextChange={setCommentText}
-                          onSubmitComment={(event) =>
-                            handleComment(event, requestItem)
-                          }
-                          roommates={roommates}
-                          user={user}
-                          commenting={commentingId === requestItem.id}
-                          likingCommentIds={likingCommentIds}
-                          onToggleLike={(comment) =>
-                            handleCommentLike(requestItem, comment)
-                          }
-                          openLikesCommentId={openLikesCommentId}
-                          onOpenLikesChange={setOpenLikesCommentId}
-                          open={expanded}
-                          readOnly={isArchived}
-                        />
-
-                        <div
-                          className="ui-moduleActionRow"
-                          onClick={(event) => event.stopPropagation()}
-                          onKeyDown={(event) => event.stopPropagation()}
-                        >
-                          <span className={styles.completedText}>
-                            {isArchived
-                              ? `Archived${requestItem.archivedBy ? ` by ${requestItem.archivedBy}` : ""}`
-                              : "Request actions"}
-                          </span>
-                          <ModuleEditButton
-                            onEdit={onEdit}
-                            disabled={Boolean(
-                              restoringId || archivingId || deletingId,
-                            )}
-                          />
-                          {isArchived ? (
-                            <button
-                              type="button"
-                              onClick={() => handleRestore(requestItem)}
-                              disabled={Boolean(restoringId || deletingId)}
-                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-                            >
-                              {restoringId === requestItem.id ? "Restoring…" : "Restore"}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleArchive(requestItem)}
-                              disabled={Boolean(archivingId || deletingId)}
-                              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-                            >
-                              {archivingId === requestItem.id ? "Archiving…" : "Archive"}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(requestItem)}
-                            disabled={Boolean((isArchived ? restoringId : archivingId) || deletingId)}
-                            className="ui-pillButton ui-pillDanger ui-moduleActionButton"
-                          >
-                            {deletingId === requestItem.id ? "Deleting…" : "Delete"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-              </div>
-            );
-          })
-        )}
+          <div
+            className="ui-moduleActionRow"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <span className={styles.completedText}>
+              {isArchived
+                ? `Archived${requestItem.archivedBy ? ` by ${requestItem.archivedBy}` : ""}`
+                : "Request actions"}
+            </span>
+            <ModuleEditButton
+              onEdit={onEdit}
+              disabled={Boolean(restoringId || archivingId || deletingId)}
+            />
+            {isArchived ? (
+              <button
+                type="button"
+                onClick={() => handleRestore(requestItem)}
+                disabled={Boolean(restoringId || deletingId)}
+                className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+              >
+                {restoringId === requestItem.id ? "Restoring…" : "Restore"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleArchive(requestItem)}
+                disabled={Boolean(archivingId || deletingId)}
+                className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+              >
+                {archivingId === requestItem.id ? "Archiving…" : "Archive"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => handleDelete(requestItem)}
+              disabled={Boolean(
+                (isArchived ? restoringId : archivingId) || deletingId,
+              )}
+              className="ui-pillButton ui-pillDanger ui-moduleActionButton"
+            >
+              {deletingId === requestItem.id ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </ExpandableCardRegion>
       </div>
       {confirmationDialog}
     </div>

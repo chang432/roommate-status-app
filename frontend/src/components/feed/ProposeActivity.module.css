@@ -1,17 +1,5 @@
-.section {
-  @apply min-w-0;
-}
-
 .error {
   @apply mb-[14px];
-}
-
-.list {
-  @apply space-y-[10px];
-}
-
-.empty {
-  @apply text-[13.5px] text-ink-soft;
 }
 
 .card {
@@ -72,22 +60,6 @@
 
 .membershipButton {
   @apply px-[14px] py-[8px] text-[12.5px];
-}
-
-.expandedRegion {
-  @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none;
-}
-
-.expanded {
-  grid-template-rows: 1fr;
-}
-
-.collapsed {
-  grid-template-rows: 0fr;
-}
-
-.expandedInner {
-  @apply min-h-0 overflow-hidden;
 }
 
 .panel {

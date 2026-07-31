@@ -59,7 +59,7 @@ function renderPoll(overrides = {}) {
   const onPollsChange = vi.fn().mockResolvedValue();
   render(
     <PollFeature
-      polls={[poll]}
+      poll={poll}
       roommates={ROOMMATES}
       onPollsChange={onPollsChange}
       moduleTag={<span>Polls</span>}

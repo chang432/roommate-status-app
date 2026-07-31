@@ -58,7 +58,7 @@ export const FEED_MODULE_REGISTRY = {
       transitioningId,
     }) => (
       <ProposeActivity
-        activities={[module.payload]}
+        activity={module.payload}
         onActivitiesChange={onChanged}
         transitioningId={transitioningId}
         onLiveTransition={onLiveTransition}
@@ -94,7 +94,7 @@ export const FEED_MODULE_REGISTRY = {
     },
     renderCard: ({ module, moduleTag, onChanged, onEdit, roommates }) => (
       <RequestFeature
-        requests={[module.payload]}
+        request={module.payload}
         onRequestsChange={onChanged}
         roommates={roommates}
         moduleTag={moduleTag}
@@ -126,7 +126,7 @@ export const FEED_MODULE_REGISTRY = {
     },
     renderCard: ({ module, moduleTag, onChanged, onEdit }) => (
       <ChecklistFeature
-        checklists={[module.payload]}
+        checklist={module.payload}
         onChecklistsChange={onChanged}
         moduleTag={moduleTag}
         onEdit={onEdit}
@@ -157,7 +157,7 @@ export const FEED_MODULE_REGISTRY = {
     },
     renderCard: ({ module, moduleTag, onChanged, onEdit, roommates }) => (
       <PollFeature
-        polls={[module.payload]}
+        poll={module.payload}
         roommates={roommates}
         onPollsChange={onChanged}
         moduleTag={moduleTag}
@@ -189,7 +189,7 @@ export const FEED_MODULE_REGISTRY = {
     },
     renderCard: ({ module, moduleTag, onChanged, onEdit }) => (
       <ShowTrackerFeature
-        shows={[module.payload]}
+        show={module.payload}
         onShowsChange={onChanged}
         moduleTag={moduleTag}
         onEdit={onEdit}
@@ -224,7 +224,7 @@ export const FEED_MODULE_REGISTRY = {
       onEdit,
     }) => (
       <BookClubMeetingFeature
-        meetings={[module.payload]}
+        meeting={module.payload}
         moduleTag={moduleTag}
         onEdit={onEdit}
         canAdminister={canAdministerBookClub}

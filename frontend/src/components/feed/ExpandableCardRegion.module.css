@@ -1,0 +1,15 @@
+.region {
+  @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none;
+}
+
+.expanded {
+  grid-template-rows: 1fr;
+}
+
+.collapsed {
+  grid-template-rows: 0fr;
+}
+
+.inner {
+  @apply min-h-0 overflow-hidden;
+}
