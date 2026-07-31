@@ -1,5 +1,7 @@
 """Show tracker and cross-module feed API tests."""
 
+import module_edits
+
 from testing.support import *  # noqa: F403
 
 
@@ -306,3 +308,7 @@ def test_module_feed_sorts_active_instances_and_exposes_archived_modules(client,
         "tv",
     ]
     assert all(item["isArchived"] is True for item in archived_feed)
+
+
+def test_every_feed_module_has_a_registered_editor():
+    assert set(module_models.MODULE_SOURCES) == set(module_edits.EDITORS)  # noqa: F405

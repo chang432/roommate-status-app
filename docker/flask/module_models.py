@@ -7,6 +7,7 @@ the same way without forcing all storage into one table.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
@@ -18,9 +19,6 @@ import household_polls
 import household_requests
 import household_shows
 import jam
-
-
-MODULE_TYPES = {"events", "requests", "checklists", "polls", "tv", "spotify", "book-club"}
 
 
 def module_url(
@@ -220,24 +218,59 @@ class BookClubMeetingModule(BaseModule):
         return self.payload.get("status") == book_club.COMPLETED_STATUS
 
 
-MODULE_CLASS_BY_TYPE = {
-    "events": EventModule,
-    "requests": RequestModule,
-    "checklists": ChecklistModule,
-    "polls": PollModule,
-    "tv": TvModule,
-    "spotify": SpotifyModule,
-    "book-club": BookClubMeetingModule,
+@dataclass(frozen=True)
+class ModuleSource:
+    """Everything the unified feed needs to load and normalize one module type."""
+
+    model: type[BaseModule]
+    list_payloads: Callable[[str], Iterable[dict[str, Any]]]
+    requires_book_club: bool = False
+
+
+def _list_jam(group_id: str) -> Iterable[dict[str, Any]]:
+    active_jam = jam.get_active(group_id)
+    return (active_jam,) if active_jam else ()
+
+
+MODULE_SOURCES = {
+    "events": ModuleSource(
+        EventModule,
+        lambda group_id: activities.list_recent(group_id, consistent=True),
+    ),
+    "requests": ModuleSource(
+        RequestModule,
+        lambda group_id: household_requests.list_recent(group_id, consistent=True),
+    ),
+    "checklists": ModuleSource(
+        ChecklistModule,
+        lambda group_id: household_checklists.list_recent(group_id, consistent=True),
+    ),
+    "polls": ModuleSource(
+        PollModule,
+        lambda group_id: household_polls.list_recent(group_id, consistent=True),
+    ),
+    "tv": ModuleSource(
+        TvModule,
+        lambda group_id: household_shows.list_recent(group_id, consistent=True),
+    ),
+    "spotify": ModuleSource(SpotifyModule, _list_jam),
+    "book-club": ModuleSource(
+        BookClubMeetingModule,
+        book_club.list_meetings,
+        requires_book_club=True,
+    ),
 }
+
+MODULE_TYPES = frozenset(MODULE_SOURCES)
 
 
 def module_from_payload(module_type: str, payload: dict[str, Any]) -> BaseModule:
     """Normalize one persistence payload using the same registry as the feed."""
     try:
-        module_class = MODULE_CLASS_BY_TYPE[module_type]
+        module_source = MODULE_SOURCES[module_type]
     except KeyError as error:
         raise ValueError(f"Unknown module type: {module_type}") from error
-    return module_class.from_payload(payload)
+    return module_source.model.from_payload(payload)
 
 
 def list_feed(
@@ -251,39 +284,14 @@ def list_feed(
         return []
 
     modules: list[BaseModule] = []
-    if "events" in requested_types:
+    for source_type, source in MODULE_SOURCES.items():
+        if source_type not in requested_types:
+            continue
+        if source.requires_book_club and not include_book_club:
+            continue
         modules.extend(
-            module_from_payload("events", item)
-            for item in activities.list_recent(group_id, consistent=True)
-        )
-    if "requests" in requested_types:
-        modules.extend(
-            module_from_payload("requests", item)
-            for item in household_requests.list_recent(group_id, consistent=True)
-        )
-    if "checklists" in requested_types:
-        modules.extend(
-            module_from_payload("checklists", item)
-            for item in household_checklists.list_recent(group_id, consistent=True)
-        )
-    if "polls" in requested_types:
-        modules.extend(
-            module_from_payload("polls", item)
-            for item in household_polls.list_recent(group_id, consistent=True)
-        )
-    if "tv" in requested_types:
-        modules.extend(
-            module_from_payload("tv", item)
-            for item in household_shows.list_recent(group_id, consistent=True)
-        )
-    if "spotify" in requested_types:
-        active_jam = jam.get_active(group_id)
-        if active_jam:
-            modules.append(module_from_payload("spotify", active_jam))
-    if "book-club" in requested_types and include_book_club:
-        modules.extend(
-            module_from_payload("book-club", item)
-            for item in book_club.list_meetings(group_id)
+            source.model.from_payload(item)
+            for item in source.list_payloads(group_id)
         )
 
     modules.sort(key=lambda module: (module.sort_at, module.created_at, module.type, module.id))
