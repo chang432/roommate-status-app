@@ -75,11 +75,47 @@ function bookClubFixture() {
   return { meeting, activeBook, completedBook }
 }
 
-async function mockBookClub(page) {
+async function mockBookClub(page, { tvFeedCount = 0, bookClubFeedCount = 0 } = {}) {
   const { meeting, activeBook, completedBook } = bookClubFixture()
   let books = [activeBook, completedBook]
   const forums = {
     [MEETING_ID]: { meetingId: MEETING_ID, locked: false, threads: [] },
+  }
+  const feedItems = [{
+    id: meeting.id, type: 'book-club', createdAt: meeting.createdAt,
+    updatedAt: meeting.updatedAt, sortAt: meeting.updatedAt,
+    title: meeting.bookTitle, subtitle: 'Book Club meeting',
+    actor: meeting.createdByName, isArchived: false, payload: meeting,
+  }]
+  for (let index = 0; index < tvFeedCount; index += 1) {
+    const id = `show-${index}`
+    feedItems.push({
+      id, type: 'tv', createdAt: NOW - index, updatedAt: NOW - index,
+      sortAt: NOW - index, title: `Show ${index + 1}`, subtitle: 'TV',
+      actor: 'Andre', isArchived: false,
+      payload: {
+        id, title: `Show ${index + 1}`, createdBy: 'Andre',
+        createdById: 'andre', members: [], createdAt: NOW - index,
+        updatedAt: NOW - index, isArchived: false,
+      },
+    })
+  }
+  for (let index = 0; index < bookClubFeedCount; index += 1) {
+    const id = `meeting-extra-${index}`
+    const extraMeeting = {
+      ...meeting,
+      id,
+      bookTitle: `Book ${index + 1}`,
+      scheduledAt: meeting.scheduledAt + (index + 1) * 86_400_000,
+      createdAt: meeting.createdAt - index - 1,
+      updatedAt: meeting.updatedAt - index - 1,
+    }
+    feedItems.push({
+      id, type: 'book-club', createdAt: extraMeeting.createdAt,
+      updatedAt: extraMeeting.updatedAt, sortAt: extraMeeting.updatedAt,
+      title: extraMeeting.bookTitle, subtitle: 'Book Club meeting',
+      actor: extraMeeting.createdByName, isArchived: false, payload: extraMeeting,
+    })
   }
 
   await page.addInitScript(() => {
@@ -141,12 +177,7 @@ async function mockBookClub(page) {
     } else if (path === '/api/jam') {
       payload = null
     } else if (path === '/api/feed') {
-      payload = [{
-        id: meeting.id, type: 'book-club', createdAt: meeting.createdAt,
-        updatedAt: meeting.updatedAt, sortAt: meeting.updatedAt,
-        title: meeting.bookTitle, subtitle: 'Book Club meeting',
-        actor: meeting.createdByName, isArchived: false, payload: meeting,
-      }]
+      payload = feedItems
     } else if (path === '/api/book-club/books') {
       if (method === 'POST') {
         const book = {
@@ -323,7 +354,7 @@ test('confirms meeting completion safely on desktop', async ({ page }, testInfo)
 
 test('shows the next feed category while swiping on a phone', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await mockBookClub(page)
+  await mockBookClub(page, { tvFeedCount: 20, bookClubFeedCount: 20 })
   await page.goto('/')
 
   const feedMenuButton = page.getByRole('button', { name: 'Open feed menu' })
@@ -336,6 +367,7 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   const feedTabs = page.getByRole('tablist', { name: 'Feed categories' })
   const stickyHeader = page.locator('[data-feed-sticky-header]')
   await expect(feedTabs.getByRole('tab')).toHaveCount(7)
+  await expect(stickyHeader).not.toHaveAttribute('data-feed-pinned')
   await expect.poll(() => stickyHeader.evaluate((element) => (
     getComputedStyle(element).backgroundColor
   ))).toBe('rgba(0, 0, 0, 0)')
@@ -359,13 +391,57 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   expect(Math.abs(categoryScrollTargets.before - categoryScrollTargets.active)).toBeGreaterThan(5)
   const feedMain = page.locator('[data-feed-swipe-phase]').locator('..')
   await feedMain.scrollIntoViewIfNeeded()
+  const feedShellTop = await page.locator('[data-feed-shell]').evaluate((element) => (
+    element.getBoundingClientRect().top + window.scrollY
+  ))
+  const tvScrollOffset = 240
+  await page.evaluate(
+    ({ top, offset }) => window.scrollTo(0, top + offset),
+    { top: feedShellTop, offset: tvScrollOffset },
+  )
+  await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+  await expect(stickyHeader).toHaveAttribute('data-feed-pinned', '')
+
+  async function feedSwipePoint(deltaX) {
+    const activeFeedBox = await feedMain.boundingBox()
+    const y = await page.locator('[role="tabpanel"]').evaluate((panel) => {
+      const headerBottom = document.querySelector(
+        '[data-feed-sticky-header]',
+      ).getBoundingClientRect().bottom
+      const cards = [...panel.querySelectorAll('article')]
+        .map((card) => card.getBoundingClientRect())
+        .filter((rect) => rect.bottom > headerBottom && rect.top < window.innerHeight)
+        .sort((first, second) => first.top - second.top)
+      for (let index = 0; index < cards.length - 1; index += 1) {
+        const gapStart = Math.max(cards[index].bottom, headerBottom)
+        const gapEnd = Math.min(cards[index + 1].top, window.innerHeight)
+        if (gapEnd - gapStart >= 2) return gapStart + (gapEnd - gapStart) / 2
+      }
+      const panelRect = panel.getBoundingClientRect()
+      return Math.min(
+        Math.max(panelRect.top + Math.min(40, panelRect.height / 2), headerBottom + 4),
+        window.innerHeight - 20,
+      )
+    })
+    return {
+      x: deltaX < 0
+        ? activeFeedBox.x + activeFeedBox.width - 20
+        : activeFeedBox.x + 20,
+      y,
+    }
+  }
+
   const feedBox = await feedMain.boundingBox()
-  const swipeStartX = feedBox.x + feedBox.width - 20
-  const swipeY = feedBox.y + Math.min(60, feedBox.height / 2)
+  const { x: swipeStartX, y: swipeY } = await feedSwipePoint(-260)
+  const pinnedScrollBeforeSwipe = await page.evaluate(() => window.scrollY)
   await page.mouse.move(swipeStartX, swipeY)
   await page.mouse.down()
   await page.mouse.move(swipeStartX - 12, swipeY + 1)
-  await page.mouse.move(swipeStartX - 260, swipeY + 4, { steps: 8 })
+  await page.mouse.move(swipeStartX - 260, swipeY + 140, { steps: 8 })
+  await expect.poll(() => page.evaluate((top) => (
+    Math.abs(window.scrollY - top)
+  ), pinnedScrollBeforeSwipe)).toBeLessThan(2)
+  await expect(stickyHeader).toHaveAttribute('data-feed-pinned', '')
 
   const incomingBookClub = page.locator('[data-feed-panel-type="book-club"]')
   await expect(incomingBookClub.getByText('The Fifth Season').first()).toBeVisible()
@@ -398,6 +474,26 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
   expect(indicatorCenter).toBeLessThan(Math.max(tvCenter, bookClubCenter))
   await page.screenshot({ path: testInfo.outputPath('group-feed-swipe-preview-mobile.png') })
 
+  await incomingBookClub.evaluate((panel) => {
+    window.__incomingFeedPanel = panel
+    window.__feedPanelFrames = []
+    function samplePanel() {
+      const rect = panel.getBoundingClientRect()
+      const header = document.querySelector('[data-feed-sticky-header]')
+      const phase = document.querySelector('[data-feed-swipe-phase]')
+        ?.dataset.feedSwipePhase
+      window.__feedPanelFrames.push({
+        x: rect.x,
+        y: rect.y,
+        phase,
+        headerPinned: header.hasAttribute('data-feed-pinned'),
+        headerBackground: getComputedStyle(header).backgroundColor,
+      })
+      if (phase !== 'idle') window.requestAnimationFrame(samplePanel)
+    }
+    window.requestAnimationFrame(samplePanel)
+  })
+
   await page.mouse.up()
   const selectedBookClubTab = feedTabs.getByRole('tab', { name: /^Book Club/, selected: true })
   await expect(selectedBookClubTab).toBeVisible()
@@ -413,22 +509,261 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
       (activeTabBox.x + activeTabBox.width / 2)
     )
   }).toBeLessThan(2)
+  const firstHandoff = await page.evaluate(() => ({
+    samePanel: window.__incomingFeedPanel === document.querySelector(
+      '[data-feed-panel-type="book-club"]',
+    ),
+    frames: window.__feedPanelFrames,
+  }))
+  expect(firstHandoff.samePanel).toBe(true)
+  expect(firstHandoff.frames.length).toBeGreaterThan(2)
+  for (let index = 1; index < firstHandoff.frames.length; index += 1) {
+    expect(firstHandoff.frames[index].x).toBeLessThanOrEqual(
+      firstHandoff.frames[index - 1].x + 1,
+    )
+  }
+  const firstHandoffYs = firstHandoff.frames.map(({ y }) => y)
+  expect(Math.max(...firstHandoffYs) - Math.min(...firstHandoffYs)).toBeLessThan(2)
+  expect(firstHandoff.frames.every(({ headerPinned, headerBackground }) => (
+    headerPinned &&
+    headerBackground !== 'transparent' &&
+    headerBackground !== 'rgba(0, 0, 0, 0)'
+  ))).toBe(true)
 
-  const stickyDocumentTop = await stickyHeader.evaluate((element) => (
-    element.getBoundingClientRect().top + window.scrollY
-  ))
-  await page.locator('[data-feed-panel-type="book-club"]').evaluate((panel) => {
-    const spacer = document.createElement('div')
-    spacer.style.height = '1200px'
-    spacer.setAttribute('aria-hidden', 'true')
-    panel.append(spacer)
-  })
-  await page.evaluate((top) => window.scrollTo(0, top + 300), stickyDocumentTop)
+  await expect.poll(() => page.evaluate((top) => (
+    Math.abs(window.scrollY - top)
+  ), feedShellTop)).toBeLessThan(2)
+
+  const bookClubScrollOffset = 300
+  await page.evaluate(
+    ({ top, offset }) => window.scrollTo(0, top + offset),
+    { top: feedShellTop, offset: bookClubScrollOffset },
+  )
   await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
   await expect.poll(() => stickyHeader.evaluate((element) => {
     const background = getComputedStyle(element).backgroundColor
     return background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)'
   })).toBe(true)
+
+  async function swipeActivePanel(deltaX) {
+    const point = await feedSwipePoint(deltaX)
+    await page.mouse.move(point.x, point.y)
+    await page.mouse.down()
+    await page.mouse.move(point.x + deltaX, point.y + 4, { steps: 8 })
+    await page.mouse.up()
+  }
+
+  await swipeActivePanel(260)
+  await expect(feedTabs.getByRole('tab', { name: /^TV/, selected: true })).toBeVisible()
+  await expect.poll(() => page.evaluate(({ top, offset }) => (
+    Math.abs(window.scrollY - (top + offset))
+  ), { top: feedShellTop, offset: tvScrollOffset })).toBeLessThan(2)
+  await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+
+  const tvReturnScrollOffset = 180
+  await page.evaluate(
+    ({ top, offset }) => window.scrollTo(0, top + offset),
+    { top: feedShellTop, offset: tvReturnScrollOffset },
+  )
+  const returnPoint = await feedSwipePoint(-260)
+  await page.mouse.move(returnPoint.x, returnPoint.y)
+  await page.mouse.down()
+  await page.mouse.move(returnPoint.x - 260, returnPoint.y + 4, { steps: 8 })
+  const returningBookClub = page.locator('[data-feed-panel-type="book-club"]')
+  const returningBookY = (await returningBookClub.getByText(
+    'The Fifth Season',
+  ).first().boundingBox()).y
+  await returningBookClub.evaluate((panel) => {
+    window.__returningFeedPanel = panel
+  })
+  await page.mouse.up()
+  await expect(feedTabs.getByRole('tab', { name: /^Book Club/, selected: true })).toBeVisible()
+  await expect.poll(() => page.evaluate(({ top, offset }) => (
+    Math.abs(window.scrollY - (top + offset))
+  ), { top: feedShellTop, offset: bookClubScrollOffset })).toBeLessThan(2)
+  await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+  const restoredBookY = (await page.locator(
+    '[data-feed-panel-type="book-club"]',
+  ).getByText('The Fifth Season').first().boundingBox()).y
+  expect(Math.abs(restoredBookY - returningBookY)).toBeLessThan(2)
+  expect(await page.evaluate(() => (
+    window.__returningFeedPanel === document.querySelector(
+      '[data-feed-panel-type="book-club"]',
+    )
+  ))).toBe(true)
+
+  const unpinnedScrollTop = Math.max(feedShellTop - 80, 0)
+  await page.evaluate((top) => window.scrollTo(0, top), unpinnedScrollTop)
+  const unpinnedHeaderY = (await stickyHeader.boundingBox()).y
+  expect(unpinnedHeaderY).toBeGreaterThan(5)
+  await expect(stickyHeader).not.toHaveAttribute('data-feed-pinned')
+  await expect.poll(() => stickyHeader.evaluate((element) => (
+    getComputedStyle(element).backgroundColor
+  ))).toBe('rgba(0, 0, 0, 0)')
+  const unpinnedWindowScroll = await page.evaluate(() => window.scrollY)
+
+  const unpinnedReturnPoint = await feedSwipePoint(260)
+  await page.mouse.move(unpinnedReturnPoint.x, unpinnedReturnPoint.y)
+  await page.mouse.down()
+  await page.mouse.move(
+    unpinnedReturnPoint.x + 260,
+    unpinnedReturnPoint.y + 4,
+    { steps: 8 },
+  )
+  const unpinnedTv = page.locator('[data-feed-panel-type="tv"]')
+  await unpinnedTv.evaluate((panel) => {
+    window.__unpinnedFeedPanel = panel
+    window.__feedAnchorFrames = []
+    function sampleAnchor() {
+      const header = document.querySelector('[data-feed-sticky-header]')
+      const phase = document.querySelector('[data-feed-swipe-phase]')
+        ?.dataset.feedSwipePhase
+      window.__feedAnchorFrames.push({
+        headerY: header.getBoundingClientRect().y,
+        scrollY: window.scrollY,
+        phase,
+        headerPinned: header.hasAttribute('data-feed-pinned'),
+        headerBackground: getComputedStyle(header).backgroundColor,
+      })
+      if (phase !== 'idle') window.requestAnimationFrame(sampleAnchor)
+    }
+    window.requestAnimationFrame(sampleAnchor)
+  })
+  await page.mouse.up()
+  await expect(feedTabs.getByRole('tab', { name: /^TV/, selected: true })).toBeVisible()
+  const unpinnedHandoff = await page.evaluate(() => ({
+    samePanel: window.__unpinnedFeedPanel === document.querySelector(
+      '[data-feed-panel-type="tv"]',
+    ),
+    frames: window.__feedAnchorFrames,
+    panelTransform: document.querySelector(
+      '[data-feed-panel-type="tv"]',
+    ).style.transform,
+  }))
+  expect(unpinnedHandoff.samePanel).toBe(true)
+  expect(unpinnedHandoff.frames.length).toBeGreaterThan(2)
+  expect(
+    Math.max(...unpinnedHandoff.frames.map(({ headerY }) => headerY)) -
+    Math.min(...unpinnedHandoff.frames.map(({ headerY }) => headerY))
+  ).toBeLessThan(2)
+  expect(
+    Math.max(...unpinnedHandoff.frames.map(({ scrollY }) => scrollY)) -
+    Math.min(...unpinnedHandoff.frames.map(({ scrollY }) => scrollY))
+  ).toBeLessThan(2)
+  expect(unpinnedHandoff.frames.every(({ headerPinned, headerBackground }) => (
+    !headerPinned && headerBackground === 'rgba(0, 0, 0, 0)'
+  ))).toBe(true)
+  expect(Math.abs((await stickyHeader.boundingBox()).y - unpinnedHeaderY)).toBeLessThan(2)
+  expect(Math.abs(await page.evaluate(() => window.scrollY) - unpinnedWindowScroll)).toBeLessThan(2)
+  expect(unpinnedHandoff.panelTransform).toBe('translate3d(0px, 0px, 0px)')
+
+  const prePinGap = 4
+  await page.evaluate(
+    ({ top, gap }) => window.scrollTo(0, top - gap),
+    { top: feedShellTop, gap: prePinGap },
+  )
+  await expect.poll(async () => Math.round(
+    (await stickyHeader.boundingBox()).y,
+  )).toBe(prePinGap)
+  const tvYBeforePin = (await unpinnedTv.boundingBox()).y
+  await page.evaluate((top) => window.scrollTo(0, top), feedShellTop)
+  await expect.poll(() => page.evaluate((top) => (
+    Math.abs(window.scrollY - top)
+  ), feedShellTop)).toBeLessThan(2)
+  await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+  await expect(stickyHeader).toHaveAttribute('data-feed-pinned', '')
+  expect(
+    Math.abs((await unpinnedTv.boundingBox()).y - tvYBeforePin + prePinGap),
+  ).toBeLessThan(2)
+  expect(await unpinnedTv.evaluate((panel) => panel.style.transform)).toBe(
+    'translate3d(0px, 0px, 0px)',
+  )
+
+  const emptySwipePoint = await feedSwipePoint(260)
+  await page.mouse.move(emptySwipePoint.x, emptySwipePoint.y)
+  await page.mouse.down()
+  await page.mouse.move(emptySwipePoint.x + 260, emptySwipePoint.y + 4, {
+    steps: 8,
+  })
+  const incomingEmptyPolls = page.locator('[data-feed-panel-type="polls"]')
+  const incomingEmptyMessage = incomingEmptyPolls.getByText(
+    'No active modules here yet.',
+  )
+  const [emptyPreviewBox, stickyPreviewBox] = await Promise.all([
+    incomingEmptyMessage.boundingBox(),
+    stickyHeader.boundingBox(),
+  ])
+  expect(emptyPreviewBox.y).toBeGreaterThanOrEqual(
+    stickyPreviewBox.y + stickyPreviewBox.height - 1,
+  )
+  expect(emptyPreviewBox.y + emptyPreviewBox.height).toBeLessThanOrEqual(844)
+  await page.mouse.up()
+  await expect(feedTabs.getByRole('tab', { name: /^Polls/, selected: true })).toBeVisible()
+  await expect(incomingEmptyMessage).toBeVisible()
+  const emptyFinalBox = await incomingEmptyMessage.boundingBox()
+  const stickyFinalBox = await stickyHeader.boundingBox()
+  expect(emptyFinalBox.y).toBeGreaterThanOrEqual(
+    stickyFinalBox.y + stickyFinalBox.height - 1,
+  )
+  expect(emptyFinalBox.y + emptyFinalBox.height).toBeLessThanOrEqual(844)
+  await expect.poll(() => page.evaluate((top) => Math.abs(
+    document.documentElement.scrollHeight - window.innerHeight - top
+  ), feedShellTop)).toBeLessThan(2)
+  await page.evaluate((top) => window.scrollTo(0, top + 200), feedShellTop)
+  await expect.poll(() => page.evaluate((top) => (
+    Math.abs(window.scrollY - top)
+  ), feedShellTop)).toBeLessThan(2)
+
+  const shortToLongPoint = await feedSwipePoint(-260)
+  await page.mouse.move(shortToLongPoint.x, shortToLongPoint.y)
+  await page.mouse.down()
+  await page.mouse.move(
+    shortToLongPoint.x - 260,
+    shortToLongPoint.y + 4,
+    { steps: 8 },
+  )
+  const incomingLongTv = page.locator('[data-feed-panel-type="tv"]')
+  await incomingLongTv.evaluate((panel) => {
+    window.__shortToLongPanel = panel
+    window.__shortToLongFrames = []
+    function sampleShortToLong() {
+      const viewport = document.querySelector('[data-feed-swipe-phase]')
+      const phase = viewport?.dataset.feedSwipePhase
+      window.__shortToLongFrames.push({
+        x: panel.getBoundingClientRect().x,
+        viewportHeight: viewport.getBoundingClientRect().height,
+        panelHeight: panel.scrollHeight,
+        documentHeight: document.documentElement.scrollHeight,
+        phase,
+      })
+      if (phase !== 'idle') window.requestAnimationFrame(sampleShortToLong)
+    }
+    window.requestAnimationFrame(sampleShortToLong)
+  })
+  await page.mouse.up()
+  await expect(feedTabs.getByRole('tab', { name: /^TV/, selected: true })).toBeVisible()
+  const shortToLongHandoff = await page.evaluate(() => ({
+    samePanel: window.__shortToLongPanel === document.querySelector(
+      '[data-feed-panel-type="tv"]',
+    ),
+    frames: window.__shortToLongFrames,
+  }))
+  expect(shortToLongHandoff.samePanel).toBe(true)
+  expect(shortToLongHandoff.frames.length).toBeGreaterThan(2)
+  for (let index = 1; index < shortToLongHandoff.frames.length; index += 1) {
+    expect(shortToLongHandoff.frames[index].x).toBeLessThanOrEqual(
+      shortToLongHandoff.frames[index - 1].x + 1,
+    )
+  }
+  expect(shortToLongHandoff.frames.every(({ viewportHeight, panelHeight }) => (
+    viewportHeight >= panelHeight - 1
+  ))).toBe(true)
+  expect(
+    Math.max(...shortToLongHandoff.frames.map(({ documentHeight }) => documentHeight)) -
+    Math.min(...shortToLongHandoff.frames.map(({ documentHeight }) => documentHeight)),
+  ).toBeLessThan(2)
+  await page.getByText('Show 20', { exact: true }).scrollIntoViewIfNeeded()
+  await expect(page.getByText('Show 20', { exact: true })).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('group-feed-sticky-mobile.png') })
 })
@@ -444,6 +779,7 @@ test('keeps the editorial feed header clear across themes', async ({ page }, tes
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
 
     const stickyHeader = page.locator('[data-feed-sticky-header]')
+    await expect(stickyHeader).not.toHaveAttribute('data-feed-pinned')
     await expect.poll(() => stickyHeader.evaluate((element) => (
       getComputedStyle(element).backgroundColor
     ))).toBe('rgba(0, 0, 0, 0)')
@@ -458,14 +794,20 @@ test('keeps the editorial feed header clear across themes', async ({ page }, tes
     })
     await page.evaluate((top) => window.scrollTo(0, top + 200), stickyDocumentTop)
     await expect.poll(async () => Math.round((await stickyHeader.boundingBox()).y)).toBe(0)
+    await expect(stickyHeader).toHaveAttribute('data-feed-pinned', '')
     await expect.poll(() => stickyHeader.evaluate((element) => {
       const background = getComputedStyle(element).backgroundColor
       return background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)'
     })).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath(`group-feed-header-${theme}-desktop.png`) })
+    await page.evaluate((top) => window.scrollTo(0, Math.max(top - 20, 0)), stickyDocumentTop)
+    await expect(stickyHeader).not.toHaveAttribute('data-feed-pinned')
+    await expect.poll(() => stickyHeader.evaluate((element) => (
+      getComputedStyle(element).backgroundColor
+    ))).toBe('rgba(0, 0, 0, 0)')
     await expect.poll(() => page.evaluate(() => (
       document.documentElement.scrollWidth <= window.innerWidth
     ))).toBe(true)
-    await page.screenshot({ path: testInfo.outputPath(`group-feed-header-${theme}-desktop.png`) })
   }
 })
 
