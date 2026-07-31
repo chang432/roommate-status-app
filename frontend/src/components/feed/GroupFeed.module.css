@@ -1,0 +1,319 @@
+.pageError {
+  @apply mt-4;
+}
+
+.loading {
+  @apply mt-10 text-center text-[14px] text-ink-soft;
+}
+
+.shell {
+  @apply flex min-w-0 flex-col;
+  /* The page contributes 4rem of bottom padding, so subtract it here to keep
+     an empty feed pinned without creating a blank vertical scroll range. */
+  min-height: calc(100vh - 4rem);
+  min-height: calc(100dvh - 4rem);
+}
+
+.drawerBackdrop {
+  @apply fixed inset-0 z-40 bg-ink/25;
+}
+
+.moduleNav {
+  @apply fixed left-0 top-0 z-50 h-full w-[min(320px,calc(100vw-24px))] -translate-x-full overflow-y-auto border-r border-line bg-card px-4 py-5 shadow-card transition-transform duration-200;
+}
+
+.moduleNavOpen {
+  @apply translate-x-0;
+}
+
+.moduleNavHeader {
+  @apply mb-4 flex items-center justify-between;
+}
+
+.moduleNavHeaderActions {
+  @apply flex items-center gap-2;
+}
+
+.moduleNavEyebrow {
+  @apply text-[12px] font-black uppercase tracking-[0.08em] text-ink-soft;
+}
+
+.moduleNavClose {
+  @apply rounded-full border border-line px-3 py-1 text-[12px] font-bold text-ink-soft transition hover:border-accent hover:text-ink;
+}
+
+.moduleNavEdit {
+  @apply rounded-full border border-line px-3 py-1 text-[12px] font-bold text-ink-soft transition hover:border-accent hover:text-ink;
+}
+
+.moduleNavList {
+  @apply space-y-2;
+}
+
+.moduleNavItem {
+  @apply flex w-full items-center justify-between rounded-sm border border-transparent px-3 py-3 text-left text-[14px] font-black text-ink-soft transition hover:border-line hover:bg-surface-hover hover:text-ink;
+}
+
+.moduleNavItemEditing {
+  @apply cursor-default hover:border-transparent hover:bg-transparent hover:text-ink-soft;
+}
+
+.moduleNavEditRow {
+  @apply grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2;
+}
+
+.moduleNavEditRowDragging {
+  @apply opacity-55;
+}
+
+.moduleNavDragHandle {
+  @apply grid h-9 w-9 touch-none select-none cursor-grab place-items-center rounded-full border border-line bg-card text-[16px] font-black leading-none text-ink-soft transition hover:border-accent hover:text-ink active:cursor-grabbing;
+}
+
+.moduleNavAllEditor {
+  @apply space-y-2;
+}
+
+.moduleNavAllDropdown {
+  @apply border-line bg-card;
+}
+
+.moduleNavAllSummary {
+  @apply flex items-center gap-2 rounded-full bg-surface-muted px-2 py-1 text-[11px] text-ink-soft;
+}
+
+.moduleNavAllMenu {
+  @apply rounded-sm border border-line bg-surface-muted p-2 shadow-soft;
+}
+
+.moduleNavAllOption {
+  @apply flex items-center gap-2 rounded-sm px-2 py-[7px] text-[13px] font-bold text-ink-soft transition hover:bg-surface-hover hover:text-ink;
+}
+
+.moduleNavItemActive {
+  @apply border-accent bg-accent-soft text-ink;
+}
+
+.moduleNavCount {
+  @apply rounded-full bg-surface-muted px-2 py-1 text-[11px] text-ink-soft;
+}
+
+.modulePalette[data-module-type='events'] {
+  --module-bg: hsl(var(--color-module-events-bg));
+  --module-border: hsl(var(--color-module-events-border));
+  --module-text: hsl(var(--color-module-events-text));
+}
+
+.modulePalette[data-module-type='requests'] {
+  --module-bg: hsl(var(--color-module-requests-bg));
+  --module-border: hsl(var(--color-module-requests-border));
+  --module-text: hsl(var(--color-module-requests-text));
+}
+
+.modulePalette[data-module-type='checklists'] {
+  --module-bg: hsl(var(--color-module-checklists-bg));
+  --module-border: hsl(var(--color-module-checklists-border));
+  --module-text: hsl(var(--color-module-checklists-text));
+}
+
+.modulePalette[data-module-type='polls'] {
+  --module-bg: hsl(var(--color-module-polls-bg));
+  --module-border: hsl(var(--color-module-polls-border));
+  --module-text: hsl(var(--color-module-polls-text));
+}
+
+.modulePalette[data-module-type='tv'] {
+  --module-bg: hsl(var(--color-module-tv-bg));
+  --module-border: hsl(var(--color-module-tv-border));
+  --module-text: hsl(var(--color-module-tv-text));
+}
+
+.modulePalette[data-module-type='spotify'] {
+  --module-bg: hsl(var(--color-module-spotify-bg));
+  --module-border: hsl(var(--color-module-spotify-border));
+  --module-text: hsl(var(--color-module-spotify-text));
+}
+
+.modulePalette[data-module-type='book-club'] {
+  --module-bg: hsl(var(--color-module-book-club-bg));
+  --module-border: hsl(var(--color-module-book-club-border));
+  --module-text: hsl(var(--color-module-book-club-text));
+}
+
+.modulePalette .moduleNavCount {
+  background-color: var(--module-bg);
+  color: var(--module-text);
+}
+
+.modulePalette .feedCategoryCount {
+  background-color: var(--module-bg);
+  color: var(--module-text);
+}
+
+.moduleNavItemActive.modulePalette {
+  border-color: var(--module-border);
+  background-color: var(--module-bg);
+  color: var(--module-text);
+}
+
+.feedColumn {
+  @apply min-w-0 flex-1 touch-pan-y pb-24;
+}
+
+.feedViewport {
+  @apply relative grid min-w-0;
+  overflow-x: clip;
+}
+
+.feedViewportAnchored {
+  /* Saved category content can be offset beneath an unpinned title; clip the
+     scrolled-away portion so it never paints over the sticky feed controls. */
+  overflow: clip;
+}
+
+.feedPanel {
+  @apply min-w-0 will-change-transform;
+  grid-area: 1 / 1;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.feedPanelAdjacent {
+  @apply pointer-events-none;
+}
+
+.feedPanelDirect {
+  transition: none;
+}
+
+.feedSection {
+  @apply mt-7;
+}
+
+.feedStickyHeader {
+  @apply sticky top-0 z-30 mx-[-18px] mb-4 bg-transparent px-[18px] pt-3;
+}
+
+.feedStickyHeader[data-feed-pinned] {
+  @apply bg-bg-top;
+}
+
+.feedHeader {
+  @apply flex min-h-11 items-center gap-3 px-1 pb-2;
+}
+
+.feedCategoryRow {
+  @apply flex min-w-0 items-end border-b-2 border-line;
+}
+
+.feedMenuButton {
+  @apply grid h-11 w-11 flex-none place-items-center bg-transparent text-ink-soft transition hover:text-ink focus:outline-none focus:ring-4 focus:ring-inset focus:ring-accent-soft;
+}
+
+.feedMenuIcon {
+  @apply flex w-5 flex-col gap-[4px];
+}
+
+.feedMenuIcon span {
+  @apply block h-[2px] w-full rounded-full bg-current;
+}
+
+.feedTitle {
+  @apply flex-1 font-display text-[24px] font-semibold leading-none text-ink;
+}
+
+.feedCategoryScroller {
+  @apply min-w-0 flex-1 overflow-x-auto overscroll-x-contain;
+  scrollbar-width: none;
+}
+
+.feedCategoryScroller::-webkit-scrollbar {
+  display: none;
+}
+
+.feedCategoryTabs {
+  @apply relative flex w-max min-w-full items-center gap-1;
+}
+
+.feedCategoryTab {
+  @apply flex min-h-11 flex-none items-center whitespace-nowrap px-3 py-2 text-[13px] font-black text-ink-soft transition-colors hover:text-ink focus:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-accent-soft;
+}
+
+.feedCategoryTabActive {
+  @apply text-ink;
+}
+
+.feedCategoryTabContent {
+  @apply flex items-center gap-2;
+}
+
+.feedCategoryCount {
+  @apply rounded-full bg-surface-muted px-2 py-1 text-[11px] leading-none text-ink-soft;
+}
+
+.feedCategoryIndicator {
+  @apply pointer-events-none absolute bottom-0 h-1 rounded-full bg-ink opacity-0 transition-[transform,width,opacity];
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, width;
+}
+
+.feedCategoryIndicatorDirect {
+  transition: none;
+}
+
+.feedList {
+  @apply flex flex-col gap-3;
+}
+
+.feedArchiveSection {
+  @apply mt-5 border-t border-line pt-4;
+}
+
+.feedArchiveToggle {
+  @apply mb-3 flex w-full items-center justify-between rounded-sm px-1 py-2 text-left text-[13px] font-bold text-ink-soft transition hover:text-ink;
+}
+
+.moduleItem {
+  @apply relative min-w-0;
+}
+
+.moduleType {
+  @apply rounded-full border px-2 py-[2px] text-[10px] font-black uppercase tracking-[0.07em];
+  border-color: var(--module-border);
+  background-color: var(--module-bg);
+  color: var(--module-text);
+}
+
+.emptyFeed {
+  @apply rounded-sm border border-dashed border-line bg-card px-4 py-8 text-center text-[14px] font-semibold text-ink-soft;
+}
+
+.createInlineButton {
+  @apply grid h-11 w-11 flex-none place-items-center rounded-full bg-solid-accent text-[26px] font-black leading-none text-on-strong shadow-soft transition hover:scale-105 hover:bg-solid-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft;
+}
+
+.createInlineSlot {
+  @apply h-11 w-11 flex-none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedPanel,
+  .feedCategoryIndicator {
+    transition: none;
+  }
+}
+
+.createPicker {
+  @apply grid gap-3 sm:grid-cols-2;
+}
+
+.createPickerButton {
+  @apply rounded-sm border px-4 py-5 text-left text-[15px] font-black shadow-soft transition hover:brightness-[0.98];
+  border-color: var(--module-border);
+  background-color: var(--module-bg);
+  color: var(--module-text);
+}
+
+.createModal {
+  @apply max-w-[680px];
+}
