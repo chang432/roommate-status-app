@@ -1913,22 +1913,24 @@ export default function GroupFeed({
           className={styles.feedStickyHeader}
           data-feed-sticky-header
         >
-          <div className={styles.feedHeader}>
+          <div className={styles.feedHeader} data-feed-title-row>
             <h2 className={styles.feedTitle}>Group Feed</h2>
-            {canCreateModule &&
-              (activeType !== "book-club" || canAdministerBookClub) && (
-                <button
-                  type="button"
-                  onClick={openCreateModal}
-                  className={styles.createInlineButton}
-                  aria-label={createLabel}
-                  title={createLabel}
-                >
-                  +
-                </button>
-              )}
+            <div className={styles.createInlineSlot} data-feed-create-slot>
+              {canCreateModule &&
+                (activeType !== "book-club" || canAdministerBookClub) && (
+                  <button
+                    type="button"
+                    onClick={openCreateModal}
+                    className={styles.createInlineButton}
+                    aria-label={createLabel}
+                    title={createLabel}
+                  >
+                    +
+                  </button>
+                )}
+            </div>
           </div>
-          <div className={styles.feedCategoryRow}>
+          <div className={styles.feedCategoryRow} data-feed-category-row>
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
