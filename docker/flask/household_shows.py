@@ -1,16 +1,8 @@
-"""TV show tracker feed for the Roomie Status backend.
+"""TV show persistence with independently mutable watcher rows.
 
-Each show is one item in its own DynamoDB table (RoommateStatus-*-shows-v2),
-separate from the roommate and activities tables so the household scan in db.py
-and the activity/checklist feed both stay clean — the same "own table per
-concern" pattern activities.py follows. Watchers are embedded on the show item
-(like checklist items), each tracking their own season and episode, so a show is
-a single read/write. The table is keyed ``(groupId HASH, id RANGE)``; see
-group_tables.py for why the group is the partition key.
-
-Configuration (env):
-    SHOWS_TABLE  - override the table name
-                   (default: "${ROOMMATE_TABLE}-shows-v2")
+Show metadata and watchparty state remain one feed record. Every watcher's
+progress lives in a child row in the same group partition, preventing one
+watcher's update from replacing the complete watcher collection.
 """
 
 from __future__ import annotations
@@ -22,19 +14,15 @@ import uuid
 
 from botocore.exceptions import ClientError
 
-# Reuse db's resource builder so every table signs requests the same way and
-# shares the local DynamoDB endpoint override (DYNAMODB_ENDPOINT).
 from db import resource
-from group_tables import query_group
+from group_tables import query_group, query_group_prefix
 
 RECENT_LIMIT = 20
-
-# Season and episode are both 1-based; each watcher tracks their own pair.
 PROGRESS_FIELDS = ("season", "episode")
+ROW_STORAGE = "rows"
+WATCHER_PREFIX = "show-watcher"
 
-# Distinct non-None results from the mutation helpers, so routes can map an
-# outcome to an HTTP status without touching boto3 details.
-MUTATION_ARCHIVED = "archived"  # edit rejected: the show is archived (read-only)
+MUTATION_ARCHIVED = "archived"
 WATCHPARTY_EMPTY = "empty"
 DELETE_OK = "deleted"
 DELETE_NOT_FOUND = "not_found"
@@ -51,10 +39,6 @@ _table_lock = threading.Lock()
 
 
 def _get_table():
-    """Return the cached Shows Table resource, built lazily (like db.py).
-
-    The table is created by CloudFormation, not here, so it must already exist.
-    """
     global _table
     if _table is None:
         with _table_lock:
@@ -64,319 +48,341 @@ def _get_table():
 
 
 def _fetch(show_id: str, group_id: str, consistent: bool = True) -> dict | None:
-    """Read one show by its full key, or None when it isn't in this group.
-
-    The group is half the primary key, so an id from another household simply
-    doesn't resolve — no post-read ownership check is needed.
-    """
     return _get_table().get_item(
-        Key={"groupId": group_id, "id": show_id},
-        ConsistentRead=consistent,
+        Key={"groupId": group_id, "id": show_id}, ConsistentRead=consistent
     ).get("Item")
+
+
+def _watcher_row_id(show_id: str, user_id: str) -> str:
+    return f"{WATCHER_PREFIX}#{show_id}#{user_id}"
+
+
+def _watcher_rows(show: dict, group_id: str, consistent: bool = False) -> list[dict]:
+    """Read child rows, falling back to embedded members during deployment."""
+    if show.get("membersStorage") != ROW_STORAGE:
+        return list(show.get("members") or [])
+    rows = query_group_prefix(
+        _get_table(), group_id, f"{WATCHER_PREFIX}#{show['id']}#", consistent=consistent
+    )
+    return sorted(rows, key=lambda row: (int(row.get("sortOrder", 0)), row["id"]))
 
 
 def _project_member(raw: dict) -> dict:
     return {
-        "id": raw.get("id"),
-        "name": raw.get("name", raw.get("id")),
+        "id": raw.get("userId", raw.get("id")),
+        "name": raw.get("name", raw.get("userId", raw.get("id"))),
         "season": int(raw.get("season", 1)),
         "episode": int(raw.get("episode", 1)),
     }
 
 
-def _project(item: dict) -> dict:
-    """Project a raw item to the exact shape the frontend expects."""
-    archived_at = item.get("archivedAt")
+def _project(show: dict, group_id: str, consistent: bool = False) -> dict:
+    archived_at = show.get("archivedAt")
     return {
-        "id": item["id"],
-        "title": item.get("title", ""),
-        "createdBy": item.get("createdBy", "Someone"),
-        "createdById": item.get("createdById"),
-        "groupId": item.get("groupId"),
-        "createdAt": int(item["createdAt"]),
-        "updatedAt": int(item.get("updatedAt", item["createdAt"])),
+        "id": show["id"],
+        "title": show.get("title", ""),
+        "createdBy": show.get("createdBy", "Someone"),
+        "createdById": show.get("createdById"),
+        "groupId": show.get("groupId"),
+        "createdAt": int(show["createdAt"]),
+        "updatedAt": int(show.get("updatedAt", show["createdAt"])),
         "archivedAt": int(archived_at) if archived_at is not None else None,
-        "isArchived": bool(item.get("isArchived", False)),
-        "archivedBy": item.get("archivedBy"),
-        "archivedById": item.get("archivedById"),
-        "isWatchpartyLive": item.get("watchpartyStartedAt") is not None,
-        "watchpartyStartedAt": (
-            int(item["watchpartyStartedAt"])
-            if item.get("watchpartyStartedAt") is not None
-            else None
-        ),
-        "watchpartyStartedBy": item.get("watchpartyStartedBy"),
-        "watchpartyStartedById": item.get("watchpartyStartedById"),
-        "watchpartySeason": (
-            int(item["watchpartySeason"])
-            if item.get("watchpartySeason") is not None
-            else None
-        ),
-        "watchpartyEpisode": (
-            int(item["watchpartyEpisode"])
-            if item.get("watchpartyEpisode") is not None
-            else None
-        ),
-        "members": [_project_member(raw) for raw in item.get("members") or []],
+        "isArchived": bool(show.get("isArchived", False)),
+        "archivedBy": show.get("archivedBy"),
+        "archivedById": show.get("archivedById"),
+        "isWatchpartyLive": show.get("watchpartyStartedAt") is not None,
+        "watchpartyStartedAt": int(show["watchpartyStartedAt"]) if show.get("watchpartyStartedAt") is not None else None,
+        "watchpartyStartedBy": show.get("watchpartyStartedBy"),
+        "watchpartyStartedById": show.get("watchpartyStartedById"),
+        "watchpartySeason": int(show["watchpartySeason"]) if show.get("watchpartySeason") is not None else None,
+        "watchpartyEpisode": int(show["watchpartyEpisode"]) if show.get("watchpartyEpisode") is not None else None,
+        "members": [_project_member(row) for row in _watcher_rows(show, group_id, consistent)],
+    }
+
+
+def _new_watcher_row(show_id: str, user_id: str, name: str, group_id: str, sort_order: int) -> dict:
+    return {
+        "groupId": group_id,
+        "id": _watcher_row_id(show_id, user_id),
+        "parentId": show_id,
+        "userId": user_id,
+        "recordType": "show-watcher",
+        "name": name,
+        "season": 1,
+        "episode": 1,
+        "sortOrder": sort_order,
     }
 
 
 def add_show(title: str, created_by_id: str, created_by: str, group_id: str) -> dict:
-    """Create a show, auto-joining the creator as the first watcher at S1 E1."""
     now_ms = int(time.time() * 1000)
-    item = {
-        "id": uuid.uuid4().hex,
+    show_id = uuid.uuid4().hex
+    show = {
+        "id": show_id,
         "title": title,
         "createdBy": created_by,
         "createdById": created_by_id,
         "groupId": group_id,
         "createdAt": now_ms,
         "updatedAt": now_ms,
-        "members": [
-            {"id": created_by_id, "name": created_by, "season": 1, "episode": 1}
-        ],
+        "membersStorage": ROW_STORAGE,
     }
-    _get_table().put_item(Item=item)
-    return _project(item)
+    table = _get_table()
+    table.put_item(Item=show)
+    table.put_item(Item=_new_watcher_row(show_id, created_by_id, created_by, group_id, 0))
+    return _project(show, group_id, consistent=True)
 
 
 def get(show_id: str, group_id: str, consistent: bool = False) -> dict | None:
-    item = _fetch(show_id, group_id, consistent=consistent)
-    return _project(item) if item else None
+    show = _fetch(show_id, group_id, consistent=consistent)
+    return _project(show, group_id, consistent) if show else None
 
 
 def edit_title_owned(show_id: str, creator_id: str, group_id: str, title: str) -> dict | str:
     table = _get_table()
-    item = _fetch(show_id, group_id)
-    if item is None:
+    show = _fetch(show_id, group_id)
+    if show is None:
         return EDIT_NOT_FOUND
-    if item.get("createdById") != creator_id:
+    if show.get("createdById") != creator_id:
         return EDIT_FORBIDDEN
-    if item.get("isArchived", False):
+    if show.get("isArchived", False):
         return EDIT_READ_ONLY
-    if item.get("title", "") == title:
-        return _project(item)
+    if show.get("title", "") == title:
+        return _project(show, group_id)
     try:
         response = table.update_item(
             Key={"groupId": group_id, "id": show_id},
             UpdateExpression="SET title = :title, updatedAt = :now",
             ExpressionAttributeValues={
                 ":title": title,
-                ":now": max(
-                    int(time.time() * 1000),
-                    int(item.get("updatedAt", item["createdAt"])) + 1,
-                ),
+                ":now": max(int(time.time() * 1000), int(show.get("updatedAt", show["createdAt"])) + 1),
                 ":creator": creator_id,
                 ":false": False,
             },
-            ConditionExpression=(
-                "attribute_exists(id) AND createdById = :creator AND "
-                "(attribute_not_exists(isArchived) OR isArchived = :false)"
-            ),
+            ConditionExpression="attribute_exists(id) AND createdById = :creator AND (attribute_not_exists(isArchived) OR isArchived = :false)",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
             raise
         return EDIT_READ_ONLY
-    return _project(response["Attributes"])
+    return _project(response["Attributes"], group_id, consistent=True)
 
 
-def list_recent(
-    group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False
-) -> list[dict]:
-    """Return the group's recent shows, newest first. Active/completed split and
-    per-watcher ordering are done in the frontend, so this stays a recency
-    sort scoped to the caller's group."""
+def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
     shows = [
-        item
-        for item in query_group(_get_table(), group_id, consistent=consistent)
-        if "createdAt" in item
+        item for item in query_group(_get_table(), group_id, consistent=consistent)
+        if "createdAt" in item and not item.get("parentId")
     ]
     shows.sort(key=lambda item: int(item.get("updatedAt", item["createdAt"])), reverse=True)
-    return [_project(item) for item in shows[:limit]]
+    return [_project(item, group_id, consistent) for item in shows[:limit]]
 
 
-def _mutate_members(show_id: str, group_id: str, mutate):
-    """Load a show, run `mutate(members)`, and persist with an optimistic write.
+def _touch_active(show_id: str, group_id: str) -> bool:
+    """Linearize a watcher mutation against the parent archive state."""
+    try:
+        _get_table().update_item(
+            Key={"groupId": group_id, "id": show_id},
+            UpdateExpression="SET updatedAt = :now",
+            ExpressionAttributeValues={":now": int(time.time() * 1000), ":false": False, ":storage": ROW_STORAGE},
+            ConditionExpression="attribute_exists(id) AND membersStorage = :storage AND (attribute_not_exists(isArchived) OR isArchived = :false)",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
 
-    `mutate` edits the members list in place; returning False means "no change"
-    (e.g. member not found) so the caller gets None. A show in another group is
-    invisible here (returns None). Completed shows are read-only and yield
-    MUTATION_COMPLETED. The conditional update also re-checks the group and the
-    archived flag to guard against a concurrent change between read and write.
-    """
-    table = _get_table()
-    item = _fetch(show_id, group_id)
-    if item is None:
+
+def _mutate_embedded_members(show_id: str, group_id: str, mutate):
+    """Temporary deploy-window support for legacy rows awaiting migration."""
+    show = _fetch(show_id, group_id)
+    if show is None:
         return None
-    if item.get("isArchived", False):
+    if show.get("isArchived", False):
         return MUTATION_ARCHIVED
-
-    members = [dict(member) for member in (item.get("members") or [])]
+    members = [dict(member) for member in (show.get("members") or [])]
     if mutate(members) is False:
         return None
-
     try:
-        resp = table.update_item(
+        response = _get_table().update_item(
             Key={"groupId": group_id, "id": show_id},
-            UpdateExpression="SET #members = :members, updatedAt = :updated_at",
+            UpdateExpression="SET #members = :members, updatedAt = :now",
             ExpressionAttributeNames={"#members": "members"},
-            ExpressionAttributeValues={
-                ":members": members,
-                ":updated_at": int(time.time() * 1000),
-                ":false": False,
-            },
-            ConditionExpression=(
-                "attribute_exists(id) AND "
-                "(attribute_not_exists(isArchived) OR isArchived = :false)"
-            ),
+            ExpressionAttributeValues={":members": members, ":now": int(time.time() * 1000), ":false": False},
+            ConditionExpression="attribute_exists(id) AND (attribute_not_exists(isArchived) OR isArchived = :false)",
             ReturnValues="ALL_NEW",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             return None
         raise
-    return _project(resp["Attributes"])
+    return _project(response["Attributes"], group_id, consistent=True)
 
 
 def join(show_id: str, user_id: str, name: str, group_id: str):
-    """Add a watcher if not already present (idempotent); returns the snapshot."""
-
-    def mutate(members: list[dict]):
-        if not any(member.get("id") == user_id for member in members):
-            members.append({"id": user_id, "name": name, "season": 1, "episode": 1})
-        # Return None (not False) even when already present so a repeat join
-        # still resolves with the current show rather than a 404.
+    show = _fetch(show_id, group_id)
+    if show is None:
         return None
-
-    return _mutate_members(show_id, group_id, mutate)
+    if show.get("membersStorage") != ROW_STORAGE:
+        def mutate(members):
+            if not any(member.get("id") == user_id for member in members):
+                members.append({"id": user_id, "name": name, "season": 1, "episode": 1})
+        return _mutate_embedded_members(show_id, group_id, mutate)
+    if not _touch_active(show_id, group_id):
+        return MUTATION_ARCHIVED
+    try:
+        _get_table().put_item(
+            Item=_new_watcher_row(show_id, user_id, name, group_id, int(time.time() * 1000)),
+            ConditionExpression="attribute_not_exists(id)",
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+    return get(show_id, group_id, consistent=True)
 
 
 def leave(show_id: str, user_id: str, group_id: str):
-    """Remove a watcher; returns the snapshot whether or not they were present."""
-
-    def mutate(members: list[dict]):
-        members[:] = [member for member in members if member.get("id") != user_id]
+    show = _fetch(show_id, group_id)
+    if show is None:
         return None
-
-    return _mutate_members(show_id, group_id, mutate)
+    if show.get("membersStorage") != ROW_STORAGE:
+        return _mutate_embedded_members(
+            show_id, group_id,
+            lambda members: members.__setitem__(slice(None), [member for member in members if member.get("id") != user_id]),
+        )
+    if not _touch_active(show_id, group_id):
+        return MUTATION_ARCHIVED
+    _get_table().delete_item(Key={"groupId": group_id, "id": _watcher_row_id(show_id, user_id)})
+    return get(show_id, group_id, consistent=True)
 
 
 def _write_progress(member: dict, field: str, value) -> None:
-    """Write a clamped, 1-based season/episode. Changing the season restarts the
-    episode at 1, since a new season begins from its first episode."""
     member[field] = max(1, int(value))
     if field == "season":
         member["episode"] = 1
 
 
+def _fetch_watcher(show_id: str, member_id: str, group_id: str) -> dict | None:
+    return _get_table().get_item(
+        Key={"groupId": group_id, "id": _watcher_row_id(show_id, member_id)}, ConsistentRead=True
+    ).get("Item")
+
+
 def set_progress(show_id: str, member_id: str, field: str, value, group_id: str):
-    """Set one watcher's season or episode to an absolute value."""
     if field not in PROGRESS_FIELDS:
         return None
-
-    def mutate(members: list[dict]):
-        for member in members:
-            if member.get("id") == member_id:
-                _write_progress(member, field, value)
-                return None
-        return False
-
-    return _mutate_members(show_id, group_id, mutate)
-
-
-def adjust_progress(show_id: str, member_id: str, field: str, delta: int, group_id: str):
-    """Nudge one watcher's season or episode by delta (+1 / -1)."""
-    if field not in PROGRESS_FIELDS:
+    show = _fetch(show_id, group_id)
+    if show is None:
         return None
-
-    def mutate(members: list[dict]):
-        for member in members:
-            if member.get("id") == member_id:
-                _write_progress(member, field, int(member.get(field, 1)) + delta)
-                return None
-        return False
-
-    return _mutate_members(show_id, group_id, mutate)
-
-
-def set_watchparty(
-    show_id: str,
-    user_id: str,
-    name: str,
-    group_id: str,
-    live: bool,
-    season: int | None = None,
-    episode: int | None = None,
-):
-    """Start or end the show's live watchparty state."""
-    table = _get_table()
-    item = _fetch(show_id, group_id)
-    if item is None:
+    if show.get("membersStorage") != ROW_STORAGE:
+        def mutate(members):
+            for member in members:
+                if member.get("id") == member_id:
+                    _write_progress(member, field, value)
+                    return None
+            return False
+        return _mutate_embedded_members(show_id, group_id, mutate)
+    if _fetch_watcher(show_id, member_id, group_id) is None:
         return None
-    if item.get("isArchived", False):
+    if not _touch_active(show_id, group_id):
         return MUTATION_ARCHIVED
-    if live and not item.get("members"):
-        return WATCHPARTY_EMPTY
-
-    now_ms = int(time.time() * 1000)
-    if live:
-        season = max(1, int(season or 1))
-        episode = max(1, int(episode or 1))
-        update = dict(
-            UpdateExpression=(
-                "SET watchpartyStartedAt = :now, watchpartyStartedById = :user_id, "
-                "watchpartyStartedBy = :name, watchpartySeason = :season, "
-                "watchpartyEpisode = :episode, updatedAt = :now"
-            ),
-            ExpressionAttributeValues={
-                ":now": now_ms,
-                ":user_id": user_id,
-                ":name": name,
-                ":season": season,
-                ":episode": episode,
-                ":false": False,
-            },
-        )
-    else:
-        update = dict(
-            UpdateExpression=(
-                "SET updatedAt = :now REMOVE watchpartyStartedAt, "
-                "watchpartyStartedById, watchpartyStartedBy, "
-                "watchpartySeason, watchpartyEpisode"
-            ),
-            ExpressionAttributeValues={
-                ":now": now_ms,
-                ":false": False,
-            },
-        )
-
+    expression = "SET #field = :value"
+    names = {"#field": field}
+    values = {":value": max(1, int(value))}
+    if field == "season":
+        expression += ", episode = :one"
+        values[":one"] = 1
     try:
-        resp = table.update_item(
-            Key={"groupId": group_id, "id": show_id},
-            ConditionExpression=(
-                "attribute_exists(id) AND "
-                "(attribute_not_exists(isArchived) OR isArchived = :false)"
-            ),
-            ReturnValues="ALL_NEW",
-            **update,
+        _get_table().update_item(
+            Key={"groupId": group_id, "id": _watcher_row_id(show_id, member_id)},
+            UpdateExpression=expression, ExpressionAttributeNames=names,
+            ExpressionAttributeValues=values, ConditionExpression="attribute_exists(id)",
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             return None
         raise
-    return _project(resp["Attributes"])
+    return get(show_id, group_id, consistent=True)
 
 
-def start_watchparty(
-    show_id: str,
-    user_id: str,
-    name: str,
-    group_id: str,
-    season: int | None = None,
-    episode: int | None = None,
-):
+def adjust_progress(show_id: str, member_id: str, field: str, delta: int, group_id: str):
+    if field not in PROGRESS_FIELDS:
+        return None
+    show = _fetch(show_id, group_id)
+    if show is None:
+        return None
+    if show.get("membersStorage") != ROW_STORAGE:
+        def mutate(members):
+            for member in members:
+                if member.get("id") == member_id:
+                    _write_progress(member, field, int(member.get(field, 1)) + delta)
+                    return None
+            return False
+        return _mutate_embedded_members(show_id, group_id, mutate)
+    if not _touch_active(show_id, group_id):
+        return MUTATION_ARCHIVED
+    # Compare-and-set retries preserve concurrent increments to one watcher's
+    # progress without touching any other watcher row.
+    for _ in range(5):
+        watcher = _fetch_watcher(show_id, member_id, group_id)
+        if watcher is None:
+            return None
+        current = int(watcher.get(field, 1))
+        next_value = max(1, current + delta)
+        expression = "SET #field = :next"
+        values = {":next": next_value, ":current": current}
+        if field == "season":
+            expression += ", episode = :one"
+            values[":one"] = 1
+        try:
+            _get_table().update_item(
+                Key={"groupId": group_id, "id": watcher["id"]},
+                UpdateExpression=expression, ExpressionAttributeNames={"#field": field},
+                ExpressionAttributeValues=values,
+                ConditionExpression="attribute_exists(id) AND #field = :current",
+            )
+            return get(show_id, group_id, consistent=True)
+        except ClientError as err:
+            if err.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                raise
+    return None
+
+
+def set_watchparty(show_id: str, user_id: str, name: str, group_id: str, live: bool, season: int | None = None, episode: int | None = None):
+    table = _get_table()
+    show = _fetch(show_id, group_id)
+    if show is None:
+        return None
+    if show.get("isArchived", False):
+        return MUTATION_ARCHIVED
+    if live and not _watcher_rows(show, group_id, consistent=True):
+        return WATCHPARTY_EMPTY
+    now_ms = int(time.time() * 1000)
+    if live:
+        update = {
+            "UpdateExpression": "SET watchpartyStartedAt = :now, watchpartyStartedById = :user, watchpartyStartedBy = :name, watchpartySeason = :season, watchpartyEpisode = :episode, updatedAt = :now",
+            "ExpressionAttributeValues": {":now": now_ms, ":user": user_id, ":name": name, ":season": max(1, int(season or 1)), ":episode": max(1, int(episode or 1)), ":false": False},
+        }
+    else:
+        update = {
+            "UpdateExpression": "SET updatedAt = :now REMOVE watchpartyStartedAt, watchpartyStartedById, watchpartyStartedBy, watchpartySeason, watchpartyEpisode",
+            "ExpressionAttributeValues": {":now": now_ms, ":false": False},
+        }
+    try:
+        response = table.update_item(
+            Key={"groupId": group_id, "id": show_id},
+            ConditionExpression="attribute_exists(id) AND (attribute_not_exists(isArchived) OR isArchived = :false)",
+            ReturnValues="ALL_NEW", **update,
+        )
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None
+        raise
+    return _project(response["Attributes"], group_id, consistent=True)
+
+
+def start_watchparty(show_id: str, user_id: str, name: str, group_id: str, season: int | None = None, episode: int | None = None):
     return set_watchparty(show_id, user_id, name, group_id, True, season, episode)
 
 
@@ -385,67 +391,48 @@ def end_watchparty(show_id: str, user_id: str, name: str, group_id: str):
 
 
 def _set_archived(show_id: str, user_id: str, name: str, group_id: str, archived: bool):
-    """Archive or restore a show. Any roommate in the group may do this."""
-    table = _get_table()
-    item = _fetch(show_id, group_id)
-    if item is None:
+    show = _fetch(show_id, group_id)
+    if show is None:
         return None
+    now_ms = int(time.time() * 1000)
     if archived:
-        update = dict(
-            UpdateExpression=(
-                "SET isArchived = :true, archivedAt = :ts, archivedById = :user_id, "
-                "archivedBy = :name, updatedAt = :ts"
-            ),
-            ExpressionAttributeValues={
-                ":ts": int(time.time() * 1000),
-                ":true": True,
-                ":user_id": user_id,
-                ":name": name,
-            },
-        )
+        update = {
+            "UpdateExpression": "SET isArchived = :true, archivedAt = :now, archivedById = :user, archivedBy = :name, updatedAt = :now",
+            "ExpressionAttributeValues": {":true": True, ":now": now_ms, ":user": user_id, ":name": name},
+        }
     else:
-        update = dict(
-            UpdateExpression=(
-                "SET isArchived = :false, restoredById = :user_id, restoredBy = :name, updatedAt = :ts "
-                "REMOVE archivedAt, archivedById, archivedBy"
-            ),
-            ExpressionAttributeValues={
-                ":ts": int(time.time() * 1000),
-                ":false": False,
-                ":user_id": user_id,
-                ":name": name,
-            },
-        )
-
+        update = {
+            "UpdateExpression": "SET isArchived = :false, restoredById = :user, restoredBy = :name, updatedAt = :now REMOVE archivedAt, archivedById, archivedBy",
+            "ExpressionAttributeValues": {":false": False, ":now": now_ms, ":user": user_id, ":name": name},
+        }
     try:
-        resp = table.update_item(
-            Key={"groupId": group_id, "id": show_id},
-            ConditionExpression="attribute_exists(id)",
-            ReturnValues="ALL_NEW",
-            **update,
+        response = _get_table().update_item(
+            Key={"groupId": group_id, "id": show_id}, ConditionExpression="attribute_exists(id)",
+            ReturnValues="ALL_NEW", **update,
         )
     except ClientError as err:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             return None
         raise
-    return _project(resp["Attributes"])
+    return _project(response["Attributes"], group_id, consistent=True)
 
 
 def archive(show_id: str, user_id: str, name: str, group_id: str):
-    """Archive a show so it drops out of the active list."""
-    return _set_archived(show_id, user_id, name, group_id, archived=True)
+    return _set_archived(show_id, user_id, name, group_id, True)
 
 
 def restore(show_id: str, user_id: str, name: str, group_id: str):
-    """Restore a previously archived show to the active list."""
-    return _set_archived(show_id, user_id, name, group_id, archived=False)
+    return _set_archived(show_id, user_id, name, group_id, False)
 
 
 def delete(show_id: str, group_id: str) -> str:
-    """Delete a show. The group is half the key, so another household's id
-    simply doesn't resolve and reports not-found."""
-    table = _get_table()
-    if _fetch(show_id, group_id) is None:
+    show = _fetch(show_id, group_id)
+    if show is None:
         return DELETE_NOT_FOUND
+    table = _get_table()
     table.delete_item(Key={"groupId": group_id, "id": show_id})
+    if show.get("membersStorage") == ROW_STORAGE:
+        with table.batch_writer() as batch:
+            for row in _watcher_rows(show, group_id, consistent=True):
+                batch.delete_item(Key={"groupId": group_id, "id": row["id"]})
     return DELETE_OK

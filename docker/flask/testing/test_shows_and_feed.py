@@ -72,6 +72,28 @@ def test_progress_clamps_at_one_and_validates_input(client):
     assert client.put(
         f"/api/shows/{show_id}/watchers/sheryl/episode", json={"value": "x", "userId": "sheryl"}
     ).status_code == 400
+
+
+def test_concurrent_watcher_progress_updates_preserve_both_watchers(client):
+    """Progress is stored per watcher rather than as one replaceable members list."""
+    show = _make_show(client)
+    show_id = show["id"]
+    household_shows.join(show_id, "andre", "Andre", TEST_GROUP_ID)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(
+            lambda args: household_shows.adjust_progress(*args),
+            [
+                (show_id, "sheryl", "episode", 2, TEST_GROUP_ID),
+                (show_id, "andre", "episode", 3, TEST_GROUP_ID),
+            ],
+        ))
+
+    assert all(results)
+    stored = household_shows.get(show_id, TEST_GROUP_ID, consistent=True)
+    assert {member["id"]: member["episode"] for member in stored["members"]} == {
+        "sheryl": 3, "andre": 4,
+    }
     assert client.patch(
         f"/api/shows/{show_id}/watchers/sheryl/rating", json={"delta": 1, "userId": "sheryl"}
     ).status_code == 400
