@@ -172,7 +172,9 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
           >
             <strong>{entry.authorName}</strong>
             <span>{relativeTime(entry.createdAt)}{entry.updatedAt > entry.createdAt ? " · edited" : ""}</span>
-            <span className={styles.collapseGlyph} aria-hidden="true">⌄</span>
+            <span className={styles.collapseGlyph} aria-hidden="true">
+              {collapsed ? "+" : "−"}
+            </span>
           </button>
           {entryActions(entry, locked)}
         </header>

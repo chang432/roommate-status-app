@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import BookClubForum from "./BookClubForum.jsx";
@@ -150,13 +150,17 @@ describe("BookClubForum", () => {
     const replyToggle = screen.getByRole("button", { name: /Kayla/ });
     expect(rootToggle).toHaveAttribute("aria-expanded", "true");
     expect(replyToggle).toHaveAttribute("aria-expanded", "true");
+    expect(within(rootToggle).getByText("−")).toBeVisible();
+    expect(within(replyToggle).getByText("−")).toBeVisible();
 
     await userEvent.click(replyToggle);
     expect(replyToggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(replyToggle).getByText("+")).toBeVisible();
     expect(screen.getByText("A reply")).not.toBeVisible();
 
     await userEvent.click(rootToggle);
     expect(rootToggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(rootToggle).getByText("+")).toBeVisible();
     expect(screen.queryByText("Root message")).not.toBeVisible();
     expect(screen.queryByRole("button", { name: /Kayla/ })).not.toBeInTheDocument();
   });

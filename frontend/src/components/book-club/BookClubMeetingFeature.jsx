@@ -8,19 +8,21 @@ import {
 } from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useExpandOnModuleFocus } from "../../context/ModuleFocusContext.jsx";
+import { avatarColor } from "../../utils/avatar.js";
 import { exactDateTime } from "../../utils/time.js";
 import ModuleEditButton from "../feed/ModuleEditButton.jsx";
 import ExpandableCardRegion from "../feed/ExpandableCardRegion.jsx";
+import PeoplePopover from "../ui/PeoplePopover.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import BookClubDisclosure from "./BookClubDisclosure.jsx";
 import BookClubMeetingDiscussion from "./BookClubMeetingDiscussion.jsx";
 import styles from "./BookClubMeetingFeature.module.css";
 
 const ATTENDANCE_OPTIONS = [
-  { status: "attending", label: "Attending" },
-  { status: "maybe", label: "Maybe" },
-  { status: "not_attending", label: "Not attending" },
-  { status: "pending", label: "Pending" },
+  { status: "attending", label: "Attending", icon: "✓" },
+  { status: "maybe", label: "Maybe", icon: "?" },
+  { status: "not_attending", label: "Not attending", icon: "×" },
+  { status: "pending", label: "Pending", icon: "…" },
 ];
 
 function groupAttendance(responses) {
@@ -45,6 +47,7 @@ export default function BookClubMeetingFeature({
   const [expandedId, setExpandedId] = useState(null);
   const [details, setDetails] = useState({});
   const [attendanceOpen, setAttendanceOpen] = useState(false);
+  const [openAttendanceStatus, setOpenAttendanceStatus] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const { confirm, confirmationDialog } = useConfirmDialog();
@@ -77,11 +80,20 @@ export default function BookClubMeetingFeature({
   async function toggle(meeting) {
     if (expandedId === meeting.id) {
       setExpandedId(null);
+      setOpenAttendanceStatus(null);
       return;
     }
     setExpandedId(meeting.id);
     setError("");
     await loadMeetingDetails(meeting.id);
+  }
+
+  function toggleAttendance() {
+    setAttendanceOpen((value) => {
+      const next = !value;
+      if (!next) setOpenAttendanceStatus(null);
+      return next;
+    });
   }
 
   async function saveResponse(meeting, changes) {
@@ -189,7 +201,7 @@ export default function BookClubMeetingFeature({
             title="Attendance"
             badge={`${responses.length} ${responses.length === 1 ? "member" : "members"}`}
             open={attendanceOpen}
-            onToggle={() => setAttendanceOpen((value) => !value)}
+            onToggle={toggleAttendance}
           >
             <div className={styles.attendanceContent}>
               {attendanceEditable ? (
@@ -218,8 +230,14 @@ export default function BookClubMeetingFeature({
                 className={styles.attendanceGroups}
                 aria-label="Member attendance"
               >
-                {ATTENDANCE_OPTIONS.map(({ status, label }) => {
+                {ATTENDANCE_OPTIONS.map(({ status, label, icon }) => {
                   const members = attendanceGroups[status];
+                  const people = members.map((response, index) => ({
+                    id: response.userId,
+                    name: response.userName,
+                    color: avatarColor(index),
+                  }));
+                  const peopleLabel = `${members.length} ${members.length === 1 ? "person" : "people"}`;
                   return (
                     <section
                       className={styles.attendanceGroup}
@@ -228,35 +246,54 @@ export default function BookClubMeetingFeature({
                       aria-label={`${label}: ${members.length}`}
                     >
                       <header className={styles.attendanceGroupHeader}>
-                        <h4>
-                          <span
-                            aria-hidden="true"
-                            className={styles.attendanceIndicator}
-                          />
-                          {label}
-                        </h4>
-                        <span
-                          aria-label={`${members.length} ${members.length === 1 ? "member" : "members"}`}
+                        <PeoplePopover
+                          people={people}
+                          open={openAttendanceStatus === status}
+                          onOpenChange={(open) =>
+                            setOpenAttendanceStatus(open ? status : null)
+                          }
+                          heading={label}
+                          dialogLabel={`${label} members`}
+                          buttonLabel={`View ${peopleLabel} marked ${label.toLowerCase()}`}
+                          disabled={!members.length}
+                          triggerClassName={styles.attendanceTrigger}
                         >
-                          {members.length}
-                        </span>
-                      </header>
-                      {members.length ? (
-                        <ul className={styles.memberList}>
-                          {members.map((response) => (
-                            <li key={response.userId}>
-                              <span title={response.userName}>
-                                {response.userName}
+                          <span className={styles.attendanceIconCluster}>
+                            {members.length ? members.map((member) => (
+                              <span
+                                key={member.userId}
+                                aria-hidden="true"
+                                className={styles.attendanceMemberIcon}
+                              >
+                                {icon}
                               </span>
-                              {response.userId === user.id ? (
-                                <small>You</small>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className={styles.emptyGroup}>No one yet</p>
-                      )}
+                            )) : (
+                              <span
+                                aria-hidden="true"
+                                className={styles.attendanceMemberIcon}
+                              >
+                                {icon}
+                              </span>
+                            )}
+                            {members.length > 4 ? (
+                              <span
+                                aria-hidden="true"
+                                className={styles.attendanceMoreDesktop}
+                              >
+                                +{members.length - 4}
+                              </span>
+                            ) : null}
+                            {members.length > 3 ? (
+                              <span
+                                aria-hidden="true"
+                                className={styles.attendanceMoreMobile}
+                              >
+                                +{members.length - 3}
+                              </span>
+                            ) : null}
+                          </span>
+                        </PeoplePopover>
+                      </header>
                     </section>
                   );
                 })}

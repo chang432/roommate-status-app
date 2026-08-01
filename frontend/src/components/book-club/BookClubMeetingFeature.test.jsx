@@ -54,12 +54,12 @@ const MEETING = {
   }],
 };
 
-function renderMeeting({ intent = null, canAdminister = false, onEdit = vi.fn() } = {}) {
+function renderMeeting({ meeting = MEETING, intent = null, canAdminister = false, onEdit = vi.fn() } = {}) {
   return render(
     <MemoryRouter>
       <ModuleFocusProvider intent={intent}>
         <BookClubMeetingFeature
-          meeting={MEETING}
+          meeting={meeting}
           moduleTag={<span>Book Club</span>}
           onEdit={onEdit}
           canAdminister={canAdminister}
@@ -178,9 +178,15 @@ describe("BookClubMeetingFeature", () => {
       { attendanceStatus: "attending" },
     );
     await waitFor(() => {
-      expect(within(screen.getByRole("region", { name: "Attending: 2" })).getByText("Andre"))
-        .toBeInTheDocument();
+      expect(within(screen.getByLabelText("Member attendance")).getByRole("button", {
+        name: "View 2 people marked attending",
+      })).toBeInTheDocument();
     });
+    const attending = within(screen.getByLabelText("Member attendance")).getByRole("button", {
+      name: "View 2 people marked attending",
+    });
+    await userEvent.click(attending);
+    expect(screen.getByRole("dialog", { name: "Attending members" })).toHaveTextContent("Andre");
   });
 
   it("groups every member by attendance status with explicit counts", async () => {
@@ -192,17 +198,47 @@ describe("BookClubMeetingFeature", () => {
     await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
 
     const attendance = screen.getByLabelText("Member attendance");
-    expect(within(screen.getByRole("region", { name: "Attending: 1" })).getByText("Kayla"))
-      .toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Maybe: 1" })).getByText("Andre"))
-      .toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Not attending: 1" })).getByText("Ting"))
-      .toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Pending: 1" })).getByText("Sheryl"))
-      .toBeInTheDocument();
-    expect(within(attendance).getAllByRole("listitem")).toHaveLength(4);
-    expect(within(screen.getByRole("region", { name: "Maybe: 1" })).getByText("You"))
-      .toBeInTheDocument();
+    expect(attendance).not.toHaveTextContent("Kayla");
+
+    for (const [label, person] of [
+      ["Attending", "Kayla"],
+      ["Maybe", "Andre"],
+      ["Not attending", "Ting"],
+      ["Pending", "Sheryl"],
+    ]) {
+      const trigger = within(attendance).getByRole("button", {
+        name: `View 1 person marked ${label.toLowerCase()}`,
+      });
+      await userEvent.click(trigger);
+      expect(screen.getByRole("dialog", { name: `${label} members` }))
+        .toHaveTextContent(person);
+      await userEvent.click(trigger);
+    }
+  });
+
+  it("shows a responsive additional count after the visible response icons", async () => {
+    const crowdedMeeting = {
+      ...MEETING,
+      responses: Array.from({ length: 6 }, (_, index) => ({
+        userId: index === 0 ? "andre" : `member-${index}`,
+        userName: index === 0 ? "Andre" : `Member ${index}`,
+        attendanceStatus: "attending",
+      })),
+    };
+    getBookClubMeeting.mockResolvedValueOnce({ meeting: crowdedMeeting });
+    renderMeeting({ meeting: crowdedMeeting });
+    await userEvent.click(screen.getByRole("button", {
+      name: /The Left Hand of Darkness/,
+      expanded: false,
+    }));
+    await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
+
+    const attending = within(screen.getByLabelText("Member attendance"))
+      .getByRole("button", { name: "View 6 people marked attending" });
+    expect(within(attending).getByText("+2")).toBeInTheDocument();
+    await userEvent.click(attending);
+    expect(screen.getByRole("dialog", { name: "Attending members" }))
+      .toHaveTextContent("Member 5");
   });
 
   it("keeps completed meeting attendance read-only", async () => {

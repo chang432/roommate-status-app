@@ -10,8 +10,7 @@
 .entrySummary { @apply flex min-w-0 flex-1 items-baseline gap-2 rounded-sm bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent; }
 .entryHeader strong { @apply text-[13px] text-ink; }
 .entryHeader span { @apply text-[11px] text-ink-soft; }
-.collapseGlyph { @apply ml-auto flex-none text-base leading-none text-accent-deep transition-transform motion-reduce:transition-none; }
-.entrySummary[aria-expanded="false"] .collapseGlyph { @apply -rotate-90; }
+.collapseGlyph { @apply ml-auto flex-none text-lg font-semibold leading-none text-accent-deep; }
 .entryContent { @apply min-w-0; }
 .topic h3 { @apply mt-2 text-[14px] font-semibold text-ink; }
 .entryBody { @apply mt-1.5 whitespace-pre-wrap text-[13px] leading-5 text-ink; }
