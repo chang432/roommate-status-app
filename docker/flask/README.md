@@ -28,8 +28,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/book-club/books`                                  | `?userId=<id>` + title/author/Book owner   | admin-added current title; completes the former current book |
 | `PATCH /api/book-club/books/<id>`                            | `?userId=<id>` + title/author/Book owner, optional admin `setAsCurrent` | corrected book and historical meeting snapshots; restores a completed book only when none is current |
 | `PUT /api/book-club/books/<id>/review`                       | `?userId=<id>` + rating/finished/note      | member review and refreshed Book Club library           |
-| `GET/POST /api/book-club/meetings/<id>/forum`                | `?userId=<id>` + optional topic/reply      | meeting forum threads                                   |
-| `PATCH/DELETE /api/book-club/meetings/<id>/forum/<entryId>`  | `?userId=<id>` + editable title/body       | edited or soft-removed forum entry                      |
+| `GET/POST /api/book-club/meetings/<id>/forum`                | `?userId=<id>` + optional message/reply    | threaded meeting messages                              |
+| `PATCH/DELETE /api/book-club/meetings/<id>/forum/<entryId>`  | `?userId=<id>` + editable body             | edited or soft-removed forum entry                      |
 | `GET  /api/roommates`                                        | `?userId=<id>`                             | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |

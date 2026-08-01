@@ -125,7 +125,6 @@ def seed_local_book_club() -> None:
             BOOK_CLUB_GROUP_ID,
             meeting["id"],
             creator,
-            "Predictions before Chapter 9",
             "What do you think the stone eater wants?",
             None,
         )

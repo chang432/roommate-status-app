@@ -245,7 +245,7 @@ async function mockBookClub(page, {
           } : thread)
         } else {
           forum.threads = [{
-            id: 'forum#topic', meetingId, title: entry.title,
+            id: 'forum#message', meetingId,
             authorId: 'andre', authorName: 'Andre', body: entry.body,
             createdAt: NOW, updatedAt: NOW, lastActivityAt: NOW, replies: [],
           }]
@@ -330,14 +330,17 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
 
   await details.getByRole('button', { name: /Discussions/ }).click()
   await details.getByRole('button', { name: /Read through Chapter 9/ }).click()
-  await details.getByRole('button', { name: 'New topic' }).click()
-  await details.getByLabel('New topic title').fill('Favorite passage')
-  await details.getByLabel('New topic post').fill('Which scene stayed with you?')
-  await details.getByRole('button', { name: 'Post topic' }).click()
+  await details.getByLabel('New message').fill('Which scene stayed with you?')
+  await details.getByRole('button', { name: 'Send message' }).click()
   await details.getByRole('button', { name: 'Reply' }).click()
-  await details.getByLabel('Reply to Favorite passage').fill('The final conversation.')
+  await details.getByLabel('Reply to message').fill('The final conversation.')
   await details.getByRole('button', { name: 'Reply', exact: true }).click()
   await expect(details.getByText('The final conversation.')).toBeVisible()
+  const rootMessageToggle = details.getByRole('button', { name: /Andre/ }).first()
+  await rootMessageToggle.click()
+  await expect(details.getByText('Which scene stayed with you?')).toBeHidden()
+  await rootMessageToggle.click()
+  await expect(details.getByText('Which scene stayed with you?')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-modal-desktop.png'), fullPage: true })
 
   await details.getByRole('button', { name: '← All books' }).click()
@@ -360,7 +363,7 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await page.getByLabel('Your RSVP').selectOption('maybe')
   await expect(page.getByRole('region', { name: 'Maybe: 2' })).toContainText('Andre')
   await discussionSection.getByRole('button', { name: /Discussion/ }).click()
-  await expect(discussionSection.getByText('Favorite passage')).toBeVisible()
+  await expect(discussionSection.getByText('Which scene stayed with you?')).toBeVisible()
   await page.waitForTimeout(750)
   await page.screenshot({ path: testInfo.outputPath('book-club-meeting-tracker-desktop.png'), fullPage: true })
   await page.getByRole('button', { name: 'Complete meeting' }).click()
@@ -375,7 +378,7 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await expect(wholeBook.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
   await wholeBook.getByRole('button', { name: /Discussions/ }).click()
   await wholeBook.getByRole('button', { name: /Read through Chapter 9/ }).click()
-  await expect(wholeBook.getByText('Favorite passage')).toBeVisible()
+  await expect(wholeBook.getByText('Which scene stayed with you?')).toBeVisible()
 })
 
 test('confirms meeting completion safely on desktop', async ({ page }, testInfo) => {
@@ -1109,7 +1112,7 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   await expect(attendance.getByRole('listitem')).toHaveCount(3)
   await expect.poll(() => attendance.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.getByRole('region', { name: 'Discussion' }).getByRole('button', { name: /Discussion/ }).click()
-  await expect(page.getByRole('region', { name: 'Discussion' }).getByText('No topics yet. Start the conversation before the meeting.')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Discussion' }).getByText('No messages yet. Start the conversation.')).toBeVisible()
   await expect.poll(() => page.evaluate(() => (
     document.documentElement.scrollWidth <= window.innerWidth
   ))).toBe(true)

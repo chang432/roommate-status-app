@@ -48,7 +48,8 @@ availability to hang out. Built from the mockups in `../mockups`.
   dedicated position and a separate action for opening the full book detail.
   When no title is current, an admin can restore a completed title from its edit
   form.
-  Members review current or completed books with
+  Meeting discussions use body-only messages with Reddit-style threaded replies
+  that can be collapsed independently. Members review current or completed books
   1–5 stars, finish status, and an optional note; completed meeting discussions
   remain read-only.
 - **Requests**: the household board lets users ask specific roommates for

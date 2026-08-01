@@ -24,7 +24,6 @@ TIMEZONE = "America/New_York"
 OPEN_STATUS = "scheduled"
 COMPLETED_STATUS = "completed"
 REVIEW_NOTE_LIMIT = 1000
-FORUM_TITLE_LIMIT = 120
 FORUM_POST_LIMIT = 2000
 FORUM_REPLY_LIMIT = 1000
 _table = None
@@ -876,8 +875,10 @@ def _project_forum_entry(item: dict) -> dict:
         ),
         "deletedByName": item.get("deletedByName"),
     }
-    if not item.get("parentPostId"):
-        projected["title"] = item.get("title", "")
+    # Keep legacy titles readable until the title-removal migration completes;
+    # new messages never write this optional field.
+    if not item.get("parentPostId") and item.get("title"):
+        projected["title"] = item["title"]
     return projected
 
 
@@ -921,7 +922,6 @@ def create_forum_entry(
     group_id: str,
     meeting_id: str,
     member: dict,
-    title,
     body,
     parent_post_id,
 ) -> tuple[dict | None, dict | None, str | None]:
@@ -946,11 +946,7 @@ def create_forum_entry(
             or parent.get("deletedAt") is not None
         ):
             return None, None, "Unknown open forum topic."
-        title = None
     else:
-        title, error = _validate_text(title, "Topic title", FORUM_TITLE_LIMIT)
-        if error:
-            return None, None, error
         parent = None
 
     now = _now()
@@ -966,8 +962,6 @@ def create_forum_entry(
         "updatedAt": now,
         "lastActivityAt": now,
     }
-    if title is not None:
-        entry["title"] = title
     if parent is not None:
         entry["parentPostId"] = parent["id"]
     _get_table().put_item(
@@ -988,7 +982,6 @@ def update_forum_entry(
     meeting_id: str,
     entry_id: str,
     member: dict,
-    title,
     body,
 ) -> tuple[dict | None, str | None]:
     meeting = _fetch(group_id, meeting_id)
@@ -1008,10 +1001,7 @@ def update_forum_entry(
     if error:
         return None, error
     if not entry.get("parentPostId"):
-        title, error = _validate_text(title, "Topic title", FORUM_TITLE_LIMIT)
-        if error:
-            return None, error
-        entry["title"] = title
+        entry.pop("title", None)
     entry["body"] = body
     entry["updatedAt"] = _now()
     _get_table().put_item(Item=entry)

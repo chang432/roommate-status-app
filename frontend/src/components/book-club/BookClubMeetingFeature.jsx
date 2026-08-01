@@ -266,7 +266,7 @@ export default function BookClubMeetingFeature({
           <BookClubMeetingDiscussion
             meeting={detail}
             canAdminister={canAdminister}
-            className={styles.meetingSection}
+            className={`${styles.meetingSection} ${styles.discussionSection}`}
             variant="flat"
             title="Discussion"
             description={null}

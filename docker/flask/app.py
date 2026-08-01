@@ -821,7 +821,6 @@ def create_app() -> Flask:
             viewer["groupId"],
             meeting_id,
             viewer,
-            body.get("title"),
             body.get("body"),
             body.get("parentPostId"),
         )
@@ -854,8 +853,8 @@ def create_app() -> Flask:
             else:
                 notify_group(
                     viewer["groupId"],
-                    title=f"New Book Club topic from {viewer['name']}",
-                    body=f"{entry['title']}: {entry['body']}",
+                    title=f"New Book Club message from {viewer['name']}",
+                    body=entry["body"],
                     url=notification_url,
                     event_type="book-club-changed",
                     exclude_user_ids={viewer["id"]},
@@ -875,7 +874,6 @@ def create_app() -> Flask:
             meeting_id,
             entry_id,
             viewer,
-            body.get("title"),
             body.get("body"),
         )
         if error:

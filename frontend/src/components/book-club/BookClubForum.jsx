@@ -15,12 +15,11 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
   const [forum, setForum] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [topicComposerOpen, setTopicComposerOpen] = useState(false);
-  const [topicTitle, setTopicTitle] = useState("");
-  const [topicBody, setTopicBody] = useState("");
+  const [messageBody, setMessageBody] = useState("");
   const [replyTo, setReplyTo] = useState(null);
   const [replyBody, setReplyBody] = useState("");
   const [editing, setEditing] = useState(null);
+  const [collapsedEntries, setCollapsedEntries] = useState(() => new Set());
   const { confirm, confirmationDialog } = useConfirmDialog();
 
   const loadForum = useCallback(async () => {
@@ -47,22 +46,19 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
     });
   }, [focusThreadId, forum]);
 
-  async function createTopic(event) {
+  async function createMessage(event) {
     event.preventDefault();
-    if (!topicTitle.trim() || !topicBody.trim() || busy) return;
+    if (!messageBody.trim() || busy) return;
     setBusy(true);
     setError("");
     try {
       const response = await createBookClubForumEntry(user.id, meeting.id, {
-        title: topicTitle,
-        body: topicBody,
+        body: messageBody,
       });
       setForum(response.forum);
-      setTopicTitle("");
-      setTopicBody("");
-      setTopicComposerOpen(false);
+      setMessageBody("");
     } catch (err) {
-      setError(err.message || "Could not create the topic.");
+      setError(err.message || "Could not send the message.");
     } finally {
       setBusy(false);
     }
@@ -98,12 +94,12 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
         user.id,
         meeting.id,
         editing.id,
-        { title: editing.title, body: editing.body },
+        { body: editing.body },
       );
       setForum(response.forum);
       setEditing(null);
     } catch (err) {
-      setError(err.message || "Could not update the forum entry.");
+      setError(err.message || "Could not update the message.");
     } finally {
       setBusy(false);
     }
@@ -111,7 +107,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
 
   async function removeEntry(entry) {
     if (busy) return;
-    const kind = entry.parentPostId ? "reply" : "topic";
+    const kind = entry.parentPostId ? "reply" : "message";
     const confirmed = await confirm({
       title: `Remove this ${kind}?`,
       message: `This permanently removes the ${kind} from the meeting discussion.`,
@@ -138,7 +134,6 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
         {ownsEntry && (
           <button type="button" onClick={() => setEditing({
             id: entry.id,
-            title: entry.title ?? "",
             body: entry.body,
             isReply: Boolean(entry.parentPostId),
           })}>Edit</button>
@@ -148,40 +143,57 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
     );
   }
 
+  function toggleEntry(entryId) {
+    setCollapsedEntries((current) => {
+      const next = new Set(current);
+      if (next.has(entryId)) next.delete(entryId);
+      else next.add(entryId);
+      return next;
+    });
+  }
+
   function renderEntry(entry, locked, reply = false) {
     const isEditing = editing?.id === entry.id;
+    const collapsed = collapsedEntries.has(entry.id);
+    const contentId = `forum-entry-${entry.id}`;
     return (
       <article
         key={entry.id}
         id={!reply ? `forum-${entry.id}` : undefined}
-        className={reply ? styles.reply : styles.topic}
+        className={`${reply ? styles.reply : styles.topic} ${collapsed ? styles.collapsed : ""}`}
       >
         <header className={styles.entryHeader}>
-          <div>
+          <button
+            type="button"
+            className={styles.entrySummary}
+            aria-expanded={!collapsed}
+            aria-controls={contentId}
+            onClick={() => toggleEntry(entry.id)}
+          >
             <strong>{entry.authorName}</strong>
             <span>{relativeTime(entry.createdAt)}{entry.updatedAt > entry.createdAt ? " · edited" : ""}</span>
-          </div>
+            <span className={styles.collapseGlyph} aria-hidden="true">⌄</span>
+          </button>
           {entryActions(entry, locked)}
         </header>
-        {isEditing ? (
-          <form className={styles.editForm} onSubmit={saveEdit}>
-            {!editing.isReply && (
-              <input aria-label="Topic title" maxLength={120} required value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} />
-            )}
-            <textarea aria-label="Discussion post" maxLength={editing.isReply ? 1000 : 2000} required value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} />
-            <div>
-              <button type="submit" className={`ui-primaryButton ${styles.primaryAction}`} disabled={busy}>Save</button>
-              <button type="button" onClick={() => setEditing(null)}>Cancel</button>
-            </div>
-          </form>
-        ) : entry.deletedAt ? (
-          <p className={styles.deleted}>This {reply ? "reply" : "topic"} was removed{entry.deletedByName ? ` by ${entry.deletedByName}` : ""}.</p>
-        ) : (
-          <>
-            {!reply && <h3>{entry.title}</h3>}
-            <p className={styles.entryBody}>{entry.body}</p>
-          </>
-        )}
+        <div id={contentId} className={styles.entryContent} hidden={collapsed}>
+          {isEditing ? (
+            <form className={styles.editForm} onSubmit={saveEdit}>
+              <textarea aria-label="Discussion message" maxLength={editing.isReply ? 1000 : 2000} required value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} />
+              <div>
+                <button type="submit" className={`ui-primaryButton ${styles.primaryAction}`} disabled={busy}>Save</button>
+                <button type="button" onClick={() => setEditing(null)}>Cancel</button>
+              </div>
+            </form>
+          ) : entry.deletedAt ? (
+            <p className={styles.deleted}>This {reply ? "reply" : "message"} was removed{entry.deletedByName ? ` by ${entry.deletedByName}` : ""}.</p>
+          ) : (
+            <>
+              {!reply && entry.title ? <h3>{entry.title}</h3> : null}
+              <p className={styles.entryBody}>{entry.body}</p>
+            </>
+          )}
+        </div>
       </article>
     );
   }
@@ -194,38 +206,34 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
       {error && <p className="ui-errorBox">{error}</p>}
       {!forum && !error && <p className={styles.forumState}>Loading discussion…</p>}
       {forum?.locked && <p className={styles.locked}>This discussion closed when the meeting was completed.</p>}
-      {forum && !forum.threads.length && <p className={styles.forumState}>No topics yet. Start the conversation before the meeting.</p>}
+      {forum && !forum.threads.length && <p className={styles.forumState}>No messages yet. Start the conversation.</p>}
       <div className={styles.threads}>
         {forum?.threads.map((thread) => (
           <section key={thread.id} className={styles.thread}>
             {renderEntry(thread, forum.locked)}
-            <div className={styles.replies}>
-              {thread.replies.map((reply) => renderEntry(reply, forum.locked, true))}
-            </div>
-            {!forum.locked && !thread.deletedAt && (
-              replyTo === thread.id ? (
-                <form className={styles.replyForm} onSubmit={createReply}>
-                  <textarea aria-label={`Reply to ${thread.title}`} autoFocus maxLength={1000} required value={replyBody} onChange={(event) => setReplyBody(event.target.value)} placeholder="Write a reply…" />
-                  <div><button className={`ui-primaryButton ${styles.primaryAction}`} type="submit" disabled={busy || !replyBody.trim()}>Reply</button><button type="button" onClick={() => { setReplyTo(null); setReplyBody(""); }}>Cancel</button></div>
-                </form>
-              ) : <button type="button" className={styles.replyButton} onClick={() => setReplyTo(thread.id)}>Reply</button>
+            {!collapsedEntries.has(thread.id) && (
+              <>
+                <div className={styles.replies}>
+                  {thread.replies.map((reply) => renderEntry(reply, forum.locked, true))}
+                </div>
+                {!forum.locked && !thread.deletedAt && (
+                  replyTo === thread.id ? (
+                    <form className={styles.replyForm} onSubmit={createReply}>
+                      <textarea aria-label={`Reply to ${thread.title || "message"}`} autoFocus maxLength={1000} required value={replyBody} onChange={(event) => setReplyBody(event.target.value)} placeholder="Write a reply…" />
+                      <div><button className={`ui-primaryButton ${styles.primaryAction}`} type="submit" disabled={busy || !replyBody.trim()}>Reply</button><button type="button" onClick={() => { setReplyTo(null); setReplyBody(""); }}>Cancel</button></div>
+                    </form>
+                  ) : <button type="button" className={styles.replyButton} onClick={() => setReplyTo(thread.id)}>Reply</button>
+                )}
+              </>
             )}
           </section>
         ))}
       </div>
-      {forum && !forum.locked && !topicComposerOpen && (
-        <div className={styles.forumActions}>
-          <button type="button" className={`ui-primaryButton ${styles.primaryAction}`} onClick={() => setTopicComposerOpen(true)}>New topic</button>
-        </div>
-      )}
-      {forum && !forum.locked && topicComposerOpen && (
-        <form className={styles.topicForm} onSubmit={createTopic}>
-          <h2>Start a topic</h2>
-          <input autoFocus aria-label="New topic title" maxLength={120} required placeholder="What should we discuss?" value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} />
-          <textarea aria-label="New topic post" maxLength={2000} required placeholder="Share a question or thought…" value={topicBody} onChange={(event) => setTopicBody(event.target.value)} />
+      {forum && !forum.locked && (
+        <form className={styles.messageForm} onSubmit={createMessage}>
+          <textarea aria-label="New message" maxLength={2000} required placeholder="Write a message…" value={messageBody} onChange={(event) => setMessageBody(event.target.value)} />
           <div className={styles.formActions}>
-            <button className={`ui-primaryButton ${styles.primaryAction}`} type="submit" disabled={busy || !topicTitle.trim() || !topicBody.trim()}>Post topic</button>
-            <button type="button" onClick={() => { setTopicComposerOpen(false); setTopicTitle(""); setTopicBody(""); }}>Cancel</button>
+            <button className={`ui-primaryButton ${styles.primaryAction}`} type="submit" disabled={busy || !messageBody.trim()}>Send message</button>
           </div>
         </form>
       )}

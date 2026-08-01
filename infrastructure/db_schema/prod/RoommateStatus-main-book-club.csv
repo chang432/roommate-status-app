@@ -17,6 +17,6 @@ groupId (S),id (S),bookId (S),userId (S),userName (S),rating (N),finished (BOOL)
 book-club,rating#book-uuid#andre,book-uuid,andre,Andre,5,true,Changed how I saw the opening.,1789000000000,1789000000000
 book-club,rating#older-book#kayla,older-book,kayla,Kayla,4,,,1788000000000,1788000000000
 
-groupId (S),id (S),meetingId (S),bookId (S),parentPostId (S),title (S),authorId (S),authorName (S),body (S),createdAt (N),updatedAt (N),lastActivityAt (N),deletedAt (N),deletedById (S),deletedByName (S),meetingForumMigrated (BOOL),meetingForumLegacyRecord (M)
-book-club,forum#meeting-uuid#1789000000000#post-uuid,meeting#meeting-uuid,book-uuid,,Favorite turning point,andre,Andre,Which scene changed the book for you?,1789000000000,1789000000000,1789001000000,,,,,
+groupId (S),id (S),meetingId (S),bookId (S),parentPostId (S),authorId (S),authorName (S),body (S),createdAt (N),updatedAt (N),lastActivityAt (N),deletedAt (N),deletedById (S),deletedByName (S),meetingForumMigrated (BOOL),meetingForumLegacyRecord (M),forumTitleRemovedLegacyRecord (M)
+book-club,forum#meeting-uuid#1789000000000#post-uuid,meeting#meeting-uuid,book-uuid,,andre,Andre,Which scene changed the book for you?,1789000000000,1789000000000,1789001000000,,,,,,
 book-club,forum#meeting-uuid#1789001000000#reply-uuid,meeting#meeting-uuid,book-uuid,forum#meeting-uuid#1789000000000#post-uuid,,kayla,Kayla,The final conversation.,1789001000000,1789001000000,1789001000000,,,,,

@@ -459,7 +459,7 @@ def test_only_admins_can_add_current_books(client):
     assert rejected.status_code == 403
 
 
-def test_meeting_forum_supports_topics_replies_moderation_and_locking(
+def test_meeting_forum_supports_messages_replies_moderation_and_locking(
     client, monkeypatch
 ):
     meeting = create_meeting(client).get_json()["meeting"]
@@ -479,11 +479,13 @@ def test_meeting_forum_supports_topics_replies_moderation_and_locking(
 
     created = client.post(
         grouped_path(meeting_path(meeting["id"], "/forum"), user_id="sheryl"),
-        json={"title": "Favorite passage", "body": "Which scene stayed with you?"},
+        json={"body": "Which scene stayed with you?"},
     )
     assert created.status_code == 201
     topic = created.get_json()["forum"]["threads"][0]
     assert topic["authorName"] == "Sheryl"
+    assert group_notifications[0]["title"] == "New Book Club message from Sheryl"
+    assert group_notifications[0]["body"] == "Which scene stayed with you?"
     assert group_notifications[0]["exclude_user_ids"] == {"sheryl"}
     assert group_notifications[0]["url"] == module_models.book_club_url(
         meeting["bookId"], meeting["id"], topic["id"]
@@ -502,10 +504,10 @@ def test_meeting_forum_supports_topics_replies_moderation_and_locking(
             ),
             user_id="sheryl",
         ),
-        json={"title": "Favorite scene", "body": "Which scene stayed with you?"},
+        json={"body": "Which scene stayed with you?"},
     )
     assert edited.status_code == 200
-    assert edited.get_json()["forum"]["threads"][0]["title"] == "Favorite scene"
+    assert "title" not in edited.get_json()["forum"]["threads"][0]
 
     replied = client.post(
         grouped_path(meeting_path(meeting["id"], "/forum")),
@@ -525,7 +527,7 @@ def test_meeting_forum_supports_topics_replies_moderation_and_locking(
                 f"/forum/{quote(topic['id'], safe='')}",
             )
         ),
-        json={"title": "Changed", "body": "Nope"},
+        json={"body": "Nope"},
     )
     assert forbidden.status_code == 403
 
@@ -547,7 +549,7 @@ def test_meeting_forum_supports_topics_replies_moderation_and_locking(
     assert locked["locked"] is True
     rejected = client.post(
         grouped_path(meeting_path(meeting["id"], "/forum")),
-        json={"title": "Late topic", "body": "Too late"},
+        json={"body": "Too late"},
     )
     assert rejected.status_code == 409
 

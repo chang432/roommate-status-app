@@ -11,6 +11,7 @@
 .details dt { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
 .details dd { @apply text-ink; }
 .meetingSection { @apply bg-transparent; }
+.discussionSection { @apply border-t border-line pt-1; }
 .attendanceContent { @apply grid gap-3; }
 .attendanceEditor { @apply grid grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] items-center gap-3 border-b border-line pb-3; }
 .attendanceEditor > span { @apply text-xs font-bold text-ink; }
@@ -24,8 +25,8 @@
 .attendanceGroup[data-status="attending"] .attendanceIndicator { @apply bg-status-green; }
 .attendanceGroup[data-status="maybe"] .attendanceIndicator { @apply bg-status-amber; }
 .attendanceGroup[data-status="not_attending"] .attendanceIndicator { @apply bg-status-red; }
-.memberList { @apply mt-1 flex flex-wrap gap-x-3 gap-y-1; }
-.memberList li { @apply flex min-w-0 items-baseline gap-1 text-xs font-semibold text-ink; }
+.memberList { @apply mt-1 grid; }
+.memberList li { @apply flex min-w-0 items-center gap-1.5 py-1 text-xs font-semibold text-ink; }
 .memberList li > span { @apply min-w-0 break-words; }
 .memberList small { @apply text-[10px] font-bold uppercase tracking-wide text-accent-deep; }
 .emptyGroup { @apply mt-1 py-0 text-xs italic text-ink-soft; }

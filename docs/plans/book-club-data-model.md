@@ -34,7 +34,7 @@
   unknown finish status until their author updates them.
 - Members may update their own attendance until the meeting is completed, even
   after its scheduled time.
-- Every meeting has a forum with titled root topics and one reply level.
+- Every meeting has a threaded message discussion with one reply level.
   Authors may edit or remove their entries, group admins may remove any entry,
   and completion makes the entire forum read-only.
 
@@ -55,10 +55,10 @@ The existing `RoommateStatus-{dev,main}-book-club` table remains keyed by
 - `rating#<bookUuid>#<userId>`: member review with rating, finish status,
   optional note, member snapshot, and lifecycle timestamps. The established ID
   prefix remains because existing star ratings are upgraded in place.
-- `forum#<meetingUuid>#<timestamp>#<uuid>`: meeting-scoped topic or reply.
-  Replies include `parentPostId`; topics include `title` and
-  `lastActivityAt`. Removed entries keep attribution/timestamps but omit their
-  title and body.
+- `forum#<meetingUuid>#<timestamp>#<uuid>`: meeting-scoped message or reply.
+  Replies include `parentPostId`; root messages are body-only and all entries
+  include `lastActivityAt`. Removed entries keep attribution/timestamps but
+  omit their body.
 
 All timestamps are server-generated epoch milliseconds except an admin-selected
 meeting time. Historical display names remain denormalized while authorization
@@ -74,11 +74,13 @@ library modal opens the referenced topic. The type is
 included only when the group has Book Club enabled. Book addition, meeting creation, edits,
 completion, and book completion require a group admin; any current member can
 send a reminder, update their own response, review an active or completed book, create a
-forum topic, and reply before completion. New topics notify the group except
+forum message, and reply before completion. New messages notify the group except
 the author; replies notify thread participants except the author.
 
 ## Migration
 
+`2026-07-31-01-remove-book-club-forum-titles` removes legacy root-message
+titles after preserving them in reversible migration markers.
 `2026-07-29-01-derive-book-completion` removes legacy book `status` fields,
 preserving known historical completion dates and clearing an invalid completion
 date from the configured current title.
