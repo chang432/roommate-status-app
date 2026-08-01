@@ -182,7 +182,15 @@ describe("BookClubMeetingFeature", () => {
         name: "View 2 people marked attending",
       })).toBeInTheDocument();
     });
-    const attending = within(screen.getByLabelText("Member attendance")).getByRole("button", {
+    const attendance = screen.getByLabelText("Member attendance");
+    expect(screen.getByRole("region", { name: "Attending: 2" }))
+      .toHaveTextContent("Attending2");
+    expect(screen.getByRole("region", { name: "Maybe: 0" }))
+      .toHaveTextContent("Maybe0");
+    expect(within(screen.getByRole("region", { name: "Maybe: 0" }))
+      .queryByRole("button", { name: /marked maybe/ }))
+      .not.toBeInTheDocument();
+    const attending = within(attendance).getByRole("button", {
       name: "View 2 people marked attending",
     });
     await userEvent.click(attending);
@@ -199,6 +207,14 @@ describe("BookClubMeetingFeature", () => {
 
     const attendance = screen.getByLabelText("Member attendance");
     expect(attendance).not.toHaveTextContent("Kayla");
+    expect(within(attendance).getAllByRole("region").map((row) => (
+      row.getAttribute("aria-label")
+    ))).toEqual([
+      "Attending: 1",
+      "Maybe: 1",
+      "Not attending: 1",
+      "Pending: 1",
+    ]);
 
     for (const [label, person] of [
       ["Attending", "Kayla"],
@@ -209,6 +225,9 @@ describe("BookClubMeetingFeature", () => {
       const trigger = within(attendance).getByRole("button", {
         name: `View 1 person marked ${label.toLowerCase()}`,
       });
+      expect(screen.getByRole("region", { name: `${label}: 1` }))
+        .toHaveTextContent(`${label}1`);
+      expect(within(trigger).getByText(person.charAt(0))).toBeInTheDocument();
       await userEvent.click(trigger);
       expect(screen.getByRole("dialog", { name: `${label} members` }))
         .toHaveTextContent(person);
@@ -216,7 +235,7 @@ describe("BookClubMeetingFeature", () => {
     }
   });
 
-  it("shows a responsive additional count after the visible response icons", async () => {
+  it("shows a responsive additional count after the visible member avatars", async () => {
     const crowdedMeeting = {
       ...MEETING,
       responses: Array.from({ length: 6 }, (_, index) => ({
@@ -236,6 +255,9 @@ describe("BookClubMeetingFeature", () => {
     const attending = within(screen.getByLabelText("Member attendance"))
       .getByRole("button", { name: "View 6 people marked attending" });
     expect(within(attending).getByText("+2")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Maybe: 0" })).toHaveTextContent("Maybe0");
+    expect(within(screen.getByRole("region", { name: "Maybe: 0" }))
+      .queryByRole("button")).not.toBeInTheDocument();
     await userEvent.click(attending);
     expect(screen.getByRole("dialog", { name: "Attending members" }))
       .toHaveTextContent("Member 5");

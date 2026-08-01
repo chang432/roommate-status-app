@@ -287,6 +287,36 @@ async function dragTouch(page, start, end, steps = 8) {
   await session.detach()
 }
 
+async function expectAttendanceRowsStacked(attendance) {
+  const expectedNames = [
+    'Attending: 1',
+    'Maybe: 1',
+    'Not attending: 0',
+    'Pending: 1',
+  ]
+  const rows = attendance.getByRole('region')
+  await expect(rows).toHaveCount(expectedNames.length)
+  const boxes = []
+  for (const name of expectedNames) {
+    const row = attendance.getByRole('region', { name })
+    await expect(row).toBeVisible()
+    boxes.push(await row.boundingBox())
+  }
+  for (let index = 1; index < boxes.length; index += 1) {
+    const spacing = boxes[index].y - (boxes[index - 1].y + boxes[index - 1].height)
+    expect(spacing).toBeGreaterThanOrEqual(4)
+    expect(spacing).toBeLessThanOrEqual(16)
+  }
+  for (const name of ['Attending: 1', 'Maybe: 1', 'Pending: 1']) {
+    const row = attendance.getByRole('region', { name })
+    const rowBox = await row.boundingBox()
+    const triggerBox = await row.getByRole('button').boundingBox()
+    expect(Math.abs(
+      (rowBox.x + rowBox.width) - (triggerBox.x + triggerBox.width),
+    )).toBeLessThan(2)
+  }
+}
+
 test('uses the household modal for books, reviews, and discussions', async ({ page }, testInfo) => {
   await mockBookClub(page)
   await page.goto('/')
@@ -364,6 +394,7 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await attendanceSection.getByRole('button', { name: /Attendance/ }).click()
   await expect(attendanceSection.getByRole('button', { name: /Attendance/ }).getByText('−')).toBeVisible()
   const attendance = page.getByLabel('Member attendance')
+  await expectAttendanceRowsStacked(attendance)
   await expect(attendance.getByRole('button', { name: 'View 1 person marked attending' })).toBeVisible()
   await expect(attendance.getByRole('button', { name: 'View 1 person marked maybe' })).toBeVisible()
   const pendingTrigger = attendance.getByRole('button', { name: 'View 1 person marked pending' })
@@ -1123,6 +1154,7 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   const attendanceSection = page.getByRole('region', { name: 'Attendance' })
   await attendanceSection.getByRole('button', { name: /Attendance/ }).click()
   const attendance = page.getByLabel('Member attendance')
+  await expectAttendanceRowsStacked(attendance)
   await expect(attendance.getByRole('button', { name: 'View 1 person marked attending' })).toBeVisible()
   await expect(attendance.getByRole('button', { name: 'View 1 person marked maybe' })).toBeVisible()
   await expect(attendance.getByRole('button', { name: 'View 1 person marked pending' })).toBeVisible()

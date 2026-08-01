@@ -12,6 +12,7 @@ import { avatarColor } from "../../utils/avatar.js";
 import { exactDateTime } from "../../utils/time.js";
 import ModuleEditButton from "../feed/ModuleEditButton.jsx";
 import ExpandableCardRegion from "../feed/ExpandableCardRegion.jsx";
+import Avatar from "../ui/Avatar.jsx";
 import PeoplePopover from "../ui/PeoplePopover.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import BookClubDisclosure from "./BookClubDisclosure.jsx";
@@ -19,10 +20,10 @@ import BookClubMeetingDiscussion from "./BookClubMeetingDiscussion.jsx";
 import styles from "./BookClubMeetingFeature.module.css";
 
 const ATTENDANCE_OPTIONS = [
-  { status: "attending", label: "Attending", icon: "✓" },
-  { status: "maybe", label: "Maybe", icon: "?" },
-  { status: "not_attending", label: "Not attending", icon: "×" },
-  { status: "pending", label: "Pending", icon: "…" },
+  { status: "attending", label: "Attending" },
+  { status: "maybe", label: "Maybe" },
+  { status: "not_attending", label: "Not attending" },
+  { status: "pending", label: "Pending" },
 ];
 
 function groupAttendance(responses) {
@@ -152,6 +153,10 @@ export default function BookClubMeetingFeature({
   const viewerResponse = responses.find(
     (response) => response.userId === user.id,
   );
+  // Preserve each member's avatar color when an RSVP moves them between rows.
+  const responseAvatarColors = new Map(
+    responses.map((response, index) => [response.userId, avatarColor(index)]),
+  );
   const attendanceEditable =
     Boolean(viewerResponse) && detail.status === "scheduled";
 
@@ -230,70 +235,70 @@ export default function BookClubMeetingFeature({
                 className={styles.attendanceGroups}
                 aria-label="Member attendance"
               >
-                {ATTENDANCE_OPTIONS.map(({ status, label, icon }) => {
+                {ATTENDANCE_OPTIONS.map(({ status, label }) => {
                   const members = attendanceGroups[status];
-                  const people = members.map((response, index) => ({
+                  const people = members.map((response) => ({
                     id: response.userId,
                     name: response.userName,
-                    color: avatarColor(index),
+                    color: responseAvatarColors.get(response.userId),
                   }));
                   const peopleLabel = `${members.length} ${members.length === 1 ? "person" : "people"}`;
                   return (
                     <section
                       className={styles.attendanceGroup}
-                      data-status={status}
                       key={status}
                       aria-label={`${label}: ${members.length}`}
                     >
-                      <header className={styles.attendanceGroupHeader}>
-                        <PeoplePopover
-                          people={people}
-                          open={openAttendanceStatus === status}
-                          onOpenChange={(open) =>
-                            setOpenAttendanceStatus(open ? status : null)
-                          }
-                          heading={label}
-                          dialogLabel={`${label} members`}
-                          buttonLabel={`View ${peopleLabel} marked ${label.toLowerCase()}`}
-                          disabled={!members.length}
-                          triggerClassName={styles.attendanceTrigger}
-                        >
-                          <span className={styles.attendanceIconCluster}>
-                            {members.length ? members.map((member) => (
-                              <span
-                                key={member.userId}
-                                aria-hidden="true"
-                                className={styles.attendanceMemberIcon}
-                              >
-                                {icon}
-                              </span>
-                            )) : (
-                              <span
-                                aria-hidden="true"
-                                className={styles.attendanceMemberIcon}
-                              >
-                                {icon}
-                              </span>
-                            )}
-                            {members.length > 4 ? (
-                              <span
-                                aria-hidden="true"
-                                className={styles.attendanceMoreDesktop}
-                              >
-                                +{members.length - 4}
-                              </span>
-                            ) : null}
-                            {members.length > 3 ? (
-                              <span
-                                aria-hidden="true"
-                                className={styles.attendanceMoreMobile}
-                              >
-                                +{members.length - 3}
-                              </span>
-                            ) : null}
+                      <div className={styles.attendanceGroupRow}>
+                        <span className={styles.attendanceGroupSummary}>
+                          <span className={styles.attendanceGroupLabel}>
+                            {label}
                           </span>
-                        </PeoplePopover>
-                      </header>
+                          <span className={styles.attendanceGroupCount}>
+                            {members.length}
+                          </span>
+                        </span>
+                        {members.length ? (
+                          <span className={styles.attendancePeople}>
+                            <PeoplePopover
+                              people={people}
+                              open={openAttendanceStatus === status}
+                              onOpenChange={(open) =>
+                                setOpenAttendanceStatus(open ? status : null)
+                              }
+                              heading={label}
+                              dialogLabel={`${label} members`}
+                              buttonLabel={`View ${peopleLabel} marked ${label.toLowerCase()}`}
+                              triggerClassName={styles.attendanceTrigger}
+                            >
+                              <span
+                                className={styles.attendanceAvatarCluster}
+                                aria-hidden="true"
+                              >
+                                {people.map((person) => (
+                                  <Avatar
+                                    key={person.id}
+                                    name={person.name}
+                                    color={person.color}
+                                    size={28}
+                                    className={styles.attendanceAvatar}
+                                  />
+                                ))}
+                                {members.length > 4 ? (
+                                  <span className={styles.attendanceMoreDesktop}>
+                                    +{members.length - 4}
+                                  </span>
+                                ) : null}
+                                {members.length > 3 ? (
+                                  <span className={styles.attendanceMoreMobile}>
+                                    +{members.length - 3}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </PeoplePopover>
+                          </span>
+                        ) : null}
+                      </div>
                     </section>
                   );
                 })}
