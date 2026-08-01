@@ -328,6 +328,66 @@ def test_admins_add_and_members_correct_books_and_all_meeting_snapshots(client):
     )
 
 
+def test_books_support_normalized_member_editable_tags(client):
+    book = add_book(
+        client,
+        tags=["Science   Fiction", "Bechdel Pass", "science fiction"],
+    )
+    assert book["tags"] == ["Science Fiction", "Bechdel Pass"]
+
+    edited = client.patch(
+        grouped_path(f"/api/book-club/books/{book['id']}", user_id="sheryl"),
+        json={
+            "title": book["title"],
+            "author": book["author"],
+            "bookOwnerId": "andre",
+            "tags": ["Classic", "Feminist"],
+        },
+    )
+    assert edited.status_code == 200
+    assert edited.get_json()["book"]["tags"] == ["Classic", "Feminist"]
+
+    # Omitting the additive field preserves it for callers updating other metadata.
+    preserved = client.patch(
+        grouped_path(f"/api/book-club/books/{book['id']}", user_id="kayla"),
+        json={
+            "title": book["title"],
+            "author": book["author"],
+            "bookOwnerId": "andre",
+        },
+    )
+    assert preserved.status_code == 200
+    assert preserved.get_json()["book"]["tags"] == ["Classic", "Feminist"]
+
+
+def test_book_tags_validate_shape_length_and_count(client):
+    invalid_values = [
+        ("Classic", "Book tags must be a list."),
+        ([""], "Book tags cannot be empty."),
+        (["x" * (book_club.BOOK_TAG_LENGTH + 1)], "Book tags must be at most"),
+        ([str(index) for index in range(book_club.BOOK_TAG_LIMIT + 1)], "Books can have at most"),
+    ]
+    for tags, message in invalid_values:
+        response = client.post(grouped_path("/api/book-club/books"), json={
+            "title": "A Book",
+            "author": "An Author",
+            "bookOwnerId": "andre",
+            "tags": tags,
+        })
+        assert response.status_code == 400
+        assert message in response.get_json()["error"]
+
+
+def test_legacy_books_project_an_empty_tag_list(client):
+    book = add_book(client)
+    stored = book_club._fetch(TEST_GROUP_ID, f"book#{book['id']}")
+    stored.pop("tags", None)
+    book_club._get_table().put_item(Item=stored)
+
+    projected = client.get(grouped_path("/api/book-club/books")).get_json()["books"][0]
+    assert projected["tags"] == []
+
+
 def test_adding_a_replacement_completes_the_prior_current_book(client):
     first = add_book(client, title="First", author="Writer One")
     second = add_book(client, title="Second", author="Writer Two", bookOwnerId="kayla")

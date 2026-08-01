@@ -6,11 +6,12 @@
 .thread { @apply overflow-visible rounded-sm border border-line bg-card; }
 .topic { @apply p-3; }
 .reply { @apply border-l-2 border-accent-soft px-3 py-[10px]; }
-.entryHeader { @apply relative flex items-start gap-1; }
-.entrySummary { @apply flex min-w-0 flex-1 items-baseline gap-2 rounded-sm bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent; }
-.entryHeader strong { @apply text-[13px] text-ink; }
-.entrySummary > span:not(.collapseGlyph) { @apply text-[11px] text-ink-soft; }
-.collapseGlyph { @apply ml-auto flex-none text-lg font-semibold leading-none text-accent-deep; }
+.entryHeader { @apply relative flex items-start gap-0; }
+.entrySummary { @apply flex min-h-9 min-w-0 flex-1 items-center rounded-sm bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent; }
+.entryMeta { @apply flex min-w-0 items-baseline gap-2; }
+.entryMeta strong { @apply truncate text-[13px] text-ink; }
+.entryMeta > span { @apply flex-none text-[11px] text-ink-soft; }
+.collapseGlyph { @apply ml-auto grid h-9 w-9 flex-none place-items-center text-lg font-semibold leading-none text-accent-deep; }
 .entryContent { @apply min-w-0; }
 .topic h3 { @apply mt-2 text-[14px] font-semibold text-ink; }
 .entryBody { @apply mt-1.5 whitespace-pre-wrap text-[13px] leading-5 text-ink; }

@@ -24,6 +24,8 @@ TIMEZONE = "America/New_York"
 OPEN_STATUS = "scheduled"
 COMPLETED_STATUS = "completed"
 REVIEW_NOTE_LIMIT = 1000
+BOOK_TAG_LIMIT = 10
+BOOK_TAG_LENGTH = 32
 FORUM_POST_LIMIT = 2000
 FORUM_REPLY_LIMIT = 1000
 _table = None
@@ -150,6 +152,7 @@ def _project_book(item: dict | None) -> dict | None:
         "author": item["author"],
         "bookOwnerId": item.get("bookOwnerId", item.get("recommendedById")),
         "bookOwnerName": item.get("bookOwnerName", item.get("recommendedByName")),
+        "tags": list(item.get("tags") or []),
         "completedAt": int(item["completedAt"]) if item.get("completedAt") is not None else None,
     }
 
@@ -259,7 +262,31 @@ def get_meeting(group_id: str, meeting_id: str, members: list[dict] | None = Non
     return _project_meeting(item, members, book)
 
 
-def _book_values(body: dict, members: list[dict]) -> tuple[dict | None, str | None]:
+def _normalize_book_tags(value) -> tuple[list[str] | None, str | None]:
+    if not isinstance(value, list):
+        return None, "Book tags must be a list."
+    normalized = []
+    seen = set()
+    for tag in value:
+        if not isinstance(tag, str):
+            return None, "Every book tag must be text."
+        label = " ".join(tag.split())
+        if not label:
+            return None, "Book tags cannot be empty."
+        if len(label) > BOOK_TAG_LENGTH:
+            return None, f"Book tags must be at most {BOOK_TAG_LENGTH} characters."
+        key = label.casefold()
+        if key not in seen:
+            seen.add(key)
+            normalized.append(label)
+    if len(normalized) > BOOK_TAG_LIMIT:
+        return None, f"Books can have at most {BOOK_TAG_LIMIT} tags."
+    return normalized, None
+
+
+def _book_values(
+    body: dict, members: list[dict], existing: dict | None = None
+) -> tuple[dict | None, str | None]:
     member_by_id = {member["id"]: member for member in members}
     title, error = _validate_text(body.get("title"), "Book title")
     if error:
@@ -270,11 +297,18 @@ def _book_values(body: dict, members: list[dict]) -> tuple[dict | None, str | No
     book_owner_id = body.get("bookOwnerId")
     if book_owner_id not in member_by_id:
         return None, "Book owner must be a current group member."
+    # Older PATCH callers omit this additive field, so preserve it only when editing.
+    tags, error = _normalize_book_tags(
+        body.get("tags", list(existing.get("tags") or []) if existing else [])
+    )
+    if error:
+        return None, error
     return {
         "title": title,
         "author": author,
         "bookOwnerId": book_owner_id,
         "bookOwnerName": member_by_id[book_owner_id]["name"],
+        "tags": tags,
     }, None
 
 
@@ -364,7 +398,7 @@ def update_book(
     book = _fetch(group_id, f"book#{normalized}")
     if book is None:
         return None, "Unknown Book Club book."
-    values, error = _book_values(body, members)
+    values, error = _book_values(body, members, book)
     if error:
         return None, error
     set_as_current = body.get("setAsCurrent", False)

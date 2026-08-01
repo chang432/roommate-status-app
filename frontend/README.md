@@ -47,8 +47,10 @@ availability to hang out. Built from the mockups in `../mockups`.
   collapsible sections, with each member's own RSVP control in a stable,
   dedicated position and a separate action for opening the full book detail.
   When no title is current, an admin can restore a completed title from its edit
-  form.
-  Meeting discussions use body-only messages with Reddit-style threaded replies
+  form. Books support reusable household tags that members can add or correct;
+  tags appear in the library and participate in its existing search.
+  Saved personal reviews collapse to a compact summary and can be reopened for
+  editing at any time. Meeting discussions use body-only messages with Reddit-style threaded replies
   that can be collapsed independently. Members review current or completed books
   1–5 stars, finish status, and an optional note; completed meeting discussions
   remain read-only.

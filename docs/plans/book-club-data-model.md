@@ -31,7 +31,9 @@
   requires its open meeting to be completed first, then timestamps the book and
   clears the pointer. Each member can review any book with a 1–5 star rating, required finished/not-finished
   status, and optional note. Legacy star-only ratings remain visible with
-  unknown finish status until their author updates them.
+  unknown finish status until their author updates them. Books may also carry
+  up to ten reusable household tags; any current member may correct these tags
+  alongside the rest of the catalog metadata.
 - Members may update their own attendance until the meeting is completed, even
   after its scheduled time.
 - Every meeting has a threaded message discussion with one reply level.
@@ -45,8 +47,8 @@ The existing `RoommateStatus-{dev,main}-book-club` table remains keyed by
 
 - `config#book-club`: `openMeetingId`, `lastMeetingAt`, optional `activeBookId`,
   and the two ordered owner-ID lists.
-- `book#<uuid>`: title, author, current Book owner snapshot, and optional
-  `completedAt`. It has no status field: current status is derived by comparing
+- `book#<uuid>`: title, author, current Book owner snapshot, optional custom
+  tag list, and optional `completedAt`. It has no status field: current status is derived by comparing
   its `bookId` with `config#book-club.activeBookId`.
 - `meeting#<uuid>`: scheduled time, book and owner snapshots, reading target,
   scheduled/completed status, and creator/completer snapshots.
@@ -71,8 +73,9 @@ Meetings normalize as compact `type: "book-club"` feed modules and use
 Forum notifications use
 `/?book=<book-id>&meeting=<meeting-id>&thread=<root-id>` so the household
 library modal opens the referenced topic. The type is
-included only when the group has Book Club enabled. Book addition, meeting creation, edits,
+included only when the group has Book Club enabled. Book addition, meeting creation,
 completion, and book completion require a group admin; any current member can
+correct an existing book's metadata and tags,
 send a reminder, update their own response, review an active or completed book, create a
 forum message, and reply before completion. New messages notify the group except
 the author; replies notify thread participants except the author.

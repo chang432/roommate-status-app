@@ -4,11 +4,13 @@ import {
   updateBookClubBook,
 } from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import BookClubTagEditor from "./BookClubTagEditor.jsx";
 import styles from "./BookClubMeetingForm.module.css";
 
 export default function BookClubBookForm({
   book = null,
   roommates,
+  availableTags = [],
   canSetAsCurrent = false,
   onSaved,
   onCancel,
@@ -18,6 +20,7 @@ export default function BookClubBookForm({
     title: book?.title ?? "",
     author: book?.author ?? "",
     bookOwnerId: book?.bookOwnerId ?? roommates[0]?.id ?? "",
+    tags: book?.tags ?? [],
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -32,6 +35,7 @@ export default function BookClubBookForm({
         title: draft.title.trim(),
         author: draft.author.trim(),
         bookOwnerId: draft.bookOwnerId,
+        tags: draft.tags,
         ...(setAsCurrent ? { setAsCurrent: true } : {}),
       };
       const response = book
@@ -63,6 +67,12 @@ export default function BookClubBookForm({
           {roommates.map((roommate) => <option key={roommate.id} value={roommate.id}>{roommate.name}</option>)}
         </select>
       </label>
+      <BookClubTagEditor
+        tags={draft.tags}
+        availableTags={availableTags}
+        disabled={saving}
+        onChange={(tags) => setDraft({ ...draft, tags })}
+      />
       <div className="ui-formActions">
         <button type="button" className="ui-secondaryButton ui-formActionButton" disabled={saving} onClick={onCancel}>Cancel</button>
         {canSetAsCurrent && (

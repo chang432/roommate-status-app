@@ -30,6 +30,25 @@ function statusLabel(book) {
   return "Completed";
 }
 
+function reviewDescription(review) {
+  if (!review) return "Add a rating, finish status, and optional note";
+  const finish = review.finished === true
+    ? "Finished"
+    : review.finished === false
+      ? "Didn’t finish"
+      : "Finish status not recorded";
+  return `${review.rating} out of 5 stars · ${finish}`;
+}
+
+function BookTags({ tags, className = "" }) {
+  if (!tags?.length) return null;
+  return (
+    <span className={`${styles.bookTags} ${className}`} aria-label="Book tags">
+      {tags.map((tag) => <span key={tag.toLocaleLowerCase()}>{tag}</span>)}
+    </span>
+  );
+}
+
 function BookDetail({
   book,
   onBack,
@@ -51,7 +70,8 @@ function BookDetail({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
-  const [reviewsOpen, setReviewsOpen] = useState(true);
+  const [reviewOpen, setReviewOpen] = useState(!initialReview);
+  const [communityReviewsOpen, setCommunityReviewsOpen] = useState(true);
   const [discussionsOpen, setDiscussionsOpen] = useState(Boolean(focusMeetingId));
 
   useEffect(() => {
@@ -70,6 +90,7 @@ function BookDetail({
       });
       onBooksChange(updated);
       setSaved(true);
+      setReviewOpen(false);
     } catch (err) {
       setError(err.message || "Could not save your review.");
     } finally {
@@ -98,6 +119,7 @@ function BookDetail({
           </div>
           <p>by {book.author}</p>
           <small>{bookDate(book)}</small>
+          <BookTags tags={book.tags} className={styles.detailTags} />
         </div>
         <dl>
           <div><dt>Book owner</dt><dd>{book.bookOwnerName || "Former member"}</dd></div>
@@ -106,21 +128,18 @@ function BookDetail({
         </dl>
       </header>
 
+      {saved ? <p className={styles.reviewSavedStatus} role="status">Review saved.</p> : null}
       <BookClubDisclosure
-        title="Reviews"
-        description="Your review and the household"
-        badge={`${book.reviewCount} ${book.reviewCount === 1 ? "review" : "reviews"}`}
-        open={reviewsOpen}
-        onToggle={() => setReviewsOpen((value) => !value)}
+        className={styles.detailSection}
+        variant="flat"
+        title="Your review"
+        description={reviewDescription(initialReview)}
+        badge={initialReview ? `${initialReview.rating} ★` : null}
+        open={reviewOpen}
+        onToggle={() => setReviewOpen((value) => !value)}
       >
         <form className={styles.reviewForm} onSubmit={submitReview}>
-          <div className={styles.formHeading}>
-            <div>
-              <h3>Your review</h3>
-              {initialReview?.finished == null && initialReview && <p>Finish status not recorded—please confirm it below.</p>}
-            </div>
-            {saved && <span role="status">Saved</span>}
-          </div>
+          {initialReview?.finished == null && initialReview && <p className={styles.reviewPrompt}>Finish status not recorded—please confirm it below.</p>}
           <fieldset>
             <legend>Rating</legend>
             <div className={styles.starChoices}>
@@ -150,8 +169,18 @@ function BookDetail({
             <button className={`ui-primaryButton ${styles.saveReview}`} type="submit" disabled={busy || !rating || !finished}>{busy ? "Saving…" : initialReview ? "Update review" : "Save review"}</button>
           </div>
         </form>
+      </BookClubDisclosure>
+
+      <BookClubDisclosure
+        className={styles.detailSection}
+        variant="flat"
+        title="Community reviews"
+        description="Everyone’s take, including yours"
+        badge={`${book.reviewCount} ${book.reviewCount === 1 ? "review" : "reviews"}`}
+        open={communityReviewsOpen}
+        onToggle={() => setCommunityReviewsOpen((value) => !value)}
+      >
         <div className={styles.community}>
-          <div className={styles.sectionHeading}><h3>Community reviews</h3></div>
           {!book.reviews.length && <p className={styles.muted}>No reviews yet. Be the first.</p>}
           <div className={styles.reviewList}>
             {book.reviews.map((review) => (
@@ -166,6 +195,8 @@ function BookDetail({
       </BookClubDisclosure>
 
       <BookClubDisclosure
+        className={styles.detailSection}
+        variant="flat"
         title="Discussions"
         description="Across every meeting"
         badge={`${book.meetings.length} ${book.meetings.length === 1 ? "meeting" : "meetings"}`}
@@ -209,7 +240,12 @@ export default function BookClubLibrary({
   const filteredBooks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return books;
-    return books.filter((book) => [book.title, book.author, book.bookOwnerName].filter(Boolean).some((value) => value.toLowerCase().includes(normalized)));
+    return books.filter((book) => [
+      book.title,
+      book.author,
+      book.bookOwnerName,
+      ...(book.tags ?? []),
+    ].filter(Boolean).some((value) => value.toLowerCase().includes(normalized)));
   }, [books, query]);
   const selected = books.find((book) => book.id === selectedBookId) ?? null;
 
@@ -226,7 +262,7 @@ export default function BookClubLibrary({
         <p className={styles.libraryCount}>{books.length} {books.length === 1 ? "book" : "books"} · current and completed</p>
         <div className={styles.libraryTools}>
           {canAdminister && <button type="button" className={`ui-primaryButton ${styles.addButton}`} onClick={onAddBook}>Add book</button>}
-          <label className={styles.search}><span className="sr-only">Search books</span><input type="search" placeholder="Search title, author, or owner" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+          <label className={styles.search}><span className="sr-only">Search books</span><input type="search" placeholder="Search books and tags" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
         </div>
       </div>
       {!books.length ? (
@@ -242,6 +278,7 @@ export default function BookClubLibrary({
                 </span>
                 <span className={styles.bookMeta}>by {book.author} · Book owner: {book.bookOwnerName || "Former member"}</span>
                 <span className={styles.bookMeta}>{bookDate(book)}</span>
+                <BookTags tags={book.tags} className={styles.cardTags} />
               </span>
               <span className={styles.cardStats}><span>{ratingLabel(book)}</span><span>{finishedLabel(book)}</span></span>
             </button>

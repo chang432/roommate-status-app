@@ -38,6 +38,7 @@ function bookClubFixture() {
     isCurrent: true,
     selectedAt: NOW - 1_000_000,
     completedAt: null,
+    tags: ['Climate Fiction', 'Bechdel Pass'],
     reviewCount: 0,
     averageRating: null,
     finishedCount: 0,
@@ -57,6 +58,7 @@ function bookClubFixture() {
     isCurrent: false,
     selectedAt: NOW - 2_000_000,
     completedAt: NOW - 1_500_000,
+    tags: ['Cozy Science Fiction'],
     reviewCount: 1,
     averageRating: 4,
     finishedCount: 0,
@@ -341,27 +343,44 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await page.getByRole('button', { name: /Library All books/ }).click()
   const library = page.getByRole('dialog', { name: 'Book library' })
   await expect(library.getByRole('button', { name: /The Fifth Season/ })).toContainText('Current')
+  await expect(library.getByRole('button', { name: /The Fifth Season/ })).toContainText('Bechdel Pass')
   await expect(library.getByRole('button', { name: /A Psalm for the Wild-Built/ })).toContainText('4.0 ★')
+  await library.getByRole('searchbox', { name: 'Search books' }).fill('Climate Fiction')
+  await expect(library.getByRole('button', { name: /The Fifth Season/ })).toBeVisible()
+  await expect(library.getByRole('button', { name: /A Psalm for the Wild-Built/ })).toBeHidden()
+  await library.getByRole('searchbox', { name: 'Search books' }).fill('')
   await page.screenshot({ path: testInfo.outputPath('book-club-library-modal-desktop.png'), fullPage: true })
 
   await library.getByRole('button', { name: 'Add book' }).click()
   const addDialog = page.getByRole('dialog', { name: 'Add a book' })
   await addDialog.getByRole('textbox', { name: 'Book title' }).fill('Kindred')
   await addDialog.getByRole('textbox', { name: 'Author' }).fill('Octavia E. Butler')
+  await addDialog.getByRole('combobox', { name: 'Book tag' }).fill('bechdel pass')
+  await addDialog.getByRole('button', { name: 'Add tag' }).click()
+  await addDialog.getByRole('combobox', { name: 'Book tag' }).fill('Time Travel')
+  await addDialog.getByRole('button', { name: 'Add tag' }).click()
   await addDialog.getByRole('button', { name: 'Add current book' }).click()
   await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Kindred')
+  await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Bechdel Pass')
+  await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Time Travel')
   await page.getByRole('button', { name: '← All books' }).click()
 
   await library.getByRole('button', { name: /The Fifth Season/ }).click()
   const details = page.getByRole('dialog', { name: 'Book details' })
   await expect(details.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
+  await expect(details.getByLabel('Book tags')).toContainText('Climate Fiction')
   await expect.poll(() => details.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-summary-desktop.png'), fullPage: true })
   await details.getByRole('radio', { name: '5 stars' }).locator('..').click()
   await details.getByRole('radio', { name: 'Finished' }).locator('..').click()
   await details.getByPlaceholder('What stayed with you?').fill('A fierce and unforgettable start.')
   await details.getByRole('button', { name: 'Save review' }).click()
-  await expect(details.getByRole('status')).toHaveText('Saved')
+  const personalReview = details.getByRole('region', { name: 'Your review' })
+  await expect(details.getByRole('status')).toHaveText('Review saved.')
+  await expect(personalReview.getByRole('button', { name: /Your review/ })).toHaveAttribute('aria-expanded', 'false')
+  await personalReview.getByRole('button', { name: /Your review/ }).click()
+  await expect(personalReview.getByRole('button', { name: 'Update review' })).toBeVisible()
+  await expect(details.getByRole('region', { name: 'Community reviews' })).toContainText('Andre')
 
   await details.getByRole('button', { name: /Discussions/ }).click()
   await details.getByRole('button', { name: /Read through Chapter 9/ }).click()
@@ -381,6 +400,13 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await expect(rootMenu).toBeHidden()
   await expect(rootActions).toBeFocused()
   const rootMessageToggle = details.getByRole('button', { name: /Andre/ }).first()
+  const [rootToggleBox, rootActionsBox] = await Promise.all([
+    rootMessageToggle.locator('[data-discussion-collapse-indicator]').boundingBox(),
+    rootActions.boundingBox(),
+  ])
+  expect(Math.abs(
+    (rootToggleBox.y + rootToggleBox.height / 2) - (rootActionsBox.y + rootActionsBox.height / 2),
+  )).toBeLessThan(2)
   await expect(rootMessageToggle).toContainText('−')
   await rootMessageToggle.click()
   await expect(rootMessageToggle).toContainText('+')
@@ -393,9 +419,10 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await details.getByRole('button', { name: '← All books' }).click()
   await page.getByRole('button', { name: /A Psalm for the Wild-Built/ }).click()
   await expect(page.getByText('Finish status not recorded').first()).toBeVisible()
+  await page.getByRole('region', { name: 'Your review' }).getByRole('button', { name: /Your review/ }).click()
   await page.getByRole('radio', { name: 'Finished' }).locator('..').click()
   await page.getByRole('button', { name: 'Update review' }).click()
-  await expect(page.getByRole('status')).toHaveText('Saved')
+  await expect(page.getByRole('status')).toHaveText('Review saved.')
   await page.getByRole('button', { name: 'Close' }).click()
 
   await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
@@ -454,6 +481,26 @@ test('confirms meeting completion safely on desktop', async ({ page }, testInfo)
 
   await confirmation.getByRole('button', { name: 'Cancel' }).click()
   await expect(page.getByRole('button', { name: 'Complete meeting' })).toBeVisible()
+})
+
+test('allows a household member to update reusable book tags', async ({ page }) => {
+  await mockBookClub(page, { viewerIsAdmin: false })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: /Library All books/ }).click()
+  const library = page.getByRole('dialog', { name: 'Book library' })
+  await expect(library.getByRole('button', { name: 'Add book' })).toHaveCount(0)
+  await library.getByRole('button', { name: /The Fifth Season/ }).click()
+
+  const details = page.getByRole('dialog', { name: 'Book details' })
+  await details.getByRole('button', { name: 'Edit book' }).click()
+  const editor = page.getByRole('dialog', { name: 'Edit book' })
+  await editor.getByRole('combobox', { name: 'Book tag' }).fill('Household Favorite')
+  await editor.getByRole('button', { name: 'Add tag' }).click()
+  await editor.getByRole('button', { name: 'Save book' }).click()
+
+  await expect(page.getByRole('dialog', { name: 'Book details' }).getByLabel('Book tags'))
+    .toContainText('Household Favorite')
 })
 
 test('shows the next feed category while swiping on a phone', async ({ page }, testInfo) => {
@@ -1154,6 +1201,7 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   const library = page.getByRole('dialog', { name: 'Book library' })
   await expect(library.getByRole('searchbox', { name: 'Search books' })).toBeVisible()
   await expect(library.getByRole('button', { name: /The Fifth Season/ })).toBeVisible()
+  await expect(library.getByRole('button', { name: /The Fifth Season/ })).toContainText('Climate Fiction')
   await expect.poll(() => library.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('book-club-library-modal-mobile.png'), fullPage: true })
 
@@ -1191,6 +1239,14 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   await discussion.getByLabel('New message').fill('Phone discussion message')
   await discussion.getByRole('button', { name: 'Send message' }).click()
   const mobileActions = discussion.getByRole('button', { name: "More actions for Andre's message" })
+  const mobileMessageToggle = discussion.getByRole('button', { name: /Andre/, expanded: true })
+  const [mobileToggleBox, mobileActionsBox] = await Promise.all([
+    mobileMessageToggle.locator('[data-discussion-collapse-indicator]').boundingBox(),
+    mobileActions.boundingBox(),
+  ])
+  expect(Math.abs(
+    (mobileToggleBox.y + mobileToggleBox.height / 2) - (mobileActionsBox.y + mobileActionsBox.height / 2),
+  )).toBeLessThan(2)
   await mobileActions.click()
   const mobileMenu = discussion.getByRole('menu', { name: "Actions for Andre's message" })
   await expect(mobileMenu.getByRole('menuitem', { name: 'Edit' })).toBeVisible()

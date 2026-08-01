@@ -8,6 +8,7 @@ import {
 import { useAuth } from "../../context/AuthContext.jsx";
 import { isAdminIn } from "../../utils/roles.js";
 import { OPEN_BOOK_LIBRARY_ADD_EVENT } from "../../utils/bookClubEvents.js";
+import { collectBookTags } from "../../utils/bookTags.js";
 import ModalShell from "../ui/ModalShell.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import BookClubBookForm from "./BookClubBookForm.jsx";
@@ -186,6 +187,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   const openOrder = openList ? lists[openList] : [];
   const openTitle = openList === "book" ? "Book owner order" : "Snack owner order";
   const activeBook = summary?.activeBook;
+  const availableTags = useMemo(() => collectBookTags(books), [books]);
 
   return (
     <section className={styles.section} aria-label="Book Club">
@@ -250,6 +252,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
             <BookClubBookForm
               book={bookEditor === "add" ? null : bookEditor}
               roommates={roommates}
+              availableTags={availableTags}
               canSetAsCurrent={Boolean(
                 bookEditor !== "add" && !summary?.activeBook && !bookEditor?.isCurrent && canAdminister
               )}

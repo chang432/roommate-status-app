@@ -274,9 +274,11 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
             aria-controls={contentId}
             onClick={() => toggleEntry(entry.id)}
           >
-            <strong>{entry.authorName}</strong>
-            <span>{relativeTime(entry.createdAt)}{entry.updatedAt > entry.createdAt ? " · edited" : ""}</span>
-            <span className={styles.collapseGlyph} aria-hidden="true">
+            <span className={styles.entryMeta}>
+              <strong>{entry.authorName}</strong>
+              <span>{relativeTime(entry.createdAt)}{entry.updatedAt > entry.createdAt ? " · edited" : ""}</span>
+            </span>
+            <span className={styles.collapseGlyph} data-discussion-collapse-indicator aria-hidden="true">
               {collapsed ? "+" : "−"}
             </span>
           </button>

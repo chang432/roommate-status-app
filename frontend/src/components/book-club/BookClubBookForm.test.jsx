@@ -40,7 +40,7 @@ describe("BookClubBookForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "Add current book" }));
 
     expect(addBookClubBook).toHaveBeenCalledWith("andre", {
-      title: "Kindred", author: "Octavia E. Butler", bookOwnerId: "kayla",
+      title: "Kindred", author: "Octavia E. Butler", bookOwnerId: "kayla", tags: [],
     });
     expect(onSaved).toHaveBeenCalledWith(response);
   });
@@ -56,7 +56,7 @@ describe("BookClubBookForm", () => {
     await userEvent.type(title, "Kindred");
     await userEvent.click(screen.getByRole("button", { name: "Save book" }));
     expect(updateBookClubBook).toHaveBeenCalledWith(
-      "andre", "book-1", expect.objectContaining({ title: "Kindred" }),
+      "andre", "book-1", expect.objectContaining({ title: "Kindred", tags: [] }),
     );
   });
 
@@ -69,7 +69,31 @@ describe("BookClubBookForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "Set as current" }));
 
     expect(updateBookClubBook).toHaveBeenCalledWith("andre", "book-1", {
-      title: "Kindred", author: "Octavia Butler", bookOwnerId: "andre", setAsCurrent: true,
+      title: "Kindred", author: "Octavia Butler", bookOwnerId: "andre", tags: [],
+      setAsCurrent: true,
+    });
+  });
+
+  it("creates, reuses, and removes custom tags", async () => {
+    updateBookClubBook.mockResolvedValue({ book: { id: "book-1" }, books: [] });
+    render(<BookClubBookForm book={{
+      id: "book-1",
+      title: "Kindred",
+      author: "Octavia Butler",
+      bookOwnerId: "andre",
+      tags: ["Classic"],
+    }} roommates={ROOMMATES} availableTags={["Bechdel Pass", "Classic"]} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove Classic tag" }));
+    await userEvent.type(screen.getByRole("combobox", { name: "Book tag" }), "bechdel pass{enter}");
+    await userEvent.type(screen.getByRole("combobox", { name: "Book tag" }), "Historical Fiction,");
+    await userEvent.click(screen.getByRole("button", { name: "Save book" }));
+
+    expect(updateBookClubBook).toHaveBeenCalledWith("andre", "book-1", {
+      title: "Kindred",
+      author: "Octavia Butler",
+      bookOwnerId: "andre",
+      tags: ["Bechdel Pass", "Historical Fiction"],
     });
   });
 });

@@ -25,8 +25,8 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/book-club/books/<id>/complete`                    | `?userId=<id>`                             | admin-completed active book after its open meeting is completed |
 | `POST /api/book-club/meetings/<id>/notify`                   | `?userId=<id>`                             | sends members a deep-linked meeting reminder            |
 | `GET /api/book-club/books`                                   | `?userId=<id>`                             | current/completed books, meetings, aggregate review data, and reviews |
-| `POST /api/book-club/books`                                  | `?userId=<id>` + title/author/Book owner   | admin-added current title; completes the former current book |
-| `PATCH /api/book-club/books/<id>`                            | `?userId=<id>` + title/author/Book owner, optional admin `setAsCurrent` | corrected book and historical meeting snapshots; restores a completed book only when none is current |
+| `POST /api/book-club/books`                                  | `?userId=<id>` + title/author/Book owner/optional tags | admin-added current title; completes the former current book |
+| `PATCH /api/book-club/books/<id>`                            | `?userId=<id>` + title/author/Book owner/optional tags, optional admin `setAsCurrent` | corrected book and historical meeting snapshots; restores a completed book only when none is current |
 | `PUT /api/book-club/books/<id>/review`                       | `?userId=<id>` + rating/finished/note      | member review and refreshed Book Club library           |
 | `GET/POST /api/book-club/meetings/<id>/forum`                | `?userId=<id>` + optional message/reply    | threaded meeting messages                              |
 | `PATCH/DELETE /api/book-club/meetings/<id>/forum/<entryId>`  | `?userId=<id>` + editable body             | edited or soft-removed forum entry                      |
