@@ -247,9 +247,15 @@ export default function BookClubMeetingFeature({
                     <section
                       className={styles.attendanceGroup}
                       key={status}
+                      data-status={status}
                       aria-label={`${label}: ${members.length}`}
                     >
                       <div className={styles.attendanceGroupRow}>
+                        <span
+                          className={styles.attendanceIndicator}
+                          data-attendance-status-indicator={status}
+                          aria-hidden="true"
+                        />
                         <span className={styles.attendanceGroupSummary}>
                           <span className={styles.attendanceGroupLabel}>
                             {label}

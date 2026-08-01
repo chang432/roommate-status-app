@@ -85,6 +85,7 @@ describe("BookClubForum", () => {
     expect(screen.getByText("Which scene stayed with you?")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reply" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Send message" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /More actions/ })).not.toBeInTheDocument();
   });
 
   it("confirms before permanently removing a topic", async () => {
@@ -108,7 +109,11 @@ describe("BookClubForum", () => {
     });
     render(<BookClubForum meeting={MEETING} canAdminister={false} />);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", {
+      name: "More actions for Andre's message",
+    }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Remove" }));
     expect(deleteBookClubForumEntry).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Remove message" }));
 
@@ -117,6 +122,55 @@ describe("BookClubForum", () => {
       "meeting#1",
       "forum#1",
     );
+  });
+
+  it("shows only permitted actions and supports keyboard dismissal", async () => {
+    getBookClubForum.mockResolvedValue({
+      forum: {
+        meetingId: MEETING.id,
+        locked: false,
+        threads: [{
+          id: "forum#1",
+          body: "Root message",
+          authorId: "andre",
+          authorName: "Andre",
+          createdAt: 1,
+          updatedAt: 1,
+          lastActivityAt: 2,
+          replies: [{
+            id: "forum#2",
+            parentPostId: "forum#1",
+            body: "A reply",
+            authorId: "kayla",
+            authorName: "Kayla",
+            createdAt: 2,
+            updatedAt: 2,
+          }],
+        }],
+      },
+    });
+    render(<BookClubForum meeting={MEETING} canAdminister />);
+
+    const ownActions = await screen.findByRole("button", {
+      name: "More actions for Andre's message",
+    });
+    await userEvent.click(ownActions);
+    const ownMenu = screen.getByRole("menu", { name: "Actions for Andre's message" });
+    expect(within(ownMenu).getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
+    expect(within(ownMenu).getByRole("menuitem", { name: "Remove" })).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("menu", { name: "Actions for Andre's message" }))
+      .not.toBeInTheDocument();
+    expect(ownActions).toHaveFocus();
+
+    await userEvent.click(screen.getByRole("button", {
+      name: "More actions for Kayla's reply",
+    }));
+    const adminMenu = screen.getByRole("menu", { name: "Actions for Kayla's reply" });
+    expect(within(adminMenu).queryByRole("menuitem", { name: "Edit" }))
+      .not.toBeInTheDocument();
+    expect(within(adminMenu).getByRole("menuitem", { name: "Remove" })).toBeInTheDocument();
   });
 
   it("collapses roots and replies independently", async () => {
@@ -146,8 +200,8 @@ describe("BookClubForum", () => {
     });
     render(<BookClubForum meeting={MEETING} canAdminister={false} />);
 
-    const rootToggle = await screen.findByRole("button", { name: /Andre/ });
-    const replyToggle = screen.getByRole("button", { name: /Kayla/ });
+    const rootToggle = await screen.findByRole("button", { name: /Andre/, expanded: true });
+    const replyToggle = screen.getByRole("button", { name: /Kayla/, expanded: true });
     expect(rootToggle).toHaveAttribute("aria-expanded", "true");
     expect(replyToggle).toHaveAttribute("aria-expanded", "true");
     expect(within(rootToggle).getByText("−")).toBeVisible();

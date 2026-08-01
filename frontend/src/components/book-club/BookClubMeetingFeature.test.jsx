@@ -222,11 +222,19 @@ describe("BookClubMeetingFeature", () => {
       ["Not attending", "Ting"],
       ["Pending", "Sheryl"],
     ]) {
+      const status = {
+        Attending: "attending",
+        Maybe: "maybe",
+        "Not attending": "not_attending",
+        Pending: "pending",
+      }[label];
       const trigger = within(attendance).getByRole("button", {
         name: `View 1 person marked ${label.toLowerCase()}`,
       });
-      expect(screen.getByRole("region", { name: `${label}: 1` }))
-        .toHaveTextContent(`${label}1`);
+      const row = screen.getByRole("region", { name: `${label}: 1` });
+      expect(row).toHaveTextContent(`${label}1`);
+      expect(row.querySelector(`[data-attendance-status-indicator="${status}"]`))
+        .toBeInTheDocument();
       expect(within(trigger).getByText(person.charAt(0))).toBeInTheDocument();
       await userEvent.click(trigger);
       expect(screen.getByRole("dialog", { name: `${label} members` }))

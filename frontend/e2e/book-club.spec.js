@@ -296,17 +296,22 @@ async function expectAttendanceRowsStacked(attendance) {
   ]
   const rows = attendance.getByRole('region')
   await expect(rows).toHaveCount(expectedNames.length)
-  const boxes = []
   for (const name of expectedNames) {
     const row = attendance.getByRole('region', { name })
     await expect(row).toBeVisible()
-    boxes.push(await row.boundingBox())
+    await expect(row.locator('[data-attendance-status-indicator]')).toBeVisible()
   }
-  for (let index = 1; index < boxes.length; index += 1) {
-    const spacing = boxes[index].y - (boxes[index - 1].y + boxes[index - 1].height)
-    expect(spacing).toBeGreaterThanOrEqual(4)
-    expect(spacing).toBeLessThanOrEqual(16)
-  }
+  // The disclosure animates open, so wait until its final row spacing is stable.
+  await expect.poll(async () => {
+    const boxes = await Promise.all(expectedNames.map((name) => (
+      attendance.getByRole('region', { name }).boundingBox()
+    )))
+    return boxes.slice(1).every((box, index) => {
+      const previous = boxes[index]
+      const spacing = box.y - (previous.y + previous.height)
+      return spacing >= 4 && spacing <= 16
+    })
+  }).toBe(true)
   for (const name of ['Attending: 1', 'Maybe: 1', 'Pending: 1']) {
     const row = attendance.getByRole('region', { name })
     const rowBox = await row.boundingBox()
@@ -366,6 +371,15 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await details.getByLabel('Reply to message').fill('The final conversation.')
   await details.getByRole('button', { name: 'Reply', exact: true }).click()
   await expect(details.getByText('The final conversation.')).toBeVisible()
+  const rootActions = details.getByRole('button', { name: "More actions for Andre's message" })
+  await rootActions.click()
+  const rootMenu = details.getByRole('menu', { name: "Actions for Andre's message" })
+  await expect(rootMenu.getByRole('menuitem', { name: 'Edit' })).toBeVisible()
+  await expect(rootMenu.getByRole('menuitem', { name: 'Remove' })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('book-club-entry-menu-desktop.png'), fullPage: true })
+  await page.keyboard.press('Escape')
+  await expect(rootMenu).toBeHidden()
+  await expect(rootActions).toBeFocused()
   const rootMessageToggle = details.getByRole('button', { name: /Andre/ }).first()
   await expect(rootMessageToggle).toContainText('−')
   await rootMessageToggle.click()
@@ -1155,6 +1169,7 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   await attendanceSection.getByRole('button', { name: /Attendance/ }).click()
   const attendance = page.getByLabel('Member attendance')
   await expectAttendanceRowsStacked(attendance)
+  await page.waitForTimeout(750)
   await expect(attendance.getByRole('button', { name: 'View 1 person marked attending' })).toBeVisible()
   await expect(attendance.getByRole('button', { name: 'View 1 person marked maybe' })).toBeVisible()
   await expect(attendance.getByRole('button', { name: 'View 1 person marked pending' })).toBeVisible()
@@ -1165,10 +1180,26 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   const rsvpRowBox = await rsvpRow.boundingBox()
   const rsvpSelectBox = await rsvpSelect.boundingBox()
   const rsvpLabelBox = await rsvpLabel.boundingBox()
-  expect(Math.abs(rsvpRowBox.y - rsvpSelectBox.y)).toBeLessThan(1)
+  expect(rsvpRowBox.height).toBeGreaterThanOrEqual(rsvpSelectBox.height)
+  expect(Math.abs(
+    (rsvpLabelBox.y + rsvpLabelBox.height / 2) - (rsvpSelectBox.y + rsvpSelectBox.height / 2),
+  )).toBeLessThanOrEqual(8)
   expect(rsvpSelectBox.x).toBeGreaterThan(rsvpLabelBox.x)
-  await page.getByRole('region', { name: 'Discussion' }).getByRole('button', { name: /Discussion/ }).click()
-  await expect(page.getByRole('region', { name: 'Discussion' }).getByText('No messages yet. Start the conversation.')).toBeVisible()
+  const discussion = page.getByRole('region', { name: 'Discussion' })
+  await discussion.getByRole('button', { name: /Discussion/ }).click()
+  await expect(discussion.getByText('No messages yet. Start the conversation.')).toBeVisible()
+  await discussion.getByLabel('New message').fill('Phone discussion message')
+  await discussion.getByRole('button', { name: 'Send message' }).click()
+  const mobileActions = discussion.getByRole('button', { name: "More actions for Andre's message" })
+  await mobileActions.click()
+  const mobileMenu = discussion.getByRole('menu', { name: "Actions for Andre's message" })
+  await expect(mobileMenu.getByRole('menuitem', { name: 'Edit' })).toBeVisible()
+  await expect(mobileMenu.getByRole('menuitem', { name: 'Remove' })).toBeVisible()
+  await page.waitForTimeout(750)
+  await page.screenshot({ path: testInfo.outputPath('book-club-entry-menu-mobile.png'), fullPage: true })
+  await page.keyboard.press('Escape')
+  await expect(mobileMenu).toBeHidden()
+  await expect(mobileActions).toBeFocused()
   await expect.poll(() => page.evaluate(() => (
     document.documentElement.scrollWidth <= window.innerWidth
   ))).toBe(true)

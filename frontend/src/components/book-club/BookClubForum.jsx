@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   createBookClubForumEntry,
   deleteBookClubForumEntry,
@@ -10,6 +10,101 @@ import { relativeTime } from "../../utils/time.js";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import styles from "./BookClubForum.module.css";
 
+function EntryActionMenu({ entry, busy, ownsEntry, open, onOpenChange, onEdit, onRemove }) {
+  const menuId = useId();
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+  const kind = entry.parentPostId ? "reply" : "message";
+  const actionLabel = `${entry.authorName}'s ${kind}`;
+
+  useEffect(() => {
+    if (open) menuRef.current?.querySelector('[role="menuitem"]')?.focus();
+  }, [open]);
+
+  function closeAndFocusTrigger() {
+    triggerRef.current?.focus();
+    onOpenChange(false);
+  }
+
+  function handleMenuKeyDown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeAndFocusTrigger();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const items = [...menuRef.current.querySelectorAll('[role="menuitem"]:not(:disabled)')];
+    const currentIndex = items.indexOf(document.activeElement);
+    // Keep this compact menu usable without forcing keyboard users back to the trigger.
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? items.length - 1
+        : (currentIndex + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    items[nextIndex]?.focus();
+  }
+
+  return (
+    <div
+      className={styles.entryMenu}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) onOpenChange(false);
+      }}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        className={styles.entryMenuTrigger}
+        aria-label={`More actions for ${actionLabel}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => onOpenChange(!open)}
+      >
+        <span aria-hidden="true">…</span>
+      </button>
+      {open ? (
+        <div
+          ref={menuRef}
+          id={menuId}
+          className={styles.entryMenuPanel}
+          role="menu"
+          aria-label={`Actions for ${actionLabel}`}
+          onKeyDown={handleMenuKeyDown}
+        >
+          {ownsEntry ? (
+            <button
+              type="button"
+              className={styles.entryMenuItem}
+              role="menuitem"
+              onClick={() => {
+                onOpenChange(false);
+                onEdit();
+              }}
+            >
+              Edit
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={`${styles.entryMenuItem} ${styles.entryMenuDanger}`}
+            role="menuitem"
+            disabled={busy}
+            onClick={() => {
+              onOpenChange(false);
+              onRemove();
+            }}
+          >
+            Remove
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function BookClubForum({ meeting, canAdminister, focusThreadId, variant = "card" }) {
   const { user } = useAuth();
   const [forum, setForum] = useState(null);
@@ -20,6 +115,7 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
   const [replyBody, setReplyBody] = useState("");
   const [editing, setEditing] = useState(null);
   const [collapsedEntries, setCollapsedEntries] = useState(() => new Set());
+  const [openActionMenuId, setOpenActionMenuId] = useState(null);
   const { confirm, confirmationDialog } = useConfirmDialog();
 
   const loadForum = useCallback(async () => {
@@ -35,6 +131,10 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
   useEffect(() => {
     void loadForum();
   }, [loadForum]);
+
+  useEffect(() => {
+    setOpenActionMenuId(null);
+  }, [forum]);
 
   useEffect(() => {
     if (!focusThreadId || !forum) return;
@@ -130,20 +230,24 @@ export default function BookClubForum({ meeting, canAdminister, focusThreadId, v
     const ownsEntry = entry.authorId === user.id;
     if (locked || entry.deletedAt || (!ownsEntry && !canAdminister)) return null;
     return (
-      <div className={styles.entryActions}>
-        {ownsEntry && (
-          <button type="button" onClick={() => setEditing({
+      <EntryActionMenu
+        entry={entry}
+        busy={busy}
+        ownsEntry={ownsEntry}
+        open={openActionMenuId === entry.id}
+        onOpenChange={(open) => setOpenActionMenuId(open ? entry.id : null)}
+        onEdit={() => setEditing({
             id: entry.id,
             body: entry.body,
             isReply: Boolean(entry.parentPostId),
-          })}>Edit</button>
-        )}
-        <button type="button" disabled={busy} onClick={() => removeEntry(entry)}>Remove</button>
-      </div>
+          })}
+        onRemove={() => removeEntry(entry)}
+      />
     );
   }
 
   function toggleEntry(entryId) {
+    setOpenActionMenuId(null);
     setCollapsedEntries((current) => {
       const next = new Set(current);
       if (next.has(entryId)) next.delete(entryId);
