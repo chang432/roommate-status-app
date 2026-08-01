@@ -7,8 +7,7 @@
 .description { @apply mt-0.5 block truncate text-[12px] text-ink-soft; }
 .badge { @apply max-w-48 flex-none truncate rounded-full bg-surface-muted px-2 py-1 text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
 .flat .badge { @apply max-w-48 rounded-none bg-transparent px-0 py-0 text-[11px] normal-case tracking-normal; }
-.chevron { @apply flex-none text-lg leading-none text-accent-deep transition-transform duration-300 motion-reduce:transition-none; }
-.summary[aria-expanded="true"] .chevron { @apply rotate-180; }
+.toggleIcon { @apply grid h-6 w-6 flex-none place-items-center text-xl font-semibold leading-none text-accent-deep; }
 .expandedRegion { @apply grid transition-[grid-template-rows] duration-700 ease-out motion-reduce:transition-none; }
 .expanded { grid-template-rows: 1fr; }
 .collapsed { grid-template-rows: 0fr; }

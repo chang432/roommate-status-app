@@ -194,9 +194,9 @@ export default function BookClubMeetingFeature({
             <div className={styles.attendanceContent}>
               {attendanceEditable ? (
                 <label className={styles.attendanceEditor}>
-                  <span>Your RSVP</span>
+                  <span>RSVP</span>
                   <select
-                    aria-label="Your RSVP"
+                    aria-label="RSVP"
                     value={viewerResponse.attendanceStatus ?? ""}
                     disabled={busy}
                     onChange={(event) =>

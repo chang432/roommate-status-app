@@ -11,13 +11,13 @@
 .details dt { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
 .details dd { @apply text-ink; }
 .meetingSection { @apply bg-transparent; }
-.discussionSection { @apply border-t border-line pt-1; }
+.discussionSection { @apply border-t border-line pt-3; }
 .attendanceContent { @apply grid gap-3; }
 .attendanceEditor { @apply grid grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] items-center gap-3 border-b border-line pb-3; }
 .attendanceEditor > span { @apply text-xs font-bold text-ink; }
 .attendanceEditor select { @apply min-h-10 w-full rounded-sm border border-line bg-card px-3 text-sm text-ink outline-none focus:border-accent focus:shadow-focus; }
 .attendanceGroups { @apply grid grid-cols-2 gap-x-5 gap-y-3; }
-.attendanceGroup { @apply min-w-0; }
+.attendanceGroup { @apply min-w-0 border-t border-line pt-2; }
 .attendanceGroupHeader { @apply flex items-center justify-between gap-2; }
 .attendanceGroupHeader h4 { @apply flex min-w-0 items-center gap-2 text-xs font-bold text-ink; }
 .attendanceGroupHeader > span { @apply text-xs font-bold tabular-nums text-ink-soft; }
@@ -33,7 +33,7 @@
 .meetingActions { @apply flex-nowrap; }
 @media (max-width: 520px) {
   .meta { @apply whitespace-normal; }
-  .attendanceEditor { @apply grid-cols-1 gap-1.5; }
+  .attendanceEditor { @apply gap-1.5; }
   .attendanceGroups { @apply grid-cols-1; }
   .meetingActions { @apply gap-1.5; }
   .meetingActions button, .meetingActions a { @apply min-h-9 whitespace-nowrap px-2 py-1.5 text-[10.5px]; }

@@ -98,6 +98,8 @@ describe("BookClubMeetingFeature", () => {
 
     expect(attendanceToggle).toHaveAttribute("aria-expanded", "false");
     expect(discussionToggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(attendanceToggle).getByText("+")).toBeVisible();
+    expect(within(discussionToggle).getByText("+")).toBeVisible();
     expect(screen.getByLabelText("Member attendance").closest("[inert]"))
       .toBeInTheDocument();
     expect(screen.queryByTestId("discussion-meeting#1")).not.toBeInTheDocument();
@@ -105,8 +107,10 @@ describe("BookClubMeetingFeature", () => {
     await userEvent.click(attendanceToggle);
     expect(attendanceToggle).toHaveAttribute("aria-expanded", "true");
     expect(discussionToggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(attendanceToggle).getByText("−")).toBeVisible();
 
     await userEvent.click(discussionToggle);
+    expect(within(discussionToggle).getByText("−")).toBeVisible();
     expect(screen.getByTestId("discussion-meeting#1")).toHaveTextContent("Chapter 8");
     expect(screen.getByRole("link", { name: "View book" })).toHaveAttribute(
       "href",
@@ -167,7 +171,7 @@ describe("BookClubMeetingFeature", () => {
       expanded: false,
     }));
     await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
-    await userEvent.selectOptions(screen.getByLabelText("Your RSVP"), "attending");
+    await userEvent.selectOptions(screen.getByLabelText("RSVP"), "attending");
     expect(setBookClubResponse).toHaveBeenCalledWith(
       "andre",
       "meeting#1",
@@ -210,7 +214,7 @@ describe("BookClubMeetingFeature", () => {
     }));
     await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
 
-    await waitFor(() => expect(screen.queryByLabelText("Your RSVP")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText("RSVP")).not.toBeInTheDocument());
     expect(screen.getByLabelText("Member attendance")).toBeInTheDocument();
   });
 

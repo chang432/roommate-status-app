@@ -28,7 +28,9 @@ export default function BookClubDisclosure({
           {description ? <span className={styles.description}>{description}</span> : null}
         </span>
         {badge ? <span className={styles.badge}>{badge}</span> : null}
-        <span className={styles.chevron} aria-hidden="true">⌄</span>
+        <span className={styles.toggleIcon} aria-hidden="true">
+          {open ? "−" : "+"}
+        </span>
       </button>
       <div className={`${styles.expandedRegion} ${open ? styles.expanded : styles.collapsed}`}>
         <div className={styles.expandedInner} {...(!open ? { inert: "" } : {})}>
