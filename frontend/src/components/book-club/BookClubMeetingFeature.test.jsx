@@ -55,7 +55,7 @@ function renderMeeting({ meeting = MEETING, intent = null, canAdminister = false
       <ModuleFocusProvider intent={intent}>
         <BookClubMeetingFeature
           meeting={meeting}
-          moduleTag={<span>Book Club</span>}
+          moduleTag={<span>Books</span>}
           onEdit={onEdit}
           canAdminister={canAdminister}
           onChanged={vi.fn()}
@@ -73,34 +73,37 @@ describe("BookClubMeetingFeature", () => {
   });
   afterEach(() => cleanup());
 
-  it("shows attendance without a nested collapse control and links the full book", async () => {
+  it("uses the reading target as its title and links the book from the header", async () => {
     renderMeeting();
 
     const header = screen.getByRole("button", {
-      name: /The Left Hand of Darkness/,
+      name: /Book Club meeting Chapter 8/,
       expanded: false,
     });
+    const bookLink = screen.getByRole("link", {
+      name: "View The Left Hand of Darkness in the Book Club library",
+    });
+    expect(screen.getByText("Books").nextElementSibling).toHaveTextContent("Chapter 8");
+    expect(bookLink).toHaveAttribute("href", "/?book=book-1");
     expect(document.querySelector("[inert]")).toBeInTheDocument();
     await userEvent.click(header);
 
     expect(header).toHaveAttribute("aria-expanded", "true");
     expect(getBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");
-    expect(screen.getByText("Chapter 8")).toBeInTheDocument();
+    expect(screen.getAllByText("Chapter 8")).toHaveLength(2);
+    expect(screen.queryByText("Ursula K. Le Guin")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View book" })).not.toBeInTheDocument();
     const attendance = screen.getByRole("region", { name: "Attendance" });
     expect(within(attendance).queryByRole("button", { name: /Attendance/ })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Member attendance").closest("[inert]")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Discussion" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View book" })).toHaveAttribute(
-      "href",
-      "/?book=book-1",
-    );
   });
 
   it("keeps administration actions inside the expanded feed card", async () => {
     const onEdit = vi.fn();
     renderMeeting({ canAdminister: true, onEdit });
     await userEvent.click(screen.getByRole("button", {
-      name: /The Left Hand of Darkness/,
+      name: /Book Club meeting Chapter 8/,
       expanded: false,
     }));
 
@@ -110,7 +113,7 @@ describe("BookClubMeetingFeature", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("link", { name: "View book" })).toHaveClass("ui-pillSecondary");
+    expect(screen.queryByRole("link", { name: "View book" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Complete meeting" })).toHaveClass(
       "ui-pillDanger",
     );
@@ -120,7 +123,7 @@ describe("BookClubMeetingFeature", () => {
     completeBookClubMeeting.mockResolvedValue({});
     renderMeeting({ canAdminister: true });
     await userEvent.click(screen.getByRole("button", {
-      name: /The Left Hand of Darkness/,
+      name: /Book Club meeting Chapter 8/,
       expanded: false,
     }));
 
@@ -145,7 +148,7 @@ describe("BookClubMeetingFeature", () => {
     });
     renderMeeting();
     await userEvent.click(screen.getByRole("button", {
-      name: /The Left Hand of Darkness/,
+      name: /Book Club meeting Chapter 8/,
       expanded: false,
     }));
     await userEvent.selectOptions(screen.getByLabelText("RSVP"), "attending");
@@ -177,7 +180,7 @@ describe("BookClubMeetingFeature", () => {
   it("groups every member by attendance status with explicit counts", async () => {
     renderMeeting();
     await userEvent.click(screen.getByRole("button", {
-      name: /The Left Hand of Darkness/,
+      name: /Book Club meeting Chapter 8/,
       expanded: false,
     }));
     const attendance = screen.getByLabelText("Member attendance");
@@ -230,7 +233,7 @@ describe("BookClubMeetingFeature", () => {
     getBookClubMeeting.mockResolvedValueOnce({ meeting: crowdedMeeting });
     renderMeeting({ meeting: crowdedMeeting });
     await userEvent.click(screen.getByRole("button", {
-      name: /The Left Hand of Darkness/,
+      name: /Book Club meeting Chapter 8/,
       expanded: false,
     }));
     const attending = within(screen.getByLabelText("Member attendance"))
@@ -248,11 +251,12 @@ describe("BookClubMeetingFeature", () => {
     getBookClubMeeting.mockResolvedValueOnce({ meeting: { ...MEETING, status: "completed" } });
     renderMeeting();
     await userEvent.click(screen.getByRole("button", {
-      name: /The Left Hand of Darkness/,
+      name: /Book Club meeting Chapter 8/,
       expanded: false,
     }));
     await waitFor(() => expect(screen.queryByLabelText("RSVP")).not.toBeInTheDocument());
     expect(screen.getByLabelText("Member attendance")).toBeInTheDocument();
+    expect(document.querySelector(".ui-moduleActionRow")).not.toBeInTheDocument();
   });
 
   it("expands a meeting targeted by a household notification", async () => {
@@ -260,7 +264,7 @@ describe("BookClubMeetingFeature", () => {
       intent: { itemId: "meeting#1", token: "book-club:meeting#1" },
     });
     expect(await screen.findByRole("button", {
-      name: /The Left Hand of Darkness/,
+      name: /Book Club meeting Chapter 8/,
       expanded: true,
     })).toBeInTheDocument();
     expect(getBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");

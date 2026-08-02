@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   completeBookClubMeeting,
   getBookClubMeeting,
@@ -11,6 +10,7 @@ import { useExpandOnModuleFocus } from "../../context/ModuleFocusContext.jsx";
 import { avatarColor } from "../../utils/avatar.js";
 import { exactDateTime } from "../../utils/time.js";
 import ModuleEditButton from "../feed/ModuleEditButton.jsx";
+import BookLinkedModuleHeader from "../feed/BookLinkedModuleHeader.jsx";
 import ExpandableCardRegion from "../feed/ExpandableCardRegion.jsx";
 import Avatar from "../ui/Avatar.jsx";
 import PeoplePopover from "../ui/PeoplePopover.jsx";
@@ -152,28 +152,21 @@ export default function BookClubMeetingFeature({
     <div className={styles.list}>
       {error && <p className="ui-errorBox">{error}</p>}
       <article className={styles.card}>
-        <button
-          type="button"
+        <BookLinkedModuleHeader
           className={styles.header}
-          aria-expanded={expanded}
-          onClick={() => toggle(meeting)}
-        >
-          <span className={styles.headerText}>
-            <span className={styles.title}>{meeting.bookTitle}</span>
-            <span className={styles.meta}>
-              {exactDateTime(meeting.scheduledAt)} · Snacks:{" "}
-              {meeting.snackOwnerName}
-            </span>
-          </span>
-          {moduleTag}
-        </button>
+          expanded={expanded}
+          onToggle={() => toggle(meeting)}
+          toggleLabel={`Book Club meeting ${meeting.readingTarget}`}
+          moduleTag={moduleTag}
+          title={meeting.readingTarget}
+          meta={`${exactDateTime(meeting.scheduledAt)} · Snacks: ${meeting.snackOwnerName}`}
+          bookId={meeting.bookId}
+          bookTitle={meeting.bookTitle}
+        />
         <ExpandableCardRegion
           expanded={expanded}
           className={styles.detailsPanel}
         >
-          <p className={styles.bookTitle}>
-            {detail.bookTitle} by {detail.bookAuthor}
-          </p>
           <dl className={styles.details}>
             <div>
               <dt>Reading target</dt>
@@ -296,37 +289,29 @@ export default function BookClubMeetingFeature({
               </div>
             </div>
           </section>
-          <div className={`ui-moduleActionRow ${styles.meetingActions}`}>
-            <Link
-              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-              to={`/?book=${encodeURIComponent(meeting.bookId)}`}
-            >
-              View book
-            </Link>
-            {detail.status === "scheduled" && (
-              <>
+          {detail.status === "scheduled" && (
+            <div className={`ui-moduleActionRow ${styles.meetingActions}`}>
+              <button
+                type="button"
+                className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                disabled={busy}
+                onClick={() => notify(detail)}
+              >
+                Send reminder
+              </button>
+              <ModuleEditButton onEdit={onEdit} disabled={busy} />
+              {canAdminister && (
                 <button
                   type="button"
-                  className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                  className="ui-pillButton ui-pillDanger ui-moduleActionButton"
                   disabled={busy}
-                  onClick={() => notify(detail)}
+                  onClick={() => complete(detail)}
                 >
-                  Send reminder
+                  Complete meeting
                 </button>
-                <ModuleEditButton onEdit={onEdit} disabled={busy} />
-                {canAdminister && (
-                  <button
-                    type="button"
-                    className="ui-pillButton ui-pillDanger ui-moduleActionButton"
-                    disabled={busy}
-                    onClick={() => complete(detail)}
-                  >
-                    Complete meeting
-                  </button>
-                )}
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </ExpandableCardRegion>
       </article>
       {confirmationDialog}

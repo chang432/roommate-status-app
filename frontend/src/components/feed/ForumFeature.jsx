@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import {
   archiveForum,
   commentOnForum,
@@ -14,6 +13,7 @@ import { relativeTime } from "../../utils/time.js";
 import FeedComments from "../comments/FeedComments.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import ExpandableCardRegion from "./ExpandableCardRegion.jsx";
+import BookLinkedModuleHeader from "./BookLinkedModuleHeader.jsx";
 import ModuleEditButton from "./ModuleEditButton.jsx";
 import styles from "./ForumFeature.module.css";
 
@@ -87,31 +87,17 @@ export default function ForumFeature({ forum, roommates, onForumsChange, moduleT
     <div className={styles.wrap}>
       {error ? <p className={cx("ui-errorText", styles.error)}>{error}</p> : null}
       <article className={cx(styles.card, forum.isArchived && styles.archived)}>
-        <div className={styles.summary}>
-          <button
-            type="button"
-            className={styles.summaryButton}
-            aria-expanded={expanded}
-            aria-label={`${expanded ? "Close" : "Open"} forum ${forum.title}`}
-            onClick={toggleExpanded}
-          />
-          <div className={styles.summaryText}>
-            <span className={styles.titleRow}>
-              {moduleTag}
-              <strong className={styles.title}>{forum.title}</strong>
-            </span>
-            <span className={styles.meta}>
-              {forum.createdBy} · {relativeTime(forum.createdAt)}
-            </span>
-          </div>
-          <Link
-            className={styles.bookTag}
-            to={`/?book=${encodeURIComponent(forum.bookId)}`}
-            aria-label={`View ${forum.bookTitle} in the Book Club library`}
-          >
-            {forum.bookTitle}
-          </Link>
-        </div>
+        <BookLinkedModuleHeader
+          className={styles.summary}
+          expanded={expanded}
+          onToggle={toggleExpanded}
+          toggleLabel={`forum ${forum.title}`}
+          moduleTag={moduleTag}
+          title={forum.title}
+          meta={`${forum.createdBy} · ${relativeTime(forum.createdAt)}`}
+          bookId={forum.bookId}
+          bookTitle={forum.bookTitle}
+        />
 
         <ExpandableCardRegion expanded={expanded} className={styles.panel}>
           <FeedComments

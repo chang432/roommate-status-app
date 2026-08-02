@@ -1,0 +1,41 @@
+.header {
+  @apply relative flex min-w-0 items-center gap-3;
+}
+
+.toggleButton {
+  @apply absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent;
+}
+
+.copy {
+  @apply pointer-events-none relative z-[1] min-w-0 flex-1;
+}
+
+.titleRow {
+  @apply flex min-w-0 items-center gap-2;
+}
+
+.title {
+  @apply block min-w-0 flex-1 truncate font-display text-[18px] leading-tight text-ink;
+}
+
+.meta {
+  @apply mt-1 block text-[12.5px] font-semibold text-ink-soft;
+}
+
+.bookTag {
+  @apply relative z-[2] inline-flex min-h-9 max-w-[230px] flex-none items-center truncate rounded-full border border-line bg-surface-muted px-3 py-[7px] text-[12px] font-bold text-ink-soft transition hover:border-accent hover:text-ink;
+}
+
+@media (max-width: 560px) {
+  .header {
+    @apply flex-wrap items-start;
+  }
+
+  .copy {
+    @apply basis-full;
+  }
+
+  .bookTag {
+    @apply ml-auto max-w-full;
+  }
+}

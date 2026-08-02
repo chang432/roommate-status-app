@@ -43,9 +43,9 @@ availability to hang out. Built from the mockups in `../mockups`.
   current title first and completed titles by recency, aggregate ratings, and
   collapsible reviews. Admins add the
   current title and schedule meetings for it; members can correct catalog books.
-  Expanded meeting cards keep attendance visible, with each member's own RSVP
-  control in a stable, dedicated position and a separate action for opening the
-  full book detail.
+  Meeting cards identify the reading target and link the associated book from
+  their header. Expanded cards keep attendance visible, with each member's own
+  RSVP control in a stable, dedicated position.
   When no title is current, an admin can restore a completed title from its edit
   form. Books support reusable household tags that members can add or correct;
   tags appear in the library and participate in its existing search.

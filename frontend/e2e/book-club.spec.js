@@ -395,7 +395,20 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   await expect(page.getByRole('status')).toHaveText('Review saved.')
   await page.getByRole('button', { name: 'Close' }).click()
 
-  await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  const meetingHeader = page.getByRole('button', {
+    name: 'Open Book Club meeting Read through Chapter 9',
+  })
+  const meetingBookLink = page.getByRole('link', {
+    name: 'View The Fifth Season in the Book Club library',
+  })
+  const meetingHeaderRoot = meetingHeader.locator('..')
+  const meetingTitle = meetingHeaderRoot.getByText('Read through Chapter 9', { exact: true })
+  const [meetingTitleBox, meetingBookBox] = await Promise.all([
+    meetingTitle.boundingBox(),
+    meetingBookLink.boundingBox(),
+  ])
+  expect(meetingBookBox.x).toBeGreaterThan(meetingTitleBox.x + meetingTitleBox.width)
+  await meetingHeader.click()
   const attendanceSection = page.getByRole('region', { name: 'Attendance' })
   await expect(attendanceSection.getByRole('button', { name: /Attendance/ })).toHaveCount(0)
   await expect(page.getByRole('region', { name: 'Discussion' })).toHaveCount(0)
@@ -420,7 +433,7 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   await expect(confirmation).toContainText('Attendance will become read-only')
   await page.screenshot({ path: testInfo.outputPath('complete-meeting-confirmation-desktop.png'), fullPage: true })
   await confirmation.getByRole('button', { name: 'Cancel' }).click()
-  await page.getByRole('link', { name: 'View book' }).click()
+  await meetingBookLink.click()
   await expect(page).toHaveURL(/\?book=active-book$/)
   const wholeBook = page.getByRole('dialog', { name: 'Book details' })
   await expect(wholeBook.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
@@ -431,7 +444,9 @@ test('confirms meeting completion safely on desktop', async ({ page }, testInfo)
   await mockBookClub(page)
   await page.goto('/')
 
-  await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  await page.getByRole('button', {
+    name: 'Open Book Club meeting Read through Chapter 9',
+  }).click()
   await page.getByRole('button', { name: 'Complete meeting' }).click()
 
   const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
@@ -456,12 +471,22 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   await creator.getByRole('button', { name: 'Create forum' }).click()
 
   const forumCard = page.getByRole('button', {
-    name: 'Open forum Memory, survival, and change',
+    name: /forum Memory, survival, and change$/,
   })
   await expect(page.getByText('Memory, survival, and change')).toBeVisible()
   await expect(page.getByRole('link', {
     name: 'View The Fifth Season in the Book Club library',
   })).toBeVisible()
+  const forumHeaderRoot = forumCard.locator('..')
+  const forumTitle = forumHeaderRoot.getByText('Memory, survival, and change', { exact: true })
+  const forumBookLink = forumHeaderRoot.getByRole('link', {
+    name: 'View The Fifth Season in the Book Club library',
+  })
+  const [forumTitleBox, forumBookBox] = await Promise.all([
+    forumTitle.boundingBox(),
+    forumBookLink.boundingBox(),
+  ])
+  expect(forumBookBox.x).toBeGreaterThan(forumTitleBox.x + forumTitleBox.width)
   await forumCard.click({ position: { x: 12, y: 12 } })
   await expect(page.getByRole('button', {
     name: 'Close forum Memory, survival, and change',
@@ -475,6 +500,18 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   await page.screenshot({ path: testInfo.outputPath('forum-module-desktop.png'), fullPage: true })
 
   await page.setViewportSize({ width: 390, height: 844 })
+  const [phoneForumHeaderBox, phoneForumTitleBox, phoneForumBookBox] = await Promise.all([
+    forumHeaderRoot.boundingBox(),
+    forumTitle.boundingBox(),
+    forumBookLink.boundingBox(),
+  ])
+  expect(phoneForumBookBox.y).toBeGreaterThan(
+    phoneForumTitleBox.y + phoneForumTitleBox.height,
+  )
+  expect(Math.abs(
+    (phoneForumHeaderBox.x + phoneForumHeaderBox.width - 18)
+      - (phoneForumBookBox.x + phoneForumBookBox.width),
+  )).toBeLessThan(2)
   await expect.poll(() => page.evaluate(() => (
     document.documentElement.scrollWidth <= window.innerWidth
   ))).toBe(true)
@@ -994,9 +1031,9 @@ test('swipes categories from the clickable Book Club card header', async ({ page
     await bookClubTab.click()
     await expect(bookClubTab).toHaveAttribute('aria-selected', 'true')
 
-    const cardHeader = page.locator(
-      '[data-feed-panel-type="book-club"] button[aria-expanded]',
-    ).filter({ hasText: 'The Fifth Season' })
+    const cardHeader = page.getByRole('button', {
+      name: /Book Club meeting Read through Chapter 9$/,
+    })
     await expect(cardHeader).toHaveAttribute('aria-expanded', 'false')
     await cardHeader.click()
     await expect(cardHeader).toHaveAttribute('aria-expanded', 'true')
@@ -1217,7 +1254,31 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-modal-mobile.png'), fullPage: true })
 
   await details.getByRole('button', { name: 'Close' }).click()
-  await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  const phoneMeetingHeader = page.getByRole('button', {
+    name: 'Open Book Club meeting Read through Chapter 9',
+  })
+  const phoneMeetingHeaderRoot = phoneMeetingHeader.locator('..')
+  const phoneMeetingTitle = phoneMeetingHeaderRoot.getByText(
+    'Read through Chapter 9',
+    { exact: true },
+  )
+  const phoneMeetingBookLink = phoneMeetingHeaderRoot.getByRole('link', {
+    name: 'View The Fifth Season in the Book Club library',
+  })
+  const [phoneMeetingRootBox, phoneMeetingTitleBox, phoneMeetingBookBox] =
+    await Promise.all([
+      phoneMeetingHeaderRoot.boundingBox(),
+      phoneMeetingTitle.boundingBox(),
+      phoneMeetingBookLink.boundingBox(),
+    ])
+  expect(phoneMeetingBookBox.y).toBeGreaterThan(
+    phoneMeetingTitleBox.y + phoneMeetingTitleBox.height,
+  )
+  expect(Math.abs(
+    (phoneMeetingRootBox.x + phoneMeetingRootBox.width)
+      - (phoneMeetingBookBox.x + phoneMeetingBookBox.width),
+  )).toBeLessThan(2)
+  await phoneMeetingHeader.click()
   const attendanceSection = page.getByRole('region', { name: 'Attendance' })
   const attendance = page.getByLabel('Member attendance')
   await expectAttendanceRowsStacked(attendance)
@@ -1241,10 +1302,9 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   await expect.poll(() => page.evaluate(() => (
     document.documentElement.scrollWidth <= window.innerWidth
   ))).toBe(true)
-  const bookBoxAction = await page.getByRole('link', { name: 'View book' }).boundingBox()
   const reminderBox = await page.getByRole('button', { name: 'Send reminder' }).boundingBox()
   const completeBox = await page.getByRole('button', { name: 'Complete meeting' }).boundingBox()
-  for (const box of [bookBoxAction, reminderBox, completeBox]) {
+  for (const box of [phoneMeetingBookBox, reminderBox, completeBox]) {
     expect(box.height).toBeGreaterThanOrEqual(36)
     expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(390)

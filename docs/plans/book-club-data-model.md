@@ -7,7 +7,7 @@
   detail, Library opens the complete catalog, and the owner cards open their
   respective orders.
 - Meetings expand directly in the household feed for always-visible attendance,
-  reminders, editing, and completion. Their View book link opens
+  reminders, editing, and completion. Their linked book tag opens
   the complete book detail inside the household library modal.
 - Index zero in each list is the current owner and the default for a new meeting.
   Neither list advances automatically. An admin selection moves that member to

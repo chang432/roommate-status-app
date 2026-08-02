@@ -1,11 +1,7 @@
 .list { @apply grid gap-3; }
 .card { @apply rounded-sm border border-line bg-card px-4 py-3; }
-.header { @apply flex w-full items-center justify-between gap-3 text-left; }
-.headerText { @apply min-w-0 flex-1; }
-.title { @apply block truncate text-sm font-semibold text-ink; }
-.meta { @apply mt-0.5 block text-xs text-ink-soft; }
+.header { @apply w-full; }
 .detailsPanel { @apply mt-3 grid gap-3 border-t border-line pt-3 text-sm text-ink; }
-.bookTitle { @apply rounded border border-accent-soft bg-accent-soft px-3 py-2 font-semibold; }
 .details { @apply grid gap-2; }
 .details div { @apply grid grid-cols-[7rem_1fr] gap-2; }
 .details dt { @apply text-xs font-bold uppercase tracking-wide text-accent-deep; }
@@ -38,12 +34,11 @@
 .attendanceAvatar:nth-of-type(n + 5) { @apply hidden; }
 .meetingActions { @apply flex-nowrap; }
 @media (max-width: 520px) {
-  .meta { @apply whitespace-normal; }
   .attendanceEditor { @apply gap-1.5; }
   .attendanceGroups { @apply gap-1.5; }
   .attendanceAvatar:nth-of-type(n + 4) { @apply hidden; }
   .attendanceMoreDesktop { @apply hidden; }
   .attendanceMoreMobile { @apply inline; }
   .meetingActions { @apply gap-1.5; }
-  .meetingActions button, .meetingActions a { @apply min-h-9 whitespace-nowrap px-2 py-1.5 text-[10.5px]; }
+  .meetingActions button { @apply min-h-9 whitespace-nowrap px-2 py-1.5 text-[10.5px]; }
 }
