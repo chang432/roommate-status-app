@@ -28,8 +28,12 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/book-club/books`                                  | `?userId=<id>` + title/author/Book owner/optional tags | admin-added current title; completes the former current book |
 | `PATCH /api/book-club/books/<id>`                            | `?userId=<id>` + title/author/Book owner/optional tags, optional admin `setAsCurrent` | corrected book and historical meeting snapshots; restores a completed book only when none is current |
 | `PUT /api/book-club/books/<id>/review`                       | `?userId=<id>` + rating/finished/note      | member review and refreshed Book Club library           |
-| `GET/POST /api/book-club/meetings/<id>/forum`                | `?userId=<id>` + optional message/reply    | threaded meeting messages                              |
-| `PATCH/DELETE /api/book-club/meetings/<id>/forum/<entryId>`  | `?userId=<id>` + editable body             | edited or soft-removed forum entry                      |
+| `GET/POST /api/forums`                                      | `?userId=<id>` / `{ title, bookId, createdById }` | household forums / newly created book-tagged forum |
+| `POST /api/forums/<id>/comments`                            | `{ authorId, text }`                       | forums with the new flat comment                        |
+| `PUT/DELETE /api/forums/<id>/comments/<commentId>/likes`    | `{ userId }`                               | forums with updated comment likes                       |
+| `POST /api/forums/<id>/archive`                             | `{ userId }`                               | archived forum list                                     |
+| `POST /api/forums/<id>/restore`                             | `{ userId }`                               | restored forum list                                     |
+| `DELETE /api/forums/<id>`                                   | `{ userId }`                               | remaining forum list                                    |
 | `GET  /api/roommates`                                        | `?userId=<id>`                             | `[ { id, name, status, statusText, statusUpdatedAt } ]` |
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |

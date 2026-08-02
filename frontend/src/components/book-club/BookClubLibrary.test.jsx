@@ -11,13 +11,6 @@ vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   ...(await importOriginal()),
   reviewBookClubBook: vi.fn(),
 }));
-vi.mock("./BookClubForum.jsx", () => ({
-  default: ({ meeting, focusThreadId }) => (
-    <div data-testid={`forum-${meeting.id}`} data-focus-thread={focusThreadId || ""}>
-      Forum for {meeting.readingTarget}
-    </div>
-  ),
-}));
 
 const ACTIVE_BOOK = {
   id: "active-book",
@@ -79,8 +72,6 @@ function renderLibrary(props = {}) {
     onCompleteBook: vi.fn(),
     canAdminister: true,
     completingBook: false,
-    focusMeetingId: null,
-    focusThreadId: null,
   };
   const merged = { ...defaults, ...props };
   return { ...render(<BookClubLibrary {...merged} />), props: merged };
@@ -185,20 +176,6 @@ describe("BookClubLibrary", () => {
     const reviews = screen.getByRole("region", { name: "Your review" });
     expect(within(reviews).getByRole("button", { name: /Your review/ })).toHaveAttribute("aria-expanded", "true");
     expect(within(reviews).getByRole("button", { name: "Save review" })).toBeInTheDocument();
-  });
-
-  it("shows every meeting discussion newest first and focuses the linked thread", async () => {
-    renderLibrary({
-      selectedBookId: ACTIVE_BOOK.id,
-      focusMeetingId: "meeting-old",
-      focusThreadId: "topic-1",
-    });
-
-    const discussions = screen.getByRole("region", { name: "Discussions" });
-    expect(screen.getByTestId("forum-meeting-old")).toHaveAttribute("data-focus-thread", "topic-1");
-    expect(screen.queryByTestId("forum-meeting-new")).not.toBeInTheDocument();
-    await userEvent.click(within(discussions).getAllByRole("button")[1]);
-    expect(screen.getByTestId("forum-meeting-new")).toHaveAttribute("data-focus-thread", "");
   });
 
   it("returns to the list from a stale linked book", async () => {

@@ -1,4 +1,4 @@
-# Book Club meeting-module data model
+# Book Club and forum data model
 
 ## Product behavior
 
@@ -6,8 +6,8 @@
   Book, and Snack card grid on the household page. Current Book opens its
   detail, Library opens the complete catalog, and the owner cards open their
   respective orders.
-- Meetings expand directly in the household feed for collapsible attendance and
-  discussion, reminders, editing, and completion. Their View book link opens
+- Meetings expand directly in the household feed for always-visible attendance,
+  reminders, editing, and completion. Their View book link opens
   the complete book detail inside the household library modal.
 - Index zero in each list is the current owner and the default for a new meeting.
   Neither list advances automatically. An admin selection moves that member to
@@ -36,9 +36,11 @@
   alongside the rest of the catalog metadata.
 - Members may update their own attendance until the meeting is completed, even
   after its scheduled time.
-- Every meeting has a threaded message discussion with one reply level.
-  Authors may edit or remove their entries, group admins may remove any entry,
-  and completion makes the entire forum read-only.
+- Book Club households also have a separate Forums feed category. Any member
+  can create a forum with a title and required library-book tag. Its flat
+  comments support mentions and likes like event and request comments. The
+  creator may edit its title and linked book; any member may archive, restore,
+  or delete it.
 
 ## DynamoDB records
 
@@ -57,10 +59,11 @@ The existing `RoommateStatus-{dev,main}-book-club` table remains keyed by
 - `rating#<bookUuid>#<userId>`: member review with rating, finish status,
   optional note, member snapshot, and lifecycle timestamps. The established ID
   prefix remains because existing star ratings are upgraded in place.
-- `forum#<meetingUuid>#<timestamp>#<uuid>`: meeting-scoped message or reply.
-  Replies include `parentPostId`; root messages are body-only and all entries
-  include `lastActivityAt`. Removed entries keep attribution/timestamps but
-  omit their body.
+- `book-forum#<uuid>`: standalone forum title, required `bookId`, creator
+  snapshot, archive state, version, timestamps, and an embedded list of up to
+  100 flat comments.
+- `migration-backup#remove-meeting-forums#<digest>`: reversible copy of a
+  deleted legacy meeting-forum record, written only by the removal migration.
 
 All timestamps are server-generated epoch milliseconds except an admin-selected
 meeting time. Historical display names remain denormalized while authorization
@@ -70,20 +73,20 @@ uses stable member IDs.
 
 Meetings normalize as compact `type: "book-club"` feed modules and use
 `/?module=book-club&item=<id>` deep links that expand the household feed card.
-Forum notifications use
-`/?book=<book-id>&meeting=<meeting-id>&thread=<root-id>` so the household
-library modal opens the referenced topic. The type is
-included only when the group has Book Club enabled. Book addition, meeting creation,
+Forums normalize as `type: "forums"` feed modules and use
+`/?module=forums&item=<id>` deep links. Their required book tag links to
+`/?book=<book-id>`. The type is included only when the group has Book Club
+enabled. Book addition, meeting creation,
 completion, and book completion require a group admin; any current member can
 correct an existing book's metadata and tags,
-send a reminder, update their own response, review an active or completed book, create a
-forum message, and reply before completion. New messages notify the group except
-the author; replies notify thread participants except the author.
+send a reminder, update their own response, review an active or completed book,
+or create a forum. New forum comments notify the creator and prior commenters,
+with mention and `@all` recipients deduplicated.
 
 ## Migration
 
-`2026-07-31-01-remove-book-club-forum-titles` removes legacy root-message
-titles after preserving them in reversible migration markers.
+`2026-08-01-01-remove-book-club-meeting-forums` removes legacy meeting-scoped
+discussion records after preserving each full row in a reversible backup item.
 `2026-07-29-01-derive-book-completion` removes legacy book `status` fields,
 preserving known historical completion dates and clearing an invalid completion
 date from the configured current title.

@@ -15,8 +15,6 @@ import ExpandableCardRegion from "../feed/ExpandableCardRegion.jsx";
 import Avatar from "../ui/Avatar.jsx";
 import PeoplePopover from "../ui/PeoplePopover.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
-import BookClubDisclosure from "./BookClubDisclosure.jsx";
-import BookClubMeetingDiscussion from "./BookClubMeetingDiscussion.jsx";
 import styles from "./BookClubMeetingFeature.module.css";
 
 const ATTENDANCE_OPTIONS = [
@@ -47,7 +45,6 @@ export default function BookClubMeetingFeature({
   const { user } = useAuth();
   const [expandedId, setExpandedId] = useState(null);
   const [details, setDetails] = useState({});
-  const [attendanceOpen, setAttendanceOpen] = useState(false);
   const [openAttendanceStatus, setOpenAttendanceStatus] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -89,14 +86,6 @@ export default function BookClubMeetingFeature({
     await loadMeetingDetails(meeting.id);
   }
 
-  function toggleAttendance() {
-    setAttendanceOpen((value) => {
-      const next = !value;
-      if (!next) setOpenAttendanceStatus(null);
-      return next;
-    });
-  }
-
   async function saveResponse(meeting, changes) {
     if (busy) return;
     setBusy(true);
@@ -115,8 +104,7 @@ export default function BookClubMeetingFeature({
     if (busy) return;
     const confirmed = await confirm({
       title: `Complete meeting for ${meeting.bookTitle}?`,
-      message:
-        "Attendance will become read-only, and the meeting discussion will close.",
+      message: "Attendance will become read-only.",
       confirmLabel: "Complete meeting",
     });
     if (!confirmed) return;
@@ -200,14 +188,11 @@ export default function BookClubMeetingFeature({
               <dd>{detail.snackOwnerName}</dd>
             </div>
           </dl>
-          <BookClubDisclosure
-            className={styles.meetingSection}
-            variant="flat"
-            title="Attendance"
-            badge={`${responses.length} ${responses.length === 1 ? "member" : "members"}`}
-            open={attendanceOpen}
-            onToggle={toggleAttendance}
-          >
+          <section className={styles.attendanceSection} aria-labelledby={`attendance-${meeting.id}`}>
+            <div className={styles.attendanceHeading}>
+              <h3 id={`attendance-${meeting.id}`}>Attendance</h3>
+              <span>{responses.length} {responses.length === 1 ? "member" : "members"}</span>
+            </div>
             <div className={styles.attendanceContent}>
               {attendanceEditable ? (
                 <label className={styles.attendanceEditor}>
@@ -310,16 +295,7 @@ export default function BookClubMeetingFeature({
                 })}
               </div>
             </div>
-          </BookClubDisclosure>
-          <BookClubMeetingDiscussion
-            meeting={detail}
-            canAdminister={canAdminister}
-            className={`${styles.meetingSection} ${styles.discussionSection}`}
-            variant="flat"
-            title="Discussion"
-            description={null}
-            badge={null}
-          />
+          </section>
           <div className={`ui-moduleActionRow ${styles.meetingActions}`}>
             <Link
               className="ui-pillButton ui-pillSecondary ui-moduleActionButton"

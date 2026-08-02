@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 import activities
 import book_club
 import household_checklists
+import household_forums
 import household_polls
 import household_requests
 import household_shows
@@ -31,20 +32,6 @@ def module_url(
     params = {"module": module_type}
     if item_id:
         params["item"] = item_id
-    return f"/?{urlencode(params)}"
-
-
-def book_club_url(
-    book_id: str,
-    meeting_id: str | None = None,
-    thread_id: str | None = None,
-) -> str:
-    """Open a Book Club title, optionally focused on one discussion thread."""
-    params = {"book": book_id}
-    if meeting_id:
-        params["meeting"] = meeting_id
-    if thread_id:
-        params["thread"] = thread_id
     return f"/?{urlencode(params)}"
 
 
@@ -199,6 +186,25 @@ class SpotifyModule(BaseModule):
         )
 
 
+class ForumModule(BaseModule):
+    @classmethod
+    def from_payload(cls, item: dict[str, Any]) -> "ForumModule":
+        return cls(
+            id=item["id"],
+            type="forums",
+            created_at=int(item["createdAt"]),
+            updated_at=int(item.get("updatedAt", item["createdAt"])),
+            title=item.get("title") or "Forum",
+            subtitle=item.get("bookTitle") or "Book forum",
+            actor=item.get("createdBy", "Someone"),
+            payload=item,
+        )
+
+    @property
+    def is_archived(self) -> bool:
+        return bool(self.payload.get("isArchived"))
+
+
 class BookClubMeetingModule(BaseModule):
     @classmethod
     def from_payload(cls, item: dict[str, Any]) -> "BookClubMeetingModule":
@@ -257,6 +263,11 @@ MODULE_SOURCES = {
     "book-club": ModuleSource(
         BookClubMeetingModule,
         book_club.list_meetings,
+        requires_book_club=True,
+    ),
+    "forums": ModuleSource(
+        ForumModule,
+        lambda group_id: household_forums.list_recent(group_id, consistent=True),
         requires_book_club=True,
     ),
 }

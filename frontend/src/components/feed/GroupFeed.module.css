@@ -140,6 +140,12 @@
   --module-text: hsl(var(--color-module-book-club-text));
 }
 
+.modulePalette[data-module-type='forums'] {
+  --module-bg: hsl(var(--color-module-forums-bg));
+  --module-border: hsl(var(--color-module-forums-border));
+  --module-text: hsl(var(--color-module-forums-text));
+}
+
 .modulePalette .moduleNavCount {
   background-color: var(--module-bg);
   color: var(--module-text);

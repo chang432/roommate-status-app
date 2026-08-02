@@ -118,16 +118,6 @@ def seed_local_book_club() -> None:
         True,
         "Hopeful, compact, and perfect for a group conversation.",
     )
-    if meeting and not book_club.get_forum(
-        BOOK_CLUB_GROUP_ID, meeting["id"]
-    )["threads"]:
-        book_club.create_forum_entry(
-            BOOK_CLUB_GROUP_ID,
-            meeting["id"],
-            creator,
-            "What do you think the stone eater wants?",
-            None,
-        )
 
 
 def main() -> int:

@@ -42,8 +42,6 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const linkedBookId = searchParams.get("book");
-  const linkedMeetingId = searchParams.get("meeting");
-  const linkedThreadId = searchParams.get("thread");
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -144,8 +142,6 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   function clearLibraryParams() {
     const next = new URLSearchParams(searchParams);
     next.delete("book");
-    next.delete("meeting");
-    next.delete("thread");
     setSearchParams(next, { replace: true });
   }
 
@@ -208,7 +204,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
             </button>
           </div>
           <button type="button" className={styles.card} onClick={() => openLibrary()}>
-            <CardCopy label="Library" value="All books" hint="Ratings, reviews, and discussions" />
+            <CardCopy label="Library" value="All books" hint="Ratings, reviews, and tags" />
           </button>
           <button type="button" className={styles.card} onClick={() => setOpenList("book")}>
             <CardCopy
@@ -278,8 +274,6 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
               canAdminister={canAdminister}
               onCompleteBook={completeBook}
               completingBook={completingBook}
-              focusMeetingId={linkedMeetingId}
-              focusThreadId={linkedThreadId}
             />
           )}
         </ModalShell>

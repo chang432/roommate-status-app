@@ -13,11 +13,6 @@ def test_module_url_builds_canonical_encoded_destinations():
     assert module_models.module_url("book-club", "meeting#1") == (
         "/?module=book-club&item=meeting%231"
     )
-    assert module_models.book_club_url(
-        "book#1", "meeting#1", "forum#meeting-1#topic"
-    ) == (
-        "/?book=book%231&meeting=meeting%231&thread=forum%23meeting-1%23topic"
-    )
     with pytest.raises(ValueError, match="Unknown module type"):
         module_models.module_url("unknown", "item")
 

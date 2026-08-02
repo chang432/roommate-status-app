@@ -1,6 +1,6 @@
 import { FEED_MODULE_TYPES } from "./feedModuleRegistry.jsx";
 
-export const MODULE_PREFERENCE_VERSION = 4;
+export const MODULE_PREFERENCE_VERSION = 5;
 
 export function modulePreferenceKey(userId, groupId) {
   return `roomie-module-preferences:${userId}:${groupId}`;

@@ -1,0 +1,24 @@
+.form {
+  @apply space-y-5;
+}
+
+.fields {
+  @apply space-y-4;
+}
+
+.field {
+  @apply block;
+}
+
+.input,
+.select {
+  @apply min-h-12 px-4 py-3 text-[15px];
+}
+
+.select {
+  @apply cursor-pointer disabled:cursor-not-allowed;
+}
+
+.empty {
+  @apply rounded-sm bg-surface-muted px-4 py-3 text-[13.5px] font-semibold text-ink-soft;
+}

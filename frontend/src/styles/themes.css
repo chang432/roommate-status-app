@@ -96,6 +96,9 @@
   --color-module-book-club-bg: 21 55% 90%;
   --color-module-book-club-border: 17 50% 57%;
   --color-module-book-club-text: 19 48% 30%;
+  --color-module-forums-bg: 88 25% 89%;
+  --color-module-forums-border: 88 22% 54%;
+  --color-module-forums-text: 88 28% 30%;
   --color-avatar-1: 17 50% 57%;
   --color-avatar-2: 89 13% 54%;
   --color-avatar-3: 35 60% 60%;
@@ -200,6 +203,9 @@
   --color-module-book-club-bg: 20 30% 22%;
   --color-module-book-club-border: 18 52% 63%;
   --color-module-book-club-text: 20 66% 82%;
+  --color-module-forums-bg: 91 22% 22%;
+  --color-module-forums-border: 91 27% 58%;
+  --color-module-forums-text: 88 42% 82%;
   --color-avatar-1: 17 48% 42%;
   --color-avatar-2: 89 20% 35%;
   --color-avatar-3: 36 58% 38%;
@@ -304,6 +310,9 @@
   --color-module-book-club-bg: 28 27% 21%;
   --color-module-book-club-border: 24 47% 59%;
   --color-module-book-club-text: 31 61% 81%;
+  --color-module-forums-bg: 92 23% 20%;
+  --color-module-forums-border: 92 27% 55%;
+  --color-module-forums-text: 88 39% 81%;
   --color-avatar-1: 18 48% 42%;
   --color-avatar-2: 89 20% 35%;
   --color-avatar-3: 40 51% 36%;

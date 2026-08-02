@@ -11,6 +11,8 @@ import ShowCreateForm from "./ShowCreateForm.jsx";
 import ShowTrackerFeature from "./ShowTrackerFeature.jsx";
 import BookClubMeetingFeature from "../book-club/BookClubMeetingFeature.jsx";
 import BookClubMeetingForm from "../book-club/BookClubMeetingForm.jsx";
+import ForumFeature from "./ForumFeature.jsx";
+import ForumForm from "./ForumForm.jsx";
 
 const STANDARD = "standard";
 const SHARED = "shared";
@@ -240,6 +242,39 @@ export const FEED_MODULE_REGISTRY = {
           onClose();
         }}
         onCancel={onClose}
+      />
+    ),
+  },
+  forums: {
+    id: "forums",
+    label: "Forums",
+    shortLabel: "Forums",
+    createLabel: "Create a forum",
+    availability: BOOK_CLUB,
+    ownerField: "createdById",
+    edit: { label: "Edit forum" },
+    renderCreate: ({ onChanged, onClose }) => (
+      <ForumForm
+        onChanged={onChanged}
+        onSaved={onClose}
+        onCancel={onClose}
+      />
+    ),
+    renderCard: ({ module, moduleTag, onChanged, onEdit, roommates }) => (
+      <ForumFeature
+        forum={module.payload}
+        roommates={roommates}
+        onForumsChange={onChanged}
+        moduleTag={moduleTag}
+        onEdit={onEdit}
+      />
+    ),
+    renderEdit: ({ module, onChanged, onSaved, onCancel }) => (
+      <ForumForm
+        forum={module.payload}
+        onChanged={onChanged}
+        onSaved={onSaved}
+        onCancel={onCancel}
       />
     ),
   },

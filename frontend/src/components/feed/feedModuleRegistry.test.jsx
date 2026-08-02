@@ -43,6 +43,8 @@ describe("feed module registry", () => {
     expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY.polls, bookClubOnly)).toBe(true);
     expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY["book-club"], standardOnly)).toBe(false);
     expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY["book-club"], bookClubOnly)).toBe(true);
+    expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY.forums, standardOnly)).toBe(false);
+    expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY.forums, bookClubOnly)).toBe(true);
   });
 
   it("keeps module-specific create permission in the module definition", () => {

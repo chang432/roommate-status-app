@@ -66,8 +66,6 @@
 .review > p:last-child:not(.finishStatus) { @apply mt-2 whitespace-pre-wrap leading-5; }
 .finishStatus { @apply mt-1 text-[11.5px] font-semibold text-ink-soft; }
 .muted { @apply py-3 text-[13px] text-ink-soft; }
-.meetingForums { @apply grid; }
-.meetingForum { @apply border-b border-line last:border-b-0; }
 
 @media (max-width: 520px) {
   .detailHeader dl { @apply grid-cols-2 gap-y-3; }

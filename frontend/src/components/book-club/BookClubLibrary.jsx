@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { reviewBookClubBook } from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import BookClubDisclosure from "./BookClubDisclosure.jsx";
-import BookClubMeetingDiscussion from "./BookClubMeetingDiscussion.jsx";
 import styles from "./BookClubLibrary.module.css";
 
 function bookDate(book) {
@@ -57,8 +56,6 @@ function BookDetail({
   canAdminister,
   onCompleteBook,
   completingBook,
-  focusMeetingId,
-  focusThreadId,
 }) {
   const { user } = useAuth();
   const initialReview = book.viewerReview;
@@ -72,11 +69,6 @@ function BookDetail({
   const [saved, setSaved] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(!initialReview);
   const [communityReviewsOpen, setCommunityReviewsOpen] = useState(true);
-  const [discussionsOpen, setDiscussionsOpen] = useState(Boolean(focusMeetingId));
-
-  useEffect(() => {
-    if (focusMeetingId) setDiscussionsOpen(true);
-  }, [focusMeetingId]);
 
   async function submitReview(event) {
     event.preventDefault();
@@ -194,30 +186,6 @@ function BookDetail({
         </div>
       </BookClubDisclosure>
 
-      <BookClubDisclosure
-        className={styles.detailSection}
-        variant="flat"
-        title="Discussions"
-        description="Across every meeting"
-        badge={`${book.meetings.length} ${book.meetings.length === 1 ? "meeting" : "meetings"}`}
-        open={discussionsOpen}
-        onToggle={() => setDiscussionsOpen((value) => !value)}
-      >
-        {!book.meetings.length && <p className={styles.muted}>No meetings have been scheduled for this book.</p>}
-        <div className={styles.meetingForums}>
-          {book.meetings.map((meeting) => (
-            <BookClubMeetingDiscussion
-              key={meeting.id}
-              meeting={meeting}
-              canAdminister={canAdminister}
-              className={styles.meetingForum}
-              variant="flat"
-              initiallyOpen={focusMeetingId === meeting.id}
-              focusThreadId={focusMeetingId === meeting.id ? focusThreadId : null}
-            />
-          ))}
-        </div>
-      </BookClubDisclosure>
     </div>
   );
 }
@@ -233,8 +201,6 @@ export default function BookClubLibrary({
   canAdminister,
   onCompleteBook,
   completingBook,
-  focusMeetingId,
-  focusThreadId,
 }) {
   const [query, setQuery] = useState("");
   const filteredBooks = useMemo(() => {
@@ -253,7 +219,7 @@ export default function BookClubLibrary({
     return <div className={styles.empty}><span aria-hidden="true">📕</span><h2>Book unavailable</h2><p>This title is no longer available in this household.</p><button type="button" className="ui-primaryButton" onClick={onBack}>View all books</button></div>;
   }
   if (selected) {
-    return <BookDetail key={selected.id} book={selected} onBack={onBack} onBooksChange={onBooksChange} onEditBook={onEditBook} canAdminister={canAdminister} onCompleteBook={onCompleteBook} completingBook={completingBook} focusMeetingId={focusMeetingId} focusThreadId={focusThreadId} />;
+    return <BookDetail key={selected.id} book={selected} onBack={onBack} onBooksChange={onBooksChange} onEditBook={onEditBook} canAdminister={canAdminister} onCompleteBook={onCompleteBook} completingBook={completingBook} />;
   }
 
   return (

@@ -34,13 +34,13 @@ describe("module preferences", () => {
       }),
     );
     expect(readModulePreferences("andre", "shire").allTypes).toEqual(
-      expect.arrayContaining(["events", "book-club", "polls"]),
+      expect.arrayContaining(["events", "book-club", "polls", "forums"]),
     );
 
     localStorage.setItem(
       KEY,
       JSON.stringify({
-        version: 3,
+        version: 5,
         order: [
           "events",
           "requests",
@@ -48,6 +48,7 @@ describe("module preferences", () => {
           "polls",
           "tv",
           "book-club",
+          "forums",
         ],
         allTypes: ["events"],
       }),

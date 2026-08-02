@@ -19,11 +19,6 @@ vi.mock("../../api/bookClub.js", async (importOriginal) => ({
   setBookClubResponse: vi.fn(),
   completeBookClubMeeting: vi.fn(),
 }));
-vi.mock("./BookClubForum.jsx", () => ({
-  default: ({ meeting }) => (
-    <div data-testid={`discussion-${meeting.id}`}>Discussion for {meeting.readingTarget}</div>
-  ),
-}));
 
 const MEETING = {
   id: "meeting#1",
@@ -78,7 +73,7 @@ describe("BookClubMeetingFeature", () => {
   });
   afterEach(() => cleanup());
 
-  it("shows collapsed attendance and discussion with a full-book link", async () => {
+  it("shows attendance without a nested collapse control and links the full book", async () => {
     renderMeeting();
 
     const header = screen.getByRole("button", {
@@ -92,26 +87,9 @@ describe("BookClubMeetingFeature", () => {
     expect(getBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");
     expect(screen.getByText("Chapter 8")).toBeInTheDocument();
     const attendance = screen.getByRole("region", { name: "Attendance" });
-    const discussion = screen.getByRole("region", { name: "Discussion" });
-    const attendanceToggle = within(attendance).getByRole("button", { name: /Attendance/ });
-    const discussionToggle = within(discussion).getByRole("button", { name: /Discussion/ });
-
-    expect(attendanceToggle).toHaveAttribute("aria-expanded", "false");
-    expect(discussionToggle).toHaveAttribute("aria-expanded", "false");
-    expect(within(attendanceToggle).getByText("+")).toBeVisible();
-    expect(within(discussionToggle).getByText("+")).toBeVisible();
-    expect(screen.getByLabelText("Member attendance").closest("[inert]"))
-      .toBeInTheDocument();
-    expect(screen.queryByTestId("discussion-meeting#1")).not.toBeInTheDocument();
-
-    await userEvent.click(attendanceToggle);
-    expect(attendanceToggle).toHaveAttribute("aria-expanded", "true");
-    expect(discussionToggle).toHaveAttribute("aria-expanded", "false");
-    expect(within(attendanceToggle).getByText("−")).toBeVisible();
-
-    await userEvent.click(discussionToggle);
-    expect(within(discussionToggle).getByText("−")).toBeVisible();
-    expect(screen.getByTestId("discussion-meeting#1")).toHaveTextContent("Chapter 8");
+    expect(within(attendance).queryByRole("button", { name: /Attendance/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Member attendance").closest("[inert]")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Discussion" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View book" })).toHaveAttribute(
       "href",
       "/?book=book-1",
@@ -170,7 +148,6 @@ describe("BookClubMeetingFeature", () => {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
-    await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
     await userEvent.selectOptions(screen.getByLabelText("RSVP"), "attending");
     expect(setBookClubResponse).toHaveBeenCalledWith(
       "andre",
@@ -203,8 +180,6 @@ describe("BookClubMeetingFeature", () => {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
-    await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
-
     const attendance = screen.getByLabelText("Member attendance");
     expect(attendance).not.toHaveTextContent("Kayla");
     expect(within(attendance).getAllByRole("region").map((row) => (
@@ -258,8 +233,6 @@ describe("BookClubMeetingFeature", () => {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
-    await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
-
     const attending = within(screen.getByLabelText("Member attendance"))
       .getByRole("button", { name: "View 6 people marked attending" });
     expect(within(attending).getByText("+2")).toBeInTheDocument();
@@ -278,8 +251,6 @@ describe("BookClubMeetingFeature", () => {
       name: /The Left Hand of Darkness/,
       expanded: false,
     }));
-    await userEvent.click(screen.getByRole("button", { name: /Attendance/ }));
-
     await waitFor(() => expect(screen.queryByLabelText("RSVP")).not.toBeInTheDocument());
     expect(screen.getByLabelText("Member attendance")).toBeInTheDocument();
   });

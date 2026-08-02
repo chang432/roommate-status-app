@@ -9,7 +9,6 @@ import uuid
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from db import resource
@@ -26,8 +25,6 @@ COMPLETED_STATUS = "completed"
 REVIEW_NOTE_LIMIT = 1000
 BOOK_TAG_LIMIT = 10
 BOOK_TAG_LENGTH = 32
-FORUM_POST_LIMIT = 2000
-FORUM_REPLY_LIMIT = 1000
 _table = None
 _table_lock = threading.Lock()
 
@@ -39,6 +36,11 @@ def _get_table():
             if _table is None:
                 _table = resource().Table(TABLE_NAME)
     return _table
+
+
+def table():
+    """Expose the shared Book Club table to focused sibling persistence modules."""
+    return _get_table()
 
 
 def _now() -> int:
@@ -155,6 +157,15 @@ def _project_book(item: dict | None) -> dict | None:
         "tags": list(item.get("tags") or []),
         "completedAt": int(item["completedAt"]) if item.get("completedAt") is not None else None,
     }
+
+
+def project_book(item: dict | None) -> dict | None:
+    return _project_book(item)
+
+
+def get_book(group_id: str, book_id: str) -> dict | None:
+    normalized = book_id[5:] if book_id.startswith("book#") else book_id
+    return _project_book(_fetch(group_id, f"book#{normalized}"))
 
 
 def _responses(group_id: str, meeting_id: str) -> dict[str, dict]:
@@ -860,229 +871,3 @@ def set_review(
         item["note"] = note
     _get_table().put_item(Item=item)
     return None
-
-
-def _forum_prefix(meeting_id: str) -> str:
-    return f"forum#{meeting_id.split('#', 1)[-1]}#"
-
-
-def _forum_rows(
-    group_id: str, meeting_id: str, consistent: bool = True
-) -> list[dict]:
-    response = _get_table().query(
-        KeyConditionExpression=(
-            Key("groupId").eq(group_id)
-            & Key("id").begins_with(_forum_prefix(meeting_id))
-        ),
-        ConsistentRead=consistent,
-    )
-    rows = list(response.get("Items", []))
-    while response.get("LastEvaluatedKey"):
-        response = _get_table().query(
-            KeyConditionExpression=(
-                Key("groupId").eq(group_id)
-                & Key("id").begins_with(_forum_prefix(meeting_id))
-            ),
-            ConsistentRead=consistent,
-            ExclusiveStartKey=response["LastEvaluatedKey"],
-        )
-        rows.extend(response.get("Items", []))
-    return rows
-
-
-def _project_forum_entry(item: dict) -> dict:
-    projected = {
-        "id": item["id"],
-        "meetingId": item["meetingId"],
-        "bookId": item.get("bookId"),
-        "parentPostId": item.get("parentPostId"),
-        "authorId": item.get("authorId"),
-        "authorName": item.get("authorName", "Former member"),
-        "body": item.get("body", ""),
-        "createdAt": int(item["createdAt"]),
-        "updatedAt": int(item.get("updatedAt", item["createdAt"])),
-        "lastActivityAt": int(
-            item.get("lastActivityAt", item.get("updatedAt", item["createdAt"]))
-        ),
-        "deletedAt": (
-            int(item["deletedAt"]) if item.get("deletedAt") is not None else None
-        ),
-        "deletedByName": item.get("deletedByName"),
-    }
-    # Keep legacy titles readable until the title-removal migration completes;
-    # new messages never write this optional field.
-    if not item.get("parentPostId") and item.get("title"):
-        projected["title"] = item["title"]
-    return projected
-
-
-def get_forum(group_id: str, meeting_id: str) -> dict | None:
-    meeting = _fetch(group_id, meeting_id)
-    if meeting is None or not meeting.get("id", "").startswith(
-        ("meeting#", "session#")
-    ):
-        return None
-    rows = _forum_rows(group_id, meeting_id)
-    roots = {
-        row["id"]: row for row in rows if not row.get("parentPostId")
-    }
-    replies: dict[str, list[dict]] = {root_id: [] for root_id in roots}
-    for row in rows:
-        parent_id = row.get("parentPostId")
-        if parent_id in replies:
-            replies[parent_id].append(_project_forum_entry(row))
-    threads = []
-    for root_id, root in roots.items():
-        projected = _project_forum_entry(root)
-        projected["replies"] = sorted(
-            replies[root_id], key=lambda reply: (reply["createdAt"], reply["id"])
-        )
-        threads.append(projected)
-    threads.sort(
-        key=lambda thread: (
-            -thread["lastActivityAt"],
-            -thread["createdAt"],
-            thread["id"],
-        )
-    )
-    return {
-        "meetingId": meeting_id,
-        "locked": meeting.get("status") != OPEN_STATUS,
-        "threads": threads,
-    }
-
-
-def create_forum_entry(
-    group_id: str,
-    meeting_id: str,
-    member: dict,
-    body,
-    parent_post_id,
-) -> tuple[dict | None, dict | None, str | None]:
-    meeting = _fetch(group_id, meeting_id)
-    if meeting is None or not meeting.get("id", "").startswith(
-        ("meeting#", "session#")
-    ):
-        return None, None, "Unknown meeting."
-    if meeting.get("status") != OPEN_STATUS:
-        return None, None, "Completed meeting forums are read-only."
-
-    body_limit = FORUM_REPLY_LIMIT if parent_post_id else FORUM_POST_LIMIT
-    body, error = _validate_text(body, "Post", body_limit)
-    if error:
-        return None, None, error
-    if parent_post_id:
-        parent = _fetch(group_id, parent_post_id)
-        if (
-            parent is None
-            or parent.get("meetingId") != meeting_id
-            or parent.get("parentPostId")
-            or parent.get("deletedAt") is not None
-        ):
-            return None, None, "Unknown open forum topic."
-    else:
-        parent = None
-
-    now = _now()
-    entry = {
-        "groupId": group_id,
-        "id": f"{_forum_prefix(meeting_id)}{now:013d}#{uuid.uuid4().hex}",
-        "meetingId": meeting_id,
-        "bookId": meeting.get("bookId"),
-        "authorId": member["id"],
-        "authorName": member["name"],
-        "body": body,
-        "createdAt": now,
-        "updatedAt": now,
-        "lastActivityAt": now,
-    }
-    if parent is not None:
-        entry["parentPostId"] = parent["id"]
-    _get_table().put_item(
-        Item=entry,
-        ConditionExpression="attribute_not_exists(id)",
-    )
-    if parent is not None:
-        _get_table().update_item(
-            Key={"groupId": group_id, "id": parent["id"]},
-            UpdateExpression="SET lastActivityAt = :now",
-            ExpressionAttributeValues={":now": now},
-        )
-    return get_forum(group_id, meeting_id), _project_forum_entry(entry), None
-
-
-def update_forum_entry(
-    group_id: str,
-    meeting_id: str,
-    entry_id: str,
-    member: dict,
-    body,
-) -> tuple[dict | None, str | None]:
-    meeting = _fetch(group_id, meeting_id)
-    entry = _fetch(group_id, entry_id)
-    if meeting is None or entry is None or entry.get("meetingId") != meeting_id:
-        return None, "Unknown forum entry."
-    if meeting.get("status") != OPEN_STATUS:
-        return None, "Completed meeting forums are read-only."
-    if entry.get("authorId") != member["id"]:
-        return None, "Only the author can edit this forum entry."
-    if entry.get("deletedAt") is not None:
-        return None, "Deleted forum entries are read-only."
-    body_limit = (
-        FORUM_REPLY_LIMIT if entry.get("parentPostId") else FORUM_POST_LIMIT
-    )
-    body, error = _validate_text(body, "Post", body_limit)
-    if error:
-        return None, error
-    if not entry.get("parentPostId"):
-        entry.pop("title", None)
-    entry["body"] = body
-    entry["updatedAt"] = _now()
-    _get_table().put_item(Item=entry)
-    return get_forum(group_id, meeting_id), None
-
-
-def delete_forum_entry(
-    group_id: str,
-    meeting_id: str,
-    entry_id: str,
-    member: dict,
-    is_admin: bool,
-) -> tuple[dict | None, str | None]:
-    meeting = _fetch(group_id, meeting_id)
-    entry = _fetch(group_id, entry_id)
-    if meeting is None or entry is None or entry.get("meetingId") != meeting_id:
-        return None, "Unknown forum entry."
-    if meeting.get("status") != OPEN_STATUS:
-        return None, "Completed meeting forums are read-only."
-    if entry.get("authorId") != member["id"] and not is_admin:
-        return (
-            None,
-            "Only the author or a group admin can remove this forum entry.",
-        )
-    if entry.get("deletedAt") is None:
-        now = _now()
-        _get_table().update_item(
-            Key={"groupId": group_id, "id": entry_id},
-            UpdateExpression=(
-                "REMOVE title, body SET deletedAt = :now, deletedById = :userId, "
-                "deletedByName = :userName, updatedAt = :now"
-            ),
-            ExpressionAttributeValues={
-                ":now": now,
-                ":userId": member["id"],
-                ":userName": member["name"],
-            },
-        )
-    return get_forum(group_id, meeting_id), None
-
-
-def thread_participant_ids(
-    group_id: str, meeting_id: str, parent_post_id: str
-) -> set[str]:
-    return {
-        row["authorId"]
-        for row in _forum_rows(group_id, meeting_id)
-        if row.get("authorId")
-        and (row["id"] == parent_post_id or row.get("parentPostId") == parent_post_id)
-    }
