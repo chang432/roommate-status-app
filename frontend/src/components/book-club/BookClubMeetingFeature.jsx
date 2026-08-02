@@ -147,6 +147,7 @@ export default function BookClubMeetingFeature({
   );
   const attendanceEditable =
     Boolean(viewerResponse) && detail.status === "scheduled";
+  const meetingDateTime = exactDateTime(meeting.scheduledAt);
 
   return (
     <div className={styles.list}>
@@ -156,10 +157,10 @@ export default function BookClubMeetingFeature({
           className={styles.header}
           expanded={expanded}
           onToggle={() => toggle(meeting)}
-          toggleLabel={`Book Club meeting ${meeting.readingTarget}`}
+          toggleLabel={`Book Club meeting ${meetingDateTime}, ${meeting.readingTarget}`}
           moduleTag={moduleTag}
-          title={meeting.readingTarget}
-          meta={`${exactDateTime(meeting.scheduledAt)} · Snacks: ${meeting.snackOwnerName}`}
+          title={meetingDateTime}
+          meta={`${meeting.readingTarget} · Snacks: ${meeting.snackOwnerName}`}
           bookId={meeting.bookId}
           bookTitle={meeting.bookTitle}
         />

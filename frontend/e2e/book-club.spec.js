@@ -396,18 +396,24 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   await page.getByRole('button', { name: 'Close' }).click()
 
   const meetingHeader = page.getByRole('button', {
-    name: 'Open Book Club meeting Read through Chapter 9',
+    name: /Open Book Club meeting .*Read through Chapter 9$/,
   })
   const meetingBookLink = page.getByRole('link', {
     name: 'View The Fifth Season in the Book Club library',
   })
   const meetingHeaderRoot = meetingHeader.locator('..')
-  const meetingTitle = meetingHeaderRoot.getByText('Read through Chapter 9', { exact: true })
-  const [meetingTitleBox, meetingBookBox] = await Promise.all([
+  const meetingTitle = meetingHeaderRoot.locator('strong').first()
+  const [meetingTitleBox, meetingTitleRowBox, meetingBookBox] = await Promise.all([
     meetingTitle.boundingBox(),
+    meetingTitle.locator('..').boundingBox(),
     meetingBookLink.boundingBox(),
   ])
+  await expect(meetingTitle).toContainText('2030')
+  await expect(meetingHeaderRoot).toContainText(
+    'Read through Chapter 9 · Snacks: Andre',
+  )
   expect(meetingBookBox.x).toBeGreaterThan(meetingTitleBox.x + meetingTitleBox.width)
+  expect(Math.abs(meetingBookBox.y - meetingTitleRowBox.y)).toBeLessThan(2)
   await meetingHeader.click()
   const attendanceSection = page.getByRole('region', { name: 'Attendance' })
   await expect(attendanceSection.getByRole('button', { name: /Attendance/ })).toHaveCount(0)
@@ -445,7 +451,7 @@ test('confirms meeting completion safely on desktop', async ({ page }, testInfo)
   await page.goto('/')
 
   await page.getByRole('button', {
-    name: 'Open Book Club meeting Read through Chapter 9',
+    name: /Open Book Club meeting .*Read through Chapter 9$/,
   }).click()
   await page.getByRole('button', { name: 'Complete meeting' }).click()
 
@@ -482,16 +488,28 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   const forumBookLink = forumHeaderRoot.getByRole('link', {
     name: 'View The Fifth Season in the Book Club library',
   })
-  const [forumTitleBox, forumBookBox] = await Promise.all([
+  const [forumTitleBox, forumTitleRowBox, forumBookBox] = await Promise.all([
     forumTitle.boundingBox(),
+    forumTitle.locator('..').boundingBox(),
     forumBookLink.boundingBox(),
   ])
   expect(forumBookBox.x).toBeGreaterThan(forumTitleBox.x + forumTitleBox.width)
+  expect(Math.abs(forumBookBox.y - forumTitleRowBox.y)).toBeLessThan(2)
   await forumCard.click({ position: { x: 12, y: 12 } })
   await expect(page.getByRole('button', {
     name: 'Close forum Memory, survival, and change',
   })).toBeVisible()
   await expect(page.getByText('Discussing')).toHaveCount(0)
+  const forumPanel = forumHeaderRoot.locator(
+    'xpath=following-sibling::div[1]/div/div',
+  )
+  await expect.poll(() => forumPanel.evaluate((element) => (
+    getComputedStyle(element).borderTopWidth
+  ))).toBe('0px')
+  await expect.poll(() => forumPanel.getByText('Comments', { exact: true })
+    .locator('..').evaluate((element) => (
+      getComputedStyle(element).borderTopWidth
+    ))).toBe('1px')
   await page.getByPlaceholder('Add a comment… Use @ to mention someone')
     .fill('The book keeps changing what survival means.')
   await page.getByRole('button', { name: 'Send comment' }).click()
@@ -1032,7 +1050,7 @@ test('swipes categories from the clickable Book Club card header', async ({ page
     await expect(bookClubTab).toHaveAttribute('aria-selected', 'true')
 
     const cardHeader = page.getByRole('button', {
-      name: /Book Club meeting Read through Chapter 9$/,
+      name: /Book Club meeting .*Read through Chapter 9$/,
     })
     await expect(cardHeader).toHaveAttribute('aria-expanded', 'false')
     await cardHeader.click()
@@ -1255,13 +1273,10 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
 
   await details.getByRole('button', { name: 'Close' }).click()
   const phoneMeetingHeader = page.getByRole('button', {
-    name: 'Open Book Club meeting Read through Chapter 9',
+    name: /Open Book Club meeting .*Read through Chapter 9$/,
   })
   const phoneMeetingHeaderRoot = phoneMeetingHeader.locator('..')
-  const phoneMeetingTitle = phoneMeetingHeaderRoot.getByText(
-    'Read through Chapter 9',
-    { exact: true },
-  )
+  const phoneMeetingTitle = phoneMeetingHeaderRoot.locator('strong').first()
   const phoneMeetingBookLink = phoneMeetingHeaderRoot.getByRole('link', {
     name: 'View The Fifth Season in the Book Club library',
   })

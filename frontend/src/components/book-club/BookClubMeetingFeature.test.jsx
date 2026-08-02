@@ -9,6 +9,7 @@ import {
   setBookClubResponse,
 } from "../../api/bookClub.js";
 import { ModuleFocusProvider } from "../../context/ModuleFocusContext.jsx";
+import { exactDateTime } from "../../utils/time.js";
 
 vi.mock("../../context/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { id: "andre", name: "Andre" } }),
@@ -73,24 +74,27 @@ describe("BookClubMeetingFeature", () => {
   });
   afterEach(() => cleanup());
 
-  it("uses the reading target as its title and links the book from the header", async () => {
+  it("leads with the meeting time and keeps reading details below", async () => {
     renderMeeting();
 
     const header = screen.getByRole("button", {
-      name: /Book Club meeting Chapter 8/,
+      name: /Book Club meeting .*Chapter 8/,
       expanded: false,
     });
     const bookLink = screen.getByRole("link", {
       name: "View The Left Hand of Darkness in the Book Club library",
     });
-    expect(screen.getByText("Books").nextElementSibling).toHaveTextContent("Chapter 8");
+    expect(screen.getByText("Books").nextElementSibling).toHaveTextContent(
+      exactDateTime(MEETING.scheduledAt),
+    );
+    expect(screen.getByText("Chapter 8 · Snacks: Andre")).toBeInTheDocument();
     expect(bookLink).toHaveAttribute("href", "/?book=book-1");
     expect(document.querySelector("[inert]")).toBeInTheDocument();
     await userEvent.click(header);
 
     expect(header).toHaveAttribute("aria-expanded", "true");
     expect(getBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");
-    expect(screen.getAllByText("Chapter 8")).toHaveLength(2);
+    expect(screen.getByText("Chapter 8")).toBeInTheDocument();
     expect(screen.queryByText("Ursula K. Le Guin")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "View book" })).not.toBeInTheDocument();
     const attendance = screen.getByRole("region", { name: "Attendance" });
@@ -103,7 +107,7 @@ describe("BookClubMeetingFeature", () => {
     const onEdit = vi.fn();
     renderMeeting({ canAdminister: true, onEdit });
     await userEvent.click(screen.getByRole("button", {
-      name: /Book Club meeting Chapter 8/,
+      name: /Book Club meeting .*Chapter 8/,
       expanded: false,
     }));
 
@@ -123,7 +127,7 @@ describe("BookClubMeetingFeature", () => {
     completeBookClubMeeting.mockResolvedValue({});
     renderMeeting({ canAdminister: true });
     await userEvent.click(screen.getByRole("button", {
-      name: /Book Club meeting Chapter 8/,
+      name: /Book Club meeting .*Chapter 8/,
       expanded: false,
     }));
 
@@ -148,7 +152,7 @@ describe("BookClubMeetingFeature", () => {
     });
     renderMeeting();
     await userEvent.click(screen.getByRole("button", {
-      name: /Book Club meeting Chapter 8/,
+      name: /Book Club meeting .*Chapter 8/,
       expanded: false,
     }));
     await userEvent.selectOptions(screen.getByLabelText("RSVP"), "attending");
@@ -180,7 +184,7 @@ describe("BookClubMeetingFeature", () => {
   it("groups every member by attendance status with explicit counts", async () => {
     renderMeeting();
     await userEvent.click(screen.getByRole("button", {
-      name: /Book Club meeting Chapter 8/,
+      name: /Book Club meeting .*Chapter 8/,
       expanded: false,
     }));
     const attendance = screen.getByLabelText("Member attendance");
@@ -233,7 +237,7 @@ describe("BookClubMeetingFeature", () => {
     getBookClubMeeting.mockResolvedValueOnce({ meeting: crowdedMeeting });
     renderMeeting({ meeting: crowdedMeeting });
     await userEvent.click(screen.getByRole("button", {
-      name: /Book Club meeting Chapter 8/,
+      name: /Book Club meeting .*Chapter 8/,
       expanded: false,
     }));
     const attending = within(screen.getByLabelText("Member attendance"))
@@ -251,7 +255,7 @@ describe("BookClubMeetingFeature", () => {
     getBookClubMeeting.mockResolvedValueOnce({ meeting: { ...MEETING, status: "completed" } });
     renderMeeting();
     await userEvent.click(screen.getByRole("button", {
-      name: /Book Club meeting Chapter 8/,
+      name: /Book Club meeting .*Chapter 8/,
       expanded: false,
     }));
     await waitFor(() => expect(screen.queryByLabelText("RSVP")).not.toBeInTheDocument());
@@ -264,7 +268,7 @@ describe("BookClubMeetingFeature", () => {
       intent: { itemId: "meeting#1", token: "book-club:meeting#1" },
     });
     expect(await screen.findByRole("button", {
-      name: /Book Club meeting Chapter 8/,
+      name: /Book Club meeting .*Chapter 8/,
       expanded: true,
     })).toBeInTheDocument();
     expect(getBookClubMeeting).toHaveBeenCalledWith("andre", "meeting#1");

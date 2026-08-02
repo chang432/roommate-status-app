@@ -19,5 +19,5 @@
 }
 
 .panel {
-  @apply border-t border-line px-[18px] pb-[18px] pt-4;
+  @apply px-[18px] pb-[18px] pt-4;
 }
