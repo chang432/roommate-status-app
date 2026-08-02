@@ -92,8 +92,10 @@ export default function ForumFeature({ forum, roommates, onForumsChange, moduleT
             type="button"
             className={styles.summaryButton}
             aria-expanded={expanded}
+            aria-label={`${expanded ? "Close" : "Open"} forum ${forum.title}`}
             onClick={toggleExpanded}
-          >
+          />
+          <div className={styles.summaryText}>
             <span className={styles.titleRow}>
               {moduleTag}
               <strong className={styles.title}>{forum.title}</strong>
@@ -101,7 +103,7 @@ export default function ForumFeature({ forum, roommates, onForumsChange, moduleT
             <span className={styles.meta}>
               {forum.createdBy} · {relativeTime(forum.createdAt)}
             </span>
-          </button>
+          </div>
           <Link
             className={styles.bookTag}
             to={`/?book=${encodeURIComponent(forum.bookId)}`}
@@ -112,10 +114,6 @@ export default function ForumFeature({ forum, roommates, onForumsChange, moduleT
         </div>
 
         <ExpandableCardRegion expanded={expanded} className={styles.panel}>
-          <p className={styles.bookLine}>
-            Discussing <strong>{forum.bookTitle}</strong>
-            {forum.bookAuthor ? ` by ${forum.bookAuthor}` : ""}
-          </p>
           <FeedComments
             comments={forum.comments ?? []}
             commentText={commentText}

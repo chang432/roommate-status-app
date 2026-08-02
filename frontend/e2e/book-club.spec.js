@@ -455,12 +455,18 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   await creator.getByLabel('Book').selectOption(ACTIVE_BOOK_ID)
   await creator.getByRole('button', { name: 'Create forum' }).click()
 
-  const forumCard = page.getByRole('button', { name: /Memory, survival, and change/ })
-  await expect(forumCard).toContainText('Forums')
+  const forumCard = page.getByRole('button', {
+    name: 'Open forum Memory, survival, and change',
+  })
+  await expect(page.getByText('Memory, survival, and change')).toBeVisible()
   await expect(page.getByRole('link', {
     name: 'View The Fifth Season in the Book Club library',
   })).toBeVisible()
-  await forumCard.click()
+  await forumCard.click({ position: { x: 12, y: 12 } })
+  await expect(page.getByRole('button', {
+    name: 'Close forum Memory, survival, and change',
+  })).toBeVisible()
+  await expect(page.getByText('Discussing')).toHaveCount(0)
   await page.getByPlaceholder('Add a comment… Use @ to mention someone')
     .fill('The book keeps changing what survival means.')
   await page.getByRole('button', { name: 'Send comment' }).click()

@@ -54,9 +54,18 @@ describe("ForumFeature", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("link", { name: "View Kindred in the Book Club library" }))
-      .toHaveAttribute("href", "/?book=book-1");
-    await userEvent.click(screen.getByRole("button", { name: /Memory and survival/ }));
+    const bookLink = screen.getByRole("link", {
+      name: "View Kindred in the Book Club library",
+    });
+    const header = screen.getByRole("button", {
+      name: "Open forum Memory and survival",
+    });
+    expect(bookLink).toHaveAttribute("href", "/?book=book-1");
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(header);
+    expect(screen.getByRole("button", { name: "Close forum Memory and survival" }))
+      .toHaveAttribute("aria-expanded", "true");
+    expect(screen.queryByText("Discussing")).not.toBeInTheDocument();
     expect(screen.getByText("No comments yet.")).toBeInTheDocument();
     await userEvent.type(screen.getByPlaceholderText(/Add a comment/), "The ending changed it.");
     await userEvent.click(screen.getByRole("button", { name: "Send comment" }));

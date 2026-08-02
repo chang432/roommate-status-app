@@ -15,11 +15,15 @@
 }
 
 .summary {
-  @apply flex min-w-0 items-center gap-3 px-[18px] py-4 max-[560px]:items-start max-[560px]:flex-col;
+  @apply relative flex min-w-0 items-center gap-3 px-[18px] py-4 max-[560px]:items-start max-[560px]:flex-col;
 }
 
 .summaryButton {
-  @apply min-w-0 flex-1 text-left;
+  @apply absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent;
+}
+
+.summaryText {
+  @apply pointer-events-none relative z-[1] min-w-0 flex-1;
 }
 
 .titleRow {
@@ -27,7 +31,7 @@
 }
 
 .title {
-  @apply min-w-0 truncate font-display text-[18px] leading-tight text-ink;
+  @apply block min-w-0 flex-1 truncate font-display text-[18px] leading-tight text-ink;
 }
 
 .meta {
@@ -35,13 +39,9 @@
 }
 
 .bookTag {
-  @apply max-w-[230px] flex-none truncate rounded-full border border-line bg-surface-muted px-3 py-[7px] text-[12px] font-bold text-ink-soft transition hover:border-accent hover:text-ink max-[560px]:max-w-full;
+  @apply relative z-[2] max-w-[230px] flex-none truncate rounded-full border border-line bg-surface-muted px-3 py-[7px] text-[12px] font-bold text-ink-soft transition hover:border-accent hover:text-ink max-[560px]:max-w-full;
 }
 
 .panel {
-  @apply border-t border-line px-[18px] pb-[18px];
-}
-
-.bookLine {
-  @apply py-4 text-[13.5px] text-ink-soft;
+  @apply border-t border-line px-[18px] pb-[18px] pt-4;
 }
