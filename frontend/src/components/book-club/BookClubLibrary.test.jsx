@@ -157,14 +157,26 @@ describe("BookClubLibrary", () => {
     const reviews = screen.getByRole("region", { name: "Your review" });
     const toggle = within(reviews).getByRole("button", { name: /Your review/ });
     const updateButton = within(reviews).getByRole("button", { name: "Update review" });
+    const community = screen.getByRole("region", { name: "Community reviews" });
+    const communityToggle = within(community).getByRole("button", {
+      name: /Community reviews/,
+    });
 
     expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).not.toHaveTextContent(/[+−]/);
+    expect(communityToggle).toHaveAttribute("aria-expanded", "false");
+    expect(communityToggle).not.toHaveTextContent(/[+−]/);
     expect(updateButton.closest("[inert]")).toBeInTheDocument();
+    expect(within(community).getByText("Andre").closest("[inert]"))
+      .toBeInTheDocument();
     await userEvent.click(toggle);
 
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(updateButton.closest("[inert]")).not.toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Community reviews" })).getByText("Andre")).toBeInTheDocument();
+    await userEvent.click(communityToggle);
+    expect(communityToggle).toHaveAttribute("aria-expanded", "true");
+    expect(within(community).getByText("Andre").closest("[inert]"))
+      .not.toBeInTheDocument();
   });
 
   it("opens the review form by default for a book the member has not reviewed", () => {
@@ -176,6 +188,9 @@ describe("BookClubLibrary", () => {
     const reviews = screen.getByRole("region", { name: "Your review" });
     expect(within(reviews).getByRole("button", { name: /Your review/ })).toHaveAttribute("aria-expanded", "true");
     expect(within(reviews).getByRole("button", { name: "Save review" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Community reviews" }))
+      .getByRole("button", { name: /Community reviews/ }))
+      .toHaveAttribute("aria-expanded", "false");
   });
 
   it("returns to the list from a stale linked book", async () => {

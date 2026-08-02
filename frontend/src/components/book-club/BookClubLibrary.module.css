@@ -35,8 +35,8 @@
 .detailHeader dl div { @apply min-w-0 border-r border-line px-3 first:pl-0 last:border-r-0 last:pr-0; }
 .detailHeader dt { @apply text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
 .detailHeader dd { @apply mt-1 truncate text-[13px] font-semibold text-ink; }
-.detailSection { @apply border-b border-line; }
-.reviewSavedStatus { @apply border-b border-line py-2 text-[12px] font-bold text-status-green; }
+.reviewSections { @apply grid gap-[10px] py-4; }
+.reviewSavedStatus { @apply px-1 text-[12px] font-bold text-status-green; }
 .reviewForm { @apply grid gap-4; }
 .reviewPrompt { @apply text-[12px] text-ink-soft; }
 .reviewForm fieldset { @apply grid gap-2; }

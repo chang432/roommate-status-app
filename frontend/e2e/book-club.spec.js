@@ -378,11 +378,32 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   await details.getByPlaceholder('What stayed with you?').fill('A fierce and unforgettable start.')
   await details.getByRole('button', { name: 'Save review' }).click()
   const personalReview = details.getByRole('region', { name: 'Your review' })
+  const personalReviewToggle = personalReview.getByRole('button', { name: /Your review/ })
+  const communityReviews = details.getByRole('region', { name: 'Community reviews' })
+  const communityReviewsToggle = communityReviews.getByRole('button', {
+    name: /Community reviews/,
+  })
   await expect(details.getByRole('status')).toHaveText('Review saved.')
-  await expect(personalReview.getByRole('button', { name: /Your review/ })).toHaveAttribute('aria-expanded', 'false')
-  await personalReview.getByRole('button', { name: /Your review/ }).click()
+  await expect(personalReviewToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(communityReviewsToggle).toHaveAttribute('aria-expanded', 'false')
+  expect(await personalReviewToggle.textContent()).not.toMatch(/[+−]/)
+  expect(await communityReviewsToggle.textContent()).not.toMatch(/[+−]/)
+  await expect.poll(() => personalReview.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      borderRadius: style.borderRadius,
+      borderWidth: style.borderWidth,
+    }
+  })).toEqual({ borderRadius: '12px', borderWidth: '1px' })
+  await page.waitForTimeout(750)
+  await details.evaluate((element) => { element.scrollTop = 0 })
+  await page.screenshot({ path: testInfo.outputPath('book-club-review-disclosures-desktop.png'), fullPage: true })
+  await personalReviewToggle.click()
   await expect(personalReview.getByRole('button', { name: 'Update review' })).toBeVisible()
-  await expect(details.getByRole('region', { name: 'Community reviews' })).toContainText('Andre')
+  await personalReviewToggle.click()
+  await communityReviewsToggle.click()
+  await expect(communityReviews.getByText('Andre')).toBeVisible()
+  await page.waitForTimeout(750)
 
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-modal-desktop.png'), fullPage: true })
 
@@ -445,6 +466,8 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   await meetingHeader.click()
   const attendanceSection = page.getByRole('region', { name: 'Attendance' })
   await expect(attendanceSection.getByRole('button', { name: /Attendance/ })).toHaveCount(0)
+  await expect(attendanceSection.getByText('Attendance', { exact: true })).toHaveCount(0)
+  await expect(attendanceSection.getByText(/^\d+ members?$/)).toHaveCount(0)
   await expect(page.getByRole('region', { name: 'Discussion' })).toHaveCount(0)
   const attendance = page.getByLabel('Member attendance')
   await expectAttendanceRowsStacked(attendance)
@@ -1326,6 +1349,14 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   await library.getByRole('button', { name: /The Fifth Season/ }).click()
   const details = page.getByRole('dialog', { name: 'Book details' })
   await expect(details.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
+  const phonePersonalReview = details.getByRole('region', { name: 'Your review' })
+  const phoneCommunityReviews = details.getByRole('region', { name: 'Community reviews' })
+  await expect(phonePersonalReview.getByRole('button', { name: /Your review/ }))
+    .toHaveAttribute('aria-expanded', 'true')
+  await expect(phoneCommunityReviews.getByRole('button', { name: /Community reviews/ }))
+    .toHaveAttribute('aria-expanded', 'false')
+  expect(await phonePersonalReview.getByRole('button', { name: /Your review/ }).textContent())
+    .not.toMatch(/[+−]/)
   await expect.poll(() => details.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-modal-mobile.png'), fullPage: true })
 
@@ -1365,6 +1396,8 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   expect(Math.abs(phoneMeetingBookBox.height - phoneMeetingTagBox.height)).toBeLessThan(1)
   await phoneMeetingHeader.click()
   const attendanceSection = page.getByRole('region', { name: 'Attendance' })
+  await expect(attendanceSection.getByText('Attendance', { exact: true })).toHaveCount(0)
+  await expect(attendanceSection.getByText(/^\d+ members?$/)).toHaveCount(0)
   const attendance = page.getByLabel('Member attendance')
   await expectAttendanceRowsStacked(attendance)
   await page.waitForTimeout(750)

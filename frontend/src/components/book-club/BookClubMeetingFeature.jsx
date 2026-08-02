@@ -182,11 +182,7 @@ export default function BookClubMeetingFeature({
               <dd>{detail.snackOwnerName}</dd>
             </div>
           </dl>
-          <section className={styles.attendanceSection} aria-labelledby={`attendance-${meeting.id}`}>
-            <div className={styles.attendanceHeading}>
-              <h3 id={`attendance-${meeting.id}`}>Attendance</h3>
-              <span>{responses.length} {responses.length === 1 ? "member" : "members"}</span>
-            </div>
+          <section className={styles.attendanceSection} aria-label="Attendance">
             <div className={styles.attendanceContent}>
               {attendanceEditable ? (
                 <label className={styles.attendanceEditor}>

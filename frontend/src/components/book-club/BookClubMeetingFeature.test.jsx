@@ -99,6 +99,8 @@ describe("BookClubMeetingFeature", () => {
     expect(screen.queryByRole("link", { name: "View book" })).not.toBeInTheDocument();
     const attendance = screen.getByRole("region", { name: "Attendance" });
     expect(within(attendance).queryByRole("button", { name: /Attendance/ })).not.toBeInTheDocument();
+    expect(within(attendance).queryByText("Attendance")).not.toBeInTheDocument();
+    expect(within(attendance).queryByText("4 members")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Member attendance").closest("[inert]")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Discussion" })).not.toBeInTheDocument();
   });

@@ -68,7 +68,7 @@ function BookDetail({
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(!initialReview);
-  const [communityReviewsOpen, setCommunityReviewsOpen] = useState(true);
+  const [communityReviewsOpen, setCommunityReviewsOpen] = useState(false);
 
   async function submitReview(event) {
     event.preventDefault();
@@ -120,72 +120,69 @@ function BookDetail({
         </dl>
       </header>
 
-      {saved ? <p className={styles.reviewSavedStatus} role="status">Review saved.</p> : null}
-      <BookClubDisclosure
-        className={styles.detailSection}
-        variant="flat"
-        title="Your review"
-        description={reviewDescription(initialReview)}
-        badge={initialReview ? `${initialReview.rating} ★` : null}
-        open={reviewOpen}
-        onToggle={() => setReviewOpen((value) => !value)}
-      >
-        <form className={styles.reviewForm} onSubmit={submitReview}>
-          {initialReview?.finished == null && initialReview && <p className={styles.reviewPrompt}>Finish status not recorded—please confirm it below.</p>}
-          <fieldset>
-            <legend>Rating</legend>
-            <div className={styles.starChoices}>
-              {[1, 2, 3, 4, 5].map((value) => (
-                <label key={value}>
-                  <input type="radio" name={`book-rating-${book.id}`} value={value} checked={rating === value.toString()} onChange={(event) => setRating(event.target.value)} disabled={busy} required />
-                  <span aria-hidden="true">★</span>
-                  <span className="sr-only">{value} star{value === 1 ? "" : "s"}</span>
-                </label>
+      <div className={styles.reviewSections}>
+        {saved ? <p className={styles.reviewSavedStatus} role="status">Review saved.</p> : null}
+        <BookClubDisclosure
+          title="Your review"
+          description={reviewDescription(initialReview)}
+          badge={initialReview ? `${initialReview.rating} ★` : null}
+          open={reviewOpen}
+          onToggle={() => setReviewOpen((value) => !value)}
+        >
+          <form className={styles.reviewForm} onSubmit={submitReview}>
+            {initialReview?.finished == null && initialReview && <p className={styles.reviewPrompt}>Finish status not recorded—please confirm it below.</p>}
+            <fieldset>
+              <legend>Rating</legend>
+              <div className={styles.starChoices}>
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <label key={value}>
+                    <input type="radio" name={`book-rating-${book.id}`} value={value} checked={rating === value.toString()} onChange={(event) => setRating(event.target.value)} disabled={busy} required />
+                    <span aria-hidden="true">★</span>
+                    <span className="sr-only">{value} star{value === 1 ? "" : "s"}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Did you finish it?</legend>
+              <div className={styles.finishChoices}>
+                <label><input type="radio" name={`book-finished-${book.id}`} value="true" checked={finished === "true"} onChange={(event) => setFinished(event.target.value)} required disabled={busy} /><span>Finished</span></label>
+                <label><input type="radio" name={`book-finished-${book.id}`} value="false" checked={finished === "false"} onChange={(event) => setFinished(event.target.value)} required disabled={busy} /><span>Didn’t finish</span></label>
+              </div>
+            </fieldset>
+            <label className={styles.note}>
+              <span>Optional note</span>
+              <textarea maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="What stayed with you?" disabled={busy} />
+              <small>{note.length}/1000</small>
+            </label>
+            {error && <p className="ui-errorBox">{error}</p>}
+            <div className="ui-formActions">
+              <button className={`ui-primaryButton ${styles.saveReview}`} type="submit" disabled={busy || !rating || !finished}>{busy ? "Saving…" : initialReview ? "Update review" : "Save review"}</button>
+            </div>
+          </form>
+        </BookClubDisclosure>
+
+        <BookClubDisclosure
+          title="Community reviews"
+          description="Everyone’s take, including yours"
+          badge={`${book.reviewCount} ${book.reviewCount === 1 ? "review" : "reviews"}`}
+          open={communityReviewsOpen}
+          onToggle={() => setCommunityReviewsOpen((value) => !value)}
+        >
+          <div className={styles.community}>
+            {!book.reviews.length && <p className={styles.muted}>No reviews yet. Be the first.</p>}
+            <div className={styles.reviewList}>
+              {book.reviews.map((review) => (
+                <article key={review.userId} className={styles.review}>
+                  <div><strong>{review.userName}</strong><span aria-label={`${review.rating} out of 5 stars`}>{stars(review.rating)}</span></div>
+                  <p className={styles.finishStatus}>{review.finished === true ? "Finished" : review.finished === false ? "Didn’t finish" : "Finish status not recorded"}</p>
+                  {review.note && <p>{review.note}</p>}
+                </article>
               ))}
             </div>
-          </fieldset>
-          <fieldset>
-            <legend>Did you finish it?</legend>
-            <div className={styles.finishChoices}>
-              <label><input type="radio" name={`book-finished-${book.id}`} value="true" checked={finished === "true"} onChange={(event) => setFinished(event.target.value)} required disabled={busy} /><span>Finished</span></label>
-              <label><input type="radio" name={`book-finished-${book.id}`} value="false" checked={finished === "false"} onChange={(event) => setFinished(event.target.value)} required disabled={busy} /><span>Didn’t finish</span></label>
-            </div>
-          </fieldset>
-          <label className={styles.note}>
-            <span>Optional note</span>
-            <textarea maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="What stayed with you?" disabled={busy} />
-            <small>{note.length}/1000</small>
-          </label>
-          {error && <p className="ui-errorBox">{error}</p>}
-          <div className="ui-formActions">
-            <button className={`ui-primaryButton ${styles.saveReview}`} type="submit" disabled={busy || !rating || !finished}>{busy ? "Saving…" : initialReview ? "Update review" : "Save review"}</button>
           </div>
-        </form>
-      </BookClubDisclosure>
-
-      <BookClubDisclosure
-        className={styles.detailSection}
-        variant="flat"
-        title="Community reviews"
-        description="Everyone’s take, including yours"
-        badge={`${book.reviewCount} ${book.reviewCount === 1 ? "review" : "reviews"}`}
-        open={communityReviewsOpen}
-        onToggle={() => setCommunityReviewsOpen((value) => !value)}
-      >
-        <div className={styles.community}>
-          {!book.reviews.length && <p className={styles.muted}>No reviews yet. Be the first.</p>}
-          <div className={styles.reviewList}>
-            {book.reviews.map((review) => (
-              <article key={review.userId} className={styles.review}>
-                <div><strong>{review.userName}</strong><span aria-label={`${review.rating} out of 5 stars`}>{stars(review.rating)}</span></div>
-                <p className={styles.finishStatus}>{review.finished === true ? "Finished" : review.finished === false ? "Didn’t finish" : "Finish status not recorded"}</p>
-                {review.note && <p>{review.note}</p>}
-              </article>
-            ))}
-          </div>
-        </div>
-      </BookClubDisclosure>
-
+        </BookClubDisclosure>
+      </div>
     </div>
   );
 }
