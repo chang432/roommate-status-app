@@ -1,4 +1,4 @@
-# Migration: 2026-08-01-01-remove-book-club-meeting-forums
+# Migration: 2026-08-01-02-remove-book-club-meeting-forums
 
 > Documentation only. Applied state is recorded in each environment's
 > `RoommateStatus-{dev,main}-migrations` table.

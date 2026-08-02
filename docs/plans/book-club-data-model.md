@@ -85,7 +85,7 @@ with mention and `@all` recipients deduplicated.
 
 ## Migration
 
-`2026-08-01-01-remove-book-club-meeting-forums` removes legacy meeting-scoped
+`2026-08-01-02-remove-book-club-meeting-forums` removes legacy meeting-scoped
 discussion records after preserving each full row in a reversible backup item.
 `2026-07-29-01-derive-book-completion` removes legacy book `status` fields,
 preserving known historical completion dates and clearing an invalid completion

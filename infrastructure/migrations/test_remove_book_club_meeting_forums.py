@@ -14,7 +14,7 @@ import runner
 
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 HERE = Path(__file__).resolve().parent
-MIGRATION = "2026-08-01-01-remove-book-club-meeting-forums"
+MIGRATION = "2026-08-01-02-remove-book-club-meeting-forums"
 
 
 def load(name: str, filename: str):
