@@ -32,7 +32,7 @@ export default function BookLinkedModuleHeader({
         to={`/?book=${encodeURIComponent(bookId)}`}
         aria-label={`View ${bookTitle} in the Book Club library`}
       >
-        {bookTitle}
+        <span className={styles.bookTagText}>{bookTitle}</span>
       </Link>
       <span className={styles.meta}>{meta}</span>
     </div>

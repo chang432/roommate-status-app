@@ -7,7 +7,7 @@
 }
 
 .card {
-  @apply overflow-hidden rounded-md border border-line bg-card shadow-soft;
+  @apply overflow-hidden rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft;
 }
 
 .archived {
@@ -15,9 +15,9 @@
 }
 
 .summary {
-  @apply px-[18px] py-4;
+  @apply w-full;
 }
 
 .panel {
-  @apply px-[18px] pb-[18px] pt-4;
+  @apply pt-0;
 }

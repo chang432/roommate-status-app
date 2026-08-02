@@ -1,5 +1,5 @@
 .list { @apply grid gap-3; }
-.card { @apply rounded-sm border border-line bg-card px-4 py-3; }
+.card { @apply rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft; }
 .header { @apply w-full; }
 .detailsPanel { @apply mt-3 grid gap-3 border-t border-line pt-3 text-sm text-ink; }
 .details { @apply grid gap-2; }

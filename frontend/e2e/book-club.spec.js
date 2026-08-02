@@ -403,10 +403,14 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   })
   const meetingHeaderRoot = meetingHeader.locator('..')
   const meetingTitle = meetingHeaderRoot.locator('strong').first()
-  const [meetingTitleBox, meetingTitleRowBox, meetingBookBox] = await Promise.all([
+  const meetingModuleTag = meetingHeaderRoot.locator('[data-module-type="book-club"]')
+  const meetingMeta = meetingHeaderRoot.locator('span').last()
+  const meetingCard = meetingHeaderRoot.locator('..')
+  const [meetingTitleBox, meetingTitleRowBox, meetingBookBox, meetingTagBox] = await Promise.all([
     meetingTitle.boundingBox(),
     meetingTitle.locator('..').boundingBox(),
     meetingBookLink.boundingBox(),
+    meetingModuleTag.boundingBox(),
   ])
   await expect(meetingTitle).toContainText('2030')
   await expect(meetingHeaderRoot).toContainText(
@@ -414,6 +418,30 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   )
   expect(meetingBookBox.x).toBeGreaterThan(meetingTitleBox.x + meetingTitleBox.width)
   expect(Math.abs(meetingBookBox.y - meetingTitleRowBox.y)).toBeLessThan(2)
+  expect(Math.abs(meetingBookBox.height - meetingTagBox.height)).toBeLessThan(1)
+  await expect.poll(() => meetingTitle.evaluate((element) => ({
+    fontFamily: getComputedStyle(element).fontFamily,
+    fontSize: getComputedStyle(element).fontSize,
+    fontWeight: getComputedStyle(element).fontWeight,
+  }))).toMatchObject({ fontSize: '14px', fontWeight: '600' })
+  expect(await meetingTitle.evaluate((element) => (
+    getComputedStyle(element).fontFamily
+  ))).not.toContain('Fraunces')
+  await expect.poll(() => meetingMeta.evaluate((element) => ({
+    fontSize: getComputedStyle(element).fontSize,
+    fontWeight: getComputedStyle(element).fontWeight,
+  }))).toEqual({ fontSize: '12px', fontWeight: '400' })
+  await expect.poll(() => meetingBookLink.evaluate((element) => (
+    getComputedStyle(element).fontSize
+  ))).toBe('10px')
+  await expect.poll(() => meetingCard.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      borderRadius: style.borderRadius,
+      boxShadow: style.boxShadow,
+      padding: `${style.paddingTop} ${style.paddingRight} ${style.paddingBottom} ${style.paddingLeft}`,
+    }
+  })).toEqual({ borderRadius: '12px', boxShadow: 'none', padding: '10px 14px 10px 14px' })
   await meetingHeader.click()
   const attendanceSection = page.getByRole('region', { name: 'Attendance' })
   await expect(attendanceSection.getByRole('button', { name: /Attendance/ })).toHaveCount(0)
@@ -488,13 +516,34 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   const forumBookLink = forumHeaderRoot.getByRole('link', {
     name: 'View The Fifth Season in the Book Club library',
   })
-  const [forumTitleBox, forumTitleRowBox, forumBookBox] = await Promise.all([
+  const forumModuleTag = forumHeaderRoot.locator('[data-module-type="forums"]')
+  const forumMeta = forumHeaderRoot.locator('span').last()
+  const forumCardRoot = forumHeaderRoot.locator('..')
+  const [forumTitleBox, forumTitleRowBox, forumBookBox, forumTagBox] = await Promise.all([
     forumTitle.boundingBox(),
     forumTitle.locator('..').boundingBox(),
     forumBookLink.boundingBox(),
+    forumModuleTag.boundingBox(),
   ])
   expect(forumBookBox.x).toBeGreaterThan(forumTitleBox.x + forumTitleBox.width)
   expect(Math.abs(forumBookBox.y - forumTitleRowBox.y)).toBeLessThan(2)
+  expect(Math.abs(forumBookBox.height - forumTagBox.height)).toBeLessThan(1)
+  await expect.poll(() => forumTitle.evaluate((element) => ({
+    fontSize: getComputedStyle(element).fontSize,
+    fontWeight: getComputedStyle(element).fontWeight,
+  }))).toEqual({ fontSize: '14px', fontWeight: '600' })
+  await expect.poll(() => forumMeta.evaluate((element) => ({
+    fontSize: getComputedStyle(element).fontSize,
+    fontWeight: getComputedStyle(element).fontWeight,
+  }))).toEqual({ fontSize: '12px', fontWeight: '400' })
+  await expect.poll(() => forumCardRoot.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      borderRadius: style.borderRadius,
+      boxShadow: style.boxShadow,
+      padding: `${style.paddingTop} ${style.paddingRight} ${style.paddingBottom} ${style.paddingLeft}`,
+    }
+  })).toEqual({ borderRadius: '12px', boxShadow: 'none', padding: '10px 14px 10px 14px' })
   await forumCard.click({ position: { x: 12, y: 12 } })
   await expect(page.getByRole('button', {
     name: 'Close forum Memory, survival, and change',
@@ -534,7 +583,7 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   )
   expect(Math.abs(phoneForumBookBox.y - phoneForumTitleRowBox.y)).toBeLessThan(2)
   expect(Math.abs(
-    (phoneForumHeaderBox.x + phoneForumHeaderBox.width - 18)
+    (phoneForumHeaderBox.x + phoneForumHeaderBox.width)
       - (phoneForumBookBox.x + phoneForumBookBox.width),
   )).toBeLessThan(2)
   await expect.poll(() => page.evaluate(() => (
@@ -542,9 +591,11 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   ))).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('forum-module-phone.png'), fullPage: true })
 
-  await page.getByRole('link', {
-    name: 'View The Fifth Season in the Book Club library',
-  }).click()
+  const forumBookTapBox = await forumBookLink.boundingBox()
+  await page.mouse.click(
+    forumBookTapBox.x + forumBookTapBox.width / 2,
+    forumBookTapBox.y - 4,
+  )
   await expect(page).toHaveURL(/\?book=active-book$/)
   await expect(page.getByRole('dialog', { name: 'Book details' })
     .getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
@@ -1287,16 +1338,19 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   const phoneMeetingBookLink = phoneMeetingHeaderRoot.getByRole('link', {
     name: 'View The Fifth Season in the Book Club library',
   })
+  const phoneMeetingModuleTag = phoneMeetingHeaderRoot.locator('[data-module-type="book-club"]')
   const [
     phoneMeetingRootBox,
     phoneMeetingTitleBox,
     phoneMeetingTitleRowBox,
     phoneMeetingBookBox,
+    phoneMeetingTagBox,
   ] = await Promise.all([
     phoneMeetingHeaderRoot.boundingBox(),
     phoneMeetingTitle.boundingBox(),
     phoneMeetingTitle.locator('..').boundingBox(),
     phoneMeetingBookLink.boundingBox(),
+    phoneMeetingModuleTag.boundingBox(),
   ])
   expect(phoneMeetingBookBox.x).toBeGreaterThan(
     phoneMeetingTitleBox.x + phoneMeetingTitleBox.width,
@@ -1308,6 +1362,7 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
     (phoneMeetingRootBox.x + phoneMeetingRootBox.width)
       - (phoneMeetingBookBox.x + phoneMeetingBookBox.width),
   )).toBeLessThan(2)
+  expect(Math.abs(phoneMeetingBookBox.height - phoneMeetingTagBox.height)).toBeLessThan(1)
   await phoneMeetingHeader.click()
   const attendanceSection = page.getByRole('region', { name: 'Attendance' })
   const attendance = page.getByLabel('Member attendance')
@@ -1334,7 +1389,7 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   ))).toBe(true)
   const reminderBox = await page.getByRole('button', { name: 'Send reminder' }).boundingBox()
   const completeBox = await page.getByRole('button', { name: 'Complete meeting' }).boundingBox()
-  for (const box of [phoneMeetingBookBox, reminderBox, completeBox]) {
+  for (const box of [reminderBox, completeBox]) {
     expect(box.height).toBeGreaterThanOrEqual(36)
     expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(390)
