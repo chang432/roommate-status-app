@@ -1,10 +1,10 @@
-"TABLE RoommateStatus-dev-book-club - group-scoped owner orders, meeting modules, completed-book reviews, and meeting forums. Keyed (groupId HASH, id RANGE); BookIdIndex (HASH bookId, RANGE id, ProjectionType ALL) retrieves a book's related records. activeBookId is the sole current-book pointer; every other book is completed."
+"TABLE RoommateStatus-dev-book-club - group-scoped owner orders, meeting modules, completed-book reviews, and standalone book-tagged forums. Keyed (groupId HASH, id RANGE); BookIdIndex (HASH bookId, RANGE id, ProjectionType ALL) retrieves a book's related records. activeBookId is the sole current-book pointer; every other book is completed."
 groupId (S),id (S),timezone (S),openMeetingId (S),lastMeetingAt (N),activeBookId (S),bookOwnerOrderUserIds (L of S),snackOwnerOrderUserIds (L of S),createdAt (N),updatedAt (N),bookOwnerOrderAlignmentMigrated (BOOL),bookOwnerOrderAlignmentLegacyRecord (M),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
 book-club,config#book-club,America/New_York,meeting#meeting-uuid,1784763000000,book-uuid,"[""kayla"", ""sheryl"", ""andre""]","[""andre"", ""kayla"", ""sheryl""]",1783553400000,1783553400000,true,"{""hadBookOwnerOrderUserIds"": true, ""bookOwnerOrderUserIds"": [""kayla"", ""andre"", ""sheryl""], ""alignedBookOwnerOrderUserIds"": [""kayla"", ""sheryl"", ""andre""]}",,
 
-groupId (S),id (S),bookId (S),title (S),author (S),bookOwnerId (S),bookOwnerName (S),completedAt (N),createdAt (N),updatedAt (N),bookCompletionDerivedLegacyRecord (M),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
-book-club,book#book-uuid,book-uuid,The Fifth Season,N. K. Jemisin,kayla,Kayla,,1783553400000,1783553400000,,,
-book-club,book#older-book-uuid,older-book-uuid,Kindred,Octavia E. Butler,sheryl,Sheryl,1783553500000,1783553400000,1783553500000,,,
+groupId (S),id (S),bookId (S),title (S),author (S),bookOwnerId (S),bookOwnerName (S),tags (L of S),completedAt (N),createdAt (N),updatedAt (N),bookCompletionDerivedLegacyRecord (M),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
+book-club,book#book-uuid,book-uuid,The Fifth Season,N. K. Jemisin,kayla,Kayla,"[""Science Fiction"", ""Bechdel Pass""]",,1783553400000,1783553400000,,,
+book-club,book#older-book-uuid,older-book-uuid,Kindred,Octavia E. Butler,sheryl,Sheryl,"[""Historical Fiction""]",1783553500000,1783553400000,1783553500000,,,
 
 groupId (S),id (S),scheduledAt (N),bookId (S),bookTitle (S),bookAuthor (S),readingTarget (S),bookOwnerId (S),bookOwnerName (S),snackOwnerId (S),snackOwnerName (S),status (S),createdById (S),createdByName (S),completedById (S),completedByName (S),completedAt (N),createdAt (N),updatedAt (N),meetingModuleMigrated (BOOL),meetingModuleLegacyRecord (M)
 book-club,meeting#meeting-uuid,1784763000000,book-uuid,The Fifth Season,N. K. Jemisin,Read through Chapter 9,kayla,Kayla,andre,Andre,scheduled,andre,Andre,,,,1783553400000,1783553400000,,
@@ -17,6 +17,8 @@ groupId (S),id (S),bookId (S),userId (S),userName (S),rating (N),finished (BOOL)
 book-club,rating#book-uuid#andre,book-uuid,andre,Andre,5,true,Changed how I saw the opening.,1789000000000,1789000000000
 book-club,rating#older-book#kayla,older-book,kayla,Kayla,4,,,1788000000000,1788000000000
 
-groupId (S),id (S),meetingId (S),bookId (S),parentPostId (S),title (S),authorId (S),authorName (S),body (S),createdAt (N),updatedAt (N),lastActivityAt (N),deletedAt (N),deletedById (S),deletedByName (S),meetingForumMigrated (BOOL),meetingForumLegacyRecord (M)
-book-club,forum#meeting-uuid#1789000000000#post-uuid,meeting#meeting-uuid,book-uuid,,Favorite turning point,andre,Andre,Which scene changed the book for you?,1789000000000,1789000000000,1789001000000,,,,,
-book-club,forum#meeting-uuid#1789001000000#reply-uuid,meeting#meeting-uuid,book-uuid,forum#meeting-uuid#1789000000000#post-uuid,,kayla,Kayla,The final conversation.,1789001000000,1789001000000,1789001000000,,,,,
+groupId (S),id (S),bookId (S),title (S),createdById (S),createdBy (S),createdAt (N),updatedAt (N),comments (L of M),isArchived (BOOL),version (N),archivedAt (N),archivedById (S),archivedBy (S),restoredById (S),restoredBy (S)
+book-club,book-forum#forum-uuid,book-uuid,Which moments changed how you read the ending?,andre,Andre,1789000000000,1789001000000,"[{""id"":""comment-uuid"",""authorId"":""kayla"",""author"":""Kayla"",""text"":""The final conversation."",""mentions"":[],""mentionsAll"":false,""createdAt"":1789001000000}]",false,1,,,,,
+
+groupId (S),id (S),sourceId (S),legacyForumRecord (M),createdAt (N)
+book-club,migration-backup#remove-meeting-forums#sha256,forum#meeting-uuid#1789000000000#post-uuid,"{""groupId"":""book-club"",""id"":""forum#meeting-uuid#1789000000000#post-uuid"",""meetingId"":""meeting#meeting-uuid"",""bookId"":""book-uuid"",""authorId"":""andre"",""authorName"":""Andre"",""body"":""Legacy discussion"",""createdAt"":1789000000000}",1789002000000

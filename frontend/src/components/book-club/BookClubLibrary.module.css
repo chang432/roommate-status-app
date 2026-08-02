@@ -1,4 +1,5 @@
-.library, .detail { @apply grid gap-4; }
+.library { @apply grid gap-4; }
+.detail { @apply grid gap-0; }
 .libraryHeading { @apply flex flex-col gap-3 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between; }
 .libraryCount { @apply text-[12.5px] font-bold text-ink-soft; }
 .libraryTools { @apply flex flex-col-reverse gap-2 sm:flex-row sm:items-center; }
@@ -11,30 +12,33 @@
 .cardTopline strong { @apply truncate text-[14px] font-semibold text-ink; }
 .cardTopline em, .statusChip { @apply rounded-full bg-solid-neutral px-2 py-1 text-[10px] font-bold uppercase tracking-[0.05em] text-on-strong not-italic; }
 .bookMeta { @apply mt-1 block text-[12px] text-ink-soft; }
+.bookTags { @apply mt-2 flex flex-wrap gap-1.5; }
+.bookTags > span { @apply rounded-full border border-line bg-surface-muted px-2 py-1 text-[10.5px] font-semibold text-ink-soft; }
+.cardTags { @apply mt-2; }
 .cardStats { @apply flex flex-none flex-wrap gap-x-3 gap-y-1 text-[11.5px] font-semibold text-ink-soft sm:max-w-40 sm:flex-col sm:items-end; }
 .noMatches { @apply py-8 text-center text-[13px] text-ink-soft; }
 .empty { @apply grid min-h-52 place-items-center content-center gap-2 rounded-md border border-dashed border-line bg-surface-muted p-6 text-center; }
 .empty > span { @apply text-3xl; }
 .empty h2 { @apply text-[16px] font-black text-ink; }
 .empty p { @apply text-[13px] text-ink-soft; }
-.detailActions { @apply flex items-center justify-between gap-3; }
-.detailActionGroup { @apply flex items-center gap-2; }
+.detailActions { @apply flex flex-wrap items-center justify-between gap-3 pb-4; }
+.detailActionGroup { @apply flex flex-wrap items-center justify-end gap-2; }
 .actionButton { @apply px-3 py-2 text-[12.5px]; }
-.detailHeader { @apply grid gap-4 rounded-md border border-line bg-surface-muted p-4; }
+.detailHeader { @apply grid gap-4 border-y border-line py-4; }
 .detailTitle { @apply min-w-0; }
 .titleRow { @apply flex flex-wrap items-center gap-2; }
 .detailHeader h2 { @apply min-w-0 truncate text-[18px] font-black text-ink; }
 .detailTitle > p { @apply mt-1 text-[13px] text-ink-soft; }
 .detailTitle > small { @apply mt-1 block text-[11.5px] font-semibold text-accent-deep; }
+.detailTags { @apply mt-3; }
 .detailHeader dl { @apply grid grid-cols-3 border-t border-line pt-3; }
 .detailHeader dl div { @apply min-w-0 border-r border-line px-3 first:pl-0 last:border-r-0 last:pr-0; }
 .detailHeader dt { @apply text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
 .detailHeader dd { @apply mt-1 truncate text-[13px] font-semibold text-ink; }
-.reviewForm { @apply grid gap-4 rounded-sm border border-line bg-surface-muted p-[14px]; }
-.formHeading, .sectionHeading { @apply flex items-start justify-between gap-3; }
-.formHeading h3, .sectionHeading h3 { @apply text-[14px] font-semibold text-ink; }
-.formHeading p { @apply mt-1 text-[12px] text-ink-soft; }
-.formHeading > span { @apply rounded-sm bg-success-soft px-2 py-1 text-[11px] font-bold text-status-green; }
+.reviewSections { @apply grid gap-[10px] py-4; }
+.reviewSavedStatus { @apply px-1 text-[12px] font-bold text-status-green; }
+.reviewForm { @apply grid gap-4; }
+.reviewPrompt { @apply text-[12px] text-ink-soft; }
 .reviewForm fieldset { @apply grid gap-2; }
 .reviewForm legend, .note > span { @apply text-[11px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
 .starChoices { @apply flex gap-1; }
@@ -54,17 +58,14 @@
 .note textarea { @apply min-h-24 w-full resize-y rounded-sm border border-line bg-card p-3 text-[13.5px] text-ink outline-none transition placeholder:text-placeholder-muted focus:border-accent; }
 .note small { @apply text-right text-[11px] text-ink-soft; }
 .saveReview { @apply min-w-32 px-4 py-2.5 text-[13px]; }
-.community { @apply grid gap-3 border-t border-line pt-4; }
-.reviewList { @apply grid gap-2; }
-.review { @apply rounded-sm border border-line bg-card px-3 py-[10px] text-[13px] text-ink; }
+.community { @apply grid; }
+.reviewList { @apply grid; }
+.review { @apply border-b border-line py-3 text-[13px] text-ink last:border-b-0; }
 .review > div { @apply flex items-center justify-between gap-3; }
 .review > div span { @apply text-[12px] tracking-wide text-accent-deep; }
 .review > p:last-child:not(.finishStatus) { @apply mt-2 whitespace-pre-wrap leading-5; }
 .finishStatus { @apply mt-1 text-[11.5px] font-semibold text-ink-soft; }
-.muted { @apply rounded-sm bg-surface-muted p-3 text-[13px] text-ink-soft; }
-.meetingForums { @apply grid gap-[10px]; }
-.meetingForum { @apply bg-surface-muted; }
-.meetingForum > div > section { @apply rounded-none border-0 shadow-none; }
+.muted { @apply py-3 text-[13px] text-ink-soft; }
 
 @media (max-width: 520px) {
   .detailHeader dl { @apply grid-cols-2 gap-y-3; }

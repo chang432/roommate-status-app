@@ -9,6 +9,7 @@ import activities
 import book_club
 import db
 import household_checklists
+import household_forums
 import household_polls
 import household_requests
 import household_shows
@@ -221,6 +222,23 @@ def _edit_book_club_meeting(item_id: str, editor: dict, changes: dict) -> EditRe
     return EditResult(EDIT_OK, "book-club", payload=meeting)
 
 
+def _edit_forum(item_id: str, editor: dict, changes: dict) -> EditResult:
+    if set(changes) != {"title", "bookId"}:
+        return _invalid("forums", "A forum title and book are required when editing.")
+    title, error = _text(changes, "title", "Forum title")
+    if error:
+        return _invalid("forums", error)
+    book_id = changes.get("bookId")
+    if not isinstance(book_id, str) or book_club.get_book(editor["groupId"], book_id) is None:
+        return _invalid("forums", "Choose a valid Book Club book.")
+    return _map_persistence_result(
+        "forums",
+        household_forums.edit_owned(
+            item_id, editor["id"], editor["groupId"], title, book_id
+        ),
+    )
+
+
 EDITORS: dict[str, Callable[[str, dict, dict], EditResult]] = {
     "events": _edit_event,
     "requests": _edit_request,
@@ -229,6 +247,7 @@ EDITORS: dict[str, Callable[[str, dict, dict], EditResult]] = {
     "tv": _edit_show,
     "spotify": _edit_jam,
     "book-club": _edit_book_club_meeting,
+    "forums": _edit_forum,
 }
 
 

@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   completeBookClubMeeting,
   getBookClubMeeting,
@@ -8,9 +7,13 @@ import {
 } from "../../api/bookClub.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useExpandOnModuleFocus } from "../../context/ModuleFocusContext.jsx";
+import { avatarColor } from "../../utils/avatar.js";
 import { exactDateTime } from "../../utils/time.js";
 import ModuleEditButton from "../feed/ModuleEditButton.jsx";
+import BookLinkedModuleHeader from "../feed/BookLinkedModuleHeader.jsx";
 import ExpandableCardRegion from "../feed/ExpandableCardRegion.jsx";
+import Avatar from "../ui/Avatar.jsx";
+import PeoplePopover from "../ui/PeoplePopover.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import styles from "./BookClubMeetingFeature.module.css";
 
@@ -42,6 +45,7 @@ export default function BookClubMeetingFeature({
   const { user } = useAuth();
   const [expandedId, setExpandedId] = useState(null);
   const [details, setDetails] = useState({});
+  const [openAttendanceStatus, setOpenAttendanceStatus] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const { confirm, confirmationDialog } = useConfirmDialog();
@@ -74,6 +78,7 @@ export default function BookClubMeetingFeature({
   async function toggle(meeting) {
     if (expandedId === meeting.id) {
       setExpandedId(null);
+      setOpenAttendanceStatus(null);
       return;
     }
     setExpandedId(meeting.id);
@@ -99,8 +104,7 @@ export default function BookClubMeetingFeature({
     if (busy) return;
     const confirmed = await confirm({
       title: `Complete meeting for ${meeting.bookTitle}?`,
-      message:
-        "Attendance will become read-only, and the meeting forum will close.",
+      message: "Attendance will become read-only.",
       confirmLabel: "Complete meeting",
     });
     if (!confirmed) return;
@@ -137,35 +141,33 @@ export default function BookClubMeetingFeature({
   const viewerResponse = responses.find(
     (response) => response.userId === user.id,
   );
+  // Preserve each member's avatar color when an RSVP moves them between rows.
+  const responseAvatarColors = new Map(
+    responses.map((response, index) => [response.userId, avatarColor(index)]),
+  );
   const attendanceEditable =
     Boolean(viewerResponse) && detail.status === "scheduled";
+  const meetingDateTime = exactDateTime(meeting.scheduledAt);
 
   return (
     <div className={styles.list}>
       {error && <p className="ui-errorBox">{error}</p>}
       <article className={styles.card}>
-        <button
-          type="button"
+        <BookLinkedModuleHeader
           className={styles.header}
-          aria-expanded={expanded}
-          onClick={() => toggle(meeting)}
-        >
-          <span className={styles.headerText}>
-            <span className={styles.title}>{meeting.bookTitle}</span>
-            <span className={styles.meta}>
-              {exactDateTime(meeting.scheduledAt)} · Snacks:{" "}
-              {meeting.snackOwnerName}
-            </span>
-          </span>
-          {moduleTag}
-        </button>
+          expanded={expanded}
+          onToggle={() => toggle(meeting)}
+          toggleLabel={`Book Club meeting ${meetingDateTime}, ${meeting.readingTarget}`}
+          moduleTag={moduleTag}
+          title={meetingDateTime}
+          meta={`${meeting.readingTarget} · Snacks: ${meeting.snackOwnerName}`}
+          bookId={meeting.bookId}
+          bookTitle={meeting.bookTitle}
+        />
         <ExpandableCardRegion
           expanded={expanded}
           className={styles.detailsPanel}
         >
-          <p className={styles.bookTitle}>
-            {detail.bookTitle} by {detail.bookAuthor}
-          </p>
           <dl className={styles.details}>
             <div>
               <dt>Reading target</dt>
@@ -180,109 +182,133 @@ export default function BookClubMeetingFeature({
               <dd>{detail.snackOwnerName}</dd>
             </div>
           </dl>
-          <div className={styles.responses}>
-            <h3 className={styles.responseHeading}>Attendance</h3>
-            {attendanceEditable ? (
-              <label className={styles.attendanceEditor}>
-                <span>Your attendance</span>
-                <select
-                  aria-label="Your attendance"
-                  value={viewerResponse.attendanceStatus ?? ""}
-                  disabled={busy}
-                  onChange={(event) =>
-                    saveResponse(detail, {
-                      attendanceStatus: event.target.value,
-                    })
-                  }
-                >
-                  <option value="" disabled>
-                    Pending
-                  </option>
-                  <option value="attending">Attending</option>
-                  <option value="maybe">Maybe</option>
-                  <option value="not_attending">Not attending</option>
-                </select>
-              </label>
-            ) : null}
-            <div
-              className={styles.attendanceGroups}
-              aria-label="Member attendance"
-            >
-              {ATTENDANCE_OPTIONS.map(({ status, label }) => {
-                const members = attendanceGroups[status];
-                return (
-                  <section
-                    className={styles.attendanceGroup}
-                    data-status={status}
-                    key={status}
-                    aria-label={`${label}: ${members.length}`}
+          <section className={styles.attendanceSection} aria-label="Attendance">
+            <div className={styles.attendanceContent}>
+              {attendanceEditable ? (
+                <label className={styles.attendanceEditor}>
+                  <span>RSVP</span>
+                  <select
+                    aria-label="RSVP"
+                    value={viewerResponse.attendanceStatus ?? ""}
+                    disabled={busy}
+                    onChange={(event) =>
+                      saveResponse(detail, {
+                        attendanceStatus: event.target.value,
+                      })
+                    }
                   >
-                    <header className={styles.attendanceGroupHeader}>
-                      <h4>
+                    <option value="" disabled>
+                      Pending
+                    </option>
+                    <option value="attending">Attending</option>
+                    <option value="maybe">Maybe</option>
+                    <option value="not_attending">Not attending</option>
+                  </select>
+                </label>
+              ) : null}
+              <div
+                className={styles.attendanceGroups}
+                aria-label="Member attendance"
+              >
+                {ATTENDANCE_OPTIONS.map(({ status, label }) => {
+                  const members = attendanceGroups[status];
+                  const people = members.map((response) => ({
+                    id: response.userId,
+                    name: response.userName,
+                    color: responseAvatarColors.get(response.userId),
+                  }));
+                  const peopleLabel = `${members.length} ${members.length === 1 ? "person" : "people"}`;
+                  return (
+                    <section
+                      className={styles.attendanceGroup}
+                      key={status}
+                      data-status={status}
+                      aria-label={`${label}: ${members.length}`}
+                    >
+                      <div className={styles.attendanceGroupRow}>
                         <span
-                          aria-hidden="true"
                           className={styles.attendanceIndicator}
+                          data-attendance-status-indicator={status}
+                          aria-hidden="true"
                         />
-                        {label}
-                      </h4>
-                      <span
-                        aria-label={`${members.length} ${members.length === 1 ? "member" : "members"}`}
-                      >
-                        {members.length}
-                      </span>
-                    </header>
-                    {members.length ? (
-                      <ul className={styles.memberList}>
-                        {members.map((response) => (
-                          <li key={response.userId}>
-                            <span title={response.userName}>
-                              {response.userName}
-                            </span>
-                            {response.userId === user.id ? (
-                              <small>You</small>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className={styles.emptyGroup}>No one yet</p>
-                    )}
-                  </section>
-                );
-              })}
+                        <span className={styles.attendanceGroupSummary}>
+                          <span className={styles.attendanceGroupLabel}>
+                            {label}
+                          </span>
+                          <span className={styles.attendanceGroupCount}>
+                            {members.length}
+                          </span>
+                        </span>
+                        {members.length ? (
+                          <span className={styles.attendancePeople}>
+                            <PeoplePopover
+                              people={people}
+                              open={openAttendanceStatus === status}
+                              onOpenChange={(open) =>
+                                setOpenAttendanceStatus(open ? status : null)
+                              }
+                              heading={label}
+                              dialogLabel={`${label} members`}
+                              buttonLabel={`View ${peopleLabel} marked ${label.toLowerCase()}`}
+                              triggerClassName={styles.attendanceTrigger}
+                            >
+                              <span
+                                className={styles.attendanceAvatarCluster}
+                                aria-hidden="true"
+                              >
+                                {people.map((person) => (
+                                  <Avatar
+                                    key={person.id}
+                                    name={person.name}
+                                    color={person.color}
+                                    size={28}
+                                    className={styles.attendanceAvatar}
+                                  />
+                                ))}
+                                {members.length > 4 ? (
+                                  <span className={styles.attendanceMoreDesktop}>
+                                    +{members.length - 4}
+                                  </span>
+                                ) : null}
+                                {members.length > 3 ? (
+                                  <span className={styles.attendanceMoreMobile}>
+                                    +{members.length - 3}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </PeoplePopover>
+                          </span>
+                        ) : null}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-          <div className={`ui-moduleActionRow ${styles.meetingActions}`}>
-            <Link
-              className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
-              to={`/?book=${encodeURIComponent(meeting.bookId)}&meeting=${encodeURIComponent(meeting.id)}`}
-            >
-              Forum
-            </Link>
-            {detail.status === "scheduled" && (
-              <>
+          </section>
+          {detail.status === "scheduled" && (
+            <div className={`ui-moduleActionRow ${styles.meetingActions}`}>
+              <button
+                type="button"
+                className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                disabled={busy}
+                onClick={() => notify(detail)}
+              >
+                Send reminder
+              </button>
+              <ModuleEditButton onEdit={onEdit} disabled={busy} />
+              {canAdminister && (
                 <button
                   type="button"
-                  className="ui-pillButton ui-pillSecondary ui-moduleActionButton"
+                  className="ui-pillButton ui-pillDanger ui-moduleActionButton"
                   disabled={busy}
-                  onClick={() => notify(detail)}
+                  onClick={() => complete(detail)}
                 >
-                  Send reminder
+                  Complete meeting
                 </button>
-                <ModuleEditButton onEdit={onEdit} disabled={busy} />
-                {canAdminister && (
-                  <button
-                    type="button"
-                    className="ui-pillButton ui-pillDanger ui-moduleActionButton"
-                    disabled={busy}
-                    onClick={() => complete(detail)}
-                  >
-                    Complete meeting
-                  </button>
-                )}
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </ExpandableCardRegion>
       </article>
       {confirmationDialog}

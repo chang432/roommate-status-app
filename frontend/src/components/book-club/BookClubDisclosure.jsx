@@ -10,7 +10,10 @@ export default function BookClubDisclosure({
   className = "",
 }) {
   return (
-    <section className={`${styles.disclosure} ${className}`} aria-label={title}>
+    <section
+      className={`${styles.disclosure} ${className}`}
+      aria-label={title}
+    >
       <button
         type="button"
         className={styles.summary}
@@ -22,11 +25,12 @@ export default function BookClubDisclosure({
           {description ? <span className={styles.description}>{description}</span> : null}
         </span>
         {badge ? <span className={styles.badge}>{badge}</span> : null}
-        <span className={styles.chevron} aria-hidden="true">⌄</span>
       </button>
       <div className={`${styles.expandedRegion} ${open ? styles.expanded : styles.collapsed}`}>
         <div className={styles.expandedInner} {...(!open ? { inert: "" } : {})}>
-          <div className={styles.panel}>{children}</div>
+          <div className={styles.panel}>
+            {children}
+          </div>
         </div>
       </div>
     </section>

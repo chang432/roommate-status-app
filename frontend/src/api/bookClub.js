@@ -68,27 +68,3 @@ export function reviewBookClubBook(userId, bookId, review) {
     body: JSON.stringify(review),
   });
 }
-
-export function getBookClubForum(userId, meetingId) {
-  return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}/forum`, { userId }));
-}
-
-export function createBookClubForumEntry(userId, meetingId, entry) {
-  return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}/forum`, { userId }), {
-    method: "POST",
-    body: JSON.stringify(entry),
-  });
-}
-
-export function updateBookClubForumEntry(userId, meetingId, entryId, changes) {
-  return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}/forum/${encodeURIComponent(entryId)}`, { userId }), {
-    method: "PATCH",
-    body: JSON.stringify(changes),
-  });
-}
-
-export function deleteBookClubForumEntry(userId, meetingId, entryId) {
-  return request(withQuery(`/book-club/meetings/${encodeURIComponent(meetingId)}/forum/${encodeURIComponent(entryId)}`, { userId }), {
-    method: "DELETE",
-  });
-}

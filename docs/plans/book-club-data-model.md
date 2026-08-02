@@ -1,4 +1,4 @@
-# Book Club meeting-module data model
+# Book Club and forum data model
 
 ## Product behavior
 
@@ -6,9 +6,9 @@
   Book, and Snack card grid on the household page. Current Book opens its
   detail, Library opens the complete catalog, and the owner cards open their
   respective orders.
-- Meetings expand directly in the household feed for grouped attendance,
-  reminders, editing, and completion. Their Forum link opens the relevant book
-  and meeting discussion inside the household library modal.
+- Meetings expand directly in the household feed for always-visible attendance,
+  reminders, editing, and completion. Their linked book tag opens
+  the complete book detail inside the household library modal.
 - Index zero in each list is the current owner and the default for a new meeting.
   Neither list advances automatically. An admin selection moves that member to
   the front while preserving everyone else's relative order.
@@ -31,12 +31,16 @@
   requires its open meeting to be completed first, then timestamps the book and
   clears the pointer. Each member can review any book with a 1–5 star rating, required finished/not-finished
   status, and optional note. Legacy star-only ratings remain visible with
-  unknown finish status until their author updates them.
+  unknown finish status until their author updates them. Books may also carry
+  up to ten reusable household tags; any current member may correct these tags
+  alongside the rest of the catalog metadata.
 - Members may update their own attendance until the meeting is completed, even
   after its scheduled time.
-- Every meeting has a forum with titled root topics and one reply level.
-  Authors may edit or remove their entries, group admins may remove any entry,
-  and completion makes the entire forum read-only.
+- Book Club households also have a separate Forums feed category. Any member
+  can create a forum with a title and required library-book tag. Its flat
+  comments support mentions and likes like event and request comments. The
+  creator may edit its title and linked book; any member may archive, restore,
+  or delete it.
 
 ## DynamoDB records
 
@@ -45,8 +49,8 @@ The existing `RoommateStatus-{dev,main}-book-club` table remains keyed by
 
 - `config#book-club`: `openMeetingId`, `lastMeetingAt`, optional `activeBookId`,
   and the two ordered owner-ID lists.
-- `book#<uuid>`: title, author, current Book owner snapshot, and optional
-  `completedAt`. It has no status field: current status is derived by comparing
+- `book#<uuid>`: title, author, current Book owner snapshot, optional custom
+  tag list, and optional `completedAt`. It has no status field: current status is derived by comparing
   its `bookId` with `config#book-club.activeBookId`.
 - `meeting#<uuid>`: scheduled time, book and owner snapshots, reading target,
   scheduled/completed status, and creator/completer snapshots.
@@ -55,10 +59,11 @@ The existing `RoommateStatus-{dev,main}-book-club` table remains keyed by
 - `rating#<bookUuid>#<userId>`: member review with rating, finish status,
   optional note, member snapshot, and lifecycle timestamps. The established ID
   prefix remains because existing star ratings are upgraded in place.
-- `forum#<meetingUuid>#<timestamp>#<uuid>`: meeting-scoped topic or reply.
-  Replies include `parentPostId`; topics include `title` and
-  `lastActivityAt`. Removed entries keep attribution/timestamps but omit their
-  title and body.
+- `book-forum#<uuid>`: standalone forum title, required `bookId`, creator
+  snapshot, archive state, version, timestamps, and an embedded list of up to
+  100 flat comments.
+- `migration-backup#remove-meeting-forums#<digest>`: reversible copy of a
+  deleted legacy meeting-forum record, written only by the removal migration.
 
 All timestamps are server-generated epoch milliseconds except an admin-selected
 meeting time. Historical display names remain denormalized while authorization
@@ -68,17 +73,20 @@ uses stable member IDs.
 
 Meetings normalize as compact `type: "book-club"` feed modules and use
 `/?module=book-club&item=<id>` deep links that expand the household feed card.
-Forum notifications use
-`/?book=<book-id>&meeting=<meeting-id>&thread=<root-id>` so the household
-library modal opens the referenced topic. The type is
-included only when the group has Book Club enabled. Book addition, meeting creation, edits,
+Forums normalize as `type: "forums"` feed modules and use
+`/?module=forums&item=<id>` deep links. Their required book tag links to
+`/?book=<book-id>`. The type is included only when the group has Book Club
+enabled. Book addition, meeting creation,
 completion, and book completion require a group admin; any current member can
-send a reminder, update their own response, review an active or completed book, create a
-forum topic, and reply before completion. New topics notify the group except
-the author; replies notify thread participants except the author.
+correct an existing book's metadata and tags,
+send a reminder, update their own response, review an active or completed book,
+or create a forum. New forum comments notify the creator and prior commenters,
+with mention and `@all` recipients deduplicated.
 
 ## Migration
 
+`2026-08-01-02-remove-book-club-meeting-forums` removes legacy meeting-scoped
+discussion records after preserving each full row in a reversible backup item.
 `2026-07-29-01-derive-book-completion` removes legacy book `status` fields,
 preserving known historical completion dates and clearing an invalid completion
 date from the configured current title.

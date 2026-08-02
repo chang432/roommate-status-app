@@ -320,7 +320,7 @@ describe("GroupFeed module focus", () => {
     ).toBeInTheDocument();
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(MODULE_PREFERENCE_KEY));
-      expect(stored.version).toBe(4);
+      expect(stored.version).toBe(5);
       expect(stored.allTypes).toContain("book-club");
       expect(stored.allTypes).toContain("polls");
     });
@@ -343,7 +343,7 @@ describe("GroupFeed module focus", () => {
     expect(screen.queryByText("The Left Hand of Darkness")).not.toBeInTheDocument();
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(MODULE_PREFERENCE_KEY));
-      expect(stored.version).toBe(4);
+      expect(stored.version).toBe(5);
       expect(stored.allTypes).not.toContain("book-club");
     });
 
@@ -1204,10 +1204,10 @@ describe("GroupFeed module focus", () => {
     ["first", "/", {}, /^All/, "Movie night", 0, 60, 100, 0],
     [
       "last",
-      "/?module=book-club",
+      "/?module=forums",
       { showBookClub: true },
-      /^Book Club/,
-      "The Left Hand of Darkness",
+      /^Forums/,
+      null,
       560,
       100,
       -100,
@@ -1236,7 +1236,7 @@ describe("GroupFeed module focus", () => {
         name: activeTabName,
         selected: true,
       });
-      await screen.findByText(cardText);
+      if (cardText) await screen.findByText(cardText);
       const swipeTarget = document.querySelector(
         "[data-feed-swipe-phase]",
       ).parentElement;

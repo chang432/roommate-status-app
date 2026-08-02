@@ -55,7 +55,7 @@ schemaless attributes needing no secondary index or coordination record. The
 migrations ledger records which in-place data migrations have run per
 environment (see [Data migrations](#data-migrations) below). The Book Club
 table stores group-scoped configuration, books, meeting modules, member
-responses, completed-book reviews, and meeting forum entries. All tables use
+responses, completed-book reviews, and standalone book-tagged forums. All tables use
 on-demand billing, encryption at rest, and point-in-time recovery, and are
 retained on stack deletion (`DeletionPolicy: Retain`).
 

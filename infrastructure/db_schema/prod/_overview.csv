@@ -31,8 +31,8 @@ RoommateStatus-main-spotify-jam,RoommateStatus-main-spotify-jam.csv,id (S),,jam.
 RoommateStatus-main-shows-v2,RoommateStatus-main-shows-v2.csv,"groupId (S) + id (S)",,household_shows.py,TV show tracker
 RoommateStatus-main-checklists-v2,RoommateStatus-main-checklists-v2.csv,"groupId (S) + id (S)",,household_checklists.py,Household checklists
 RoommateStatus-main-polls,RoommateStatus-main-polls.csv,"groupId (S) + id (S)",,household_polls.py,Standalone household polls
-RoommateStatus-main-comment-likes-v2,RoommateStatus-main-comment-likes-v2.csv,"groupId (S) + id (S)",,"activities.py, household_requests.py, household_polls.py",Likes on activity, request & poll comments
-RoommateStatus-main-book-club,RoommateStatus-main-book-club.csv,"groupId (S) + id (S)","BookIdIndex (HASH bookId + RANGE id, ProjectionType ALL)",book_club.py,Book Club settings and history
+RoommateStatus-main-comment-likes-v2,RoommateStatus-main-comment-likes-v2.csv,"groupId (S) + id (S)",,"activities.py, household_requests.py, household_polls.py, household_forums.py","Likes on activity, request, poll, and forum comments"
+RoommateStatus-main-book-club,RoommateStatus-main-book-club.csv,"groupId (S) + id (S)","BookIdIndex (HASH bookId + RANGE id, ProjectionType ALL)","book_club.py, household_forums.py",Book Club settings and history
 RoommateStatus-main-groups,RoommateStatus-main-groups.csv,groupId (S),"JoinCodeIndex (HASH joinCode, ProjectionType ALL)",groups.py,Households / join-by-code groups
 RoommateStatus-main-memberships,RoommateStatus-main-memberships.csv,"groupId (S) + userId (S)","UserIdIndex (HASH userId, ProjectionType ALL)",db.py,"Account memberships, admin roles, and per-group statuses"
 RoommateStatus-main-migrations,RoommateStatus-main-migrations.csv,id (S),,migrations/runner.py,In-place data-migration ledger + run lock

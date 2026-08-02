@@ -8,6 +8,7 @@ import {
 import { useAuth } from "../../context/AuthContext.jsx";
 import { isAdminIn } from "../../utils/roles.js";
 import { OPEN_BOOK_LIBRARY_ADD_EVENT } from "../../utils/bookClubEvents.js";
+import { collectBookTags } from "../../utils/bookTags.js";
 import ModalShell from "../ui/ModalShell.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import BookClubBookForm from "./BookClubBookForm.jsx";
@@ -41,8 +42,6 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const linkedBookId = searchParams.get("book");
-  const linkedMeetingId = searchParams.get("meeting");
-  const linkedThreadId = searchParams.get("thread");
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -143,8 +142,6 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   function clearLibraryParams() {
     const next = new URLSearchParams(searchParams);
     next.delete("book");
-    next.delete("meeting");
-    next.delete("thread");
     setSearchParams(next, { replace: true });
   }
 
@@ -186,6 +183,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
   const openOrder = openList ? lists[openList] : [];
   const openTitle = openList === "book" ? "Book owner order" : "Snack owner order";
   const activeBook = summary?.activeBook;
+  const availableTags = useMemo(() => collectBookTags(books), [books]);
 
   return (
     <section className={styles.section} aria-label="Book Club">
@@ -206,7 +204,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
             </button>
           </div>
           <button type="button" className={styles.card} onClick={() => openLibrary()}>
-            <CardCopy label="Library" value="All books" hint="Ratings, reviews, and discussions" />
+            <CardCopy label="Library" value="All books" hint="Ratings, reviews, and tags" />
           </button>
           <button type="button" className={styles.card} onClick={() => setOpenList("book")}>
             <CardCopy
@@ -250,6 +248,7 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
             <BookClubBookForm
               book={bookEditor === "add" ? null : bookEditor}
               roommates={roommates}
+              availableTags={availableTags}
               canSetAsCurrent={Boolean(
                 bookEditor !== "add" && !summary?.activeBook && !bookEditor?.isCurrent && canAdminister
               )}
@@ -275,8 +274,6 @@ export default function BookClub({ roommates = [], groupId, refreshToken = 0 }) 
               canAdminister={canAdminister}
               onCompleteBook={completeBook}
               completingBook={completingBook}
-              focusMeetingId={linkedMeetingId}
-              focusThreadId={linkedThreadId}
             />
           )}
         </ModalShell>

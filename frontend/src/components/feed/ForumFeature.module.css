@@ -1,0 +1,23 @@
+.wrap {
+  @apply space-y-2;
+}
+
+.error {
+  @apply px-1;
+}
+
+.card {
+  @apply overflow-hidden rounded-sm border border-line bg-card px-[14px] py-[10px] transition hover:border-accent-soft;
+}
+
+.archived {
+  @apply bg-surface-completed;
+}
+
+.summary {
+  @apply w-full;
+}
+
+.panel {
+  @apply pt-0;
+}

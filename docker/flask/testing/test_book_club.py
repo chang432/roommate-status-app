@@ -328,6 +328,66 @@ def test_admins_add_and_members_correct_books_and_all_meeting_snapshots(client):
     )
 
 
+def test_books_support_normalized_member_editable_tags(client):
+    book = add_book(
+        client,
+        tags=["Science   Fiction", "Bechdel Pass", "science fiction"],
+    )
+    assert book["tags"] == ["Science Fiction", "Bechdel Pass"]
+
+    edited = client.patch(
+        grouped_path(f"/api/book-club/books/{book['id']}", user_id="sheryl"),
+        json={
+            "title": book["title"],
+            "author": book["author"],
+            "bookOwnerId": "andre",
+            "tags": ["Classic", "Feminist"],
+        },
+    )
+    assert edited.status_code == 200
+    assert edited.get_json()["book"]["tags"] == ["Classic", "Feminist"]
+
+    # Omitting the additive field preserves it for callers updating other metadata.
+    preserved = client.patch(
+        grouped_path(f"/api/book-club/books/{book['id']}", user_id="kayla"),
+        json={
+            "title": book["title"],
+            "author": book["author"],
+            "bookOwnerId": "andre",
+        },
+    )
+    assert preserved.status_code == 200
+    assert preserved.get_json()["book"]["tags"] == ["Classic", "Feminist"]
+
+
+def test_book_tags_validate_shape_length_and_count(client):
+    invalid_values = [
+        ("Classic", "Book tags must be a list."),
+        ([""], "Book tags cannot be empty."),
+        (["x" * (book_club.BOOK_TAG_LENGTH + 1)], "Book tags must be at most"),
+        ([str(index) for index in range(book_club.BOOK_TAG_LIMIT + 1)], "Books can have at most"),
+    ]
+    for tags, message in invalid_values:
+        response = client.post(grouped_path("/api/book-club/books"), json={
+            "title": "A Book",
+            "author": "An Author",
+            "bookOwnerId": "andre",
+            "tags": tags,
+        })
+        assert response.status_code == 400
+        assert message in response.get_json()["error"]
+
+
+def test_legacy_books_project_an_empty_tag_list(client):
+    book = add_book(client)
+    stored = book_club._fetch(TEST_GROUP_ID, f"book#{book['id']}")
+    stored.pop("tags", None)
+    book_club._get_table().put_item(Item=stored)
+
+    projected = client.get(grouped_path("/api/book-club/books")).get_json()["books"][0]
+    assert projected["tags"] == []
+
+
 def test_adding_a_replacement_completes_the_prior_current_book(client):
     first = add_book(client, title="First", author="Writer One")
     second = add_book(client, title="Second", author="Writer Two", bookOwnerId="kayla")
@@ -457,99 +517,6 @@ def test_only_admins_can_add_current_books(client):
         "title": "A Book", "author": "An Author", "bookOwnerId": "sheryl",
     })
     assert rejected.status_code == 403
-
-
-def test_meeting_forum_supports_topics_replies_moderation_and_locking(
-    client, monkeypatch
-):
-    meeting = create_meeting(client).get_json()["meeting"]
-    group_notifications = []
-    user_notifications = []
-    monkeypatch.setattr(
-        "app.notify_group",
-        lambda group_id, **kwargs: group_notifications.append(kwargs)
-        or {"sent": 0, "pruned": 0, "failed": 0},
-    )
-    monkeypatch.setattr(
-        push,
-        "notify_users",
-        lambda **kwargs: user_notifications.append(kwargs)
-        or {"sent": 0, "pruned": 0, "failed": 0},
-    )
-
-    created = client.post(
-        grouped_path(meeting_path(meeting["id"], "/forum"), user_id="sheryl"),
-        json={"title": "Favorite passage", "body": "Which scene stayed with you?"},
-    )
-    assert created.status_code == 201
-    topic = created.get_json()["forum"]["threads"][0]
-    assert topic["authorName"] == "Sheryl"
-    assert group_notifications[0]["exclude_user_ids"] == {"sheryl"}
-    assert group_notifications[0]["url"] == module_models.book_club_url(
-        meeting["bookId"], meeting["id"], topic["id"]
-    )
-
-    summary = client.get(grouped_path("/api/book-club")).get_json()["summary"]
-    assert {
-        response["userId"] for response in summary["openMeeting"]["responses"]
-    } == set(db.get_group_user_ids(TEST_GROUP_ID, consistent=True))
-
-    edited = client.patch(
-        grouped_path(
-            meeting_path(
-                meeting["id"],
-                f"/forum/{quote(topic['id'], safe='')}",
-            ),
-            user_id="sheryl",
-        ),
-        json={"title": "Favorite scene", "body": "Which scene stayed with you?"},
-    )
-    assert edited.status_code == 200
-    assert edited.get_json()["forum"]["threads"][0]["title"] == "Favorite scene"
-
-    replied = client.post(
-        grouped_path(meeting_path(meeting["id"], "/forum")),
-        json={"parentPostId": topic["id"], "body": "The walk across the ice."},
-    )
-    assert replied.status_code == 201
-    thread = replied.get_json()["forum"]["threads"][0]
-    reply = thread["replies"][0]
-    assert reply["authorName"] == "Andre"
-    assert user_notifications[0]["user_ids"] == {"andre", "sheryl"}
-    assert user_notifications[0]["exclude_user_ids"] == {"andre"}
-
-    forbidden = client.patch(
-        grouped_path(
-            meeting_path(
-                meeting["id"],
-                f"/forum/{quote(topic['id'], safe='')}",
-            )
-        ),
-        json={"title": "Changed", "body": "Nope"},
-    )
-    assert forbidden.status_code == 403
-
-    removed = client.delete(
-        grouped_path(
-            meeting_path(
-                meeting["id"],
-                f"/forum/{quote(topic['id'], safe='')}",
-            )
-        )
-    )
-    assert removed.status_code == 200
-    assert removed.get_json()["forum"]["threads"][0]["deletedAt"] is not None
-
-    client.post(grouped_path(meeting_path(meeting["id"], "/complete")))
-    locked = client.get(
-        grouped_path(meeting_path(meeting["id"], "/forum"))
-    ).get_json()["forum"]
-    assert locked["locked"] is True
-    rejected = client.post(
-        grouped_path(meeting_path(meeting["id"], "/forum")),
-        json={"title": "Late topic", "body": "Too late"},
-    )
-    assert rejected.status_code == 409
 
 
 def test_feed_exposes_meetings_only_when_book_club_is_enabled(client):

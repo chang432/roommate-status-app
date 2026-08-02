@@ -38,6 +38,7 @@ function bookClubFixture() {
     isCurrent: true,
     selectedAt: NOW - 1_000_000,
     completedAt: null,
+    tags: ['Climate Fiction', 'Bechdel Pass'],
     reviewCount: 0,
     averageRating: null,
     finishedCount: 0,
@@ -57,6 +58,7 @@ function bookClubFixture() {
     isCurrent: false,
     selectedAt: NOW - 2_000_000,
     completedAt: NOW - 1_500_000,
+    tags: ['Cozy Science Fiction'],
     reviewCount: 1,
     averageRating: 4,
     finishedCount: 0,
@@ -83,9 +85,7 @@ async function mockBookClub(page, {
 } = {}) {
   const { meeting, activeBook, completedBook } = bookClubFixture()
   let books = [activeBook, completedBook]
-  const forums = {
-    [MEETING_ID]: { meetingId: MEETING_ID, locked: false, threads: [] },
-  }
+  let forumItems = []
   const feedItems = [{
     id: meeting.id, type: 'book-club', createdAt: meeting.createdAt,
     updatedAt: meeting.updatedAt, sortAt: meeting.updatedAt,
@@ -186,6 +186,37 @@ async function mockBookClub(page, {
       payload = null
     } else if (path === '/api/feed') {
       payload = feedItems
+    } else if (path === '/api/forums' && method === 'POST') {
+      const changes = request.postDataJSON()
+      const forum = {
+        id: 'book-forum-demo', ...changes,
+        bookTitle: books.find((book) => book.id === changes.bookId)?.title,
+        bookAuthor: books.find((book) => book.id === changes.bookId)?.author,
+        createdBy: 'Andre', createdById: 'andre', createdAt: NOW,
+        updatedAt: NOW, isArchived: false, comments: [],
+      }
+      forumItems = [forum]
+      feedItems.push({
+        id: forum.id, type: 'forums', createdAt: forum.createdAt,
+        updatedAt: forum.updatedAt, sortAt: forum.updatedAt,
+        title: forum.title, subtitle: forum.bookTitle, actor: forum.createdBy,
+        isArchived: false, payload: forum,
+      })
+      payload = forumItems
+      status = 201
+    } else if (path === '/api/forums/book-forum-demo/comments' && method === 'POST') {
+      const changes = request.postDataJSON()
+      forumItems = forumItems.map((forum) => ({
+        ...forum,
+        comments: [...forum.comments, {
+          id: 'forum-comment-demo', authorId: 'andre', author: 'Andre',
+          text: changes.text, createdAt: NOW, likedByIds: [], likedByNames: [],
+        }],
+      }))
+      const updated = forumItems[0]
+      const module = feedItems.find((item) => item.id === updated.id)
+      module.payload = updated
+      payload = forumItems
     } else if (path === '/api/book-club/books') {
       if (method === 'POST') {
         const book = {
@@ -226,33 +257,6 @@ async function mockBookClub(page, {
         }],
       } : book)
       payload = { books }
-    } else if (path.endsWith('/forum')) {
-      const encodedMeetingId = path.split('/meetings/')[1].split('/forum')[0]
-      const meetingId = decodeURIComponent(encodedMeetingId)
-      if (method === 'GET') {
-        payload = { forum: forums[meetingId] }
-      } else {
-        const entry = request.postDataJSON()
-        const forum = forums[meetingId]
-        if (entry.parentPostId) {
-          forum.threads = forum.threads.map((thread) => thread.id === entry.parentPostId ? {
-            ...thread,
-            replies: [...thread.replies, {
-              id: 'forum#reply', meetingId, parentPostId: thread.id,
-              authorId: 'andre', authorName: 'Andre', body: entry.body,
-              createdAt: NOW, updatedAt: NOW, lastActivityAt: NOW,
-            }],
-          } : thread)
-        } else {
-          forum.threads = [{
-            id: 'forum#topic', meetingId, title: entry.title,
-            authorId: 'andre', authorName: 'Andre', body: entry.body,
-            createdAt: NOW, updatedAt: NOW, lastActivityAt: NOW, replies: [],
-          }]
-        }
-        payload = { forum }
-        status = 201
-      }
     } else if (path.includes('/api/book-club/meetings/')) {
       payload = { meeting }
     } else {
@@ -287,12 +291,47 @@ async function dragTouch(page, start, end, steps = 8) {
   await session.detach()
 }
 
-test('uses the household modal for books, reviews, and discussions', async ({ page }, testInfo) => {
+async function expectAttendanceRowsStacked(attendance) {
+  const expectedNames = [
+    'Attending: 1',
+    'Maybe: 1',
+    'Not attending: 0',
+    'Pending: 1',
+  ]
+  const rows = attendance.getByRole('region')
+  await expect(rows).toHaveCount(expectedNames.length)
+  for (const name of expectedNames) {
+    const row = attendance.getByRole('region', { name })
+    await expect(row).toBeVisible()
+    await expect(row.locator('[data-attendance-status-indicator]')).toBeVisible()
+  }
+  // The disclosure animates open, so wait until its final row spacing is stable.
+  await expect.poll(async () => {
+    const boxes = await Promise.all(expectedNames.map((name) => (
+      attendance.getByRole('region', { name }).boundingBox()
+    )))
+    return boxes.slice(1).every((box, index) => {
+      const previous = boxes[index]
+      const spacing = box.y - (previous.y + previous.height)
+      return spacing >= 4 && spacing <= 16
+    })
+  }).toBe(true)
+  for (const name of ['Attending: 1', 'Maybe: 1', 'Pending: 1']) {
+    const row = attendance.getByRole('region', { name })
+    const rowBox = await row.boundingBox()
+    const triggerBox = await row.getByRole('button').boundingBox()
+    expect(Math.abs(
+      (rowBox.x + rowBox.width) - (triggerBox.x + triggerBox.width),
+    )).toBeLessThan(2)
+  }
+}
+
+test('uses the household modal for books and reviews', async ({ page }, testInfo) => {
   await mockBookClub(page)
   await page.goto('/')
 
   await expect(page.getByRole('heading', { name: 'Group Feed' })).toBeVisible()
-  await expect(page.getByRole('tablist', { name: 'Feed categories' }).getByRole('tab')).toHaveCount(7)
+  await expect(page.getByRole('tablist', { name: 'Feed categories' }).getByRole('tab')).toHaveCount(8)
   await expect(page.getByRole('button', { name: 'Open feed menu' })).toBeVisible()
   await expect.poll(() => page.locator('[data-feed-sticky-header]').evaluate((element) => (
     getComputedStyle(element).position
@@ -306,82 +345,303 @@ test('uses the household modal for books, reviews, and discussions', async ({ pa
   await page.getByRole('button', { name: /Library All books/ }).click()
   const library = page.getByRole('dialog', { name: 'Book library' })
   await expect(library.getByRole('button', { name: /The Fifth Season/ })).toContainText('Current')
+  await expect(library.getByRole('button', { name: /The Fifth Season/ })).toContainText('Bechdel Pass')
   await expect(library.getByRole('button', { name: /A Psalm for the Wild-Built/ })).toContainText('4.0 ★')
+  await library.getByRole('searchbox', { name: 'Search books' }).fill('Climate Fiction')
+  await expect(library.getByRole('button', { name: /The Fifth Season/ })).toBeVisible()
+  await expect(library.getByRole('button', { name: /A Psalm for the Wild-Built/ })).toBeHidden()
+  await library.getByRole('searchbox', { name: 'Search books' }).fill('')
   await page.screenshot({ path: testInfo.outputPath('book-club-library-modal-desktop.png'), fullPage: true })
 
   await library.getByRole('button', { name: 'Add book' }).click()
   const addDialog = page.getByRole('dialog', { name: 'Add a book' })
   await addDialog.getByRole('textbox', { name: 'Book title' }).fill('Kindred')
   await addDialog.getByRole('textbox', { name: 'Author' }).fill('Octavia E. Butler')
+  await addDialog.getByRole('combobox', { name: 'Book tag' }).fill('bechdel pass')
+  await addDialog.getByRole('button', { name: 'Add tag' }).click()
+  await addDialog.getByRole('combobox', { name: 'Book tag' }).fill('Time Travel')
+  await addDialog.getByRole('button', { name: 'Add tag' }).click()
   await addDialog.getByRole('button', { name: 'Add current book' }).click()
   await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Kindred')
+  await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Bechdel Pass')
+  await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Time Travel')
   await page.getByRole('button', { name: '← All books' }).click()
 
   await library.getByRole('button', { name: /The Fifth Season/ }).click()
   const details = page.getByRole('dialog', { name: 'Book details' })
   await expect(details.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
+  await expect(details.getByLabel('Book tags')).toContainText('Climate Fiction')
   await expect.poll(() => details.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-summary-desktop.png'), fullPage: true })
   await details.getByRole('radio', { name: '5 stars' }).locator('..').click()
   await details.getByRole('radio', { name: 'Finished' }).locator('..').click()
   await details.getByPlaceholder('What stayed with you?').fill('A fierce and unforgettable start.')
   await details.getByRole('button', { name: 'Save review' }).click()
-  await expect(details.getByRole('status')).toHaveText('Saved')
+  const personalReview = details.getByRole('region', { name: 'Your review' })
+  const personalReviewToggle = personalReview.getByRole('button', { name: /Your review/ })
+  const communityReviews = details.getByRole('region', { name: 'Community reviews' })
+  const communityReviewsToggle = communityReviews.getByRole('button', {
+    name: /Community reviews/,
+  })
+  await expect(details.getByRole('status')).toHaveText('Review saved.')
+  await expect(personalReviewToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(communityReviewsToggle).toHaveAttribute('aria-expanded', 'false')
+  expect(await personalReviewToggle.textContent()).not.toMatch(/[+−]/)
+  expect(await communityReviewsToggle.textContent()).not.toMatch(/[+−]/)
+  await expect.poll(() => personalReview.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      borderRadius: style.borderRadius,
+      borderWidth: style.borderWidth,
+    }
+  })).toEqual({ borderRadius: '12px', borderWidth: '1px' })
+  await page.waitForTimeout(750)
+  await details.evaluate((element) => { element.scrollTop = 0 })
+  await page.screenshot({ path: testInfo.outputPath('book-club-review-disclosures-desktop.png'), fullPage: true })
+  await personalReviewToggle.click()
+  await expect(personalReview.getByRole('button', { name: 'Update review' })).toBeVisible()
+  await personalReviewToggle.click()
+  await communityReviewsToggle.click()
+  await expect(communityReviews.getByText('Andre')).toBeVisible()
+  await page.waitForTimeout(750)
 
-  await details.getByRole('button', { name: /Discussions/ }).click()
-  await details.getByRole('button', { name: /Read through Chapter 9/ }).click()
-  await details.getByRole('button', { name: 'New topic' }).click()
-  await details.getByLabel('New topic title').fill('Favorite passage')
-  await details.getByLabel('New topic post').fill('Which scene stayed with you?')
-  await details.getByRole('button', { name: 'Post topic' }).click()
-  await details.getByRole('button', { name: 'Reply' }).click()
-  await details.getByLabel('Reply to Favorite passage').fill('The final conversation.')
-  await details.getByRole('button', { name: 'Reply', exact: true }).click()
-  await expect(details.getByText('The final conversation.')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-modal-desktop.png'), fullPage: true })
 
   await details.getByRole('button', { name: '← All books' }).click()
   await page.getByRole('button', { name: /A Psalm for the Wild-Built/ }).click()
   await expect(page.getByText('Finish status not recorded').first()).toBeVisible()
+  await page.getByRole('region', { name: 'Your review' }).getByRole('button', { name: /Your review/ }).click()
   await page.getByRole('radio', { name: 'Finished' }).locator('..').click()
   await page.getByRole('button', { name: 'Update review' }).click()
-  await expect(page.getByRole('status')).toHaveText('Saved')
+  await expect(page.getByRole('status')).toHaveText('Review saved.')
   await page.getByRole('button', { name: 'Close' }).click()
 
-  await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  const meetingHeader = page.getByRole('button', {
+    name: /Open Book Club meeting .*Read through Chapter 9$/,
+  })
+  const meetingBookLink = page.getByRole('link', {
+    name: 'View The Fifth Season in the Book Club library',
+  })
+  const meetingHeaderRoot = meetingHeader.locator('..')
+  const meetingTitle = meetingHeaderRoot.locator('strong').first()
+  const meetingModuleTag = meetingHeaderRoot.locator('[data-module-type="book-club"]')
+  const meetingMeta = meetingHeaderRoot.locator('span').last()
+  const meetingCard = meetingHeaderRoot.locator('..')
+  const [meetingTitleBox, meetingTitleRowBox, meetingBookBox, meetingTagBox] = await Promise.all([
+    meetingTitle.boundingBox(),
+    meetingTitle.locator('..').boundingBox(),
+    meetingBookLink.boundingBox(),
+    meetingModuleTag.boundingBox(),
+  ])
+  await expect(meetingTitle).toContainText('2030')
+  await expect(meetingHeaderRoot).toContainText(
+    'Read through Chapter 9 · Snacks: Andre',
+  )
+  expect(meetingBookBox.x).toBeGreaterThan(meetingTitleBox.x + meetingTitleBox.width)
+  expect(Math.abs(meetingBookBox.y - meetingTitleRowBox.y)).toBeLessThan(2)
+  expect(Math.abs(meetingBookBox.height - meetingTagBox.height)).toBeLessThan(1)
+  await expect.poll(() => meetingTitle.evaluate((element) => ({
+    fontFamily: getComputedStyle(element).fontFamily,
+    fontSize: getComputedStyle(element).fontSize,
+    fontWeight: getComputedStyle(element).fontWeight,
+  }))).toMatchObject({ fontSize: '14px', fontWeight: '600' })
+  expect(await meetingTitle.evaluate((element) => (
+    getComputedStyle(element).fontFamily
+  ))).not.toContain('Fraunces')
+  await expect.poll(() => meetingMeta.evaluate((element) => ({
+    fontSize: getComputedStyle(element).fontSize,
+    fontWeight: getComputedStyle(element).fontWeight,
+  }))).toEqual({ fontSize: '12px', fontWeight: '400' })
+  await expect.poll(() => meetingBookLink.evaluate((element) => (
+    getComputedStyle(element).fontSize
+  ))).toBe('10px')
+  await expect.poll(() => meetingCard.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      borderRadius: style.borderRadius,
+      boxShadow: style.boxShadow,
+      padding: `${style.paddingTop} ${style.paddingRight} ${style.paddingBottom} ${style.paddingLeft}`,
+    }
+  })).toEqual({ borderRadius: '12px', boxShadow: 'none', padding: '10px 14px 10px 14px' })
+  await meetingHeader.click()
+  const attendanceSection = page.getByRole('region', { name: 'Attendance' })
+  await expect(attendanceSection.getByRole('button', { name: /Attendance/ })).toHaveCount(0)
+  await expect(attendanceSection.getByText('Attendance', { exact: true })).toHaveCount(0)
+  await expect(attendanceSection.getByText(/^\d+ members?$/)).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Discussion' })).toHaveCount(0)
   const attendance = page.getByLabel('Member attendance')
-  await expect(attendance.getByRole('listitem')).toHaveCount(3)
-  await expect(page.getByRole('region', { name: 'Pending: 1' })).toContainText('Ting')
-  await page.getByLabel('Your attendance').selectOption('maybe')
-  await expect(page.getByRole('region', { name: 'Maybe: 2' })).toContainText('Andre')
+  await expectAttendanceRowsStacked(attendance)
+  await expect(attendance.getByRole('button', { name: 'View 1 person marked attending' })).toBeVisible()
+  await expect(attendance.getByRole('button', { name: 'View 1 person marked maybe' })).toBeVisible()
+  const pendingTrigger = attendance.getByRole('button', { name: 'View 1 person marked pending' })
+  await pendingTrigger.click()
+  await expect(page.getByRole('dialog', { name: 'Pending members' })).toContainText('Ting')
+  await pendingTrigger.click()
+  await page.getByLabel('RSVP').selectOption('maybe')
+  const maybeTrigger = attendance.getByRole('button', { name: 'View 2 people marked maybe' })
+  await maybeTrigger.click()
+  await expect(page.getByRole('dialog', { name: 'Maybe members' })).toContainText('Andre')
+  await maybeTrigger.click()
   await page.waitForTimeout(750)
   await page.screenshot({ path: testInfo.outputPath('book-club-meeting-tracker-desktop.png'), fullPage: true })
   await page.getByRole('button', { name: 'Complete meeting' }).click()
   const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
   await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused()
-  await expect(confirmation).toContainText('meeting forum will close')
+  await expect(confirmation).toContainText('Attendance will become read-only')
   await page.screenshot({ path: testInfo.outputPath('complete-meeting-confirmation-desktop.png'), fullPage: true })
   await confirmation.getByRole('button', { name: 'Cancel' }).click()
-  await page.getByRole('link', { name: 'Forum' }).click()
-  await expect(page).toHaveURL(/\?book=active-book&meeting=meeting%23demo/)
-  await expect(page.getByRole('dialog', { name: 'Book details' })).toContainText('Favorite passage')
+  await meetingBookLink.click()
+  await expect(page).toHaveURL(/\?book=active-book$/)
+  const wholeBook = page.getByRole('dialog', { name: 'Book details' })
+  await expect(wholeBook.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
+  await expect(wholeBook.getByText('Discussions')).toHaveCount(0)
 })
 
 test('confirms meeting completion safely on desktop', async ({ page }, testInfo) => {
   await mockBookClub(page)
   await page.goto('/')
 
-  await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  await page.getByRole('button', {
+    name: /Open Book Club meeting .*Read through Chapter 9$/,
+  }).click()
   await page.getByRole('button', { name: 'Complete meeting' }).click()
 
   const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
   await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused()
-  await expect(confirmation).toContainText('meeting forum will close')
+  await expect(confirmation).toContainText('Attendance will become read-only')
   await expect.poll(() => confirmation.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('complete-meeting-confirmation-desktop.png'), fullPage: true })
 
   await confirmation.getByRole('button', { name: 'Cancel' }).click()
   await expect(page.getByRole('button', { name: 'Complete meeting' })).toBeVisible()
+})
+
+test('creates a book-tagged forum with flat comments', async ({ page }, testInfo) => {
+  await mockBookClub(page)
+  await page.goto('/')
+
+  await page.getByRole('tab', { name: /^Forums/ }).click()
+  await page.getByRole('button', { name: 'Create a forum' }).click()
+  const creator = page.getByRole('dialog', { name: 'Create a forum' })
+  await creator.getByLabel('Forum title').fill('Memory, survival, and change')
+  await creator.getByLabel('Book').selectOption(ACTIVE_BOOK_ID)
+  await creator.getByRole('button', { name: 'Create forum' }).click()
+
+  const forumCard = page.getByRole('button', {
+    name: /forum Memory, survival, and change$/,
+  })
+  await expect(page.getByText('Memory, survival, and change')).toBeVisible()
+  await expect(page.getByRole('link', {
+    name: 'View The Fifth Season in the Book Club library',
+  })).toBeVisible()
+  const forumHeaderRoot = forumCard.locator('..')
+  const forumTitle = forumHeaderRoot.getByText('Memory, survival, and change', { exact: true })
+  const forumBookLink = forumHeaderRoot.getByRole('link', {
+    name: 'View The Fifth Season in the Book Club library',
+  })
+  const forumModuleTag = forumHeaderRoot.locator('[data-module-type="forums"]')
+  const forumMeta = forumHeaderRoot.locator('span').last()
+  const forumCardRoot = forumHeaderRoot.locator('..')
+  const [forumTitleBox, forumTitleRowBox, forumBookBox, forumTagBox] = await Promise.all([
+    forumTitle.boundingBox(),
+    forumTitle.locator('..').boundingBox(),
+    forumBookLink.boundingBox(),
+    forumModuleTag.boundingBox(),
+  ])
+  expect(forumBookBox.x).toBeGreaterThan(forumTitleBox.x + forumTitleBox.width)
+  expect(Math.abs(forumBookBox.y - forumTitleRowBox.y)).toBeLessThan(2)
+  expect(Math.abs(forumBookBox.height - forumTagBox.height)).toBeLessThan(1)
+  await expect.poll(() => forumTitle.evaluate((element) => ({
+    fontSize: getComputedStyle(element).fontSize,
+    fontWeight: getComputedStyle(element).fontWeight,
+  }))).toEqual({ fontSize: '14px', fontWeight: '600' })
+  await expect.poll(() => forumMeta.evaluate((element) => ({
+    fontSize: getComputedStyle(element).fontSize,
+    fontWeight: getComputedStyle(element).fontWeight,
+  }))).toEqual({ fontSize: '12px', fontWeight: '400' })
+  await expect.poll(() => forumCardRoot.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      borderRadius: style.borderRadius,
+      boxShadow: style.boxShadow,
+      padding: `${style.paddingTop} ${style.paddingRight} ${style.paddingBottom} ${style.paddingLeft}`,
+    }
+  })).toEqual({ borderRadius: '12px', boxShadow: 'none', padding: '10px 14px 10px 14px' })
+  await forumCard.click({ position: { x: 12, y: 12 } })
+  await expect(page.getByRole('button', {
+    name: 'Close forum Memory, survival, and change',
+  })).toBeVisible()
+  await expect(page.getByText('Discussing')).toHaveCount(0)
+  const forumPanel = forumHeaderRoot.locator(
+    'xpath=following-sibling::div[1]/div/div',
+  )
+  await expect.poll(() => forumPanel.evaluate((element) => (
+    getComputedStyle(element).borderTopWidth
+  ))).toBe('0px')
+  await expect.poll(() => forumPanel.getByText('Comments', { exact: true })
+    .locator('..').evaluate((element) => (
+      getComputedStyle(element).borderTopWidth
+    ))).toBe('1px')
+  await page.getByPlaceholder('Add a comment… Use @ to mention someone')
+    .fill('The book keeps changing what survival means.')
+  await page.getByRole('button', { name: 'Send comment' }).click()
+  await expect(page.getByText('The book keeps changing what survival means.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('forum-module-desktop.png'), fullPage: true })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const [
+    phoneForumHeaderBox,
+    phoneForumTitleBox,
+    phoneForumTitleRowBox,
+    phoneForumBookBox,
+  ] = await Promise.all([
+    forumHeaderRoot.boundingBox(),
+    forumTitle.boundingBox(),
+    forumTitle.locator('..').boundingBox(),
+    forumBookLink.boundingBox(),
+  ])
+  expect(phoneForumBookBox.x).toBeGreaterThan(
+    phoneForumTitleBox.x + phoneForumTitleBox.width,
+  )
+  expect(Math.abs(phoneForumBookBox.y - phoneForumTitleRowBox.y)).toBeLessThan(2)
+  expect(Math.abs(
+    (phoneForumHeaderBox.x + phoneForumHeaderBox.width)
+      - (phoneForumBookBox.x + phoneForumBookBox.width),
+  )).toBeLessThan(2)
+  await expect.poll(() => page.evaluate(() => (
+    document.documentElement.scrollWidth <= window.innerWidth
+  ))).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('forum-module-phone.png'), fullPage: true })
+
+  const forumBookTapBox = await forumBookLink.boundingBox()
+  await page.mouse.click(
+    forumBookTapBox.x + forumBookTapBox.width / 2,
+    forumBookTapBox.y - 4,
+  )
+  await expect(page).toHaveURL(/\?book=active-book$/)
+  await expect(page.getByRole('dialog', { name: 'Book details' })
+    .getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
+})
+
+test('allows a household member to update reusable book tags', async ({ page }) => {
+  await mockBookClub(page, { viewerIsAdmin: false })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: /Library All books/ }).click()
+  const library = page.getByRole('dialog', { name: 'Book library' })
+  await expect(library.getByRole('button', { name: 'Add book' })).toHaveCount(0)
+  await library.getByRole('button', { name: /The Fifth Season/ }).click()
+
+  const details = page.getByRole('dialog', { name: 'Book details' })
+  await details.getByRole('button', { name: 'Edit book' }).click()
+  const editor = page.getByRole('dialog', { name: 'Edit book' })
+  await editor.getByRole('combobox', { name: 'Book tag' }).fill('Household Favorite')
+  await editor.getByRole('button', { name: 'Add tag' }).click()
+  await editor.getByRole('button', { name: 'Save book' }).click()
+
+  await expect(page.getByRole('dialog', { name: 'Book details' }).getByLabel('Book tags'))
+    .toContainText('Household Favorite')
 })
 
 test('shows the next feed category while swiping on a phone', async ({ page }, testInfo) => {
@@ -398,7 +658,7 @@ test('shows the next feed category while swiping on a phone', async ({ page }, t
 
   const feedTabs = page.getByRole('tablist', { name: 'Feed categories' })
   const stickyHeader = page.locator('[data-feed-sticky-header]')
-  await expect(feedTabs.getByRole('tab')).toHaveCount(7)
+  await expect(feedTabs.getByRole('tab')).toHaveCount(8)
   await expect(stickyHeader).not.toHaveAttribute('data-feed-pinned')
   await expect.poll(() => stickyHeader.evaluate((element) => (
     getComputedStyle(element).backgroundColor
@@ -870,9 +1130,9 @@ test('swipes categories from the clickable Book Club card header', async ({ page
     await bookClubTab.click()
     await expect(bookClubTab).toHaveAttribute('aria-selected', 'true')
 
-    const cardHeader = page.locator(
-      '[data-feed-panel-type="book-club"] button[aria-expanded]',
-    ).filter({ hasText: 'The Fifth Season' })
+    const cardHeader = page.getByRole('button', {
+      name: /Book Club meeting .*Read through Chapter 9$/,
+    })
     await expect(cardHeader).toHaveAttribute('aria-expanded', 'false')
     await cardHeader.click()
     await expect(cardHeader).toHaveAttribute('aria-expanded', 'true')
@@ -1082,25 +1342,91 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   const library = page.getByRole('dialog', { name: 'Book library' })
   await expect(library.getByRole('searchbox', { name: 'Search books' })).toBeVisible()
   await expect(library.getByRole('button', { name: /The Fifth Season/ })).toBeVisible()
+  await expect(library.getByRole('button', { name: /The Fifth Season/ })).toContainText('Climate Fiction')
   await expect.poll(() => library.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('book-club-library-modal-mobile.png'), fullPage: true })
 
   await library.getByRole('button', { name: /The Fifth Season/ }).click()
   const details = page.getByRole('dialog', { name: 'Book details' })
   await expect(details.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
+  const phonePersonalReview = details.getByRole('region', { name: 'Your review' })
+  const phoneCommunityReviews = details.getByRole('region', { name: 'Community reviews' })
+  await expect(phonePersonalReview.getByRole('button', { name: /Your review/ }))
+    .toHaveAttribute('aria-expanded', 'true')
+  await expect(phoneCommunityReviews.getByRole('button', { name: /Community reviews/ }))
+    .toHaveAttribute('aria-expanded', 'false')
+  expect(await phonePersonalReview.getByRole('button', { name: /Your review/ }).textContent())
+    .not.toMatch(/[+−]/)
   await expect.poll(() => details.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('book-club-detail-modal-mobile.png'), fullPage: true })
 
   await details.getByRole('button', { name: 'Close' }).click()
-  await page.getByRole('button', { name: /The Fifth Season/, expanded: false }).click()
+  const phoneMeetingHeader = page.getByRole('button', {
+    name: /Open Book Club meeting .*Read through Chapter 9$/,
+  })
+  const phoneMeetingHeaderRoot = phoneMeetingHeader.locator('..')
+  const phoneMeetingTitle = phoneMeetingHeaderRoot.locator('strong').first()
+  const phoneMeetingBookLink = phoneMeetingHeaderRoot.getByRole('link', {
+    name: 'View The Fifth Season in the Book Club library',
+  })
+  const phoneMeetingModuleTag = phoneMeetingHeaderRoot.locator('[data-module-type="book-club"]')
+  const [
+    phoneMeetingRootBox,
+    phoneMeetingTitleBox,
+    phoneMeetingTitleRowBox,
+    phoneMeetingBookBox,
+    phoneMeetingTagBox,
+  ] = await Promise.all([
+    phoneMeetingHeaderRoot.boundingBox(),
+    phoneMeetingTitle.boundingBox(),
+    phoneMeetingTitle.locator('..').boundingBox(),
+    phoneMeetingBookLink.boundingBox(),
+    phoneMeetingModuleTag.boundingBox(),
+  ])
+  expect(phoneMeetingBookBox.x).toBeGreaterThan(
+    phoneMeetingTitleBox.x + phoneMeetingTitleBox.width,
+  )
+  expect(Math.abs(
+    phoneMeetingBookBox.y - phoneMeetingTitleRowBox.y,
+  )).toBeLessThan(2)
+  expect(Math.abs(
+    (phoneMeetingRootBox.x + phoneMeetingRootBox.width)
+      - (phoneMeetingBookBox.x + phoneMeetingBookBox.width),
+  )).toBeLessThan(2)
+  expect(Math.abs(phoneMeetingBookBox.height - phoneMeetingTagBox.height)).toBeLessThan(1)
+  await phoneMeetingHeader.click()
+  const attendanceSection = page.getByRole('region', { name: 'Attendance' })
+  await expect(attendanceSection.getByText('Attendance', { exact: true })).toHaveCount(0)
+  await expect(attendanceSection.getByText(/^\d+ members?$/)).toHaveCount(0)
   const attendance = page.getByLabel('Member attendance')
-  await expect(attendance.getByRole('listitem')).toHaveCount(3)
+  await expectAttendanceRowsStacked(attendance)
+  await page.waitForTimeout(750)
+  await expect(attendance.getByRole('button', { name: 'View 1 person marked attending' })).toBeVisible()
+  await expect(attendance.getByRole('button', { name: 'View 1 person marked maybe' })).toBeVisible()
+  await expect(attendance.getByRole('button', { name: 'View 1 person marked pending' })).toBeVisible()
   await expect.poll(() => attendance.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
-  const forumBox = await page.getByRole('link', { name: 'Forum' }).boundingBox()
+  const rsvpLabel = attendanceSection.getByText('RSVP', { exact: true })
+  const rsvpRow = attendanceSection.locator('label').filter({ hasText: 'RSVP' })
+  const rsvpSelect = attendanceSection.getByLabel('RSVP')
+  const rsvpRowBox = await rsvpRow.boundingBox()
+  const rsvpSelectBox = await rsvpSelect.boundingBox()
+  const rsvpLabelBox = await rsvpLabel.boundingBox()
+  expect(rsvpRowBox.height).toBeGreaterThanOrEqual(rsvpSelectBox.height)
+  expect(Math.abs(
+    (rsvpLabelBox.y + rsvpLabelBox.height / 2) - (rsvpSelectBox.y + rsvpSelectBox.height / 2),
+  )).toBeLessThanOrEqual(8)
+  expect(rsvpSelectBox.x).toBeGreaterThan(rsvpLabelBox.x)
+  await expect(page.getByRole('region', { name: 'Discussion' })).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => (
+    document.documentElement.scrollWidth <= window.innerWidth
+  ))).toBe(true)
   const reminderBox = await page.getByRole('button', { name: 'Send reminder' }).boundingBox()
   const completeBox = await page.getByRole('button', { name: 'Complete meeting' }).boundingBox()
-  expect(Math.abs(forumBox.y - reminderBox.y)).toBeLessThan(2)
-  expect(Math.abs(forumBox.y - completeBox.y)).toBeLessThan(2)
+  for (const box of [reminderBox, completeBox]) {
+    expect(box.height).toBeGreaterThanOrEqual(36)
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(390)
+  }
   await page.getByRole('button', { name: 'Complete meeting' }).click()
   const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
   await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused()

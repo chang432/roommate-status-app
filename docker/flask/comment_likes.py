@@ -3,20 +3,21 @@
 Likes on activity and request comments used to live inside the shared
 activities table as typed rows (``itemType`` ``commentLike`` /
 ``requestCommentLike``). They now own their own table so the activity and
-request feeds no longer scan-and-discard like rows on every read. Poll comment
-likes use the same dedicated table. Likes are
+request feeds no longer scan-and-discard like rows on every read. Poll and forum
+comment likes use the same dedicated table. Likes are
 the highest-cardinality, fastest-growing rows in that feed (one per user per
 liked comment), so giving them a dedicated table keeps each feed scan lean.
 
 Each row still self-describes which parent it belongs to — activity likes
-carry ``activityId``, request likes carry ``requestId``, and poll likes carry
-``pollId`` — so a single table holds every kind; the ``itemType`` discriminator
-is redundant here and dropped. Each module uses a distinct deterministic ID
-prefix, so their rows never collide.
+carry ``activityId``, request likes carry ``requestId``, poll likes carry
+``pollId``, and forum likes carry ``forumId`` — so a single table holds every
+kind; the ``itemType`` discriminator is redundant here and dropped. Each module
+uses a distinct deterministic ID prefix, so their rows never collide.
 
 This module owns only the table plumbing; the per-parent id, validation, and
 row shape stay with activities.py / household_requests.py /
-household_polls.py, which just target this table instead of their parent table.
+household_polls.py / household_forums.py, which just target this table instead
+of their parent table.
 
 The table is keyed ``(groupId HASH, id RANGE)`` so a feed reads only its own
 household's likes — see group_tables.py for why the feed tables partition on
@@ -67,8 +68,8 @@ def likes_by_parent(group_id: str, parent_field: str, consistent: bool = False) 
     """Group a household's likes into ``{parent_id: {comment_id: {user_id}}}``.
 
     ``parent_field`` selects which kind of like to keep — ``"activityId"``,
-    ``"requestId"``, or ``"pollId"`` — since all share this table and each row
-    names its parent.
+    ``"requestId"``, ``"pollId"``, or ``"forumId"`` — since all share this
+    table and each row names its parent.
     """
     grouped: dict[str, dict[str, set[str]]] = {}
     for like in list_for_group(group_id, consistent=consistent):

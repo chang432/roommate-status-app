@@ -45,3 +45,28 @@ def query_group(table, group_id: str, consistent: bool = False) -> list[dict]:
         if not last_key:
             return items
         kwargs["ExclusiveStartKey"] = last_key
+
+
+def query_group_prefix(
+    table, group_id: str, id_prefix: str, consistent: bool = False
+) -> list[dict]:
+    """Return rows belonging to one parent record within a group partition.
+
+    Child records use a stable, parent-prefixed sort key. Keeping the lookup as
+    a Query means a checklist or show never has to read unrelated child rows
+    just to render its own members.
+    """
+    if not group_id:
+        return []
+    kwargs = {
+        "KeyConditionExpression": Key("groupId").eq(group_id) & Key("id").begins_with(id_prefix),
+        "ConsistentRead": consistent,
+    }
+    items: list[dict] = []
+    while True:
+        response = table.query(**kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            return items
+        kwargs["ExclusiveStartKey"] = last_key

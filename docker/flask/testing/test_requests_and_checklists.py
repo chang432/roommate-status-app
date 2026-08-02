@@ -333,6 +333,27 @@ def test_checklist_items_can_be_checked_by_multiple_roommates(client):
     assert unchecked.get_json()[0]["items"][0]["checkedByIds"] == ["ting"]
 
 
+def test_concurrent_checklist_item_updates_preserve_both_changes(client):
+    """Child rows prevent one item write from replacing another item's state."""
+    checklist = _make_checklist(client).get_json()[0]
+    first, second = [item["id"] for item in checklist["items"]]
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(
+            lambda args: household_checklists.toggle_item(*args),
+            [
+                (checklist["id"], first, "kayla", "Kayla", TEST_GROUP_ID),
+                (checklist["id"], second, "ting", "Ting", TEST_GROUP_ID),
+            ],
+        ))
+
+    assert all(results)
+    stored = household_checklists.get(checklist["id"], TEST_GROUP_ID, consistent=True)
+    assert {item["id"]: item["checkedByIds"] for item in stored["items"]} == {
+        first: ["kayla"], second: ["ting"],
+    }
+
+
 def test_checklist_items_can_be_added_edited_and_deleted(client):
     checklist = _make_checklist(client).get_json()[0]
 

@@ -30,7 +30,7 @@ availability to hang out. Built from the mockups in `../mockups`.
 - **Comment likes**: roommates can like or unlike other people’s comments and
   see their own reaction state, the total like count, and a popover listing
   who liked each comment.
-- **Module feed**: `/feed` contains events, requests, checklists, polls, and TV shows
+- **Module feed**: `/feed` contains events, requests, checklists, polls, forums, and TV shows
   in one chronological group feed. Material updates bump the module instance to
   the bottom, and the side drawer/rail filters by module type. Module
   notifications use `/?module=<type>&item=<id>` links that select the matching
@@ -40,16 +40,23 @@ availability to hang out. Built from the mockups in `../mockups`.
   floating `+` creates modules.
 - **Book Club**: the household page shows a two-by-two Current Book, Library,
   Book, and Snack card grid. The library opens as a searchable modal with the
-  current title first and completed titles by recency, aggregate ratings,
-  collapsible reviews, and collapsible meeting discussions. Admins add the
+  current title first and completed titles by recency, aggregate ratings, and
+  collapsible reviews. Admins add the
   current title and schedule meetings for it; members can correct catalog books.
-  Meeting cards group household RSVPs by attendance and keep each member's own
-  response control in a stable, dedicated position.
+  Meeting cards lead with their date and time, keep the reading target and
+  Snacks assignment beneath it, and link the associated book from their
+  header. Expanded cards keep attendance visible, with each member's own RSVP
+  control in a stable, dedicated position.
   When no title is current, an admin can restore a completed title from its edit
-  form.
-  Members review current or completed books with
-  1–5 stars, finish status, and an optional note; completed meeting forums
-  remain read-only.
+  form. Books support reusable household tags that members can add or correct;
+  tags appear in the library and participate in its existing search.
+  Saved personal reviews collapse to a compact summary and can be reopened for
+  editing at any time. Members review current or completed books 1–5 stars,
+  finish status, and an optional note.
+- **Forums**: Book Club households can create a standalone forum with a title
+  and required library-book tag. Forum cards use the same flat comments,
+  mentions, and likes as events and requests. Creators can edit the title or
+  linked book; every current member can archive, restore, or delete a forum.
 - **Requests**: the household board lets users ask specific roommates for
   help, track accept/deny responses, comment, archive or restore requests, and open
   module notifications directly to the expanded request card.
@@ -116,10 +123,14 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `updateBookClubBook`            | `PATCH /api/book-club/books/:id?userId=:id`                |
 | `reviewBookClubBook`            | `PUT /api/book-club/books/:id/review?userId=:id`           |
 | `notifyBookClubMeeting`         | `POST /api/book-club/meetings/:id/notify?userId=:id`       |
-| `getBookClubForum`              | `GET /api/book-club/meetings/:id/forum?userId=:id`         |
-| `createBookClubForumEntry`      | `POST /api/book-club/meetings/:id/forum?userId=:id`        |
-| `updateBookClubForumEntry`      | `PATCH /api/book-club/meetings/:id/forum/:entryId`         |
-| `deleteBookClubForumEntry`      | `DELETE /api/book-club/meetings/:id/forum/:entryId`        |
+| `getForums`                     | `GET /api/forums?userId=:id`                               |
+| `createForum`                   | `POST /api/forums`                                         |
+| `updateForum`                   | `PATCH /api/modules/forums/:id`                            |
+| `commentOnForum`                | `POST /api/forums/:id/comments`                            |
+| `setForumCommentLiked`          | `PUT/DELETE /api/forums/:id/comments/:commentId/likes`     |
+| `archiveForum`                  | `POST /api/forums/:id/archive`                             |
+| `restoreForum`                  | `POST /api/forums/:id/restore`                             |
+| `deleteForum`                   | `DELETE /api/forums/:id`                                   |
 | `getRoommates`                  | `GET /api/roommates?userId=:id`                            |
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |

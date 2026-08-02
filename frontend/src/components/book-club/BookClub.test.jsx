@@ -96,7 +96,7 @@ describe("BookClub cards and library", () => {
     await userEvent.click(screen.getByRole("button", { name: /Current book Parable of the Sower/ }));
     const detail = screen.getByRole("dialog", { name: "Book details" });
     expect(detail).toHaveTextContent("Your review");
-    expect(detail).toHaveTextContent("Discussions");
+    expect(detail).not.toHaveTextContent("Discussions");
     expect(getBookClubBooks).toHaveBeenCalledTimes(2);
   });
 
