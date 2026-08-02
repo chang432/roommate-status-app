@@ -518,14 +518,21 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   await page.screenshot({ path: testInfo.outputPath('forum-module-desktop.png'), fullPage: true })
 
   await page.setViewportSize({ width: 390, height: 844 })
-  const [phoneForumHeaderBox, phoneForumTitleBox, phoneForumBookBox] = await Promise.all([
+  const [
+    phoneForumHeaderBox,
+    phoneForumTitleBox,
+    phoneForumTitleRowBox,
+    phoneForumBookBox,
+  ] = await Promise.all([
     forumHeaderRoot.boundingBox(),
     forumTitle.boundingBox(),
+    forumTitle.locator('..').boundingBox(),
     forumBookLink.boundingBox(),
   ])
-  expect(phoneForumBookBox.y).toBeGreaterThan(
-    phoneForumTitleBox.y + phoneForumTitleBox.height,
+  expect(phoneForumBookBox.x).toBeGreaterThan(
+    phoneForumTitleBox.x + phoneForumTitleBox.width,
   )
+  expect(Math.abs(phoneForumBookBox.y - phoneForumTitleRowBox.y)).toBeLessThan(2)
   expect(Math.abs(
     (phoneForumHeaderBox.x + phoneForumHeaderBox.width - 18)
       - (phoneForumBookBox.x + phoneForumBookBox.width),
@@ -1280,15 +1287,23 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   const phoneMeetingBookLink = phoneMeetingHeaderRoot.getByRole('link', {
     name: 'View The Fifth Season in the Book Club library',
   })
-  const [phoneMeetingRootBox, phoneMeetingTitleBox, phoneMeetingBookBox] =
-    await Promise.all([
-      phoneMeetingHeaderRoot.boundingBox(),
-      phoneMeetingTitle.boundingBox(),
-      phoneMeetingBookLink.boundingBox(),
-    ])
-  expect(phoneMeetingBookBox.y).toBeGreaterThan(
-    phoneMeetingTitleBox.y + phoneMeetingTitleBox.height,
+  const [
+    phoneMeetingRootBox,
+    phoneMeetingTitleBox,
+    phoneMeetingTitleRowBox,
+    phoneMeetingBookBox,
+  ] = await Promise.all([
+    phoneMeetingHeaderRoot.boundingBox(),
+    phoneMeetingTitle.boundingBox(),
+    phoneMeetingTitle.locator('..').boundingBox(),
+    phoneMeetingBookLink.boundingBox(),
+  ])
+  expect(phoneMeetingBookBox.x).toBeGreaterThan(
+    phoneMeetingTitleBox.x + phoneMeetingTitleBox.width,
   )
+  expect(Math.abs(
+    phoneMeetingBookBox.y - phoneMeetingTitleRowBox.y,
+  )).toBeLessThan(2)
   expect(Math.abs(
     (phoneMeetingRootBox.x + phoneMeetingRootBox.width)
       - (phoneMeetingBookBox.x + phoneMeetingBookBox.width),

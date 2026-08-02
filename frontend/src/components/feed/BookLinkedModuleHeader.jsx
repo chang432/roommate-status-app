@@ -23,12 +23,9 @@ export default function BookLinkedModuleHeader({
         aria-label={`${expanded ? "Close" : "Open"} ${toggleLabel}`}
         onClick={onToggle}
       />
-      <div className={styles.copy}>
-        <div className={styles.titleRow}>
-          {moduleTag}
-          <strong className={styles.title}>{title}</strong>
-        </div>
-        <span className={styles.meta}>{meta}</span>
+      <div className={styles.titleRow}>
+        {moduleTag}
+        <strong className={styles.title}>{title}</strong>
       </div>
       <Link
         className={styles.bookTag}
@@ -37,6 +34,7 @@ export default function BookLinkedModuleHeader({
       >
         {bookTitle}
       </Link>
+      <span className={styles.meta}>{meta}</span>
     </div>
   );
 }

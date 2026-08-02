@@ -1,17 +1,13 @@
 .header {
-  @apply relative flex min-w-0 items-start gap-3;
+  @apply relative grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3;
 }
 
 .toggleButton {
   @apply absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent;
 }
 
-.copy {
-  @apply pointer-events-none relative z-[1] min-w-0 flex-1;
-}
-
 .titleRow {
-  @apply flex min-w-0 items-center gap-2;
+  @apply pointer-events-none relative z-[1] flex min-w-0 items-center gap-2;
 }
 
 .title {
@@ -19,23 +15,9 @@
 }
 
 .meta {
-  @apply mt-1 block text-[12.5px] font-semibold text-ink-soft;
+  @apply pointer-events-none relative z-[1] col-span-2 mt-1 block min-w-0 truncate text-[12.5px] font-semibold text-ink-soft;
 }
 
 .bookTag {
-  @apply relative z-[2] inline-flex min-h-9 max-w-[230px] flex-none items-center truncate rounded-full border border-line bg-surface-muted px-3 py-[7px] text-[12px] font-bold text-ink-soft transition hover:border-accent hover:text-ink;
-}
-
-@media (max-width: 560px) {
-  .header {
-    @apply flex-wrap items-start;
-  }
-
-  .copy {
-    @apply basis-full;
-  }
-
-  .bookTag {
-    @apply ml-auto max-w-full;
-  }
+  @apply relative z-[2] inline-flex min-h-9 max-w-[min(230px,42vw)] items-center justify-self-end truncate rounded-full border border-line bg-surface-muted px-3 py-[7px] text-[12px] font-bold text-ink-soft transition hover:border-accent hover:text-ink;
 }
