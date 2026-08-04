@@ -157,12 +157,12 @@ export default function BookClubMeetingFeature({
           className={styles.header}
           expanded={expanded}
           onToggle={() => toggle(meeting)}
-          toggleLabel={`Book Club meeting ${meetingDateTime}, ${meeting.readingTarget}`}
+          toggleLabel={`Book Club meeting for ${meeting.bookTitle}, ${meetingDateTime}, ${meeting.readingTarget}`}
           moduleTag={moduleTag}
-          title={meetingDateTime}
-          meta={`${meeting.readingTarget} · Snacks: ${meeting.snackOwnerName}`}
+          title={meeting.bookTitle}
+          linkTitleToBook
+          meta={`${meetingDateTime} · ${meeting.readingTarget}`}
           bookId={meeting.bookId}
-          bookTitle={meeting.bookTitle}
         />
         <ExpandableCardRegion
           expanded={expanded}

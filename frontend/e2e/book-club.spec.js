@@ -82,8 +82,16 @@ async function mockBookClub(page, {
   archivedTvFeedCount = 0,
   bookClubFeedCount = 0,
   viewerIsAdmin = true,
+  crowdedAttendance = false,
 } = {}) {
   const { meeting, activeBook, completedBook } = bookClubFixture()
+  if (crowdedAttendance) {
+    meeting.responses = Array.from({ length: 6 }, (_, index) => ({
+      userId: index === 0 ? 'andre' : `member-${index}`,
+      userName: index === 0 ? 'Andre' : `Member ${index}`,
+      attendanceStatus: 'attending',
+    }))
+  }
   let books = [activeBook, completedBook]
   let forumItems = []
   const feedItems = [{
@@ -326,6 +334,11 @@ async function expectAttendanceRowsStacked(attendance) {
   }
 }
 
+async function clickMeetingHeader(toggle) {
+  const box = await toggle.boundingBox()
+  await toggle.click({ position: { x: 8, y: box.height - 4 } })
+}
+
 test('uses the household modal for books and reviews', async ({ page }, testInfo) => {
   await mockBookClub(page)
   await page.goto('/')
@@ -427,19 +440,18 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   const meetingModuleTag = meetingHeaderRoot.locator('[data-module-type="book-club"]')
   const meetingMeta = meetingHeaderRoot.locator('span').last()
   const meetingCard = meetingHeaderRoot.locator('..')
-  const [meetingTitleBox, meetingTitleRowBox, meetingBookBox, meetingTagBox] = await Promise.all([
+  const [meetingTitleBox, meetingBookBox, meetingTagBox] = await Promise.all([
     meetingTitle.boundingBox(),
-    meetingTitle.locator('..').boundingBox(),
     meetingBookLink.boundingBox(),
     meetingModuleTag.boundingBox(),
   ])
-  await expect(meetingTitle).toContainText('2030')
-  await expect(meetingHeaderRoot).toContainText(
-    'Read through Chapter 9 · Snacks: Andre',
-  )
-  expect(meetingBookBox.x).toBeGreaterThan(meetingTitleBox.x + meetingTitleBox.width)
-  expect(Math.abs(meetingBookBox.y - meetingTitleRowBox.y)).toBeLessThan(2)
-  expect(Math.abs(meetingBookBox.height - meetingTagBox.height)).toBeLessThan(1)
+  await expect(meetingTitle).toHaveText('The Fifth Season')
+  await expect(meetingMeta).toContainText('2030')
+  await expect(meetingMeta).toContainText('Read through Chapter 9')
+  await expect(meetingMeta).not.toContainText('Snacks')
+  expect(meetingBookBox.x).toBeGreaterThan(meetingTagBox.x + meetingTagBox.width)
+  expect(Math.abs(meetingBookBox.y - meetingTagBox.y)).toBeLessThan(2)
+  expect(Math.abs(meetingBookBox.x - meetingTitleBox.x)).toBeLessThan(1)
   await expect.poll(() => meetingTitle.evaluate((element) => ({
     fontFamily: getComputedStyle(element).fontFamily,
     fontSize: getComputedStyle(element).fontSize,
@@ -452,9 +464,6 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
     fontSize: getComputedStyle(element).fontSize,
     fontWeight: getComputedStyle(element).fontWeight,
   }))).toEqual({ fontSize: '12px', fontWeight: '400' })
-  await expect.poll(() => meetingBookLink.evaluate((element) => (
-    getComputedStyle(element).fontSize
-  ))).toBe('10px')
   await expect.poll(() => meetingCard.evaluate((element) => {
     const style = getComputedStyle(element)
     return {
@@ -463,7 +472,7 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
       padding: `${style.paddingTop} ${style.paddingRight} ${style.paddingBottom} ${style.paddingLeft}`,
     }
   })).toEqual({ borderRadius: '12px', boxShadow: 'none', padding: '10px 14px 10px 14px' })
-  await meetingHeader.click()
+  await clickMeetingHeader(meetingHeader)
   const attendanceSection = page.getByRole('region', { name: 'Attendance' })
   await expect(attendanceSection.getByRole('button', { name: /Attendance/ })).toHaveCount(0)
   await expect(attendanceSection.getByText('Attendance', { exact: true })).toHaveCount(0)
@@ -501,9 +510,10 @@ test('confirms meeting completion safely on desktop', async ({ page }, testInfo)
   await mockBookClub(page)
   await page.goto('/')
 
-  await page.getByRole('button', {
+  const meetingHeader = page.getByRole('button', {
     name: /Open Book Club meeting .*Read through Chapter 9$/,
-  }).click()
+  })
+  await meetingHeader.press('Enter')
   await page.getByRole('button', { name: 'Complete meeting' }).click()
 
   const confirmation = page.getByRole('dialog', { name: /Complete meeting/ })
@@ -1134,9 +1144,9 @@ test('swipes categories from the clickable Book Club card header', async ({ page
       name: /Book Club meeting .*Read through Chapter 9$/,
     })
     await expect(cardHeader).toHaveAttribute('aria-expanded', 'false')
-    await cardHeader.click()
+    await clickMeetingHeader(cardHeader)
     await expect(cardHeader).toHaveAttribute('aria-expanded', 'true')
-    await cardHeader.click()
+    await clickMeetingHeader(cardHeader)
     await expect(cardHeader).toHaveAttribute('aria-expanded', 'false')
 
     const feedShell = page.locator('[data-feed-shell]')
@@ -1373,28 +1383,26 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   const [
     phoneMeetingRootBox,
     phoneMeetingTitleBox,
-    phoneMeetingTitleRowBox,
     phoneMeetingBookBox,
     phoneMeetingTagBox,
   ] = await Promise.all([
     phoneMeetingHeaderRoot.boundingBox(),
     phoneMeetingTitle.boundingBox(),
-    phoneMeetingTitle.locator('..').boundingBox(),
     phoneMeetingBookLink.boundingBox(),
     phoneMeetingModuleTag.boundingBox(),
   ])
   expect(phoneMeetingBookBox.x).toBeGreaterThan(
-    phoneMeetingTitleBox.x + phoneMeetingTitleBox.width,
+    phoneMeetingTagBox.x + phoneMeetingTagBox.width,
   )
   expect(Math.abs(
-    phoneMeetingBookBox.y - phoneMeetingTitleRowBox.y,
+    phoneMeetingBookBox.y - phoneMeetingTagBox.y,
   )).toBeLessThan(2)
   expect(Math.abs(
-    (phoneMeetingRootBox.x + phoneMeetingRootBox.width)
-      - (phoneMeetingBookBox.x + phoneMeetingBookBox.width),
-  )).toBeLessThan(2)
-  expect(Math.abs(phoneMeetingBookBox.height - phoneMeetingTagBox.height)).toBeLessThan(1)
-  await phoneMeetingHeader.click()
+    phoneMeetingBookBox.x - phoneMeetingTitleBox.x,
+  )).toBeLessThan(1)
+  expect(phoneMeetingBookBox.x + phoneMeetingBookBox.width)
+    .toBeLessThanOrEqual(phoneMeetingRootBox.x + phoneMeetingRootBox.width)
+  await clickMeetingHeader(phoneMeetingHeader)
   const attendanceSection = page.getByRole('region', { name: 'Attendance' })
   await expect(attendanceSection.getByText('Attendance', { exact: true })).toHaveCount(0)
   await expect(attendanceSection.getByText(/^\d+ members?$/)).toHaveCount(0)
@@ -1435,4 +1443,56 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   await confirmation.getByRole('button', { name: 'Cancel' }).click()
   await page.waitForTimeout(750)
   await page.screenshot({ path: testInfo.outputPath('book-club-meeting-tracker-mobile.png'), fullPage: true })
+})
+
+test('centers attendance overflow counters on desktop and phone', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await mockBookClub(page, { crowdedAttendance: true })
+  await page.goto('/')
+
+  const meetingHeader = page.getByRole('button', {
+    name: /Open Book Club meeting .*Read through Chapter 9$/,
+  })
+  await clickMeetingHeader(meetingHeader)
+  await page.waitForTimeout(750)
+  const attendance = page.getByLabel('Member attendance')
+
+  async function expectCounterCentered(counter) {
+    await expect(counter).toBeVisible()
+    await expect.poll(() => counter.evaluate((element) => {
+      const circle = element.getBoundingClientRect()
+      const textRange = document.createRange()
+      textRange.selectNodeContents(element)
+      const text = textRange.getBoundingClientRect()
+      return {
+        display: getComputedStyle(element).display,
+        horizontallyCentered: Math.abs(
+          (circle.left + circle.width / 2) - (text.left + text.width / 2),
+        ) <= 1,
+        verticallyCentered: Math.abs(
+          (circle.top + circle.height / 2) - (text.top + text.height / 2),
+        ) <= 1,
+      }
+    })).toEqual({
+      display: 'grid',
+      horizontallyCentered: true,
+      verticallyCentered: true,
+    })
+  }
+
+  await expectCounterCentered(attendance.getByText('+2', { exact: true }))
+  await page.screenshot({
+    path: testInfo.outputPath('book-club-attendance-overflow-desktop.png'),
+    fullPage: true,
+  })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expectCounterCentered(attendance.getByText('+3', { exact: true }))
+  await expect.poll(() => attendance.evaluate((element) => (
+    element.scrollWidth <= element.clientWidth
+  ))).toBe(true)
+  await page.screenshot({
+    path: testInfo.outputPath('book-club-attendance-overflow-mobile.png'),
+    fullPage: true,
+  })
 })

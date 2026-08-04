@@ -8,6 +8,7 @@ export default function BookLinkedModuleHeader({
   toggleLabel,
   moduleTag,
   title,
+  linkTitleToBook = false,
   meta,
   bookId,
   bookTitle,
@@ -25,15 +26,27 @@ export default function BookLinkedModuleHeader({
       />
       <div className={styles.titleRow}>
         {moduleTag}
-        <strong className={styles.title}>{title}</strong>
+        {linkTitleToBook ? (
+          <Link
+            className={styles.titleLink}
+            to={`/?book=${encodeURIComponent(bookId)}`}
+            aria-label={`View ${title} in the Book Club library`}
+          >
+            <strong className={styles.title}>{title}</strong>
+          </Link>
+        ) : (
+          <strong className={styles.title}>{title}</strong>
+        )}
       </div>
-      <Link
-        className={styles.bookTag}
-        to={`/?book=${encodeURIComponent(bookId)}`}
-        aria-label={`View ${bookTitle} in the Book Club library`}
-      >
-        <span className={styles.bookTagText}>{bookTitle}</span>
-      </Link>
+      {!linkTitleToBook ? (
+        <Link
+          className={styles.bookTag}
+          to={`/?book=${encodeURIComponent(bookId)}`}
+          aria-label={`View ${bookTitle} in the Book Club library`}
+        >
+          <span className={styles.bookTagText}>{bookTitle}</span>
+        </Link>
+      ) : null}
       <span className={styles.meta}>{meta}</span>
     </div>
   );
