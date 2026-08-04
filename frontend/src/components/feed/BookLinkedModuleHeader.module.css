@@ -10,10 +10,6 @@
   @apply pointer-events-none relative z-[1] flex min-w-0 items-start gap-[7px];
 }
 
-.titleStack {
-  @apply min-w-0 flex-1;
-}
-
 .title {
   @apply block min-w-0 flex-1 truncate text-[14px] font-semibold text-ink;
 }
@@ -23,7 +19,7 @@
 }
 
 .secondaryRow {
-  @apply mt-[2px] flex min-w-0 items-center gap-2;
+  @apply pointer-events-none relative z-[1] mt-[2px] flex min-w-0 items-center gap-2;
 }
 
 .inlineMeta {

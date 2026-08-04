@@ -41,20 +41,20 @@ export default function BookLinkedModuleHeader({
       />
       <div className={styles.titleRow}>
         {moduleTag}
-        {/* Meetings link the primary title; forums reserve a second row for metadata and the book. */}
         {linkPrimaryTitle ? (
           <BookLinkPill bookId={bookId} bookTitle={linkedBookTitle} />
         ) : (
-          <div className={styles.titleStack}>
-            <strong className={styles.title}>{title}</strong>
-            <div className={styles.secondaryRow}>
-              <span className={styles.inlineMeta}>{meta}</span>
-              <BookLinkPill bookId={bookId} bookTitle={linkedBookTitle} />
-            </div>
-          </div>
+          <strong className={styles.title}>{title}</strong>
         )}
       </div>
-      {linkPrimaryTitle ? <span className={styles.meta}>{meta}</span> : null}
+      {linkPrimaryTitle ? (
+        <span className={styles.meta}>{meta}</span>
+      ) : (
+        <div className={styles.secondaryRow}>
+          <span className={styles.inlineMeta}>{meta}</span>
+          <BookLinkPill bookId={bookId} bookTitle={linkedBookTitle} />
+        </div>
+      )}
     </div>
   );
 }

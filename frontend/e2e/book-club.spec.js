@@ -440,10 +440,11 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   const meetingModuleTag = meetingHeaderRoot.locator('[data-module-type="book-club"]')
   const meetingMeta = meetingHeaderRoot.locator('span').last()
   const meetingCard = meetingHeaderRoot.locator('..')
-  const [meetingTitleBox, meetingBookBox, meetingTagBox] = await Promise.all([
+  const [meetingTitleBox, meetingBookBox, meetingTagBox, meetingMetaBox] = await Promise.all([
     meetingTitle.boundingBox(),
     meetingBookLink.boundingBox(),
     meetingModuleTag.boundingBox(),
+    meetingMeta.boundingBox(),
   ])
   await expect(meetingTitle).toHaveText('The Fifth Season')
   await expect(meetingMeta).toContainText('2030')
@@ -451,6 +452,7 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   await expect(meetingMeta).not.toContainText('Snacks')
   expect(meetingBookBox.x).toBeGreaterThan(meetingTagBox.x + meetingTagBox.width)
   expect(Math.abs(meetingBookBox.y - meetingTagBox.y)).toBeLessThan(2)
+  expect(Math.abs(meetingMetaBox.x - meetingTagBox.x)).toBeLessThan(2)
   expect(meetingTitleBox.x).toBeGreaterThan(meetingBookBox.x)
   expect(meetingTitleBox.x + meetingTitleBox.width)
     .toBeLessThan(meetingBookBox.x + meetingBookBox.width)
@@ -576,7 +578,7 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
     forumModuleTag.boundingBox(),
     forumMeta.boundingBox(),
   ])
-  expect(Math.abs(forumMetaBox.x - forumTitleBox.x)).toBeLessThan(2)
+  expect(Math.abs(forumMetaBox.x - forumTagBox.x)).toBeLessThan(2)
   expect(forumMetaBox.y).toBeGreaterThanOrEqual(forumTitleBox.y + forumTitleBox.height)
   expect(forumBookBox.x).toBeGreaterThanOrEqual(forumMetaBox.x + forumMetaBox.width)
   expect(Math.abs(forumMetaBox.y - forumBookBox.y)).toBeLessThan(2)
@@ -627,13 +629,15 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
     phoneForumTitleBox,
     phoneForumBookBox,
     phoneForumMetaBox,
+    phoneForumTagBox,
   ] = await Promise.all([
     forumHeaderRoot.boundingBox(),
     forumTitle.boundingBox(),
     forumBookLink.boundingBox(),
     forumMeta.boundingBox(),
+    forumModuleTag.boundingBox(),
   ])
-  expect(Math.abs(phoneForumMetaBox.x - phoneForumTitleBox.x)).toBeLessThan(2)
+  expect(Math.abs(phoneForumMetaBox.x - phoneForumTagBox.x)).toBeLessThan(2)
   expect(phoneForumMetaBox.y).toBeGreaterThanOrEqual(
     phoneForumTitleBox.y + phoneForumTitleBox.height,
   )
@@ -1403,16 +1407,19 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
     name: 'View The Fifth Season in the Book Club library',
   })
   const phoneMeetingModuleTag = phoneMeetingHeaderRoot.locator('[data-module-type="book-club"]')
+  const phoneMeetingMeta = phoneMeetingHeaderRoot.locator('span').last()
   const [
     phoneMeetingRootBox,
     phoneMeetingTitleBox,
     phoneMeetingBookBox,
     phoneMeetingTagBox,
+    phoneMeetingMetaBox,
   ] = await Promise.all([
     phoneMeetingHeaderRoot.boundingBox(),
     phoneMeetingTitle.boundingBox(),
     phoneMeetingBookLink.boundingBox(),
     phoneMeetingModuleTag.boundingBox(),
+    phoneMeetingMeta.boundingBox(),
   ])
   expect(phoneMeetingBookBox.x).toBeGreaterThan(
     phoneMeetingTagBox.x + phoneMeetingTagBox.width,
@@ -1420,6 +1427,7 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   expect(Math.abs(
     phoneMeetingBookBox.y - phoneMeetingTagBox.y,
   )).toBeLessThan(2)
+  expect(Math.abs(phoneMeetingMetaBox.x - phoneMeetingTagBox.x)).toBeLessThan(2)
   expect(phoneMeetingTitleBox.x).toBeGreaterThan(phoneMeetingBookBox.x)
   expect(phoneMeetingTitleBox.x + phoneMeetingTitleBox.width)
     .toBeLessThan(phoneMeetingBookBox.x + phoneMeetingBookBox.width)
