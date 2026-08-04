@@ -2,17 +2,31 @@ import { Link } from "react-router-dom";
 import { cx } from "../../utils/classNames.js";
 import styles from "./BookLinkedModuleHeader.module.css";
 
+export function BookLinkPill({ bookId, bookTitle }) {
+  return (
+    <Link
+      className={styles.bookLink}
+      to={`/?book=${encodeURIComponent(bookId)}`}
+      aria-label={`View ${bookTitle} in the Book Club library`}
+    >
+      <strong className={styles.bookLinkText}>{bookTitle}</strong>
+    </Link>
+  );
+}
+
 export default function BookLinkedModuleHeader({
   expanded,
   onToggle,
   toggleLabel,
   moduleTag,
   title,
+  bookLinkPlacement,
   meta,
   bookId,
-  bookTitle,
   className,
 }) {
+  const linkPrimaryTitle = bookLinkPlacement === "title";
+
   return (
     <div className={cx(styles.header, className)}>
       {/* The overlay keeps the whole header clickable while the linked book stays independent. */}
@@ -25,15 +39,12 @@ export default function BookLinkedModuleHeader({
       />
       <div className={styles.titleRow}>
         {moduleTag}
-        <strong className={styles.title}>{title}</strong>
+        {linkPrimaryTitle ? (
+          <BookLinkPill bookId={bookId} bookTitle={title} />
+        ) : (
+          <strong className={styles.title}>{title}</strong>
+        )}
       </div>
-      <Link
-        className={styles.bookTag}
-        to={`/?book=${encodeURIComponent(bookId)}`}
-        aria-label={`View ${bookTitle} in the Book Club library`}
-      >
-        <span className={styles.bookTagText}>{bookTitle}</span>
-      </Link>
       <span className={styles.meta}>{meta}</span>
     </div>
   );

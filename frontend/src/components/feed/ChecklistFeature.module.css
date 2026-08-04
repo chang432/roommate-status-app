@@ -32,7 +32,7 @@
 }
 
 .meta {
-  @apply mt-[2px] text-[12px] text-ink-soft;
+  @apply mt-[2px] text-left text-[12px] text-ink-soft;
 }
 
 .notifyButton {

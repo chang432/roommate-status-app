@@ -35,7 +35,7 @@
   .attendanceGroups { @apply gap-1.5; }
   .attendanceAvatar:nth-of-type(n + 4) { @apply hidden; }
   .attendanceMoreDesktop { @apply hidden; }
-  .attendanceMoreMobile { @apply inline; }
+  .attendanceMoreMobile { @apply inline-grid; }
   .meetingActions { @apply gap-1.5; }
   .meetingActions button { @apply min-h-9 whitespace-nowrap px-2 py-1.5 text-[10.5px]; }
 }

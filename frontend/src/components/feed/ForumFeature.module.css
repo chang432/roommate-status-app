@@ -21,3 +21,7 @@
 .panel {
   @apply pt-0;
 }
+
+.bookContext {
+  @apply mt-[12px] flex min-w-0;
+}

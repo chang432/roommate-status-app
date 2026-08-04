@@ -74,7 +74,7 @@ describe("BookClubMeetingFeature", () => {
   });
   afterEach(() => cleanup());
 
-  it("leads with the meeting time and keeps reading details below", async () => {
+  it("leads with the linked book and keeps the meeting goal below", async () => {
     renderMeeting();
 
     const header = screen.getByRole("button", {
@@ -84,12 +84,16 @@ describe("BookClubMeetingFeature", () => {
     const bookLink = screen.getByRole("link", {
       name: "View The Left Hand of Darkness in the Book Club library",
     });
-    expect(screen.getByText("Books").nextElementSibling).toHaveTextContent(
-      exactDateTime(MEETING.scheduledAt),
-    );
-    expect(screen.getByText("Chapter 8 · Snacks: Andre")).toBeInTheDocument();
+    expect(screen.getByText("Books").nextElementSibling).toBe(bookLink);
+    expect(bookLink).toHaveTextContent("The Left Hand of Darkness");
+    expect(screen.getByText(
+      `${exactDateTime(MEETING.scheduledAt)} · Chapter 8`,
+    )).toBeInTheDocument();
+    expect(screen.queryByText(/Snacks:/)).not.toBeInTheDocument();
     expect(bookLink).toHaveAttribute("href", "/?book=book-1");
     expect(document.querySelector("[inert]")).toBeInTheDocument();
+    await userEvent.click(bookLink);
+    expect(header).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(header);
 
     expect(header).toHaveAttribute("aria-expanded", "true");

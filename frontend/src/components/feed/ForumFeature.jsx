@@ -13,7 +13,7 @@ import { relativeTime } from "../../utils/time.js";
 import FeedComments from "../comments/FeedComments.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import ExpandableCardRegion from "./ExpandableCardRegion.jsx";
-import BookLinkedModuleHeader from "./BookLinkedModuleHeader.jsx";
+import BookLinkedModuleHeader, { BookLinkPill } from "./BookLinkedModuleHeader.jsx";
 import ModuleEditButton from "./ModuleEditButton.jsx";
 import styles from "./ForumFeature.module.css";
 
@@ -95,11 +95,12 @@ export default function ForumFeature({ forum, roommates, onForumsChange, moduleT
           moduleTag={moduleTag}
           title={forum.title}
           meta={`${forum.createdBy} · ${relativeTime(forum.createdAt)}`}
-          bookId={forum.bookId}
-          bookTitle={forum.bookTitle}
         />
 
         <ExpandableCardRegion expanded={expanded} className={styles.panel}>
+          <div className={styles.bookContext}>
+            <BookLinkPill bookId={forum.bookId} bookTitle={forum.bookTitle} />
+          </div>
           <FeedComments
             comments={forum.comments ?? []}
             commentText={commentText}
