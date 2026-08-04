@@ -160,7 +160,7 @@ export default function BookClubMeetingFeature({
           toggleLabel={`Book Club meeting for ${meeting.bookTitle}, ${meetingDateTime}, ${meeting.readingTarget}`}
           moduleTag={moduleTag}
           title={meeting.bookTitle}
-          linkTitleToBook
+          bookLinkPlacement="title"
           meta={`${meetingDateTime} · ${meeting.readingTarget}`}
           bookId={meeting.bookId}
         />

@@ -62,6 +62,8 @@ describe("ForumFeature", () => {
     });
     expect(bookLink).toHaveAttribute("href", "/?book=book-1");
     expect(header).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(bookLink);
+    expect(header).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(header);
     expect(screen.getByRole("button", { name: "Close forum Memory and survival" }))
       .toHaveAttribute("aria-expanded", "true");

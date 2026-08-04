@@ -1,5 +1,5 @@
 .header {
-  @apply relative grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-[10px];
+  @apply relative min-w-0;
 }
 
 .toggleButton {
@@ -7,7 +7,11 @@
 }
 
 .titleRow {
-  @apply pointer-events-none relative z-[1] flex min-w-0 items-center gap-[7px];
+  @apply pointer-events-none relative z-[1] flex min-w-0 items-start gap-[7px];
+}
+
+.titleStack {
+  @apply min-w-0 flex-1;
 }
 
 .title {
@@ -15,33 +19,21 @@
 }
 
 .meta {
-  @apply pointer-events-none relative z-[1] col-span-2 mt-[2px] block min-w-0 truncate text-[12px] text-ink-soft;
+  @apply pointer-events-none relative z-[1] mt-[2px] block min-w-0 truncate text-[12px] text-ink-soft;
 }
 
-.bookTag,
-.titleLink {
-  @apply relative z-[2] inline-flex min-w-0 max-w-[min(230px,42vw)] items-center rounded-full border border-line bg-surface-muted px-2 py-[2px] text-[10px] font-bold text-ink-soft transition hover:border-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft;
+.secondaryRow {
+  @apply mt-[2px] flex min-w-0 items-center gap-2;
 }
 
-.bookTag {
-  @apply justify-self-end;
+.inlineMeta {
+  @apply min-w-0 flex-1 truncate text-[12px] text-ink-soft;
 }
 
-.titleLink {
-  @apply pointer-events-auto;
+.bookLink {
+  @apply pointer-events-auto relative z-[2] inline-flex min-w-0 max-w-[min(230px,42vw)] items-center rounded-full border border-line bg-surface-muted px-2 py-[2px] text-[10px] font-bold text-ink-soft transition hover:border-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft;
 }
 
-.bookTagText {
-  @apply min-w-0 truncate;
-}
-
-/* The forum tag keeps its forgiving target; the meeting title uses its visible pill only. */
-.bookTag::before {
-  content: "";
-  position: absolute;
-  inset: -7px -4px;
-}
-
-.titleLink .title {
-  @apply text-[10px] font-bold text-inherit;
+.bookLinkText {
+  @apply min-w-0 truncate font-bold;
 }

@@ -94,6 +94,7 @@ export default function ForumFeature({ forum, roommates, onForumsChange, moduleT
           toggleLabel={`forum ${forum.title}`}
           moduleTag={moduleTag}
           title={forum.title}
+          bookLinkPlacement="subtitle"
           meta={`${forum.createdBy} · ${relativeTime(forum.createdAt)}`}
           bookId={forum.bookId}
           bookTitle={forum.bookTitle}

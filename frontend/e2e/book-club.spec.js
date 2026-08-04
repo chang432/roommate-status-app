@@ -459,6 +459,8 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
     fontSize: getComputedStyle(element).fontSize,
     fontWeight: getComputedStyle(element).fontWeight,
   }))).toMatchObject({ fontSize: '10px', fontWeight: '700' })
+  expect(await meetingTitle.evaluate((element) => getComputedStyle(element).fontSize))
+    .toBe(await meetingModuleTag.evaluate((element) => getComputedStyle(element).fontSize))
   expect(await meetingTitle.evaluate((element) => (
     getComputedStyle(element).fontFamily
   ))).not.toContain('Fraunces')
@@ -568,15 +570,18 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   const forumModuleTag = forumHeaderRoot.locator('[data-module-type="forums"]')
   const forumMeta = forumHeaderRoot.locator('span').last()
   const forumCardRoot = forumHeaderRoot.locator('..')
-  const [forumTitleBox, forumTitleRowBox, forumBookBox, forumTagBox] = await Promise.all([
+  const [forumTitleBox, forumBookBox, forumTagBox, forumMetaBox] = await Promise.all([
     forumTitle.boundingBox(),
-    forumTitle.locator('..').boundingBox(),
     forumBookLink.boundingBox(),
     forumModuleTag.boundingBox(),
+    forumMeta.boundingBox(),
   ])
-  expect(forumBookBox.x).toBeGreaterThan(forumTitleBox.x + forumTitleBox.width)
-  expect(Math.abs(forumBookBox.y - forumTitleRowBox.y)).toBeLessThan(2)
+  expect(Math.abs(forumBookBox.x - forumTitleBox.x)).toBeLessThan(2)
+  expect(forumBookBox.y).toBeGreaterThanOrEqual(forumTitleBox.y + forumTitleBox.height)
+  expect(Math.abs(forumMetaBox.y - forumBookBox.y)).toBeLessThan(2)
   expect(Math.abs(forumBookBox.height - forumTagBox.height)).toBeLessThan(1)
+  expect(await forumBookLink.evaluate((element) => getComputedStyle(element).fontSize))
+    .toBe(await forumModuleTag.evaluate((element) => getComputedStyle(element).fontSize))
   await expect.poll(() => forumTitle.evaluate((element) => ({
     fontSize: getComputedStyle(element).fontSize,
     fontWeight: getComputedStyle(element).fontWeight,
@@ -619,32 +624,30 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   const [
     phoneForumHeaderBox,
     phoneForumTitleBox,
-    phoneForumTitleRowBox,
     phoneForumBookBox,
+    phoneForumMetaBox,
   ] = await Promise.all([
     forumHeaderRoot.boundingBox(),
     forumTitle.boundingBox(),
-    forumTitle.locator('..').boundingBox(),
     forumBookLink.boundingBox(),
+    forumMeta.boundingBox(),
   ])
-  expect(phoneForumBookBox.x).toBeGreaterThan(
-    phoneForumTitleBox.x + phoneForumTitleBox.width,
+  expect(Math.abs(phoneForumBookBox.x - phoneForumTitleBox.x)).toBeLessThan(2)
+  expect(phoneForumBookBox.y).toBeGreaterThanOrEqual(
+    phoneForumTitleBox.y + phoneForumTitleBox.height,
   )
-  expect(Math.abs(phoneForumBookBox.y - phoneForumTitleRowBox.y)).toBeLessThan(2)
-  expect(Math.abs(
-    (phoneForumHeaderBox.x + phoneForumHeaderBox.width)
-      - (phoneForumBookBox.x + phoneForumBookBox.width),
-  )).toBeLessThan(2)
+  expect(Math.abs(phoneForumMetaBox.y - phoneForumBookBox.y)).toBeLessThan(2)
+  expect(phoneForumBookBox.x + phoneForumBookBox.width)
+    .toBeLessThanOrEqual(phoneForumHeaderBox.x + phoneForumHeaderBox.width)
   await expect.poll(() => page.evaluate(() => (
     document.documentElement.scrollWidth <= window.innerWidth
   ))).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('forum-module-phone.png'), fullPage: true })
 
-  const forumBookTapBox = await forumBookLink.boundingBox()
-  await page.mouse.click(
-    forumBookTapBox.x + forumBookTapBox.width / 2,
-    forumBookTapBox.y - 4,
-  )
+  await forumBookLink.click()
+  await expect(page.getByRole('button', {
+    name: 'Close forum Memory, survival, and change',
+  })).toHaveAttribute('aria-expanded', 'true')
   await expect(page).toHaveURL(/\?book=active-book$/)
   await expect(page.getByRole('dialog', { name: 'Book details' })
     .getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
