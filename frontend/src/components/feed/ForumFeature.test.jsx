@@ -38,7 +38,7 @@ describe("ForumFeature", () => {
   });
   afterEach(() => cleanup());
 
-  it("expands to flat comments and keeps the linked book visible", async () => {
+  it("reveals the linked book above comments without collapsing the forum", async () => {
     const onChanged = vi.fn();
     render(
       <MemoryRouter>
@@ -62,13 +62,18 @@ describe("ForumFeature", () => {
     });
     const creatorMeta = screen.getByText(/Andre ·/);
     expect(bookLink).toHaveAttribute("href", "/?book=book-1");
-    expect(bookLink.parentElement.nextElementSibling).toBe(creatorMeta);
-    expect(header).toHaveAttribute("aria-expanded", "false");
-    await userEvent.click(bookLink);
+    expect(bookLink.closest("[inert]")).not.toBeNull();
     expect(header).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(header);
-    expect(screen.getByRole("button", { name: "Close forum Memory and survival" }))
-      .toHaveAttribute("aria-expanded", "true");
+    const closeHeader = screen.getByRole("button", {
+      name: "Close forum Memory and survival",
+    });
+    expect(closeHeader).toHaveAttribute("aria-expanded", "true");
+    expect(bookLink.closest("[inert]")).toBeNull();
+    expect(bookLink.parentElement.nextElementSibling).toHaveTextContent("Comments");
+    await userEvent.click(bookLink);
+    expect(closeHeader).toHaveAttribute("aria-expanded", "true");
+    expect(creatorMeta).toBeInTheDocument();
     expect(screen.queryByText("Discussing")).not.toBeInTheDocument();
     expect(screen.getByText("No comments yet.")).toBeInTheDocument();
     await userEvent.type(screen.getByPlaceholderText(/Add a comment/), "The ending changed it.");

@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { cx } from "../../utils/classNames.js";
 import styles from "./BookLinkedModuleHeader.module.css";
 
-function BookLinkPill({ bookId, bookTitle }) {
+export function BookLinkPill({ bookId, bookTitle }) {
   return (
     <Link
       className={styles.bookLink}
@@ -23,11 +23,9 @@ export default function BookLinkedModuleHeader({
   bookLinkPlacement,
   meta,
   bookId,
-  bookTitle,
   className,
 }) {
   const linkPrimaryTitle = bookLinkPlacement === "title";
-  const linkedBookTitle = linkPrimaryTitle ? title : bookTitle;
 
   return (
     <div className={cx(styles.header, className)}>
@@ -42,21 +40,12 @@ export default function BookLinkedModuleHeader({
       <div className={styles.titleRow}>
         {moduleTag}
         {linkPrimaryTitle ? (
-          <BookLinkPill bookId={bookId} bookTitle={linkedBookTitle} />
+          <BookLinkPill bookId={bookId} bookTitle={title} />
         ) : (
           <strong className={styles.title}>{title}</strong>
         )}
       </div>
-      {linkPrimaryTitle ? (
-        <span className={styles.meta}>{meta}</span>
-      ) : (
-        <>
-          <div className={styles.bookRow}>
-            <BookLinkPill bookId={bookId} bookTitle={linkedBookTitle} />
-          </div>
-          <span className={styles.meta}>{meta}</span>
-        </>
-      )}
+      <span className={styles.meta}>{meta}</span>
     </div>
   );
 }

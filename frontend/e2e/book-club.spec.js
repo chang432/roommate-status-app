@@ -561,30 +561,23 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
     name: /forum Memory, survival, and change$/,
   })
   await expect(page.getByText('Memory, survival, and change')).toBeVisible()
-  await expect(page.getByRole('link', {
-    name: 'View The Fifth Season in the Book Club library',
-  })).toBeVisible()
   const forumHeaderRoot = forumCard.locator('..')
+  const forumCardRoot = forumHeaderRoot.locator('..')
+  const forumBookLinkLocator = forumCardRoot.locator(
+    'a[aria-label="View The Fifth Season in the Book Club library"]',
+  )
+  await expect(forumBookLinkLocator.locator('xpath=ancestor::*[@inert][1]'))
+    .toHaveAttribute('inert', '')
   const forumTitle = forumHeaderRoot.getByText('Memory, survival, and change', { exact: true })
-  const forumBookLink = forumHeaderRoot.getByRole('link', {
-    name: 'View The Fifth Season in the Book Club library',
-  })
   const forumModuleTag = forumHeaderRoot.locator('[data-module-type="forums"]')
   const forumMeta = forumHeaderRoot.locator('span').last()
-  const forumCardRoot = forumHeaderRoot.locator('..')
-  const [forumTitleBox, forumBookBox, forumTagBox, forumMetaBox] = await Promise.all([
+  const [forumTitleBox, forumTagBox, forumMetaBox] = await Promise.all([
     forumTitle.boundingBox(),
-    forumBookLink.boundingBox(),
     forumModuleTag.boundingBox(),
     forumMeta.boundingBox(),
   ])
   expect(Math.abs(forumMetaBox.x - forumTagBox.x)).toBeLessThan(2)
-  expect(Math.abs(forumBookBox.x - forumMetaBox.x)).toBeLessThan(2)
-  expect(forumBookBox.y).toBeGreaterThanOrEqual(forumTitleBox.y + forumTitleBox.height)
-  expect(forumMetaBox.y).toBeGreaterThanOrEqual(forumBookBox.y + forumBookBox.height)
-  expect(Math.abs(forumBookBox.height - forumTagBox.height)).toBeLessThan(1)
-  expect(await forumBookLink.evaluate((element) => getComputedStyle(element).fontSize))
-    .toBe(await forumModuleTag.evaluate((element) => getComputedStyle(element).fontSize))
+  expect(forumMetaBox.y).toBeGreaterThanOrEqual(forumTitleBox.y + forumTitleBox.height)
   await expect.poll(() => forumTitle.evaluate((element) => ({
     fontSize: getComputedStyle(element).fontSize,
     fontWeight: getComputedStyle(element).fontWeight,
@@ -605,15 +598,30 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   await expect(page.getByRole('button', {
     name: 'Close forum Memory, survival, and change',
   })).toBeVisible()
+  const forumBookLink = forumCardRoot.getByRole('link', {
+    name: 'View The Fifth Season in the Book Club library',
+  })
+  await expect(forumBookLink).toBeVisible()
   await expect(page.getByText('Discussing')).toHaveCount(0)
   const forumPanel = forumHeaderRoot.locator(
     'xpath=following-sibling::div[1]/div/div',
   )
+  const comments = forumPanel.getByText('Comments', { exact: true }).locator('..')
+  const [forumPanelBox, forumBookBox, commentsBox] = await Promise.all([
+    forumPanel.boundingBox(),
+    forumBookLink.boundingBox(),
+    comments.boundingBox(),
+  ])
+  expect(Math.abs(forumBookBox.x - forumPanelBox.x)).toBeLessThan(2)
+  expect(forumBookBox.y).toBeGreaterThanOrEqual(forumMetaBox.y + forumMetaBox.height)
+  expect(commentsBox.y).toBeGreaterThanOrEqual(forumBookBox.y + forumBookBox.height)
+  expect(Math.abs(forumBookBox.height - forumTagBox.height)).toBeLessThan(1)
+  expect(await forumBookLink.evaluate((element) => getComputedStyle(element).fontSize))
+    .toBe(await forumModuleTag.evaluate((element) => getComputedStyle(element).fontSize))
   await expect.poll(() => forumPanel.evaluate((element) => (
     getComputedStyle(element).borderTopWidth
   ))).toBe('0px')
-  await expect.poll(() => forumPanel.getByText('Comments', { exact: true })
-    .locator('..').evaluate((element) => (
+  await expect.poll(() => comments.evaluate((element) => (
       getComputedStyle(element).borderTopWidth
     ))).toBe('1px')
   await page.getByPlaceholder('Add a comment… Use @ to mention someone')
@@ -630,19 +638,24 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
     phoneForumBookBox,
     phoneForumMetaBox,
     phoneForumTagBox,
+    phoneCommentsBox,
   ] = await Promise.all([
     forumHeaderRoot.boundingBox(),
     forumTitle.boundingBox(),
     forumBookLink.boundingBox(),
     forumMeta.boundingBox(),
     forumModuleTag.boundingBox(),
+    comments.boundingBox(),
   ])
   expect(Math.abs(phoneForumMetaBox.x - phoneForumTagBox.x)).toBeLessThan(2)
   expect(Math.abs(phoneForumBookBox.x - phoneForumMetaBox.x)).toBeLessThan(2)
-  expect(phoneForumBookBox.y).toBeGreaterThanOrEqual(
+  expect(phoneForumMetaBox.y).toBeGreaterThanOrEqual(
     phoneForumTitleBox.y + phoneForumTitleBox.height,
   )
-  expect(phoneForumMetaBox.y).toBeGreaterThanOrEqual(
+  expect(phoneForumBookBox.y).toBeGreaterThanOrEqual(
+    phoneForumMetaBox.y + phoneForumMetaBox.height,
+  )
+  expect(phoneCommentsBox.y).toBeGreaterThanOrEqual(
     phoneForumBookBox.y + phoneForumBookBox.height,
   )
   expect(phoneForumBookBox.x + phoneForumBookBox.width)
