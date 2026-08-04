@@ -51,10 +51,10 @@ export default function BookLinkedModuleHeader({
         <span className={styles.meta}>{meta}</span>
       ) : (
         <>
-          <span className={styles.meta}>{meta}</span>
           <div className={styles.bookRow}>
             <BookLinkPill bookId={bookId} bookTitle={linkedBookTitle} />
           </div>
+          <span className={styles.meta}>{meta}</span>
         </>
       )}
     </div>

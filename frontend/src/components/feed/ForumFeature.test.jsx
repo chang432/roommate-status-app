@@ -62,7 +62,7 @@ describe("ForumFeature", () => {
     });
     const creatorMeta = screen.getByText(/Andre ·/);
     expect(bookLink).toHaveAttribute("href", "/?book=book-1");
-    expect(creatorMeta.nextElementSibling).toContainElement(bookLink);
+    expect(bookLink.parentElement.nextElementSibling).toBe(creatorMeta);
     expect(header).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(bookLink);
     expect(header).toHaveAttribute("aria-expanded", "false");
