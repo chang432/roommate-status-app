@@ -18,12 +18,8 @@
   @apply pointer-events-none relative z-[1] mt-[2px] block min-w-0 truncate text-[12px] text-ink-soft;
 }
 
-.secondaryRow {
-  @apply pointer-events-none relative z-[1] mt-[2px] flex min-w-0 items-center gap-2;
-}
-
-.inlineMeta {
-  @apply min-w-0 truncate text-[12px] text-ink-soft;
+.bookRow {
+  @apply pointer-events-none relative z-[1] mt-[2px] flex min-w-0;
 }
 
 .bookLink {

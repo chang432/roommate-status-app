@@ -50,10 +50,12 @@ export default function BookLinkedModuleHeader({
       {linkPrimaryTitle ? (
         <span className={styles.meta}>{meta}</span>
       ) : (
-        <div className={styles.secondaryRow}>
-          <span className={styles.inlineMeta}>{meta}</span>
-          <BookLinkPill bookId={bookId} bookTitle={linkedBookTitle} />
-        </div>
+        <>
+          <span className={styles.meta}>{meta}</span>
+          <div className={styles.bookRow}>
+            <BookLinkPill bookId={bookId} bookTitle={linkedBookTitle} />
+          </div>
+        </>
       )}
     </div>
   );
