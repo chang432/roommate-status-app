@@ -14,30 +14,34 @@
   @apply block min-w-0 flex-1 truncate text-[14px] font-semibold text-ink;
 }
 
-.titleLink {
-  @apply pointer-events-auto relative z-[2] min-w-0 flex-1 rounded-sm transition hover:text-accent-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft;
-}
-
-.titleLink .title {
-  @apply text-inherit;
-}
-
 .meta {
   @apply pointer-events-none relative z-[1] col-span-2 mt-[2px] block min-w-0 truncate text-[12px] text-ink-soft;
 }
 
+.bookTag,
+.titleLink {
+  @apply relative z-[2] inline-flex min-w-0 max-w-[min(230px,42vw)] items-center rounded-full border border-line bg-surface-muted px-2 py-[2px] text-[10px] font-bold text-ink-soft transition hover:border-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft;
+}
+
 .bookTag {
-  @apply relative z-[2] inline-flex min-w-0 max-w-[min(230px,42vw)] items-center justify-self-end rounded-full border border-line bg-surface-muted px-2 py-[2px] text-[10px] font-bold text-ink-soft transition hover:border-accent hover:text-ink;
+  @apply justify-self-end;
+}
+
+.titleLink {
+  @apply pointer-events-auto;
 }
 
 .bookTagText {
   @apply min-w-0 truncate;
 }
 
-/* Compact book links retain forgiving click and touch targets over the card toggle. */
-.bookTag::before,
-.titleLink::before {
+/* The forum tag keeps its forgiving target; the meeting title uses its visible pill only. */
+.bookTag::before {
   content: "";
   position: absolute;
   inset: -7px -4px;
+}
+
+.titleLink .title {
+  @apply text-[10px] font-bold text-inherit;
 }

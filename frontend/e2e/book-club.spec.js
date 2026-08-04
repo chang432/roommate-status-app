@@ -336,7 +336,7 @@ async function expectAttendanceRowsStacked(attendance) {
 
 async function clickMeetingHeader(toggle) {
   const box = await toggle.boundingBox()
-  await toggle.click({ position: { x: 8, y: box.height - 4 } })
+  await toggle.click({ position: { x: box.width - 8, y: 8 } })
 }
 
 test('uses the household modal for books and reviews', async ({ page }, testInfo) => {
@@ -451,15 +451,28 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   await expect(meetingMeta).not.toContainText('Snacks')
   expect(meetingBookBox.x).toBeGreaterThan(meetingTagBox.x + meetingTagBox.width)
   expect(Math.abs(meetingBookBox.y - meetingTagBox.y)).toBeLessThan(2)
-  expect(Math.abs(meetingBookBox.x - meetingTitleBox.x)).toBeLessThan(1)
+  expect(meetingTitleBox.x).toBeGreaterThan(meetingBookBox.x)
+  expect(meetingTitleBox.x + meetingTitleBox.width)
+    .toBeLessThan(meetingBookBox.x + meetingBookBox.width)
   await expect.poll(() => meetingTitle.evaluate((element) => ({
     fontFamily: getComputedStyle(element).fontFamily,
     fontSize: getComputedStyle(element).fontSize,
     fontWeight: getComputedStyle(element).fontWeight,
-  }))).toMatchObject({ fontSize: '14px', fontWeight: '600' })
+  }))).toMatchObject({ fontSize: '10px', fontWeight: '700' })
   expect(await meetingTitle.evaluate((element) => (
     getComputedStyle(element).fontFamily
   ))).not.toContain('Fraunces')
+  await expect.poll(() => meetingBookLink.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      backgroundColor: style.backgroundColor,
+      borderRadius: style.borderRadius,
+      borderWidth: style.borderWidth,
+    }
+  })).toMatchObject({ borderRadius: '9999px', borderWidth: '1px' })
+  expect(await meetingBookLink.evaluate((element) => (
+    getComputedStyle(element).backgroundColor
+  ))).not.toBe('rgba(0, 0, 0, 0)')
   await expect.poll(() => meetingMeta.evaluate((element) => ({
     fontSize: getComputedStyle(element).fontSize,
     fontWeight: getComputedStyle(element).fontWeight,
@@ -500,6 +513,9 @@ test('uses the household modal for books and reviews', async ({ page }, testInfo
   await page.screenshot({ path: testInfo.outputPath('complete-meeting-confirmation-desktop.png'), fullPage: true })
   await confirmation.getByRole('button', { name: 'Cancel' }).click()
   await meetingBookLink.click()
+  await expect(page.getByRole('button', {
+    name: /Close Book Club meeting .*Read through Chapter 9$/,
+  })).toHaveAttribute('aria-expanded', 'true')
   await expect(page).toHaveURL(/\?book=active-book$/)
   const wholeBook = page.getByRole('dialog', { name: 'Book details' })
   await expect(wholeBook.getByRole('heading', { name: 'The Fifth Season' })).toBeVisible()
@@ -1397,9 +1413,9 @@ test('keeps the two-column cards and library modal usable on a phone', async ({ 
   expect(Math.abs(
     phoneMeetingBookBox.y - phoneMeetingTagBox.y,
   )).toBeLessThan(2)
-  expect(Math.abs(
-    phoneMeetingBookBox.x - phoneMeetingTitleBox.x,
-  )).toBeLessThan(1)
+  expect(phoneMeetingTitleBox.x).toBeGreaterThan(phoneMeetingBookBox.x)
+  expect(phoneMeetingTitleBox.x + phoneMeetingTitleBox.width)
+    .toBeLessThan(phoneMeetingBookBox.x + phoneMeetingBookBox.width)
   expect(phoneMeetingBookBox.x + phoneMeetingBookBox.width)
     .toBeLessThanOrEqual(phoneMeetingRootBox.x + phoneMeetingRootBox.width)
   await clickMeetingHeader(phoneMeetingHeader)

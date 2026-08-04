@@ -92,6 +92,8 @@ describe("BookClubMeetingFeature", () => {
     expect(screen.queryByText(/Snacks:/)).not.toBeInTheDocument();
     expect(bookLink).toHaveAttribute("href", "/?book=book-1");
     expect(document.querySelector("[inert]")).toBeInTheDocument();
+    await userEvent.click(bookLink);
+    expect(header).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(header);
 
     expect(header).toHaveAttribute("aria-expanded", "true");
