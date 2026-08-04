@@ -60,7 +60,9 @@ describe("ForumFeature", () => {
     const header = screen.getByRole("button", {
       name: "Open forum Memory and survival",
     });
+    const creatorMeta = screen.getByText(/Andre ·/);
     expect(bookLink).toHaveAttribute("href", "/?book=book-1");
+    expect(creatorMeta.nextElementSibling).toBe(bookLink);
     expect(header).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(bookLink);
     expect(header).toHaveAttribute("aria-expanded", "false");

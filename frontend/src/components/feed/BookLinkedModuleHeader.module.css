@@ -27,7 +27,7 @@
 }
 
 .inlineMeta {
-  @apply min-w-0 flex-1 truncate text-[12px] text-ink-soft;
+  @apply min-w-0 truncate text-[12px] text-ink-soft;
 }
 
 .bookLink {

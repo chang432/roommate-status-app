@@ -576,8 +576,9 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
     forumModuleTag.boundingBox(),
     forumMeta.boundingBox(),
   ])
-  expect(Math.abs(forumBookBox.x - forumTitleBox.x)).toBeLessThan(2)
-  expect(forumBookBox.y).toBeGreaterThanOrEqual(forumTitleBox.y + forumTitleBox.height)
+  expect(Math.abs(forumMetaBox.x - forumTitleBox.x)).toBeLessThan(2)
+  expect(forumMetaBox.y).toBeGreaterThanOrEqual(forumTitleBox.y + forumTitleBox.height)
+  expect(forumBookBox.x).toBeGreaterThanOrEqual(forumMetaBox.x + forumMetaBox.width)
   expect(Math.abs(forumMetaBox.y - forumBookBox.y)).toBeLessThan(2)
   expect(Math.abs(forumBookBox.height - forumTagBox.height)).toBeLessThan(1)
   expect(await forumBookLink.evaluate((element) => getComputedStyle(element).fontSize))
@@ -632,9 +633,12 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
     forumBookLink.boundingBox(),
     forumMeta.boundingBox(),
   ])
-  expect(Math.abs(phoneForumBookBox.x - phoneForumTitleBox.x)).toBeLessThan(2)
-  expect(phoneForumBookBox.y).toBeGreaterThanOrEqual(
+  expect(Math.abs(phoneForumMetaBox.x - phoneForumTitleBox.x)).toBeLessThan(2)
+  expect(phoneForumMetaBox.y).toBeGreaterThanOrEqual(
     phoneForumTitleBox.y + phoneForumTitleBox.height,
+  )
+  expect(phoneForumBookBox.x).toBeGreaterThanOrEqual(
+    phoneForumMetaBox.x + phoneForumMetaBox.width,
   )
   expect(Math.abs(phoneForumMetaBox.y - phoneForumBookBox.y)).toBeLessThan(2)
   expect(phoneForumBookBox.x + phoneForumBookBox.width)
