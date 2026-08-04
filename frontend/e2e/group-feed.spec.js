@@ -54,7 +54,15 @@ function feedFixture() {
       title: 'Kitchen reset',
       createdBy: 'Andre',
       createdById: 'andre',
-      items: [{ id: 'item-1', text: 'Wipe counters', checkedBy: [], checkedByIds: [] }],
+      items: [
+        {
+          id: 'item-1',
+          text: 'Wipe counters',
+          checkedBy: [{ id: 'kayla', name: 'Kayla' }],
+          checkedByIds: ['kayla'],
+        },
+        { id: 'item-2', text: 'Take out trash', checkedBy: [], checkedByIds: [] },
+      ],
     }),
     feedItem('polls', {
       ...base,
@@ -176,10 +184,23 @@ test('keeps every registered feed card usable at desktop and phone widths', asyn
     await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click()
     const cardToggle = page.getByRole('button', { name: new RegExp(card) })
     await expect(cardToggle).toBeVisible()
+    if (tab === 'Checklists') {
+      await expect(cardToggle).toContainText('1 of 2 complete')
+    }
     if (tab === 'Polls') await expect(cardToggle).toContainText('2 voters')
     await cardToggle.click()
     await expect(cardToggle).toHaveAttribute('aria-expanded', 'true')
   }
+
+  await page.getByRole('tab', { name: /^Checklists/ }).click()
+  const desktopChecklistCard = page.getByRole('button', { name: /Kitchen reset/ })
+  await expect(desktopChecklistCard)
+    .toContainText('Andre · just now · 1 of 2 complete')
+  await expectNoHorizontalOverflow(page)
+  await page.screenshot({
+    path: testInfo.outputPath('checklist-card-desktop.png'),
+    fullPage: true,
+  })
 
   await page.getByRole('tab', { name: /^Polls/ }).click()
   const desktopPollCard = page.getByRole('button', { name: /Dinner\?/ })
@@ -196,6 +217,16 @@ test('keeps every registered feed card usable at desktop and phone widths', asyn
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Group Feed' })).toBeVisible()
   await expectNoHorizontalOverflow(page)
+  await page.getByRole('tab', { name: /^Checklists/ }).click()
+  const phoneChecklistCard = page.getByRole('button', { name: /Kitchen reset/ })
+  await expect(phoneChecklistCard)
+    .toContainText('Andre · just now · 1 of 2 complete')
+  await expectNoHorizontalOverflow(page)
+  await page.screenshot({
+    path: testInfo.outputPath('checklist-card-phone.png'),
+    fullPage: true,
+  })
+
   await page.getByRole('tab', { name: /^Polls/ }).click()
   const pollCard = page.getByRole('button', { name: /Dinner\?/ })
   await expect(pollCard).toContainText('2 voters')

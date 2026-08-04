@@ -62,6 +62,15 @@ function ChecklistItemEditor({
   );
 }
 
+function checklistProgress(items) {
+  if (items.length === 0) return "No items yet";
+  // One or more roommate checks completes an item; extra checkers do not increase progress.
+  const completedItems = items.filter(
+    (item) => (item.checkedByIds ?? []).length > 0,
+  ).length;
+  return `${completedItems} of ${items.length} complete`;
+}
+
 export default function ChecklistFeature({
   checklist,
   onChecklistsChange,
@@ -247,6 +256,8 @@ export default function ChecklistFeature({
 
   const expanded = expandedId === checklist.id;
   const isArchived = checklist.isArchived;
+  const items = checklist.items ?? [];
+  const progress = checklistProgress(items);
 
   return (
     <div className={styles.wrap}>
@@ -271,7 +282,8 @@ export default function ChecklistFeature({
               <p className={styles.title}>{checklist.title}</p>
             </div>
             <p className={styles.meta}>
-              {checklist.createdBy} · {relativeTime(checklist.createdAt)}
+              {checklist.createdBy} · {relativeTime(checklist.createdAt)} ·{" "}
+              {progress}
             </p>
           </div>
           {!isArchived && (
@@ -297,7 +309,7 @@ export default function ChecklistFeature({
             onKeyDown={(event) => event.stopPropagation()}
           >
             <ul className={styles.items}>
-              {checklist.items.map((item) => {
+              {items.map((item) => {
                 const checkedByCount = (item.checkedByIds ?? []).length;
                 const checkedByUser = (item.checkedByIds ?? []).includes(
                   user.id,
