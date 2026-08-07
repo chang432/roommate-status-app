@@ -22,6 +22,7 @@ const COUNTER = {
   title: "Plants watered",
   mode: "manual",
   currentValue: 2,
+  timeZone: "UTC",
   createdById: "andre",
   createdBy: "Andre",
   createdAt: 1,
@@ -36,7 +37,7 @@ const DETAIL = {
     kind: "baseline",
     value: 2,
     resultingValue: 2,
-    occurredAt: 1,
+    occurredDate: "2024-01-01",
     createdAt: 1,
     createdById: "andre",
     createdBy: "Andre",
@@ -73,6 +74,7 @@ describe("CounterFeature", () => {
     await waitFor(() => expect(countersApi.addCounterEntry).toHaveBeenCalledWith("counter-1", {
       userId: "andre",
       delta: 1,
+      occurredDate: expect.any(String),
       note: "",
     }));
     expect(onCountersChange).toHaveBeenCalled();
@@ -87,14 +89,14 @@ describe("CounterFeature", () => {
   });
 
   it("renders automatic counters only in completed days", async () => {
-    const lastIncidentAt = Date.now() - (2 * 24 * 60 * 60 * 1000 + 12 * 60 * 60 * 1000);
+    const lastIncidentDate = "2024-01-01";
     countersApi.getCounter.mockResolvedValueOnce({
-      counter: { ...COUNTER, mode: "automatic", lastIncidentAt, currentValue: 2 },
-      entries: [{ ...DETAIL.entries[0], kind: "incident", occurredAt: lastIncidentAt }],
+      counter: { ...COUNTER, mode: "automatic", lastIncidentDate, currentValue: 2 },
+      entries: [{ ...DETAIL.entries[0], kind: "incident", occurredDate: lastIncidentDate }],
       nextCursor: null,
     });
-    renderCounter({ mode: "automatic", lastIncidentAt, currentValue: 2 });
-    expect(screen.getByRole("button", { name: /Counters Plants watered/ })).toHaveTextContent("2 days");
+    renderCounter({ mode: "automatic", lastIncidentDate, currentValue: 2 });
+    expect(screen.getByRole("button", { name: /Counters Plants watered/ })).toHaveTextContent("days");
     await userEvent.click(screen.getByRole("button", { name: /Counters Plants watered/ }));
     expect(await screen.findByRole("button", { name: "Log incident" })).toBeInTheDocument();
   });

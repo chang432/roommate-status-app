@@ -6,11 +6,11 @@ def _create_counter(client, *, mode="automatic", creator="andre", **changes):
         "title": "Days since a spill",
         "mode": mode,
         "createdById": creator,
-        "occurredAt": 1_700_000_000_000,
+        "occurredDate": "2023-11-11",
+        "timeZone": "UTC",
         "note": "Starting point",
     }
     if mode == "manual":
-        body.pop("occurredAt")
         body["initialValue"] = 2
     body.update(changes)
     response = client.post("/api/counters", json=body)
@@ -23,14 +23,13 @@ def test_automatic_counter_tracks_days_and_incident_streaks(client, monkeypatch)
     monkeypatch.setattr(household_counters.time, "time", lambda: now)
     counter = _create_counter(
         client,
-        occurredAt=(now - 3 * 24 * 60 * 60) * 1000,
+        occurredDate="2023-11-11",
     )
     assert counter["currentValue"] == 3
 
-    second_at = (now - 24 * 60 * 60) * 1000
     response = client.post(
         f"/api/counters/{counter['id']}/entries",
-        json={"userId": "kayla", "occurredAt": second_at, "note": "Again"},
+        json={"userId": "kayla", "occurredDate": "2023-11-13", "note": "Again"},
     )
     assert response.status_code == 200
     assert response.get_json()["counter"]["currentValue"] == 1
@@ -40,12 +39,72 @@ def test_automatic_counter_tracks_days_and_incident_streaks(client, monkeypatch)
     assert detail["entries"][1]["daysUntilNext"] == 2
 
 
+def test_automatic_counter_uses_calendar_dates_in_counter_timezone(client, monkeypatch):
+    clock = [1_704_150_000]  # 2024-01-01 23:00 UTC / 2024-01-01 15:00 Pacific.
+    monkeypatch.setattr(household_counters.time, "time", lambda: clock[0])
+    counter = _create_counter(
+        client,
+        occurredDate="2024-01-01",
+        timeZone="America/Los_Angeles",
+    )
+    assert counter["currentValue"] == 0
+
+    clock[0] = 1_704_182_400  # 2024-01-02 08:00 UTC / midnight Pacific.
+    refreshed = client.get(
+        f"/api/counters/{counter['id']}?userId=andre"
+    ).get_json()["counter"]
+    assert refreshed["currentValue"] == 1
+
+    same_day = client.post(
+        f"/api/counters/{counter['id']}/entries",
+        json={"userId": "kayla", "occurredDate": "2024-01-02"},
+    )
+    assert same_day.status_code == 200
+    assert same_day.get_json()["counter"]["currentValue"] == 0
+
+
+def test_counter_rejects_future_dates_and_unknown_timezones(client, monkeypatch):
+    monkeypatch.setattr(household_counters.time, "time", lambda: 1_700_000_000)
+    future = _create_counter(client)
+    assert future["lastIncidentDate"] == "2023-11-11"
+    rejected_entry = client.post(
+        f"/api/counters/{future['id']}/entries",
+        json={"userId": "andre", "occurredDate": "2023-11-15"},
+    )
+    assert rejected_entry.status_code == 400
+    rejected_create = client.post(
+        "/api/counters",
+        json={
+            "title": "Future date",
+            "mode": "automatic",
+            "createdById": "andre",
+            "occurredDate": "2023-11-15",
+            "timeZone": "UTC",
+        },
+    )
+    assert rejected_create.status_code == 400
+    rejected_counter = client.post(
+        "/api/counters",
+        json={
+            "title": "Unknown zone",
+            "mode": "automatic",
+            "createdById": "andre",
+            "occurredDate": "2023-11-11",
+            "timeZone": "Mars/Olympus",
+        },
+    )
+    assert rejected_counter.status_code == 400
+
+
 def test_manual_counter_history_can_be_corrected_without_going_negative(client):
     counter = _create_counter(client, mode="manual")
-    for delta in (1, 1, -1):
+    for delta, occurred_date in zip(
+        (1, 1, -1),
+        ("2023-11-12", "2023-11-13", "2023-11-14"),
+    ):
         response = client.post(
             f"/api/counters/{counter['id']}/entries",
-            json={"userId": "kayla", "delta": delta},
+            json={"userId": "kayla", "delta": delta, "occurredDate": occurred_date},
         )
         assert response.status_code == 200
     assert response.get_json()["counter"]["currentValue"] == 3

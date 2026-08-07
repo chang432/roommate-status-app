@@ -2,14 +2,15 @@ import { useState } from "react";
 import { createCounter } from "../../api/counters.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { cx } from "../../utils/classNames.js";
-import { fromDateTimeLocal, toDateTimeLocal } from "../../utils/time.js";
+import { dateInTimeZone } from "../../utils/counters.js";
 import styles from "./CounterForm.module.css";
 
 export default function CounterCreateForm({ onCountersChange, onSuccess, onCancel }) {
   const { user } = useAuth();
+  const [timeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState("automatic");
-  const [occurredAt, setOccurredAt] = useState(() => toDateTimeLocal(Date.now()));
+  const [occurredDate, setOccurredDate] = useState(() => dateInTimeZone(Date.now(), timeZone));
   const [initialValue, setInitialValue] = useState("0");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
@@ -17,11 +18,11 @@ export default function CounterCreateForm({ onCountersChange, onSuccess, onCance
 
   async function submit(event) {
     event.preventDefault();
-    const timestamp = fromDateTimeLocal(occurredAt);
     const startingValue = Number(initialValue);
+    const today = dateInTimeZone(Date.now(), timeZone);
     if (!title.trim() || sending) return;
-    if (mode === "automatic" && (!timestamp || timestamp > Date.now())) {
-      setError("Choose an incident time that is not in the future.");
+    if (occurredDate > today) {
+      setError("Choose a date that is not in the future.");
       return;
     }
     if (mode === "manual" && (!Number.isSafeInteger(startingValue) || startingValue < 0)) {
@@ -35,9 +36,9 @@ export default function CounterCreateForm({ onCountersChange, onSuccess, onCance
         title: title.trim(),
         mode,
         createdById: user.id,
-        ...(mode === "automatic"
-          ? { occurredAt: timestamp }
-          : { initialValue: startingValue }),
+        occurredDate,
+        timeZone,
+        ...(mode === "manual" ? { initialValue: startingValue } : {}),
         note: note.trim(),
       });
       await onCountersChange();
@@ -72,14 +73,20 @@ export default function CounterCreateForm({ onCountersChange, onSuccess, onCance
 
       {mode === "automatic" ? (
         <label className={styles.field}>
-          <span className={styles.fieldLabel}>Last incident</span>
-          <input type="datetime-local" step="60" max={toDateTimeLocal(Date.now())} className={cx("ui-textInput", styles.input)} value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} disabled={sending} />
+          <span className={styles.fieldLabel}>Last incident date</span>
+          <input type="date" max={dateInTimeZone(Date.now(), timeZone)} className={cx("ui-textInput", styles.input)} value={occurredDate} onChange={(event) => setOccurredDate(event.target.value)} disabled={sending} />
         </label>
       ) : (
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Starting value</span>
-          <input type="number" min="0" step="1" className={cx("ui-textInput", styles.input)} value={initialValue} onChange={(event) => setInitialValue(event.target.value)} disabled={sending} />
-        </label>
+        <>
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Starting value</span>
+            <input type="number" min="0" step="1" className={cx("ui-textInput", styles.input)} value={initialValue} onChange={(event) => setInitialValue(event.target.value)} disabled={sending} />
+          </label>
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Starting date</span>
+            <input type="date" max={dateInTimeZone(Date.now(), timeZone)} className={cx("ui-textInput", styles.input)} value={occurredDate} onChange={(event) => setOccurredDate(event.target.value)} disabled={sending} />
+          </label>
+        </>
       )}
 
       <label className={styles.field}>

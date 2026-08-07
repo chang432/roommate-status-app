@@ -34,7 +34,8 @@ describe("CounterCreateForm", () => {
       mode: "automatic",
       createdById: "andre",
       note: "Clean slate",
-      occurredAt: expect.any(Number),
+      occurredDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      timeZone: expect.any(String),
     })));
     expect(onCountersChange).toHaveBeenCalledOnce();
     expect(onSuccess).toHaveBeenCalledOnce();
@@ -52,6 +53,7 @@ describe("CounterCreateForm", () => {
     await waitFor(() => expect(createCounter).toHaveBeenCalledWith(expect.objectContaining({
       mode: "manual",
       initialValue: 4,
+      occurredDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     })));
   });
 });

@@ -11,15 +11,19 @@ import {
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useExpandOnModuleFocus } from "../../context/ModuleFocusContext.jsx";
 import { cx } from "../../utils/classNames.js";
-import { completedDaysSince, counterValueLabel, DAY_MS } from "../../utils/counters.js";
-import { exactDateTime, fromDateTimeLocal, relativeTime, toDateTimeLocal } from "../../utils/time.js";
+import {
+  completedDaysSince,
+  counterValueLabel,
+  dateInTimeZone,
+  formatCounterDate,
+} from "../../utils/counters.js";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import ExpandableCardRegion from "./ExpandableCardRegion.jsx";
 import ModuleEditButton from "./ModuleEditButton.jsx";
 import styles from "./CounterFeature.module.css";
 
-function HistoryEditor({ entry, busy, onSave, onCancel }) {
-  const [occurredAt, setOccurredAt] = useState(() => toDateTimeLocal(entry.occurredAt));
+function HistoryEditor({ entry, timeZone, busy, onSave, onCancel }) {
+  const [occurredDate, setOccurredDate] = useState(entry.occurredDate);
   const [note, setNote] = useState(entry.note ?? "");
   const [delta, setDelta] = useState(entry.delta ?? 1);
   const [value, setValue] = useState(entry.value ?? 0);
@@ -33,13 +37,13 @@ function HistoryEditor({ entry, busy, onSave, onCancel }) {
           note: note.trim(),
           ...(entry.kind === "baseline"
             ? { value: Number(value) }
-            : { occurredAt: fromDateTimeLocal(occurredAt) }),
+            : { occurredDate }),
           ...(entry.kind === "adjustment" ? { delta: Number(delta) } : {}),
         });
       }}
     >
       {entry.kind !== "baseline" && (
-        <label><span>Date and time</span><input type="datetime-local" step="60" max={toDateTimeLocal(Date.now())} className="ui-textInput" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} required /></label>
+        <label><span>Date</span><input type="date" max={dateInTimeZone(Date.now(), timeZone)} className="ui-textInput" value={occurredDate} onChange={(event) => setOccurredDate(event.target.value)} required /></label>
       )}
       {entry.kind === "adjustment" && (
         <label><span>Change</span><select className="ui-textInput" value={delta} onChange={(event) => setDelta(event.target.value)}><option value="1">Increase by 1</option><option value="-1">Decrease by 1</option></select></label>
@@ -73,30 +77,33 @@ export default function CounterFeature({ counter, moduleTag, onCountersChange, o
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
-  const [incidentAt, setIncidentAt] = useState(() => toDateTimeLocal(Date.now()));
+  const [incidentDate, setIncidentDate] = useState(() => dateInTimeZone(Date.now(), counter.timeZone));
   const [editingId, setEditingId] = useState(null);
-  const [now, setNow] = useState(Date.now());
+  const [today, setToday] = useState(() => dateInTimeZone(Date.now(), counter.timeZone));
   const { confirm, confirmationDialog } = useConfirmDialog();
   useExpandOnModuleFocus(setExpandedId);
 
   const expanded = expandedId === counter.id;
   const liveValue = counter.mode === "automatic"
-    ? completedDaysSince(counter.lastIncidentAt, now)
+    ? completedDaysSince(counter.lastIncidentDate, today)
     : counter.currentValue;
 
   useEffect(() => {
     if (counter.mode !== "automatic") return undefined;
-    const elapsed = Math.max(0, Date.now() - counter.lastIncidentAt);
-    const timeout = window.setTimeout(() => setNow(Date.now()), DAY_MS - (elapsed % DAY_MS) + 50);
-    const refresh = () => setNow(Date.now());
+    const refresh = () => setToday(dateInTimeZone(Date.now(), counter.timeZone));
+    const interval = window.setInterval(refresh, 60_000);
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
-      window.clearTimeout(timeout);
+      window.clearInterval(interval);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [counter.lastIncidentAt, counter.mode, now]);
+  }, [counter.lastIncidentDate, counter.mode, counter.timeZone]);
+
+  useEffect(() => {
+    setToday(dateInTimeZone(Date.now(), counter.timeZone));
+  }, [counter.timeZone]);
 
   const loadDetail = useCallback(async (cursor = "", append = false) => {
     setLoading(true);
@@ -135,21 +142,30 @@ export default function CounterFeature({ counter, moduleTag, onCountersChange, o
   }
 
   async function adjust(delta) {
-    const saved = await mutate(`adjust-${delta}`, () => addCounterEntry(counter.id, { userId: user.id, delta, note: note.trim() }));
+    const saved = await mutate(`adjust-${delta}`, () => addCounterEntry(counter.id, {
+      userId: user.id,
+      delta,
+      occurredDate: dateInTimeZone(Date.now(), counter.timeZone),
+      note: note.trim(),
+    }));
     if (saved) setNote("");
   }
 
   async function logIncident(event) {
     event.preventDefault();
-    const occurredAt = fromDateTimeLocal(incidentAt);
-    if (!occurredAt || occurredAt > Date.now()) {
-      setError("Choose an incident time that is not in the future.");
+    const todayDate = dateInTimeZone(Date.now(), counter.timeZone);
+    if (!incidentDate || incidentDate > todayDate) {
+      setError("Choose an incident date that is not in the future.");
       return;
     }
-    const saved = await mutate("incident", () => addCounterEntry(counter.id, { userId: user.id, occurredAt, note: note.trim() }));
+    const saved = await mutate("incident", () => addCounterEntry(counter.id, {
+      userId: user.id,
+      occurredDate: incidentDate,
+      note: note.trim(),
+    }));
     if (saved) {
       setNote("");
-      setIncidentAt(toDateTimeLocal(Date.now()));
+      setIncidentDate(dateInTimeZone(Date.now(), counter.timeZone));
     }
   }
 
@@ -185,7 +201,7 @@ export default function CounterFeature({ counter, moduleTag, onCountersChange, o
         }}>
           <span className={styles.summaryText}>
             <span className={styles.titleRow}>{moduleTag}<strong className={styles.title}>{counter.title}</strong></span>
-            <span className={styles.meta}>{counter.mode === "automatic" ? "Days since last incident" : "Manual counter"} · {relativeTime(counter.updatedAt)}</span>
+            <span className={styles.meta}>{counter.mode === "automatic" ? `Days since last incident · Last incident ${formatCounterDate(counter.lastIncidentDate)}` : "Manual counter"}</span>
           </span>
           <span className={styles.value}>{counterValueLabel(counter.mode, liveValue)}</span>
         </button>
@@ -193,7 +209,7 @@ export default function CounterFeature({ counter, moduleTag, onCountersChange, o
         <ExpandableCardRegion expanded={expanded} className={styles.panel}>
           {!counter.isArchived && counter.mode === "automatic" && (
             <form className={styles.incidentForm} onSubmit={logIncident}>
-              <label><span>Incident date and time</span><input type="datetime-local" step="60" max={toDateTimeLocal(Date.now())} className="ui-textInput" value={incidentAt} onChange={(event) => setIncidentAt(event.target.value)} /></label>
+              <label><span>Incident date</span><input type="date" max={dateInTimeZone(Date.now(), counter.timeZone)} className="ui-textInput" value={incidentDate} onChange={(event) => setIncidentDate(event.target.value)} /></label>
               <label className={styles.noteField}><span>Note (optional)</span><input className="ui-textInput" maxLength={280} value={note} onChange={(event) => setNote(event.target.value)} placeholder="What happened?" /></label>
               <button type="submit" className="ui-pillButton ui-pillPrimary" disabled={Boolean(busy)}>{busy === "incident" ? "Logging…" : "Log incident"}</button>
             </form>
@@ -220,6 +236,7 @@ export default function CounterFeature({ counter, moduleTag, onCountersChange, o
                     {editingId === entry.id ? (
                       <HistoryEditor
                         entry={entry}
+                        timeZone={counter.timeZone}
                         busy={busy === `edit-${entry.id}`}
                         onCancel={() => setEditingId(null)}
                         onSave={async (changes) => {
@@ -231,7 +248,7 @@ export default function CounterFeature({ counter, moduleTag, onCountersChange, o
                       <>
                         <div className={styles.historyCopy}>
                           <strong>{historyLabel(entry, counter.mode, liveValue)}</strong>
-                          <span>{exactDateTime(entry.occurredAt)} · {entry.createdBy}{entry.editedAt ? ` · edited by ${entry.editedBy}` : ""}</span>
+                          <span>{formatCounterDate(entry.occurredDate)} · {entry.createdBy}{entry.editedAt ? ` · edited by ${entry.editedBy}` : ""}</span>
                           {entry.note && <p>{entry.note}</p>}
                         </div>
                         {!counter.isArchived && (

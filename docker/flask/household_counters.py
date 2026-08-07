@@ -5,11 +5,14 @@ from __future__ import annotations
 import base64
 import binascii
 import copy
+import datetime as dt
 import os
+import re
 import threading
 import time
 import uuid
 from decimal import Decimal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
@@ -24,7 +27,8 @@ RECENT_LIMIT = 10
 HISTORY_PAGE_SIZE = 20
 MAX_TEXT_LENGTH = 280
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
-DAY_MS = 24 * 60 * 60 * 1000
+DEFAULT_TIME_ZONE = "UTC"
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 AUTOMATIC = "automatic"
 MANUAL = "manual"
@@ -63,12 +67,46 @@ def _counter_key(group_id: str, counter_id: str) -> str:
     return f"{group_id}#{counter_id}"
 
 
-def _entry_sort(occurred_at: int, entry_id: str) -> str:
-    return f"{int(occurred_at):013d}#{entry_id}"
+def _entry_sort(occurred_date: str, entry_id: str) -> str:
+    return f"{occurred_date}#{entry_id}"
 
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def _time_zone(value: str | None) -> ZoneInfo | None:
+    if not isinstance(value, str) or not value:
+        return ZoneInfo(DEFAULT_TIME_ZONE)
+    try:
+        return ZoneInfo(value)
+    except (ValueError, ZoneInfoNotFoundError):
+        return None
+
+
+def _today_date(time_zone: str | None) -> dt.date:
+    zone = _time_zone(time_zone) or ZoneInfo(DEFAULT_TIME_ZONE)
+    # Derive from the injectable clock so date-boundary behavior remains testable.
+    return dt.datetime.fromtimestamp(time.time(), zone).date()
+
+
+def _parse_date(value) -> dt.date | None:
+    if not isinstance(value, str) or not DATE_RE.fullmatch(value):
+        return None
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _valid_date(value) -> bool:
+    return _parse_date(value) is not None
+
+
+def _date_delta(later: str, earlier: str) -> int:
+    later_date = later if isinstance(later, dt.date) else _parse_date(later)
+    earlier_date = earlier if isinstance(earlier, dt.date) else _parse_date(earlier)
+    return (later_date - earlier_date).days
 
 
 def _now_after(item: dict) -> int:
@@ -103,9 +141,9 @@ def _raw_entries(counter_id: str, group_id: str) -> list[dict]:
 
 def _entry_order(entry: dict):
     # A baseline is the first state even when an immediate adjustment shares
-    # its millisecond timestamp.
+    # its calendar date.
     return (
-        int(entry["occurredAt"]),
+        entry["occurredDate"],
         0 if entry["kind"] == BASELINE else 1,
         entry["entryId"],
     )
@@ -115,7 +153,7 @@ def _project_entry(entry: dict) -> dict:
     projected = {
         "id": entry["entryId"],
         "kind": entry["kind"],
-        "occurredAt": int(entry["occurredAt"]),
+        "occurredDate": entry["occurredDate"],
         "createdAt": int(entry["createdAt"]),
         "createdById": entry["createdById"],
         "createdBy": entry.get("createdBy", "Someone"),
@@ -143,12 +181,20 @@ def _derive(parent: dict, entries: list[dict]) -> tuple[dict, list[dict]]:
             if index + 1 < len(projected):
                 entry["daysUntilNext"] = max(
                     0,
-                    (projected[index + 1]["occurredAt"] - entry["occurredAt"])
-                    // DAY_MS,
+                    _date_delta(
+                        projected[index + 1]["occurredDate"],
+                        entry["occurredDate"],
+                    ),
                 )
         summary = {
-            "lastIncidentAt": int(entries[-1]["occurredAt"]),
-            "currentValue": max(0, (_now_ms() - int(entries[-1]["occurredAt"])) // DAY_MS),
+            "lastIncidentDate": entries[-1]["occurredDate"],
+            "currentValue": max(
+                0,
+                _date_delta(
+                    _today_date(parent.get("timeZone")),
+                    entries[-1]["occurredDate"],
+                ),
+            ),
         }
         return summary, projected
 
@@ -175,16 +221,23 @@ def _project(parent: dict) -> dict:
         "mode": parent["mode"],
         "createdById": parent["createdById"],
         "createdBy": parent.get("createdBy", "Someone"),
+        "timeZone": parent.get("timeZone", DEFAULT_TIME_ZONE),
         "createdAt": int(parent["createdAt"]),
         "updatedAt": int(parent.get("updatedAt", parent["createdAt"])),
         "isArchived": bool(parent.get("isArchived", False)),
         "version": int(parent.get("version", 0)),
     }
     if parent["mode"] == AUTOMATIC:
-        last_incident_at = int(parent["lastIncidentAt"])
+        last_incident_date = parent["lastIncidentDate"]
         result.update(
-            lastIncidentAt=last_incident_at,
-            currentValue=max(0, (_now_ms() - last_incident_at) // DAY_MS),
+            lastIncidentDate=last_incident_date,
+            currentValue=max(
+                0,
+                _date_delta(
+                    _today_date(parent.get("timeZone")),
+                    last_incident_date,
+                ),
+            ),
         )
     else:
         result["currentValue"] = int(parent.get("currentValue", 0))
@@ -207,18 +260,6 @@ def _valid_text(value, *, required: bool) -> str | None:
     return cleaned
 
 
-def _valid_timestamp(value) -> bool:
-    is_integer = isinstance(value, int) or (
-        isinstance(value, Decimal) and value == value.to_integral_value()
-    )
-    return (
-        is_integer
-        and not isinstance(value, bool)
-        and value >= 0
-        and value <= _now_ms()
-    )
-
-
 def _valid_value(value) -> bool:
     is_integer = isinstance(value, int) or (
         isinstance(value, Decimal) and value == value.to_integral_value()
@@ -235,7 +276,7 @@ def _entry_item(
     kind: str,
     actor_id: str,
     actor_name: str,
-    occurred_at: int,
+    occurred_date: str,
     note: str,
     *,
     delta: int | None = None,
@@ -247,10 +288,10 @@ def _entry_item(
         "itemType": "counterEntry",
         "counterId": parent["counterId"],
         "counterKey": _counter_key(parent["groupId"], parent["counterId"]),
-        "entrySort": _entry_sort(occurred_at, entry_id),
+        "entrySort": _entry_sort(occurred_date, entry_id),
         "entryId": entry_id,
         "kind": kind,
-        "occurredAt": occurred_at,
+        "occurredDate": occurred_date,
         "createdAt": _now_ms(),
         "createdById": actor_id,
         "createdBy": actor_name,
@@ -329,7 +370,8 @@ def add_counter(
     creator_name: str,
     group_id: str,
     *,
-    occurred_at: int | None = None,
+    occurred_date: str | None = None,
+    time_zone: str | None = None,
     initial_value: int | None = None,
     note: str = "",
 ):
@@ -337,6 +379,9 @@ def add_counter(
     note = _valid_text(note, required=False)
     if title is None or note is None or mode not in {AUTOMATIC, MANUAL}:
         return INVALID
+    if _time_zone(time_zone) is None:
+        return INVALID
+    time_zone = time_zone or DEFAULT_TIME_ZONE
     now = _now_ms()
     counter_id = uuid.uuid4().hex
     parent = {
@@ -347,21 +392,26 @@ def add_counter(
         "mode": mode,
         "createdById": creator_id,
         "createdBy": creator_name,
+        "timeZone": time_zone,
         "createdAt": now,
         "updatedAt": now,
         "isArchived": False,
         "version": 0,
     }
     if mode == AUTOMATIC:
-        if not _valid_timestamp(occurred_at):
+        occurred_date = occurred_date or _today_date(time_zone).isoformat()
+        if not _valid_date(occurred_date) or _parse_date(occurred_date) > _today_date(time_zone):
             return INVALID
-        entry = _entry_item(parent, INCIDENT, creator_id, creator_name, occurred_at, note)
-        parent["lastIncidentAt"] = occurred_at
+        entry = _entry_item(parent, INCIDENT, creator_id, creator_name, occurred_date, note)
+        parent["lastIncidentDate"] = occurred_date
     else:
         if not _valid_value(initial_value):
             return INVALID
+        occurred_date = occurred_date or _today_date(time_zone).isoformat()
+        if not _valid_date(occurred_date) or _parse_date(occurred_date) > _today_date(time_zone):
+            return INVALID
         entry = _entry_item(
-            parent, BASELINE, creator_id, creator_name, now, note, value=initial_value
+            parent, BASELINE, creator_id, creator_name, occurred_date, note, value=initial_value
         )
         parent["currentValue"] = initial_value
     _commit_new(parent, entry)
@@ -448,23 +498,26 @@ def _mutate_entries(counter_id: str, actor: dict, mutate):
 
 def add_entry(counter_id: str, actor: dict, payload: dict):
     note = _valid_text(payload.get("note", ""), required=False)
-    occurred_at = payload.get("occurredAt", _now_ms())
-    if note is None or not _valid_timestamp(occurred_at):
+    occurred_date = payload.get("occurredDate")
+    if note is None or (occurred_date is not None and not _valid_date(occurred_date)):
         return INVALID
 
     def mutate(parent, entries):
+        date = occurred_date or _today_date(parent.get("timeZone")).isoformat()
+        if _parse_date(date) > _today_date(parent.get("timeZone")):
+            return INVALID
+        if parent["mode"] == MANUAL and date < entries[0]["occurredDate"]:
+            return INVALID
         if parent["mode"] == AUTOMATIC:
-            entry = _entry_item(parent, INCIDENT, actor["id"], actor["name"], occurred_at, note)
+            entry = _entry_item(parent, INCIDENT, actor["id"], actor["name"], date, note)
         else:
             delta = payload.get("delta")
             if delta not in {-1, 1} or isinstance(delta, bool):
                 return INVALID
             entry = _entry_item(
-                parent, ADJUSTMENT, actor["id"], actor["name"], occurred_at, note, delta=delta
+                parent, ADJUSTMENT, actor["id"], actor["name"], date, note, delta=delta
             )
         entries.append(entry)
-        if parent["mode"] == MANUAL and occurred_at < int(parent["createdAt"]):
-            return INVALID
         entries.sort(key=_entry_order)
         return entry, None
 
@@ -479,7 +532,7 @@ def edit_entry(counter_id: str, entry_id: str, actor: dict, changes: dict):
         entry = next((item for item in entries if item["entryId"] == entry_id), None)
         if entry is None:
             return NOT_FOUND
-        allowed = {"note", "occurredAt"}
+        allowed = {"note", "occurredDate"}
         if entry["kind"] == ADJUSTMENT:
             allowed.add("delta")
         if entry["kind"] == BASELINE:
@@ -487,10 +540,12 @@ def edit_entry(counter_id: str, entry_id: str, actor: dict, changes: dict):
         if set(changes) - allowed:
             return INVALID
         note = _valid_text(changes.get("note", entry.get("note", "")), required=False)
-        occurred_at = changes.get("occurredAt", entry["occurredAt"])
-        if note is None or not _valid_timestamp(occurred_at):
+        occurred_date = changes.get("occurredDate", entry["occurredDate"])
+        if note is None or not _valid_date(occurred_date):
             return INVALID
-        if parent["mode"] == MANUAL and occurred_at < int(parent["createdAt"]):
+        if _parse_date(occurred_date) > _today_date(parent.get("timeZone")):
+            return INVALID
+        if parent["mode"] == MANUAL and occurred_date < entries[0]["occurredDate"]:
             return INVALID
         if entry["kind"] == ADJUSTMENT:
             delta = changes.get("delta", entry["delta"])
@@ -504,8 +559,8 @@ def edit_entry(counter_id: str, entry_id: str, actor: dict, changes: dict):
             entry["value"] = value
         entry.update(
             note=note,
-            occurredAt=occurred_at,
-            entrySort=_entry_sort(occurred_at, entry_id),
+            occurredDate=occurred_date,
+            entrySort=_entry_sort(occurred_date, entry_id),
             editedAt=_now_ms(),
             editedById=actor["id"],
             editedBy=actor["name"],

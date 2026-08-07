@@ -31,7 +31,8 @@ function feedFixture() {
       mode: 'automatic',
       createdBy: 'Andre',
       createdById: 'andre',
-      lastIncidentAt: Date.now() - (6 * 24 * 60 * 60 * 1000),
+      lastIncidentDate: new Date(Date.now() - (6 * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10),
+      timeZone: 'UTC',
       currentValue: 6,
       version: 1,
     }),
@@ -158,8 +159,8 @@ async function mockFeedPage(page) {
         entries: [{
           id: 'incident-1',
           kind: 'incident',
-          occurredAt: counter.lastIncidentAt,
-          createdAt: counter.lastIncidentAt,
+          occurredDate: counter.lastIncidentDate,
+          createdAt: counter.createdAt,
           createdById: 'andre',
           createdBy: 'Andre',
           note: 'Mopped and reset the tracker',
@@ -410,6 +411,7 @@ test('keeps counter tracking and history usable at desktop and phone widths', as
       'Mopped and reset the tracker',
     )
     await expect(page.getByRole('button', { name: 'Log incident' })).toBeVisible()
+    await expect(page.getByLabel('Incident date')).toHaveAttribute('type', 'date')
     await expectNoHorizontalOverflow(page)
     await page.screenshot({
       path: testInfo.outputPath(`counter-history-${viewport.name}.png`),
@@ -420,6 +422,7 @@ test('keeps counter tracking and history usable at desktop and phone widths', as
     const createDialog = page.getByRole('dialog', { name: 'Create a counter' })
     await createDialog.getByRole('radio', { name: /Manual count/ }).check()
     await expect(createDialog.getByLabel('Starting value')).toBeVisible()
+    await expect(createDialog.getByLabel('Starting date')).toHaveAttribute('type', 'date')
     await waitForAnimations(createDialog)
     await expectNoHorizontalOverflow(page)
     await page.screenshot({

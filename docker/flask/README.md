@@ -77,9 +77,9 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/polls/<id>/archive`                               | `{ userId }`                               | full updated poll list                                  |
 | `POST /api/polls/<id>/restore`                               | `{ userId }`                               | full updated poll list                                  |
 | `DELETE /api/polls/<id>`                                     | `{ userId }`                               | full updated poll list                                  |
-| `POST /api/counters`                                         | title, mode, creator, and starting state   | created counter                                         |
+| `POST /api/counters`                                         | title, mode, creator, date, and starting state | created counter                                     |
 | `GET /api/counters/<id>`                                     | `?userId=<id>&cursor=<cursor>&limit=20`     | counter detail with paginated history                   |
-| `POST /api/counters/<id>/entries`                            | `{ userId, occurredAt?, delta?, note? }`    | updated counter                                         |
+| `POST /api/counters/<id>/entries`                            | `{ userId, occurredDate?, delta?, note? }`  | updated counter                                         |
 | `PATCH /api/counters/<id>/entries/<entryId>`                 | `{ userId, changes }`                       | corrected counter                                       |
 | `DELETE /api/counters/<id>/entries/<entryId>`                | `{ userId }`                                | counter with the entry removed                          |
 | `POST /api/counters/<id>/archive`                            | `{ userId }`                                | archived counter                                        |

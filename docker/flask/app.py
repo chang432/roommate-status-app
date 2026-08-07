@@ -1189,7 +1189,8 @@ def create_app() -> Flask:
             creator["id"],
             creator["name"],
             creator["groupId"],
-            occurred_at=body.get("occurredAt"),
+            occurred_date=body.get("occurredDate"),
+            time_zone=body.get("timeZone"),
             initial_value=body.get("initialValue"),
             note=body.get("note", ""),
         )

@@ -66,7 +66,7 @@ availability to hang out. Built from the mockups in `../mockups`.
   polls. Everyone can add options and vote; creators edit poll and option text,
   while any current member can archive, restore, or delete. Poll panels also
   support comments, mentions, likes, and inspectable voter lists.
-- **Counters**: groups can opt into automatic whole-day trackers or shared
+- **Counters**: groups can opt into automatic calendar-day trackers or shared
   manual counters. Expanded cards show paginated history and allow roommates
   to correct mistaken entries while naming and deletion remain creator-owned.
 

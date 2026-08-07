@@ -53,7 +53,9 @@ could not be altered in place. The shows table holds one item per tracked TV
 show, with watchers (and their season / episode) embedded on the item. Activity schedules and lifecycle timestamps are
 schemaless attributes needing no secondary index or coordination record. The
 counters table stores summary and history rows together; `CounterHistoryIndex`
-provides an occurrence-ordered access path for history entries. The migrations
+provides a date-ordered access path for history entries. Each counter stores
+its creator-selected IANA timezone so date boundaries are shared by all members.
+The migrations
 ledger records which in-place data migrations have run per
 environment (see [Data migrations](#data-migrations) below). The Book Club
 table stores group-scoped configuration, books, meeting modules, member
