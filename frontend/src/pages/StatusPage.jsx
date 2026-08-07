@@ -162,7 +162,7 @@ export default function StatusPage() {
   const showBookClub = enabledModuleSet.has("book-club");
   const showSpotify = enabledModuleSet.has("spotify");
   const hasFeedModules = enabledModules.some((moduleId) =>
-    ["events", "requests", "checklists", "polls", "tv", "book-club", "forums"].includes(moduleId),
+    ["events", "requests", "checklists", "polls", "counters", "tv", "book-club", "forums"].includes(moduleId),
   );
   const groupDataLoading =
     groupsLoading ||

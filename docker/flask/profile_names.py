@@ -13,6 +13,7 @@ import activities
 import book_club
 import db
 import household_checklists
+import household_counters
 import household_polls
 import household_requests
 import household_shows
@@ -24,6 +25,7 @@ ID_NAME_PAIRS = (
     ("requesterId", "requester"),
     ("createdById", "createdBy"),
     ("createdById", "createdByName"),
+    ("editedById", "editedBy"),
     ("authorId", "author"),
     ("archivedById", "archivedBy"),
     ("restoredById", "restoredBy"),
@@ -163,6 +165,7 @@ def propagate_display_name(user_id: str, old_name: str, new_name: str) -> None:
         activities._get_table(),
         household_requests._get_table(),
         household_checklists._get_table(),
+        household_counters._get_table(),
         household_polls._get_table(),
         household_shows._get_table(),
         book_club._get_table(),

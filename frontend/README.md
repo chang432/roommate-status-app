@@ -66,6 +66,9 @@ availability to hang out. Built from the mockups in `../mockups`.
   polls. Everyone can add options and vote; creators edit poll and option text,
   while any current member can archive, restore, or delete. Poll panels also
   support comments, mentions, likes, and inspectable voter lists.
+- **Counters**: groups can opt into automatic whole-day trackers or shared
+  manual counters. Expanded cards show paginated history and allow roommates
+  to correct mistaken entries while naming and deletion remain creator-owned.
 
 ## Tech
 
@@ -91,9 +94,10 @@ name as username (for example `andre`) with the demo password **`roomie`**.
 
 ## Module feed behavior
 
-The **All** filter is customizable per user and group. Book Club starts
-selected after a one-time preference upgrade; explicit exclusions made after
-that remain saved. To edit a module, expand its card and use the **Edit** action
+The **All** filter is customizable per user and group. Newly registered feed
+types, including Counters, are selected once during preference upgrade;
+explicit exclusions made after that remain saved. Counters remain opt-in at the
+group level. To edit a module, expand its card and use the **Edit** action
 at the bottom. The action is shown only when the current user can edit that
 active instance.
 
@@ -176,6 +180,14 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `archivePoll`                   | `POST /api/polls/:id/archive`                              |
 | `restorePoll`                   | `POST /api/polls/:id/restore`                              |
 | `deletePoll`                    | `DELETE /api/polls/:id`                                    |
+| `createCounter`                 | `POST /api/counters`                                       |
+| `getCounter`                    | `GET /api/counters/:id?userId=:id`                         |
+| `addCounterEntry`               | `POST /api/counters/:id/entries`                           |
+| `updateCounterEntry`            | `PATCH /api/counters/:id/entries/:entryId`                 |
+| `deleteCounterEntry`            | `DELETE /api/counters/:id/entries/:entryId`                |
+| `archiveCounter`                | `POST /api/counters/:id/archive`                           |
+| `restoreCounter`                | `POST /api/counters/:id/restore`                           |
+| `deleteCounter`                 | `DELETE /api/counters/:id`                                 |
 
 In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
 Point at a different server with `VITE_API_TARGET`:

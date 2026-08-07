@@ -1,0 +1,14 @@
+COUNTER SUMMARY ITEM
+groupId (S),id (S),itemType (S),counterId (S),title (S),mode (S),createdById (S),createdBy (S),createdAt (N),updatedAt (N),currentValue (N),lastIncidentAt (N),isArchived (BOOL),version (N),archivedAt (N),archivedById (S),archivedBy (S),restoredAt (N),restoredById (S),restoredBy (S)
+yorkshire,counter#8f21,counter,8f21,Days since the last spill,automatic,andre,Andre,1786060800000,1786233600000,2,1786060800000,false,1,,,,,,
+yorkshire,counter#12ab,counter,12ab,Plants watered,manual,kayla,Kayla,1786060800000,1786147200000,4,,false,3,,,,,,
+
+COUNTER HISTORY ENTRY
+groupId (S),id (S),itemType (S),counterId (S),counterKey (S),entrySort (S),entryId (S),kind (S),occurredAt (N),createdAt (N),createdById (S),createdBy (S),note (S),delta (N),value (N),editedAt (N),editedById (S),editedBy (S)
+yorkshire,counter-entry#8f21#a1,counterEntry,8f21,yorkshire#8f21,1786060800000#a1,a1,incident,1786060800000,1786060800000,andre,Andre,First spill,,,,,
+yorkshire,counter-entry#12ab#b1,counterEntry,12ab,yorkshire#12ab,1786060800000#b1,b1,baseline,1786060800000,1786060800000,kayla,Kayla,Started with the kitchen plants,,3,,,
+yorkshire,counter-entry#12ab#b2,counterEntry,12ab,yorkshire#12ab,1786147200000#b2,b2,adjustment,1786147200000,1786147200000,ting,Ting,Watered the fern,1,,1786147300000,sheryl,Sheryl
+
+COUNTER HISTORY INDEX
+IndexName,Partition key,Sort key,Projection
+CounterHistoryIndex,counterKey (S),entrySort (S),ALL

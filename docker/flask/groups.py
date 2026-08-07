@@ -27,12 +27,17 @@ GROUP_MODULE_IDS = (
     "requests",
     "checklists",
     "polls",
+    "counters",
     "tv",
     "spotify",
     "book-club",
     "forums",
 )
 VALID_GROUP_MODULES = set(GROUP_MODULE_IDS)
+# Counters are deliberately opt-in even for the broad default household.
+DEFAULT_GROUP_MODULE_IDS = tuple(
+    module_id for module_id in GROUP_MODULE_IDS if module_id != "counters"
+)
 VALID_THEMES = {"system", "light", "dark", "forest"}
 
 _table = None
@@ -99,7 +104,7 @@ def ensure_default_group() -> dict:
                 "name": db.DEFAULT_GROUP_NAME,
                 "joinCode": join_code,
                 "createdAt": created_at,
-                "enabledModules": list(GROUP_MODULE_IDS),
+                "enabledModules": list(DEFAULT_GROUP_MODULE_IDS),
             },
             ConditionExpression="attribute_not_exists(groupId)",
         )

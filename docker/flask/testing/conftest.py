@@ -30,6 +30,7 @@ def _dynamodb():
             household_shows.TABLE_NAME,
             household_checklists.TABLE_NAME,
             household_polls.TABLE_NAME,
+            household_counters.TABLE_NAME,
         ):
             definitions = [
                 {"AttributeName": "groupId", "AttributeType": "S"},
@@ -43,6 +44,19 @@ def _dynamodb():
                     "KeySchema": [
                         {"AttributeName": "bookId", "KeyType": "HASH"},
                         {"AttributeName": "id", "KeyType": "RANGE"},
+                    ],
+                    "Projection": {"ProjectionType": "ALL"},
+                }]
+            elif table_name == household_counters.TABLE_NAME:
+                definitions.extend([
+                    {"AttributeName": "counterKey", "AttributeType": "S"},
+                    {"AttributeName": "entrySort", "AttributeType": "S"},
+                ])
+                indexes = [{
+                    "IndexName": household_counters.HISTORY_INDEX,
+                    "KeySchema": [
+                        {"AttributeName": "counterKey", "KeyType": "HASH"},
+                        {"AttributeName": "entrySort", "KeyType": "RANGE"},
                     ],
                     "Projection": {"ProjectionType": "ALL"},
                 }]
@@ -124,6 +138,7 @@ def client():
         household_shows._get_table(),
         household_checklists._get_table(),
         household_polls._get_table(),
+        household_counters._get_table(),
     ):
         for item in table.scan().get("Items", []):
             table.delete_item(Key={"groupId": item["groupId"], "id": item["id"]})

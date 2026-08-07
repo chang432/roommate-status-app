@@ -24,6 +24,17 @@ function feedFixture() {
     isArchived: false,
   }
   return [
+    feedItem('counters', {
+      ...base,
+      id: 'counter-1',
+      title: 'Days without a kitchen spill',
+      mode: 'automatic',
+      createdBy: 'Andre',
+      createdById: 'andre',
+      lastIncidentAt: Date.now() - (6 * 24 * 60 * 60 * 1000),
+      currentValue: 6,
+      version: 1,
+    }),
     feedItem('events', {
       ...base,
       id: 'event-1',
@@ -124,13 +135,13 @@ async function mockFeedPage(page) {
     } else if (path === '/api/groups') {
       payload = { groups: [{
         groupId: 'shire', name: 'The Shire', joinCode: 'SHIRE12',
-        enabledModules: ['events', 'requests', 'checklists', 'polls', 'tv'],
+        enabledModules: ['events', 'requests', 'checklists', 'polls', 'counters', 'tv'],
         theme: 'system', viewerIsAdmin: true,
       }] }
     } else if (path === '/api/groups/current') {
       payload = { group: {
         groupId: 'shire', name: 'The Shire', joinCode: 'SHIRE12',
-        enabledModules: ['events', 'requests', 'checklists', 'polls', 'tv'],
+        enabledModules: ['events', 'requests', 'checklists', 'polls', 'counters', 'tv'],
         theme: 'system', viewerIsAdmin: true,
       } }
     } else if (path === '/api/roommates') {
@@ -140,6 +151,21 @@ async function mockFeedPage(page) {
       ]
     } else if (path === '/api/feed') {
       payload = feedFixture()
+    } else if (path === '/api/counters/counter-1') {
+      const counter = feedFixture().find((item) => item.type === 'counters').payload
+      payload = {
+        counter,
+        entries: [{
+          id: 'incident-1',
+          kind: 'incident',
+          occurredAt: counter.lastIncidentAt,
+          createdAt: counter.lastIncidentAt,
+          createdById: 'andre',
+          createdBy: 'Andre',
+          note: 'Mopped and reset the tracker',
+        }],
+        nextCursor: null,
+      }
     } else {
       payload = {}
     }
@@ -277,6 +303,7 @@ test('keeps every registered feed card usable at desktop and phone widths', asyn
     { tab: 'Requests', card: 'Pick up milk' },
     { tab: 'Checklists', card: 'Kitchen reset' },
     { tab: 'Polls', card: 'Dinner?' },
+    { tab: 'Counters', card: 'Days without a kitchen spill' },
     { tab: 'TV', card: 'Severance' },
   ]) {
     await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click()
@@ -360,4 +387,44 @@ test('keeps every registered feed card usable at desktop and phone widths', asyn
     path: testInfo.outputPath('poll-card-phone.png'),
     fullPage: true,
   })
+})
+
+test('keeps counter tracking and history usable at desktop and phone widths', async ({
+  page,
+}, testInfo) => {
+  await mockFeedPage(page)
+
+  for (const viewport of [
+    { width: 1280, height: 900, name: 'desktop' },
+    { width: 390, height: 844, name: 'phone' },
+  ]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/')
+    await page.getByRole('tab', { name: /^Counters/ }).click()
+
+    const counterCard = page.getByRole('button', { name: /Days without a kitchen spill/ })
+    await expect(counterCard).toContainText('6 days')
+    await counterCard.click()
+    await expectExpandedCardSettled(counterCard)
+    await expect(page.getByRole('region', { name: 'Counter history' })).toContainText(
+      'Mopped and reset the tracker',
+    )
+    await expect(page.getByRole('button', { name: 'Log incident' })).toBeVisible()
+    await expectNoHorizontalOverflow(page)
+    await page.screenshot({
+      path: testInfo.outputPath(`counter-history-${viewport.name}.png`),
+      fullPage: true,
+    })
+
+    await page.getByRole('button', { name: 'Create a counter' }).click()
+    const createDialog = page.getByRole('dialog', { name: 'Create a counter' })
+    await createDialog.getByRole('radio', { name: /Manual count/ }).check()
+    await expect(createDialog.getByLabel('Starting value')).toBeVisible()
+    await waitForAnimations(createDialog)
+    await expectNoHorizontalOverflow(page)
+    await page.screenshot({
+      path: testInfo.outputPath(`counter-create-${viewport.name}.png`),
+      fullPage: true,
+    })
+  }
 })

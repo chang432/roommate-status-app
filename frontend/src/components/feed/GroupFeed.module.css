@@ -122,6 +122,12 @@
   --module-text: hsl(var(--color-module-polls-text));
 }
 
+.modulePalette[data-module-type='counters'] {
+  --module-bg: hsl(var(--color-module-counters-bg));
+  --module-border: hsl(var(--color-module-counters-border));
+  --module-text: hsl(var(--color-module-counters-text));
+}
+
 .modulePalette[data-module-type='tv'] {
   --module-bg: hsl(var(--color-module-tv-bg));
   --module-border: hsl(var(--color-module-tv-border));

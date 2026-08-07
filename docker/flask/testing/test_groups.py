@@ -138,7 +138,7 @@ def test_existing_group_projects_legacy_flags_during_migration_window(client):
 
     group = groups.get_group_by_id("legacy-house")
 
-    assert group["enabledModules"] == list(groups.GROUP_MODULE_IDS)
+    assert group["enabledModules"] == list(groups.DEFAULT_GROUP_MODULE_IDS)
 
 
 def test_every_member_can_set_a_personal_group_theme(client):

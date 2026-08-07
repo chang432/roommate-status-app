@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 import activities
 import book_club
 import household_checklists
+import household_counters
 import household_forums
 import household_polls
 import household_requests
@@ -151,6 +152,31 @@ class PollModule(BaseModule):
         return bool(self.payload.get("isArchived"))
 
 
+class CounterModule(BaseModule):
+    @classmethod
+    def from_payload(cls, item: dict[str, Any]) -> "CounterModule":
+        value = int(item.get("currentValue", 0))
+        subtitle = (
+            f"{value} day{'s' if value != 1 else ''}"
+            if item.get("mode") == household_counters.AUTOMATIC
+            else f"Count: {value}"
+        )
+        return cls(
+            id=item["id"],
+            type="counters",
+            created_at=int(item["createdAt"]),
+            updated_at=int(item.get("updatedAt", item["createdAt"])),
+            title=item.get("title", "Counter"),
+            subtitle=subtitle,
+            actor=item.get("createdBy", "Someone"),
+            payload=item,
+        )
+
+    @property
+    def is_archived(self) -> bool:
+        return bool(self.payload.get("isArchived"))
+
+
 class TvModule(BaseModule):
     @classmethod
     def from_payload(cls, item: dict[str, Any]) -> "TvModule":
@@ -253,6 +279,10 @@ MODULE_SOURCES = {
     "polls": ModuleSource(
         PollModule,
         lambda group_id: household_polls.list_recent(group_id, consistent=True),
+    ),
+    "counters": ModuleSource(
+        CounterModule,
+        lambda group_id: household_counters.list_recent(group_id, consistent=True),
     ),
     "tv": ModuleSource(
         TvModule,

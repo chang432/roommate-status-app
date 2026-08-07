@@ -87,6 +87,9 @@
   --color-module-polls-bg: 184 39% 89%;
   --color-module-polls-border: 184 39% 49%;
   --color-module-polls-text: 186 47% 29%;
+  --color-module-counters-bg: 255 35% 92%;
+  --color-module-counters-border: 252 30% 60%;
+  --color-module-counters-text: 252 36% 35%;
   --color-module-tv-bg: 300 24% 90%;
   --color-module-tv-border: 301 15% 55%;
   --color-module-tv-text: 302 20% 31%;
@@ -194,6 +197,9 @@
   --color-module-polls-bg: 184 28% 22%;
   --color-module-polls-border: 183 48% 56%;
   --color-module-polls-text: 182 55% 80%;
+  --color-module-counters-bg: 252 24% 24%;
+  --color-module-counters-border: 252 35% 65%;
+  --color-module-counters-text: 252 50% 85%;
   --color-module-tv-bg: 300 21% 24%;
   --color-module-tv-border: 302 24% 65%;
   --color-module-tv-text: 302 35% 84%;
@@ -301,6 +307,9 @@
   --color-module-polls-bg: 177 25% 20%;
   --color-module-polls-border: 176 39% 52%;
   --color-module-polls-text: 174 50% 79%;
+  --color-module-counters-bg: 252 21% 22%;
+  --color-module-counters-border: 251 30% 60%;
+  --color-module-counters-text: 250 44% 84%;
   --color-module-tv-bg: 304 18% 22%;
   --color-module-tv-border: 303 24% 58%;
   --color-module-tv-text: 304 34% 84%;

@@ -1,6 +1,8 @@
 import ActivityCreateForm from "./ActivityCreateForm.jsx";
 import ChecklistCreateForm from "./ChecklistCreateForm.jsx";
 import ChecklistFeature from "./ChecklistFeature.jsx";
+import CounterCreateForm from "./CounterCreateForm.jsx";
+import CounterFeature from "./CounterFeature.jsx";
 import ModuleEditForm from "./ModuleEditForm.jsx";
 import PollCreateForm from "./PollCreateForm.jsx";
 import PollFeature from "./PollFeature.jsx";
@@ -154,6 +156,33 @@ export const FEED_MODULE_REGISTRY = {
         poll={module.payload}
         roommates={roommates}
         onPollsChange={onChanged}
+        moduleTag={moduleTag}
+        onEdit={onEdit}
+      />
+    ),
+  },
+  counters: {
+    id: "counters",
+    label: "Counters",
+    shortLabel: "Counters",
+    createLabel: "Create a counter",
+    ownerField: "createdById",
+    edit: {
+      label: "Edit counter",
+      field: "title",
+      fieldLabel: "Counter name",
+    },
+    renderCreate: ({ onChanged, onClose }) => (
+      <CounterCreateForm
+        onCountersChange={onChanged}
+        onSuccess={onClose}
+        onCancel={onClose}
+      />
+    ),
+    renderCard: ({ module, moduleTag, onChanged, onEdit }) => (
+      <CounterFeature
+        counter={module.payload}
+        onCountersChange={onChanged}
         moduleTag={moduleTag}
         onEdit={onEdit}
       />

@@ -31,6 +31,7 @@ RoommateStatus-dev-spotify-jam,RoommateStatus-dev-spotify-jam.csv,id (S),,jam.py
 RoommateStatus-dev-shows-v2,RoommateStatus-dev-shows-v2.csv,"groupId (S) + id (S)",,household_shows.py,TV show tracker
 RoommateStatus-dev-checklists-v2,RoommateStatus-dev-checklists-v2.csv,"groupId (S) + id (S)",,household_checklists.py,Household checklists
 RoommateStatus-dev-polls,RoommateStatus-dev-polls.csv,"groupId (S) + id (S)",,household_polls.py,Standalone household polls
+RoommateStatus-dev-counters,RoommateStatus-dev-counters.csv,"groupId (S) + id (S)","CounterHistoryIndex (HASH counterKey + RANGE entrySort, ProjectionType ALL)",household_counters.py,Automatic day trackers and manual counters with history
 RoommateStatus-dev-comment-likes-v2,RoommateStatus-dev-comment-likes-v2.csv,"groupId (S) + id (S)",,"activities.py, household_requests.py, household_polls.py, household_forums.py","Likes on activity, request, poll, and forum comments"
 RoommateStatus-dev-book-club,RoommateStatus-dev-book-club.csv,"groupId (S) + id (S)","BookIdIndex (HASH bookId + RANGE id, ProjectionType ALL)","book_club.py, household_forums.py",Book Club settings and history
 RoommateStatus-dev-groups,RoommateStatus-dev-groups.csv,groupId (S),"JoinCodeIndex (HASH joinCode, ProjectionType ALL)",groups.py,Households / join-by-code groups
