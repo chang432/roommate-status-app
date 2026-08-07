@@ -5,8 +5,19 @@ import styles from "./BottomTray.module.css";
 
 const DISMISS_DISTANCE = 96;
 const DISMISS_VELOCITY = 0.5;
+const EXPAND_DISTANCE = 72;
+const EXPAND_VELOCITY = -0.5;
 
-export default function BottomTray({ title, onClose, children, widthClassName, ariaLabel }) {
+export default function BottomTray({
+  title,
+  onClose,
+  children,
+  widthClassName,
+  ariaLabel,
+  expanded = false,
+  onExpand,
+  onBack,
+}) {
   const dialogRef = useRef(null);
   const dragRef = useRef(null);
   const [dragOffset, setDragOffset] = useState(0);
@@ -47,6 +58,10 @@ export default function BottomTray({ title, onClose, children, widthClassName, a
     };
   }, [onClose]);
 
+  useEffect(() => {
+    if (onBack) dialogRef.current?.querySelector("[aria-label='Back to settings']")?.focus();
+  }, [onBack, title]);
+
   function handlePointerDown(event) {
     // Controls in the draggable header must retain their native click target;
     // pointer capture would otherwise redirect the X button's pointer-up.
@@ -77,8 +92,10 @@ export default function BottomTray({ title, onClose, children, widthClassName, a
     drag.velocity = (event.clientY - drag.lastY) / elapsed;
     drag.lastY = event.clientY;
     drag.lastAt = now;
-    drag.offset = Math.max(0, event.clientY - drag.startY);
-    setDragOffset(drag.offset);
+    drag.offset = event.clientY - drag.startY;
+    // Downward drags track the pointer. Upward drags stay anchored to the
+    // viewport edge until release, when the tray promotes to full height.
+    setDragOffset(Math.max(0, drag.offset));
   }
 
   function finishDrag(event) {
@@ -96,6 +113,17 @@ export default function BottomTray({ title, onClose, children, widthClassName, a
       onClose();
       return;
     }
+    if (
+      !expanded &&
+      onExpand &&
+      drag &&
+      drag.pointerId === event.pointerId &&
+      (drag.offset <= -EXPAND_DISTANCE || (drag.offset <= -30 && drag.velocity <= EXPAND_VELOCITY))
+    ) {
+      setDragOffset(0);
+      onExpand();
+      return;
+    }
     setDragOffset(0);
   }
 
@@ -107,8 +135,14 @@ export default function BottomTray({ title, onClose, children, widthClassName, a
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel ?? title}
-        className={cx(styles.tray, widthClassName, dragging && styles.dragging)}
+        className={cx(
+          styles.tray,
+          widthClassName,
+          expanded && styles.expanded,
+          dragging && styles.dragging,
+        )}
         style={{ transform: dragOffset ? `translateY(${dragOffset}px)` : undefined }}
+        data-expanded={expanded ? "true" : "false"}
       >
         <header
           className={styles.header}
@@ -118,7 +152,14 @@ export default function BottomTray({ title, onClose, children, widthClassName, a
           onPointerCancel={finishDrag}
         >
           <span className={styles.handle} aria-hidden="true" />
-          <h2 className={styles.title}>{title}</h2>
+          <div className={styles.heading}>
+            {onBack ? (
+              <button type="button" onClick={onBack} aria-label="Back to settings" className={styles.backButton}>
+                <span aria-hidden="true">←</span>
+              </button>
+            ) : null}
+            <h2 className={styles.title}>{title}</h2>
+          </div>
           <button type="button" onClick={onClose} aria-label="Close" className={styles.closeButton}>
             ×
           </button>

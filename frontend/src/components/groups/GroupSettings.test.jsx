@@ -57,10 +57,13 @@ describe("GroupSettings", () => {
 
   it("lets every member save a personal theme while shared controls stay read-only", async () => {
     updateGroupTheme.mockResolvedValue({ group: group({ theme: "forest" }) });
-    renderSettings();
+    renderSettings(group(), { onClose: vi.fn() });
 
+    await userEvent.click(screen.getByRole("button", { name: /Enabled modules/i }));
     expect(screen.getByRole("checkbox", { name: /Household roster/i })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Back to settings" }));
+    await userEvent.click(screen.getByRole("button", { name: /Appearance Current theme/i }));
     await userEvent.click(screen.getByRole("radio", { name: /Forest/i }));
 
     await waitFor(() => expect(updateGroupTheme).toHaveBeenCalledWith("andre", "forest"));
@@ -75,14 +78,17 @@ describe("GroupSettings", () => {
     renameGroup.mockResolvedValue({ group: renamed });
     updateGroupModules.mockResolvedValue({ group: modulesUpdated });
     const onGroupChange = vi.fn();
-    renderSettings(initial, { onGroupChange }, refreshed);
+    renderSettings(initial, { onGroupChange, onClose: vi.fn() }, refreshed);
 
+    await userEvent.click(screen.getByRole("button", { name: /Group details/i }));
     await waitFor(() => expect(screen.getByLabelText("Group name")).toHaveValue("Shire"));
     await userEvent.clear(screen.getByLabelText("Group name"));
     await userEvent.type(screen.getByLabelText("Group name"), "Bag End");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(renameGroup).toHaveBeenCalledWith("andre", "Bag End"));
 
+    await userEvent.click(screen.getByRole("button", { name: "Back to settings" }));
+    await userEvent.click(screen.getByRole("button", { name: /Enabled modules/i }));
     await userEvent.click(screen.getByRole("checkbox", { name: /Events/i }));
     await waitFor(() =>
       expect(updateGroupModules).toHaveBeenCalledWith("andre", ["roster"]),

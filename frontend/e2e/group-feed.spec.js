@@ -158,6 +158,12 @@ async function expectNoHorizontalOverflow(page) {
   expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewport)
 }
 
+async function waitForAnimations(locator) {
+  await locator.evaluate((element) => Promise.all(
+    element.getAnimations({ subtree: true }).map((animation) => animation.finished.catch(() => undefined)),
+  ))
+}
+
 async function expectExpandedCardSettled(cardToggle) {
   await expect(cardToggle).toHaveAttribute('aria-expanded', 'true')
   await expect.poll(() => cardToggle.locator('xpath=..').evaluate((card) => {
@@ -170,7 +176,7 @@ async function expectExpandedCardSettled(cardToggle) {
   })).toBe(true)
 }
 
-test('uses dismissible bottom trays for profile and active-group settings', async ({ page }) => {
+test('uses dismissible bottom trays for profile and active-group settings', async ({ page }, testInfo) => {
   await mockFeedPage(page)
 
   for (const viewport of [
@@ -182,20 +188,63 @@ test('uses dismissible bottom trays for profile and active-group settings', asyn
 
     await page.getByRole('button', { name: 'Open profile settings' }).click()
     const profileTray = page.getByRole('dialog', { name: 'Profile settings' })
-    await expect(profileTray.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible()
-    await expect(profileTray.getByRole('heading', { name: 'Notifications' })).toBeVisible()
+    await expect(profileTray).toHaveAttribute('data-expanded', 'false')
+    await expect(profileTray.getByRole('button', { name: /Profile Update your display name/i })).toBeVisible()
+    await expect(profileTray.getByLabel('Display name')).toBeHidden()
+    await waitForAnimations(profileTray)
+    await page.screenshot({
+      path: testInfo.outputPath(`profile-settings-menu-${viewport.width}.png`),
+    })
+
+    const profileHeader = profileTray.locator('header').first()
+    await profileHeader.dispatchEvent('pointerdown', {
+      pointerId: 6, pointerType: 'touch', button: 0, clientY: 140,
+    })
+    await profileHeader.dispatchEvent('pointermove', {
+      pointerId: 6, pointerType: 'touch', clientY: 40,
+    })
+    await profileHeader.dispatchEvent('pointerup', {
+      pointerId: 6, pointerType: 'touch', clientY: 40,
+    })
+    await expect(profileTray).toHaveAttribute('data-expanded', 'true')
+    await expect.poll(() => profileTray.evaluate((element) => (
+      Math.round(element.getBoundingClientRect().height)
+    ))).toBe(viewport.height)
+
+    await profileTray.getByRole('button', { name: /Change password Choose/i }).click()
+    await expect(profileTray.getByLabel('New password', { exact: true })).toBeVisible()
+    await page.screenshot({
+      path: testInfo.outputPath(`profile-settings-expanded-${viewport.width}.png`),
+    })
     await expect.poll(() => profileTray.evaluate((element) => (
       element.scrollWidth <= element.clientWidth
     ))).toBe(true)
+    await profileTray.getByRole('button', { name: 'Back to settings' }).click()
+    await expect(profileTray).toHaveAttribute('data-expanded', 'false')
     await profileTray.getByRole('button', { name: 'Close' }).click()
     await expect(profileTray).toBeHidden()
 
     await page.getByRole('button', { name: /Open group switcher/ }).click()
     await page.getByLabel('Your groups').getByRole('button', { name: 'Edit' }).click()
     const groupTray = page.getByRole('dialog', { name: 'Group settings' })
+    await expect(groupTray.getByText('SHIRE12')).toBeHidden()
+    await waitForAnimations(groupTray)
+    await waitForAnimations(page.getByLabel('Your groups'))
+    await page.screenshot({
+      path: testInfo.outputPath(`group-settings-menu-${viewport.width}.png`),
+    })
+    await groupTray.getByRole('button', { name: /Group details/i }).click()
     await expect(groupTray.getByText('SHIRE12')).toBeVisible()
+    await expect(groupTray).toHaveAttribute('data-expanded', 'true')
+    await groupTray.getByRole('button', { name: 'Back to settings' }).click()
+    await groupTray.getByRole('button', { name: /Enabled modules/i }).click()
     await expect(groupTray.getByRole('checkbox', { name: /Events/i })).toBeChecked()
+    await groupTray.getByRole('button', { name: 'Back to settings' }).click()
+    await groupTray.getByRole('button', { name: /Appearance Current theme/i }).click()
     await expect(groupTray.getByRole('radio', { name: /Forest/i })).toBeEnabled()
+    await page.screenshot({
+      path: testInfo.outputPath(`group-settings-expanded-${viewport.width}.png`),
+    })
     await expectNoHorizontalOverflow(page)
 
     const header = groupTray.locator('header').first()

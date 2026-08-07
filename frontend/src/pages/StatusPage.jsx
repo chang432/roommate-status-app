@@ -9,7 +9,6 @@ import GroupSettings from "../components/groups/GroupSettings.jsx";
 import HouseholdRoster from "../components/household/HouseholdRoster.jsx";
 import LiveEventBanner from "../components/feed/LiveEventBanner.jsx";
 import ModalShell from "../components/ui/ModalShell.jsx";
-import BottomTray from "../components/ui/BottomTray.jsx";
 import NotificationBanner from "../components/ui/NotificationBanner.jsx";
 import ProfileSettings from "../components/profile/ProfileSettings.jsx";
 import PullToRefreshIndicator from "../components/ui/PullToRefreshIndicator.jsx";
@@ -407,23 +406,20 @@ export default function StatusPage() {
         )}
 
         {settingsOpen && (
-          <BottomTray
-            title="Profile settings"
+          <ProfileSettings
             onClose={() => setSettingsOpen(false)}
             widthClassName={styles.settingsModal}
-          >
-            <ProfileSettings onProfileChanged={loadRoommates} />
-          </BottomTray>
+            onProfileChanged={loadRoommates}
+          />
         )}
         {groupSettingsOpen && selectedGroup ? (
-          <BottomTray title="Group settings" onClose={() => setGroupSettingsOpen(false)}>
-            <GroupSettings
-              group={selectedGroup}
-              roommates={roommates}
-              onGroupChange={handleGroupChange}
-              onRoommatesChange={setRoommates}
-            />
-          </BottomTray>
+          <GroupSettings
+            group={selectedGroup}
+            roommates={roommates}
+            onClose={() => setGroupSettingsOpen(false)}
+            onGroupChange={handleGroupChange}
+            onRoommatesChange={setRoommates}
+          />
         ) : null}
         {jamModalOpen && (
           <ModalShell

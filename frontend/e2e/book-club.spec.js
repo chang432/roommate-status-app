@@ -1347,6 +1347,7 @@ test('keeps the editorial feed header clear across themes', async ({ page }, tes
     await page.getByRole('button', { name: /Open group switcher/ }).click()
     await page.getByLabel('Your groups').getByRole('button', { name: 'Edit' }).click()
     const settings = page.getByRole('dialog', { name: 'Group settings' })
+    await settings.getByRole('button', { name: /Appearance Current theme/i }).click()
     await settings.getByRole('radio', { name: new RegExp(`^${theme}`, 'i') }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     await settings.getByRole('button', { name: 'Close' }).click()

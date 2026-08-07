@@ -13,10 +13,19 @@ import { GROUP_MODULE_DEFINITIONS } from "../../models/groupModules.js";
 import { THEME_DEFINITIONS, themeDefinition } from "../../models/themes.js";
 import { cx } from "../../utils/classNames.js";
 import { ROLE, ROLE_LABEL, isAdmin, roleOf } from "../../utils/roles.js";
+import SettingsMenu, { SettingsMenuButton } from "../ui/SettingsMenu.jsx";
+import SettingsTray from "../ui/SettingsTray.jsx";
 import { useConfirmDialog } from "../ui/useConfirmDialog.jsx";
 import styles from "./GroupSettings.module.css";
 
-export default function GroupSettings({ group: initialGroup, roommates, onGroupChange, onRoommatesChange }) {
+export default function GroupSettings({
+  group: initialGroup,
+  roommates,
+  onClose,
+  widthClassName,
+  onGroupChange,
+  onRoommatesChange,
+}) {
   const { user } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [group, setGroup] = useState(initialGroup);
@@ -137,13 +146,13 @@ export default function GroupSettings({ group: initialGroup, roommates, onGroupC
     if (accepted) return runMemberAction(member, () => removeGroupMember(user.id, member.id));
   }
 
-  if (loading) return <p className={styles.state}>Loading group settings…</p>;
-
-  return (
-    <div className={styles.panel}>
-      {error ? <p className="ui-errorBox">{error}</p> : null}
-
-      <section className={styles.section}>
+  const errorBox = error ? <p className="ui-errorBox">{error}</p> : null;
+  const screens = [
+    {
+      id: "details",
+      title: "Group details",
+      content: <section className={styles.workflow}>
+        {errorBox}
         <div className={styles.sectionHeader}><h3>Group</h3><p>{viewerIsAdmin ? "Rename this household or share its invite code." : "Group details are managed by an admin."}</p></div>
         {viewerIsAdmin ? (
           <form onSubmit={handleRename} className={styles.nameForm}>
@@ -153,23 +162,35 @@ export default function GroupSettings({ group: initialGroup, roommates, onGroupC
         ) : <p className={styles.groupName}>{group?.name}</p>}
         <p className={styles.codeLabel}>Invite code</p>
         <div className={styles.codeRow}><code>{group?.joinCode}</code><button type="button" onClick={handleCopyCode} className="ui-secondaryButton">{copied ? "Copied" : "Copy"}</button></div>
-      </section>
-
-      <section className={styles.section}>
+      </section>,
+    },
+    {
+      id: "appearance",
+      title: "Appearance",
+      content: <section className={styles.workflow}>
+        {errorBox}
         <div className={styles.sectionHeader}><h3>Your theme in this group</h3><p>Current theme: {themeDefinition(resolvedTheme)?.label ?? resolvedTheme}. This choice follows you across devices.</p></div>
         <div className={styles.themeChoices} role="radiogroup" aria-label="Theme">
           {THEME_DEFINITIONS.map((choice) => <button key={choice.id} type="button" role="radio" aria-checked={theme === choice.id} disabled={themeBusy} onClick={() => handleTheme(choice.id)} className={cx(styles.themeChoice, theme === choice.id && styles.themeChoiceActive)}><strong>{choice.label}</strong><small>{choice.description}</small></button>)}
         </div>
-      </section>
-
-      <section className={styles.section}>
+      </section>,
+    },
+    {
+      id: "modules",
+      title: "Enabled modules",
+      content: <section className={styles.workflow}>
+        {errorBox}
         <div className={styles.sectionHeader}><h3>Enabled modules</h3><p>{viewerIsAdmin ? "Choose what appears for everyone. Hidden data is preserved." : "Only group admins can change these modules."}</p></div>
         <div className={styles.moduleList}>
           {GROUP_MODULE_DEFINITIONS.map((module) => <label key={module.id} className={styles.moduleRow}><span><strong>{module.label}</strong><small>{module.description}</small></span><input type="checkbox" checked={enabledModules.includes(module.id)} disabled={!viewerIsAdmin || modulesBusy} onChange={(event) => handleModuleToggle(module.id, event.target.checked)} /></label>)}
         </div>
-      </section>
-
-      <section className={styles.section}>
+      </section>,
+    },
+    {
+      id: "members",
+      title: "Members",
+      content: <section className={styles.workflow}>
+        {errorBox}
         <div className={styles.sectionHeader}><h3>Members</h3><p>{viewerIsAdmin ? "Grant admin access or remove a roommate." : "Member roles are read-only for you."}</p></div>
         <ul className={styles.memberList}>
           {roommates.map((member) => {
@@ -178,8 +199,40 @@ export default function GroupSettings({ group: initialGroup, roommates, onGroupC
             return <li key={member.id} className={styles.memberRow}><div><strong>{member.name}{self ? " (you)" : ""}</strong><small>{ROLE_LABEL[roleOf(member)]}</small></div>{viewerIsAdmin ? <div className={styles.memberActions}><button type="button" className="ui-secondaryButton" disabled={busy} onClick={() => handleToggleAdmin(member)}>{isAdmin(member) ? "Revoke admin" : "Make admin"}</button>{!self && !isAdmin(member) ? <button type="button" className={styles.removeButton} disabled={busy} onClick={() => handleRemove(member)}>Remove</button> : null}</div> : null}</li>;
           })}
         </ul>
-      </section>
-      {confirmationDialog}
-    </div>
+        {confirmationDialog}
+      </section>,
+    },
+  ];
+
+  return (
+    <SettingsTray
+      title="Group settings"
+      onClose={onClose}
+      widthClassName={widthClassName}
+      screens={screens}
+      renderMenu={(openScreen) => (
+        <div className={styles.panel}>
+          {loading ? <p className={styles.state}>Loading group settings…</p> : null}
+          {!loading ? (
+            <>
+              <section className={styles.groupSummary}>
+                <div className={styles.avatar} aria-hidden="true">{(group?.name || "?").slice(0, 1).toUpperCase()}</div>
+                <div>
+                  <p className={styles.groupTitle}>{group?.name}</p>
+                  <p className={styles.groupRole}>{viewerIsAdmin ? "Group admin" : "Group member"}</p>
+                </div>
+              </section>
+              {errorBox}
+              <SettingsMenu label="Group settings options">
+                <SettingsMenuButton screenId="details" title="Group details" description={viewerIsAdmin ? "Rename the group or share its invite code." : "View the group name and invite code."} onClick={(event) => openScreen("details", event.currentTarget)} />
+                <SettingsMenuButton screenId="appearance" title="Appearance" description={`Current theme: ${themeDefinition(resolvedTheme)?.label ?? resolvedTheme}.`} onClick={(event) => openScreen("appearance", event.currentTarget)} />
+                <SettingsMenuButton screenId="modules" title="Enabled modules" description={`${enabledModules.length} modules enabled${viewerIsAdmin ? "." : "; admin access required to edit."}`} onClick={(event) => openScreen("modules", event.currentTarget)} />
+                <SettingsMenuButton screenId="members" title="Members" description={`${roommates.length} ${roommates.length === 1 ? "member" : "members"}${viewerIsAdmin ? "; manage roles and access." : "; roles are read-only."}`} onClick={(event) => openScreen("members", event.currentTarget)} />
+              </SettingsMenu>
+            </>
+          ) : null}
+        </div>
+      )}
+    />
   );
 }

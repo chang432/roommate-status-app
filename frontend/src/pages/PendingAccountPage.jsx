@@ -1,7 +1,6 @@
 import { Navigate, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import Brandmark from "../components/ui/Brandmark.jsx";
-import BottomTray from "../components/ui/BottomTray.jsx";
 import ProfileSettings from "../components/profile/ProfileSettings.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { cx } from "../utils/classNames.js";
@@ -79,13 +78,10 @@ export default function PendingAccountPage() {
           Profile settings
         </button>
         {settingsOpen && (
-          <BottomTray
-            title="Profile settings"
+          <ProfileSettings
             onClose={() => setSettingsOpen(false)}
             widthClassName={styles.settingsModal}
-          >
-            <ProfileSettings />
-          </BottomTray>
+          />
         )}
       </section>
     </main>

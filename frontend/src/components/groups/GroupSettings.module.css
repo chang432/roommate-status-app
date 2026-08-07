@@ -1,8 +1,12 @@
 .panel { @apply space-y-6; }
 .state { @apply py-10 text-center text-[14px] font-bold text-ink-soft; }
-.section { @apply border-b border-line pb-6 last:border-0; }
+.groupSummary { @apply flex items-center gap-4 px-1 pb-1; }
+.avatar { @apply grid h-14 w-14 flex-none place-items-center rounded-full bg-solid-accent text-[24px] font-black text-on-strong shadow-soft; }
+.groupTitle { @apply text-[18px] font-black text-ink; }
+.groupRole { @apply mt-1 text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
+.workflow { @apply mx-auto w-full max-w-[600px] py-1; }
 .sectionHeader { @apply mb-4; }
-.sectionHeader h3 { @apply text-[14px] font-black uppercase tracking-[0.05em] text-ink; }
+.sectionHeader h3 { @apply text-[17px] font-black text-ink; }
 .sectionHeader p { @apply mt-1 text-[13px] leading-5 text-ink-soft; }
 .nameForm { @apply flex items-end gap-2 max-[480px]:flex-col max-[480px]:items-stretch; }
 .grow { @apply min-w-0 flex-1; }

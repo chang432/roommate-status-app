@@ -46,4 +46,38 @@ describe("BottomTray", () => {
 
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("expands a compact tray after a deliberate upward swipe", () => {
+    const onExpand = vi.fn();
+    render(<BottomTray title="Profile settings" onClose={vi.fn()} onExpand={onExpand}><p>Settings</p></BottomTray>);
+    const header = screen.getByRole("heading", { name: "Profile settings" }).closest("header");
+
+    fireEvent.pointerDown(header, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientY: 140,
+    });
+    fireEvent.pointerMove(header, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientY: 50,
+    });
+    fireEvent.pointerUp(header, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientY: 50,
+    });
+
+    expect(onExpand).toHaveBeenCalledOnce();
+  });
+
+  it("shows an accessible Back action for detail screens", async () => {
+    const onBack = vi.fn();
+    render(<BottomTray title="Change password" ariaLabel="Profile settings" onClose={vi.fn()} expanded onBack={onBack}><p>Workflow</p></BottomTray>);
+
+    const dialog = screen.getByRole("dialog", { name: "Profile settings" });
+    expect(dialog).toHaveAttribute("data-expanded", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Back to settings" }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
 });

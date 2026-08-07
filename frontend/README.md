@@ -9,11 +9,11 @@ availability to hang out. Built from the mockups in `../mockups`.
   on `/signup`.
 - **Pending accounts** can sign in but cannot use household features until a
   group code assigns them to a household.
-- **Profile settings** keep account actions in one place, including sign out,
-  account deletion, System/Light/Dark/Forest appearance preferences, and the
-  current household invite code for grouped users. Group admins can also choose
-  whether the household roster, Book Club, and group feed are shown to everyone
-  in that group. Theme choices are stored on the current device.
+- **Profile and group settings** open as compact option trays, then expand to
+  full height when swiped up or when an option is selected. Profile, notification,
+  password, account deletion, group details, appearance, module, and member
+  workflows each have a focused in-tray screen. Group admins choose which modules
+  appear for everyone, while each member's theme follows them across devices.
 - **View** the whole household's current statuses at a glance.
 - **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.
