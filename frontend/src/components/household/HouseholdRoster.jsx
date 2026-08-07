@@ -14,14 +14,12 @@ import styles from "./HouseholdRoster.module.css";
 
 // The household roster: your own status card, the group action header, and a
 // grid of everyone else. Roster state is *controlled* — `roommates` is owned by
-// the page because GroupFeed reads it for mentions and ProfileSettings mutates
-// it when an admin removes a member, so any roster change is handed back up
+// the page because GroupFeed reads it for mentions and GroupSettings mutates it
+// when an admin removes a member, so any roster change is handed back up
 // through onRoommatesChange rather than refetched here.
 export default function HouseholdRoster({
   roommates,
   groupName,
-  hasJam,
-  onShareJam,
   onRoommatesChange,
   onError,
 }) {
@@ -123,15 +121,6 @@ export default function HouseholdRoster({
           className={cx("ui-iconPrimary", styles.notifyButton)}
         >
           <img src="/megaphone.png" alt="" className={styles.notifyIcon} />
-        </button>
-        <button
-          type="button"
-          onClick={onShareJam}
-          aria-label={hasJam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-          title={hasJam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-          className={cx("ui-iconPrimary", styles.jamButton)}
-        >
-          <img src="/spotify.png" alt="" className={styles.spotifyIcon} />
         </button>
       </div>
       <div className={styles.memberGrid}>

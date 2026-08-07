@@ -21,6 +21,19 @@ DEFAULT_GROUP_JOIN_CODE = os.environ.get("DEFAULT_GROUP_JOIN_CODE", "YORKSHIRE")
 JOIN_CODE_RE = re.compile(r"^[A-Z0-9]{6,16}$")
 GROUP_SLUG_RE = re.compile(r"[^a-z0-9]+")
 GROUP_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+GROUP_MODULE_IDS = (
+    "roster",
+    "events",
+    "requests",
+    "checklists",
+    "polls",
+    "tv",
+    "spotify",
+    "book-club",
+    "forums",
+)
+VALID_GROUP_MODULES = set(GROUP_MODULE_IDS)
+VALID_THEMES = {"system", "light", "dark", "forest"}
 
 _table = None
 _table_lock = threading.Lock()
@@ -47,16 +60,27 @@ def valid_join_code(code: str) -> bool:
 def _project_group(item: dict | None) -> dict | None:
     if item is None:
         return None
+    if "enabledModules" in item:
+        enabled_modules = [
+            module_id for module_id in GROUP_MODULE_IDS if module_id in item["enabledModules"]
+        ]
+    else:
+        # The deploy runs before the migration. This projection preserves the
+        # legacy visibility during that short expand/contract window.
+        enabled_modules = []
+        if item.get("showRoster", True):
+            enabled_modules.append("roster")
+        if item.get("showFeed", True):
+            enabled_modules.extend(("events", "requests", "checklists", "polls", "tv"))
+        enabled_modules.append("spotify")
+        if item.get("showBookClub", True):
+            enabled_modules.extend(("book-club", "forums"))
     return {
         "groupId": item["groupId"],
         "name": item.get("name", item["groupId"]),
         "joinCode": item["joinCode"],
         "createdAt": int(item["createdAt"]) if item.get("createdAt") is not None else None,
-        # Older group rows predate display controls. Treat absent values as
-        # visible so deploying this change never hides a household by default.
-        "showRoster": item.get("showRoster", True),
-        "showFeed": item.get("showFeed", True),
-        "showBookClub": item.get("showBookClub", True),
+        "enabledModules": enabled_modules,
     }
 
 
@@ -75,9 +99,7 @@ def ensure_default_group() -> dict:
                 "name": db.DEFAULT_GROUP_NAME,
                 "joinCode": join_code,
                 "createdAt": created_at,
-                "showRoster": True,
-                "showFeed": True,
-                "showBookClub": True,
+                "enabledModules": list(GROUP_MODULE_IDS),
             },
             ConditionExpression="attribute_not_exists(groupId)",
         )
@@ -108,9 +130,7 @@ def ensure_seed_group(
     name: str,
     join_code: str,
     *,
-    show_roster: bool,
-    show_feed: bool,
-    show_book_club: bool,
+    enabled_modules: list[str],
 ) -> dict:
     """Create or refresh a named development seed group.
 
@@ -129,9 +149,9 @@ def ensure_seed_group(
         "name": name,
         "joinCode": code,
         "createdAt": now,
-        "showRoster": show_roster,
-        "showFeed": show_feed,
-        "showBookClub": show_book_club,
+        "enabledModules": [
+            module_id for module_id in GROUP_MODULE_IDS if module_id in enabled_modules
+        ],
     }
     try:
         table.put_item(Item=item, ConditionExpression="attribute_not_exists(groupId)")
@@ -144,16 +164,13 @@ def ensure_seed_group(
             Key={"groupId": group_id},
             UpdateExpression=(
                 "SET #name = :name, joinCode = :joinCode, "
-                "showRoster = :showRoster, showFeed = :showFeed, "
-                "showBookClub = :showBookClub"
+                "enabledModules = :enabledModules"
             ),
             ExpressionAttributeNames={"#name": "name"},
             ExpressionAttributeValues={
                 ":name": name,
                 ":joinCode": code,
-                ":showRoster": show_roster,
-                ":showFeed": show_feed,
-                ":showBookClub": show_book_club,
+                ":enabledModules": item["enabledModules"],
             },
             ConditionExpression="attribute_exists(groupId)",
         )
@@ -188,10 +205,21 @@ def get_group_by_code(code: str) -> dict | None:
 def list_groups_for_user(user_id: str) -> list[dict]:
     """Return the metadata for every group an account belongs to."""
     return [
-        group
+        personalize_group(group, user_id)
         for group_id in db.get_group_ids(user_id)
         if (group := get_group_by_id(group_id)) is not None
     ]
+
+
+def personalize_group(group: dict, user_id: str) -> dict:
+    membership = db.get_membership(user_id, group["groupId"])
+    return {
+        **group,
+        "viewerIsAdmin": bool(
+            membership and membership.get("role", db.ROLE_MEMBER) == db.ROLE_ADMIN
+        ),
+        "theme": membership.get("theme", "system") if membership else "system",
+    }
 
 
 def create_group(user_id: str, name: str) -> tuple[dict | None, dict | None, str | None]:
@@ -214,10 +242,8 @@ def create_group(user_id: str, name: str) -> tuple[dict | None, dict | None, str
             "joinCode": join_code,
             "createdAt": int(time.time() * 1000),
             # New households start with no shared modules visible. An admin
-            # explicitly enables the sections they want from group settings.
-            "showRoster": False,
-            "showFeed": False,
-            "showBookClub": False,
+            # explicitly enables the surfaces they want from group settings.
+            "enabledModules": [],
         }
         try:
             table.put_item(
@@ -266,28 +292,23 @@ def join_group(user_id: str, code: str) -> tuple[dict | None, str | None]:
     return {**db.get_account_by_id(account["id"]), "groupId": group["groupId"]}, None
 
 
-def set_display_options(
-    actor_id: str,
-    group_id: str,
-    show_roster: bool,
-    show_feed: bool,
-    show_book_club: bool,
+def set_enabled_modules(
+    actor_id: str, group_id: str, enabled_modules: list[str]
 ) -> tuple[dict | None, str | None]:
-    """Update one household's shared section visibility for a group admin."""
+    """Update one household's enabled UI surfaces for a group admin."""
     if not db.is_group_admin(actor_id, group_id):
         return None, "forbidden"
+    if not isinstance(enabled_modules, list) or any(
+        not isinstance(module_id, str) or module_id not in VALID_GROUP_MODULES
+        for module_id in enabled_modules
+    ):
+        return None, "invalid_modules"
+    normalized = [module_id for module_id in GROUP_MODULE_IDS if module_id in enabled_modules]
     try:
         _get_table().update_item(
             Key={"groupId": group_id},
-            UpdateExpression=(
-                "SET showRoster = :showRoster, showFeed = :showFeed, "
-                "showBookClub = :showBookClub"
-            ),
-            ExpressionAttributeValues={
-                ":showRoster": show_roster,
-                ":showFeed": show_feed,
-                ":showBookClub": show_book_club,
-            },
+            UpdateExpression="SET enabledModules = :enabledModules",
+            ExpressionAttributeValues={":enabledModules": normalized},
             ConditionExpression="attribute_exists(groupId)",
         )
     except ClientError as err:
@@ -295,6 +316,44 @@ def set_display_options(
             return None, "unknown_group"
         raise
     return get_group_by_id(group_id), None
+
+
+def rename_group(actor_id: str, group_id: str, name: str) -> tuple[dict | None, str | None]:
+    if not db.is_group_admin(actor_id, group_id):
+        return None, "forbidden"
+    display_name = (name or "").strip()
+    if not display_name or len(display_name) > 80:
+        return None, "invalid_name"
+    try:
+        _get_table().update_item(
+            Key={"groupId": group_id},
+            UpdateExpression="SET #name = :name",
+            ExpressionAttributeNames={"#name": "name"},
+            ExpressionAttributeValues={":name": display_name},
+            ConditionExpression="attribute_exists(groupId)",
+        )
+    except ClientError as error:
+        if error.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None, "unknown_group"
+        raise
+    return get_group_by_id(group_id), None
+
+
+def set_member_theme(user_id: str, group_id: str, theme: str) -> tuple[str | None, str | None]:
+    if theme not in VALID_THEMES:
+        return None, "invalid_theme"
+    try:
+        db._get_memberships_table().update_item(
+            Key={"groupId": group_id, "userId": user_id},
+            UpdateExpression="SET theme = :theme",
+            ExpressionAttributeValues={":theme": theme},
+            ConditionExpression="attribute_exists(groupId) AND attribute_exists(userId)",
+        )
+    except ClientError as error:
+        if error.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return None, "unknown_member"
+        raise
+    return theme, None
 
 
 def _authorize_admin_action(

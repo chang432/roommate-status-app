@@ -230,7 +230,6 @@ class ModuleSource:
 
     model: type[BaseModule]
     list_payloads: Callable[[str], Iterable[dict[str, Any]]]
-    requires_book_club: bool = False
 
 
 def _list_jam(group_id: str) -> Iterable[dict[str, Any]]:
@@ -263,12 +262,10 @@ MODULE_SOURCES = {
     "book-club": ModuleSource(
         BookClubMeetingModule,
         book_club.list_meetings,
-        requires_book_club=True,
     ),
     "forums": ModuleSource(
         ForumModule,
         lambda group_id: household_forums.list_recent(group_id, consistent=True),
-        requires_book_club=True,
     ),
 }
 
@@ -287,8 +284,6 @@ def module_from_payload(module_type: str, payload: dict[str, Any]) -> BaseModule
 def list_feed(
     group_id: str,
     module_type: str | None = None,
-    *,
-    include_book_club: bool = False,
 ) -> list[dict[str, Any]]:
     requested_types = MODULE_TYPES if not module_type or module_type == "all" else {module_type}
     if not requested_types <= MODULE_TYPES:
@@ -297,8 +292,6 @@ def list_feed(
     modules: list[BaseModule] = []
     for source_type, source in MODULE_SOURCES.items():
         if source_type not in requested_types:
-            continue
-        if source.requires_book_club and not include_book_club:
             continue
         modules.extend(
             source.model.from_payload(item)

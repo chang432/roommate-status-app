@@ -1,5 +1,5 @@
 TABLE RoommateStatus-main-memberships - one account membership per group; primary key groupId + userId. UserIdIndex (HASH userId, ProjectionType ALL) lists a user's groups.
-groupId (S),userId (S),name (S),status (S),statusText (S),statusUpdatedAt (N|NULL),joinedAt (N),role (S)
-yorkshire,sheryl,Sheryl,available,in the kitchen,1720200000000,1720100000000,member
-yorkshire,andre,Andre,ooh,back around 7,1720199000000,1720100000000,admin
-cedar-house,andre,Andre,busy,,null,1720260000000,admin
+groupId (S),userId (S),name (S),status (S),statusText (S),statusUpdatedAt (N|NULL),joinedAt (N),role (S),theme (S)
+yorkshire,sheryl,Sheryl,available,in the kitchen,1720200000000,1720100000000,member,light
+yorkshire,andre,Andre,ooh,back around 7,1720199000000,1720100000000,admin,forest
+cedar-house,andre,Andre,busy,,null,1720260000000,admin,system

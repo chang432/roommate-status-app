@@ -2,17 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Brandmark from "../components/ui/Brandmark.jsx";
 import BookClub from "../components/book-club/BookClub.jsx";
-import EnableNotifications from "../components/profile/EnableNotifications.jsx";
 import { GroupFeedView } from "../components/feed/GroupFeed.jsx";
 import JamWidget, { JamShareForm } from "../components/jam/JamWidget.jsx";
 import GroupSwitcherDrawer from "../components/groups/GroupSwitcherDrawer.jsx";
+import GroupSettings from "../components/groups/GroupSettings.jsx";
 import HouseholdRoster from "../components/household/HouseholdRoster.jsx";
 import LiveEventBanner from "../components/feed/LiveEventBanner.jsx";
 import ModalShell from "../components/ui/ModalShell.jsx";
+import BottomTray from "../components/ui/BottomTray.jsx";
 import NotificationBanner from "../components/ui/NotificationBanner.jsx";
 import ProfileSettings from "../components/profile/ProfileSettings.jsx";
 import PullToRefreshIndicator from "../components/ui/PullToRefreshIndicator.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useTheme } from "../context/ThemeContext.jsx";
 import { endActivity, startActivity } from "../api/activities.js";
 import { getGroups } from "../api/groups.js";
 import { getRoommates } from "../api/roommates.js";
@@ -28,7 +30,7 @@ import {
 import styles from "./StatusPage.module.css";
 
 export default function StatusPage() {
-  const { user, logout, deleteAccount, joinGroup, createGroup, selectGroup } =
+  const { user, joinGroup, createGroup, selectGroup } =
     useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const feedRef = useRef(null);
@@ -40,12 +42,14 @@ export default function StatusPage() {
   const [transitioningId, setTransitioningId] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
+  const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
   const [jamModalOpen, setJamModalOpen] = useState(false);
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [groupsError, setGroupsError] = useState("");
   const [bookClubRefreshToken, setBookClubRefreshToken] = useState(0);
   const activeGroupIdRef = useRef(user.activeGroupId);
+  const { setTheme } = useTheme();
   const {
     modules,
     loading: modulesLoading,
@@ -153,15 +157,28 @@ export default function StatusPage() {
   const liveWatchparties = shows.filter((show) => show.isWatchpartyLive);
   const selectedGroup =
     groups.find((group) => group.groupId === user.activeGroupId) ?? groups[0];
-  // Group controls are shared with everyone in the household. Missing fields
-  // mean an older group record, which remains fully visible by default.
-  const showRoster = selectedGroup?.showRoster !== false;
-  const showFeed = selectedGroup?.showFeed !== false;
-  const showBookClub = selectedGroup?.showBookClub !== false;
+  const enabledModules = selectedGroup?.enabledModules ?? [];
+  const enabledModuleSet = new Set(enabledModules);
+  const showRoster = enabledModuleSet.has("roster");
+  const showBookClub = enabledModuleSet.has("book-club");
+  const showSpotify = enabledModuleSet.has("spotify");
+  const hasFeedModules = enabledModules.some((moduleId) =>
+    ["events", "requests", "checklists", "polls", "tv", "book-club", "forums"].includes(moduleId),
+  );
   const groupDataLoading =
     groupsLoading ||
     statusLoadedGroupId !== user.activeGroupId ||
     modulesLoading;
+
+  useEffect(() => {
+    setTheme(selectedGroup?.theme ?? "system");
+  }, [selectedGroup?.groupId, selectedGroup?.theme, setTheme]);
+
+  const handleGroupChange = useCallback((updatedGroup) => {
+    setGroups((currentGroups) => currentGroups.map((group) =>
+      group.groupId === updatedGroup.groupId ? updatedGroup : group,
+    ));
+  }, []);
 
   async function handleLiveTransition(activity, action) {
     if (transitioningId) return;
@@ -240,6 +257,10 @@ export default function StatusPage() {
         onSelect={handleGroupSelect}
         onJoin={handleJoinGroup}
         onCreate={handleCreateGroup}
+        onEdit={() => {
+          setGroupDrawerOpen(false);
+          setGroupSettingsOpen(true);
+        }}
       />
 
       <div
@@ -339,28 +360,28 @@ export default function StatusPage() {
             </div>
           )}
 
-          <EnableNotifications />
           {showBanner && <NotificationBanner count={freeCount} />}
 
           {showRoster && (
             <HouseholdRoster
               roommates={displayedRoommates}
               groupName={selectedGroup?.name}
-              hasJam={Boolean(jam)}
-              onShareJam={openJamModal}
               onRoommatesChange={setRoommates}
               onError={setError}
             />
           )}
         </main>
 
-        {jam && (
+        {showSpotify && (
           <div hidden={groupDataLoading}>
-            <JamWidget
-              jam={jam}
-              onJamChange={refreshModules}
-              onReplace={openJamModal}
-            />
+            {jam ? (
+              <JamWidget jam={jam} onJamChange={refreshModules} onReplace={openJamModal} />
+            ) : (
+              <section className={styles.jamEmpty}>
+                <div><p>Spotify Jam</p><span>No Jam is active in this group.</span></div>
+                <button type="button" onClick={openJamModal} className="ui-primaryButton">Share Jam</button>
+              </section>
+            )}
           </div>
         )}
 
@@ -372,7 +393,7 @@ export default function StatusPage() {
           />
         )}
 
-        {(showFeed || showBookClub) && (
+        {hasFeedModules && (
           <div ref={feedRef} hidden={groupDataLoading}>
             <GroupFeedView
               roommates={displayedRoommates}
@@ -380,34 +401,30 @@ export default function StatusPage() {
               loading={modulesLoading}
               error={modulesError}
               refreshModules={refreshModules}
-              showStandardModules={showFeed}
-              showBookClub={showBookClub}
+              enabledModuleIds={enabledModules}
             />
           </div>
         )}
 
         {settingsOpen && (
-          <ModalShell
+          <BottomTray
             title="Profile settings"
             onClose={() => setSettingsOpen(false)}
             widthClassName={styles.settingsModal}
           >
-            <ProfileSettings
-              user={user}
-              roommates={roommates}
-              onRoommatesChange={setRoommates}
-              onGroupChange={(updatedGroup) =>
-                setGroups((currentGroups) =>
-                  currentGroups.map((group) =>
-                    group.groupId === updatedGroup.groupId ? updatedGroup : group,
-                  ),
-                )
-              }
-              onSignOut={logout}
-              onDeleteAccount={deleteAccount}
-            />
-          </ModalShell>
+            <ProfileSettings onProfileChanged={loadRoommates} />
+          </BottomTray>
         )}
+        {groupSettingsOpen && selectedGroup ? (
+          <BottomTray title="Group settings" onClose={() => setGroupSettingsOpen(false)}>
+            <GroupSettings
+              group={selectedGroup}
+              roommates={roommates}
+              onGroupChange={handleGroupChange}
+              onRoommatesChange={setRoommates}
+            />
+          </BottomTray>
+        ) : null}
         {jamModalOpen && (
           <ModalShell
             title={jam ? "Replace Spotify Jam" : "Share Spotify Jam"}

@@ -161,3 +161,96 @@ def test_delete_account_removes_roommate_and_push_subscriptions(client):
     assert deleted.get_json() == {"ok": True}
     assert db.get_account_by_id("andre") is None
     assert push._get_table().get_item(Key={"id": "sub-delete-me"}).get("Item") is None
+
+
+def test_profile_rename_rewrites_id_linked_history_across_tables(client):
+    activities._get_table().put_item(Item={
+        "groupId": TEST_GROUP_ID,
+        "id": "rename-activity",
+        "text": "Dinner",
+        "proposedById": "andre",
+        "proposedBy": "Andre",
+        "memberIds": {"andre", "sheryl"},
+        "members": {"Andre", "Sheryl"},
+        "comments": [{
+            "id": "comment-1", "authorId": "andre", "author": "Andre",
+            "text": "Hi", "mentions": [{"id": "andre", "name": "Andre"}],
+        }],
+        "createdAt": 1,
+    })
+    household_polls._get_table().put_item(Item={
+        "groupId": TEST_GROUP_ID,
+        "id": "rename-poll",
+        "title": "Choose",
+        "createdById": "andre",
+        "createdBy": "Andre",
+        "options": [{
+            "id": "one", "text": "One", "addedById": "andre", "addedBy": "Andre",
+            "voterNamesById": {"andre": "Andre"},
+        }],
+        "createdAt": 1,
+    })
+    book_club._get_table().put_item(Item={
+        "groupId": TEST_GROUP_ID,
+        "id": "book#rename",
+        "bookId": "rename",
+        "title": "Book",
+        "author": "Writer",
+        "bookOwnerId": "andre",
+        "bookOwnerName": "Andre",
+        "createdAt": 1,
+    })
+    jam._get_table().put_item(Item={
+        "id": f"activeJam#{TEST_GROUP_ID}",
+        "groupId": TEST_GROUP_ID,
+        "hostId": "andre",
+        "hostName": "Andre",
+        "link": "https://spotify.link/test",
+        "createdAt": 1,
+    })
+
+    renamed = client.patch(
+        "/api/accounts/andre",
+        json={"name": "Wren", "currentPassword": "roomie"},
+    )
+
+    assert renamed.status_code == 200
+    assert renamed.get_json()["user"]["name"] == "Wren"
+    assert next(item for item in db.get_all(TEST_GROUP_ID) if item["id"] == "andre")["name"] == "Wren"
+    activity = activities._get_table().get_item(
+        Key={"groupId": TEST_GROUP_ID, "id": "rename-activity"}
+    )["Item"]
+    assert activity["proposedBy"] == "Wren"
+    assert activity["members"] == {"Wren", "Sheryl"}
+    assert activity["comments"][0]["author"] == "Wren"
+    assert activity["comments"][0]["mentions"][0]["name"] == "Wren"
+    poll = household_polls._get_table().get_item(
+        Key={"groupId": TEST_GROUP_ID, "id": "rename-poll"}
+    )["Item"]
+    assert poll["createdBy"] == "Wren"
+    assert poll["options"][0]["addedBy"] == "Wren"
+    assert poll["options"][0]["voterNamesById"]["andre"] == "Wren"
+    book = book_club._get_table().get_item(
+        Key={"groupId": TEST_GROUP_ID, "id": "book#rename"}
+    )["Item"]
+    assert book["bookOwnerName"] == "Wren"
+    assert jam.get_active(TEST_GROUP_ID)["hostName"] == "Wren"
+
+
+def test_profile_and_password_updates_require_current_password(client):
+    denied_name = client.patch(
+        "/api/accounts/andre", json={"name": "Wren", "currentPassword": "wrong"}
+    )
+    denied_password = client.put(
+        "/api/accounts/andre/password",
+        json={"currentPassword": "wrong", "newPassword": "new-secret"},
+    )
+    updated_password = client.put(
+        "/api/accounts/andre/password",
+        json={"currentPassword": "roomie", "newPassword": "new-secret"},
+    )
+
+    assert denied_name.status_code == 401
+    assert denied_password.status_code == 401
+    assert updated_password.status_code == 200
+    assert db.authenticate("andre", "new-secret")["id"] == "andre"

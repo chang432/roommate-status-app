@@ -106,10 +106,14 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | ------------------------------- | ---------------------------------------------------------- |
 | `login`                         | `POST /api/login`                                          |
 | `createAccount`                 | `POST /api/accounts`                                       |
+| `updateAccount`                 | `PATCH /api/accounts/:id`                                 |
+| `updatePassword`                | `PUT /api/accounts/:id/password`                          |
 | `deleteAccount`                 | `DELETE /api/accounts/:id`                                 |
 | `joinGroup`                     | `POST /api/groups/join`                                    |
 | `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
-| `updateGroupDisplay`            | `PUT /api/groups/display?userId=:id`                       |
+| `renameGroup`                   | `PATCH /api/groups/current?userId=:id`                     |
+| `updateGroupModules`            | `PUT /api/groups/modules?userId=:id`                       |
+| `updateGroupTheme`              | `PUT /api/groups/theme?userId=:id`                         |
 | `getBookClub`                   | `GET /api/book-club?userId=:id`                            |
 | `createBookClubMeeting`         | `POST /api/book-club/meetings?userId=:id`                  |
 | `getBookClubMeetings`           | `GET /api/book-club/meetings?userId=:id`                   |

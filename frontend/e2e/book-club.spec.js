@@ -4,6 +4,10 @@ const MEETING_ID = 'meeting#demo'
 const ACTIVE_BOOK_ID = 'active-book'
 const COMPLETED_BOOK_ID = 'completed-book'
 const NOW = Date.UTC(2030, 7, 7, 23, 30)
+const ALL_GROUP_MODULES = [
+  'roster', 'events', 'requests', 'checklists', 'polls', 'tv',
+  'spotify', 'book-club', 'forums',
+]
 
 function bookClubFixture() {
   const meeting = {
@@ -152,12 +156,14 @@ async function mockBookClub(page, {
     if (path === '/api/accounts/andre') {
       payload = { user: { id: 'andre', name: 'Andre', username: 'andre', groupId: 'book-club', hasGroup: true } }
     } else if (path === '/api/groups') {
-      payload = { groups: [{ groupId: 'book-club', name: 'Book Club' }] }
+      payload = { groups: [{ groupId: 'book-club', name: 'Book Club', enabledModules: ALL_GROUP_MODULES, theme: 'system' }] }
     } else if (path === '/api/groups/current') {
       payload = { group: {
-        groupId: 'book-club', name: 'Book Club', showBookClub: true,
-        showRoster: true, showFeed: true, viewerIsAdmin,
+        groupId: 'book-club', name: 'Book Club',
+        enabledModules: ALL_GROUP_MODULES, theme: 'system', viewerIsAdmin,
       } }
+    } else if (path === '/api/groups/theme' && method === 'PUT') {
+      payload = { ok: true }
     } else if (path === '/api/roommates') {
       payload = [
         { id: 'andre', name: 'Andre', role: viewerIsAdmin ? 'admin' : 'member' },
@@ -1338,9 +1344,12 @@ test('keeps the editorial feed header clear across themes', async ({ page }, tes
   await page.goto('/')
 
   for (const theme of ['light', 'dark', 'forest']) {
-    await page.evaluate((nextTheme) => localStorage.setItem('roomie-theme', nextTheme), theme)
-    await page.reload()
+    await page.getByRole('button', { name: /Open group switcher/ }).click()
+    await page.getByLabel('Your groups').getByRole('button', { name: 'Edit' }).click()
+    const settings = page.getByRole('dialog', { name: 'Group settings' })
+    await settings.getByRole('radio', { name: new RegExp(`^${theme}`, 'i') }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await settings.getByRole('button', { name: 'Close' }).click()
 
     const stickyHeader = page.locator('[data-feed-sticky-header]')
     await expect(stickyHeader).not.toHaveAttribute('data-feed-pinned')

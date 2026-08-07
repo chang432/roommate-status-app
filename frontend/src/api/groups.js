@@ -16,10 +16,24 @@ export function getCurrentGroup(userId) {
   return request(withQuery("/groups/current", { userId }));
 }
 
-export function updateGroupDisplay(userId, showRoster, showFeed, showBookClub) {
-  return request(withQuery("/groups/display", { userId }), {
+export function renameGroup(userId, name) {
+  return request(withQuery("/groups/current", { userId }), {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function updateGroupModules(userId, enabledModules) {
+  return request(withQuery("/groups/modules", { userId }), {
     method: "PUT",
-    body: JSON.stringify({ showRoster, showFeed, showBookClub }),
+    body: JSON.stringify({ enabledModules }),
+  });
+}
+
+export function updateGroupTheme(userId, theme) {
+  return request(withQuery("/groups/theme", { userId }), {
+    method: "PUT",
+    body: JSON.stringify({ theme }),
   });
 }
 

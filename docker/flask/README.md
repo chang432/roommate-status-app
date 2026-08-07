@@ -10,12 +10,16 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | ------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------------------- |
 | `POST /api/login`                                            | `{ username, password }`                   | `{ user: { id, name, username, groupId, hasGroup } }`   |
 | `POST /api/accounts`                                         | `{ username, name, password }`             | new no-group `{ user }`                                 |
+| `PATCH /api/accounts/<id>`                                   | `{ name, password }`                       | renamed `{ user }`, with historical snapshots updated  |
+| `PUT /api/accounts/<id>/password`                            | `{ currentPassword, newPassword }`         | `{ ok: true }`                                          |
 | `DELETE /api/accounts/<id>`                                  | `{ password }`                             | `{ ok: true }` after password verification              |
 | `POST /api/groups/join`                                      | `{ userId, code }`                         | `{ user, group }`                                       |
 | `POST /api/groups`                                           | `{ userId, name }`                         | newly created `{ user, group }`                         |
 | `GET  /api/groups`                                           | `?userId=<id>`                             | every selectable group                                  |
 | `GET  /api/groups/current`                                   | `?userId=<id>`                             | selected group metadata, including `viewerIsAdmin`      |
-| `PUT  /api/groups/display`                                   | `?userId=<id>` + `{ showRoster, showFeed, showBookClub }` | updated admin-managed group display settings |
+| `PATCH /api/groups/current`                                  | `?userId=<id>` + `{ name }`                | renamed active group (admin only)                       |
+| `PUT /api/groups/modules`                                    | `?userId=<id>` + `{ enabledModules }`       | active group's enabled UI modules (admin only)          |
+| `PUT /api/groups/theme`                                      | `?userId=<id>` + `{ theme }`                | current member's theme for the active group             |
 | `GET /api/book-club`                                         | `?userId=<id>`                             | owner lists, active book, open meeting, and next suggested date |
 | `POST /api/book-club/meetings`                               | `?userId=<id>` + meeting fields | admin-created meeting for the configured current book |
 | `GET /api/book-club/meetings`                                | `?userId=<id>`                             | all meeting summaries and member responses              |

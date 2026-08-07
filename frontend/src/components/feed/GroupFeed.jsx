@@ -13,7 +13,6 @@ import {
   FEED_MODULE_TYPES,
   canCreateFeedModule,
   canEditFeedModule,
-  isFeedModuleEnabled,
   renderFeedModuleEdit,
 } from "./feedModuleRegistry.jsx";
 import {
@@ -47,8 +46,7 @@ export function GroupFeedView({
   loading,
   error: feedError,
   refreshModules,
-  showStandardModules = true,
-  showBookClub = false,
+  enabledModuleIds = [],
 }) {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -73,16 +71,9 @@ export function GroupFeedView({
 
   const enabledTypeIds = useMemo(() => {
     return new Set(
-      Object.values(FEED_MODULE_REGISTRY)
-        .filter((definition) =>
-          isFeedModuleEnabled(definition, {
-            showBookClub,
-            showStandardModules,
-          }),
-        )
-        .map((definition) => definition.id),
+      Object.keys(FEED_MODULE_REGISTRY).filter((id) => enabledModuleIds.includes(id)),
     );
-  }, [showBookClub, showStandardModules]);
+  }, [enabledModuleIds]);
 
   const moduleTypes = useMemo(() => {
     const byId = new Map(FEED_MODULE_TYPES.map((type) => [type.id, type]));
@@ -443,7 +434,7 @@ export function GroupFeedView({
     activeType === "all"
       ? "Create a module"
       : FEED_MODULE_REGISTRY[activeType].createLabel;
-  const canCreateModule = showStandardModules || showBookClub;
+  const canCreateModule = enabledTypeIds.size > 0;
 
   if (loading) {
     return <p className={styles.loading}>Loading the feed…</p>;

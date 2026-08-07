@@ -27,6 +27,7 @@ import household_shows
 import jam
 import module_models
 import push
+import profile_names
 import seed
 from app import _activity_status_overrides, create_app, mentions_all, resolve_mentions
 

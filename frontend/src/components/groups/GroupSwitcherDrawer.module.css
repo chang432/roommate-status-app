@@ -26,6 +26,10 @@
   @apply grid h-9 w-9 place-items-center rounded-full border border-line text-[24px] leading-none text-ink-soft transition hover:border-accent hover:text-ink;
 }
 
+.headerActions { @apply flex items-center gap-2; }
+
+.edit { @apply h-9 rounded-full border border-line px-4 text-[13px] font-black text-ink-soft transition hover:border-accent hover:bg-surface-hover hover:text-ink; }
+
 .section {
   @apply space-y-1;
 }

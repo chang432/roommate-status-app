@@ -4,6 +4,8 @@ import {
   deleteAccount as apiDeleteAccount,
   getAccount as apiGetAccount,
   login as apiLogin,
+  updateAccount as apiUpdateAccount,
+  updatePassword as apiUpdatePassword,
 } from '../api/accounts.js'
 import { createGroup as apiCreateGroup, joinGroup as apiJoinGroup } from '../api/groups.js'
 import { setInvalidUserHandler } from '../api/request.js'
@@ -79,6 +81,24 @@ export function AuthProvider({ children }) {
     logout()
   }, [logout, user])
 
+  const updateProfile = useCallback(async (name, currentPassword) => {
+    if (!user) return null
+    try {
+      const { user: updated } = await apiUpdateAccount(user.id, name, currentPassword)
+      return persistUser({ ...updated, activeGroupId: user.activeGroupId })
+    } catch (error) {
+      if (error.data?.user) {
+        persistUser({ ...error.data.user, activeGroupId: user.activeGroupId })
+      }
+      throw error
+    }
+  }, [persistUser, user])
+
+  const updatePassword = useCallback(async (currentPassword, newPassword) => {
+    if (!user) return null
+    return apiUpdatePassword(user.id, currentPassword, newPassword)
+  }, [user])
+
   const joinGroup = useCallback(async (code) => {
     if (!user) return null
     const { user: joined, group } = await apiJoinGroup(user.id, code)
@@ -105,6 +125,8 @@ export function AuthProvider({ children }) {
       selectGroup,
       createGroup,
       deleteAccount,
+      updateProfile,
+      updatePassword,
       logout,
     }}
     >

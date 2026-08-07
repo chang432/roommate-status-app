@@ -6,7 +6,6 @@ from testing.support import *  # noqa: F403
 
 
 def add_book(client, title="The Left Hand of Darkness"):
-    groups.set_display_options("andre", TEST_GROUP_ID, True, True, True)
     response = client.post(
         grouped_path("/api/book-club/books"),
         json={"title": title, "author": "Ursula K. Le Guin", "bookOwnerId": "andre"},
@@ -115,8 +114,8 @@ def test_any_member_can_archive_restore_and_delete_forum(client):
     assert deleted.get_json() == []
 
 
-def test_forums_are_hidden_when_book_club_is_disabled(client):
+def test_forum_data_remains_available_when_its_ui_module_is_disabled(client):
     forum = create_forum(client, add_book(client))
-    groups.set_display_options("andre", TEST_GROUP_ID, True, True, False)
-    assert client.get(grouped_path("/api/feed?type=forums")).get_json() == []
-    assert forum["id"]
+    groups.set_enabled_modules("andre", TEST_GROUP_ID, [])
+    feed = client.get(grouped_path("/api/feed?type=forums")).get_json()
+    assert feed[0]["id"] == forum["id"]

@@ -15,3 +15,17 @@ export function getAccount(id) {
 export function deleteAccount(id, password) {
   return request(`/accounts/${id}`, { method: "DELETE", body: JSON.stringify({ password }) });
 }
+
+export function updateAccount(id, name, currentPassword) {
+  return request(`/accounts/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name, currentPassword }),
+  });
+}
+
+export function updatePassword(id, currentPassword, newPassword) {
+  return request(`/accounts/${id}/password`, {
+    method: "PUT",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}

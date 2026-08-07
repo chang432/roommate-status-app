@@ -49,7 +49,6 @@ function LocationProbe() {
 
 function renderRoster(props = {}, { route = "/" } = {}) {
   const handlers = {
-    onShareJam: vi.fn(),
     onRoommatesChange: vi.fn(),
     onError: vi.fn(),
   };
@@ -58,7 +57,6 @@ function renderRoster(props = {}, { route = "/" } = {}) {
       <HouseholdRoster
         roommates={ROSTER}
         groupName="Yorkshire"
-        hasJam={false}
         {...handlers}
         {...props}
       />
@@ -172,20 +170,6 @@ describe("HouseholdRoster", () => {
 
     await waitFor(() => expect(pokeRoommate).toHaveBeenCalledWith("kayla", "andre"));
     expect(await screen.findByText("Poked once")).toBeInTheDocument();
-  });
-
-  it("labels the jam button by whether a jam is already live", async () => {
-    const { onShareJam } = renderRoster({ hasJam: true });
-
-    const button = screen.getByRole("button", { name: "Replace Spotify Jam" });
-    await userEvent.click(button);
-    expect(onShareJam).toHaveBeenCalled();
-
-    cleanup();
-    renderRoster({ hasJam: false });
-    expect(
-      screen.getByRole("button", { name: "Share Spotify Jam" }),
-    ).toBeInTheDocument();
   });
 
   it("opens the editor from a poke deep link and consumes the param", async () => {

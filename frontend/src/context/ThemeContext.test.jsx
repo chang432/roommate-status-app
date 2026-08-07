@@ -1,12 +1,11 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import ProfileSettings from '../components/profile/ProfileSettings.jsx'
 import { ThemeProvider, useTheme } from './ThemeContext.jsx'
 
 function ThemeProbe() {
-  const { theme, resolvedTheme } = useTheme()
-  return <output>{theme}:{resolvedTheme}</output>
+  const { theme, resolvedTheme, setTheme } = useTheme()
+  return <><output>{theme}:{resolvedTheme}</output><button onClick={() => setTheme('forest')}>Use Forest</button></>
 }
 
 function installMatchMedia(initiallyDark = false) {
@@ -48,10 +47,11 @@ describe('ThemeProvider', () => {
     vi.restoreAllMocks()
   })
 
-  it('applies and persists a named theme without consulting system changes', async () => {
-    localStorage.setItem('roomie-theme', 'forest')
+  it('applies an explicit group theme without persisting a global preference', async () => {
     const media = installMatchMedia(false)
     render(<ThemeProvider><ThemeProbe /></ThemeProvider>)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Use Forest' }))
 
     expect(await screen.findByText('forest:forest')).toBeInTheDocument()
     expect(document.documentElement).toHaveAttribute('data-theme', 'forest')
@@ -60,13 +60,13 @@ describe('ThemeProvider', () => {
       'content',
       '#143d2e',
     )
+    expect(localStorage.getItem('roomie-theme')).toBeNull()
 
     media.setDark(true)
     expect(screen.getByText('forest:forest')).toBeInTheDocument()
   })
 
   it('falls back to System and follows operating-system changes', async () => {
-    localStorage.setItem('roomie-theme', 'unknown-theme')
     const media = installMatchMedia(false)
     render(<ThemeProvider><ThemeProbe /></ThemeProvider>)
 
@@ -80,23 +80,4 @@ describe('ThemeProvider', () => {
     )
   })
 
-  it('renders theme choices from the catalog and saves Forest', async () => {
-    const user = userEvent.setup()
-    render(
-      <ThemeProvider>
-        <ProfileSettings
-          user={{ id: 'andre', name: 'Andre', username: 'andre', hasGroup: false }}
-          onSignOut={vi.fn()}
-          onDeleteAccount={vi.fn()}
-        />
-      </ThemeProvider>,
-    )
-
-    expect(screen.getAllByRole('radio')).toHaveLength(4)
-    await user.click(screen.getByRole('radio', { name: /Forest/ }))
-
-    expect(localStorage.getItem('roomie-theme')).toBe('forest')
-    expect(document.documentElement).toHaveAttribute('data-theme', 'forest')
-    expect(screen.getByText('Current theme: Forest')).toBeInTheDocument()
-  })
 })

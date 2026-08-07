@@ -99,6 +99,7 @@ import jam
 import module_edits
 import module_models
 import push
+import profile_names
 
 # Cap proposal/request/checklist text so a notification body stays sane.
 MAX_ACTIVITY_LEN = 280
@@ -186,11 +187,6 @@ def group_member_from_query() -> tuple[dict | None, tuple | None]:
     if member is None:
         return None, invalid_user_response()
     return member, None
-
-
-def group_has_book_club(group_id: str) -> bool:
-    group = groups.get_group_by_id(group_id)
-    return bool(group and group.get("showBookClub", True))
 
 
 def group_user_ids(group_id: str) -> set[str]:
@@ -294,7 +290,7 @@ def create_app() -> Flask:
         if user is None:
             return jsonify({"error": "That username and password don’t match."}), 401
 
-        return jsonify({"user": user})
+        return jsonify({"user": db.get_account_profile(user["id"])})
 
     @app.post("/api/accounts")
     def create_account():
@@ -329,10 +325,55 @@ def create_app() -> Flask:
     def get_account(user_id: str):
         """Return one account (grouped or not) so the frontend can re-validate
         a stored session — e.g. after the local in-memory DB was reseeded."""
-        account = db.get_account_by_id(db.normalize_username(user_id))
+        account = db.get_account_profile(db.normalize_username(user_id))
         if account is None:
             return jsonify({"error": "That account no longer exists.", "code": "invalid_user"}), 404
         return jsonify({"user": account})
+
+    @app.patch("/api/accounts/<user_id>")
+    def update_account_profile(user_id: str):
+        """Rename an account and every ID-linked historical name snapshot."""
+        body = request.get_json(silent=True) or {}
+        user, previous_name, error = db.begin_account_name_update(
+            user_id, body.get("name", ""), body.get("currentPassword", "")
+        )
+        if error == "invalid_name":
+            return jsonify({"error": "Enter a display name up to 80 characters."}), 400
+        if error == "invalid_password":
+            return jsonify({"error": "Your current password is incorrect."}), 401
+        if error == "sync_pending":
+            return jsonify({
+                "error": "Finish syncing the pending display name before choosing another.",
+                "code": "name_sync_pending",
+                "user": user,
+            }), 409
+        if user is None or previous_name is None:
+            return invalid_user_response()
+        try:
+            profile_names.propagate_display_name(user["id"], previous_name, user["name"])
+            user = db.finish_account_name_update(user["id"])
+        except Exception:
+            app.logger.exception("Display-name propagation failed for %s", user_id)
+            return jsonify({
+                "error": "Your name changed, but some history still needs to sync. Retry the save.",
+                "code": "name_sync_incomplete",
+                "user": db.get_account_profile(user_id),
+            }), 503
+        return jsonify({"user": user})
+
+    @app.put("/api/accounts/<user_id>/password")
+    def update_account_password(user_id: str):
+        body = request.get_json(silent=True) or {}
+        error = db.change_account_password(
+            user_id,
+            body.get("currentPassword", ""),
+            body.get("newPassword", ""),
+        )
+        if error == "invalid_current_password":
+            return jsonify({"error": "Your current password is incorrect."}), 401
+        if error == "invalid_new_password":
+            return jsonify({"error": "Password must be at least 6 characters."}), 400
+        return jsonify({"ok": True})
 
     @app.delete("/api/accounts/<user_id>")
     def delete_account(user_id: str):
@@ -358,7 +399,7 @@ def create_app() -> Flask:
             return jsonify({"error": "This account already belongs to that group."}), 409
         if error == "unknown_user" or user is None:
             return jsonify({"error": "A valid account is required."}), 400
-        group = groups.get_group_by_id(user["groupId"])
+        group = groups.personalize_group(groups.get_group_by_id(user["groupId"]), user["id"])
         return jsonify({"user": user, "group": group})
 
     @app.post("/api/groups")
@@ -375,7 +416,7 @@ def create_app() -> Flask:
             return invalid_user_response()
         if error or user is None or group is None:
             return jsonify({"error": "Could not create that group. Try again."}), 500
-        return jsonify({"user": user, "group": group}), 201
+        return jsonify({"user": user, "group": groups.personalize_group(group, user["id"])}), 201
 
     @app.get("/api/groups")
     def get_groups():
@@ -395,45 +436,52 @@ def create_app() -> Flask:
         group = groups.get_group_by_id(user["groupId"])
         if group is None:
             return jsonify({"error": "That group no longer exists."}), 404
-        # This permission belongs to the selected membership, not the account.
-        # Returning it with the selected group lets profile controls render
-        # correctly even while the separate roster request is still in flight.
-        return jsonify(
-            {
-                "group": {
-                    **group,
-                    "viewerIsAdmin": db.is_group_admin(user["id"], user["groupId"]),
-                }
-            }
-        )
+        return jsonify({"group": groups.personalize_group(group, user["id"])})
 
-    @app.put("/api/groups/display")
-    def update_group_display():
-        """Let any admin choose which shared sections their group sees."""
+    @app.patch("/api/groups/current")
+    def rename_current_group():
         actor, error = group_member_from_query()
         if error:
             return error
         body = request.get_json(silent=True) or {}
-        show_roster = body.get("showRoster")
-        show_feed = body.get("showFeed")
-        show_book_club = body.get("showBookClub")
-        if not all(
-            isinstance(value, bool)
-            for value in (show_roster, show_feed, show_book_club)
-        ):
-            return jsonify({"error": "Display settings must be true or false."}), 400
-        group, error = groups.set_display_options(
-            actor["id"],
-            actor["groupId"],
-            show_roster,
-            show_feed,
-            show_book_club,
-        )
+        group, error = groups.rename_group(actor["id"], actor["groupId"], body.get("name", ""))
         if error == "forbidden":
-            return jsonify({"error": "Only a group admin can change display settings."}), 403
+            return jsonify({"error": "Only a group admin can rename this group."}), 403
+        if error == "invalid_name":
+            return jsonify({"error": "Enter a group name up to 80 characters."}), 400
         if error == "unknown_group" or group is None:
             return jsonify({"error": "That group no longer exists."}), 404
-        return jsonify({"group": {**group, "viewerIsAdmin": True}})
+        return jsonify({"group": groups.personalize_group(group, actor["id"])})
+
+    @app.put("/api/groups/modules")
+    def update_group_modules():
+        actor, error = group_member_from_query()
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        group, error = groups.set_enabled_modules(
+            actor["id"], actor["groupId"], body.get("enabledModules")
+        )
+        if error == "forbidden":
+            return jsonify({"error": "Only a group admin can change enabled modules."}), 403
+        if error == "invalid_modules":
+            return jsonify({"error": "Enabled modules contain an unknown module."}), 400
+        if error == "unknown_group" or group is None:
+            return jsonify({"error": "That group no longer exists."}), 404
+        return jsonify({"group": groups.personalize_group(group, actor["id"])})
+
+    @app.put("/api/groups/theme")
+    def update_group_theme():
+        actor, error = group_member_from_query()
+        if error:
+            return error
+        body = request.get_json(silent=True) or {}
+        theme, error = groups.set_member_theme(actor["id"], actor["groupId"], body.get("theme", ""))
+        if error == "invalid_theme":
+            return jsonify({"error": "Choose a valid theme."}), 400
+        if error:
+            return jsonify({"error": "That membership no longer exists."}), 404
+        return jsonify({"groupId": actor["groupId"], "theme": theme})
 
     # Admin-only member administration. Both routes resolve the actor from the
     # request's group scope, so an admin of one household gains nothing in
@@ -609,8 +657,6 @@ def create_app() -> Flask:
         viewer, error = group_member_from_query()
         if error:
             return error
-        if not group_has_book_club(viewer["groupId"]):
-            return jsonify({"error": "Book Club is not enabled for this group."}), 404
         return jsonify({"summary": book_club.summary(
             viewer["groupId"], db.get_all(viewer["groupId"])
         )})
@@ -620,8 +666,6 @@ def create_app() -> Flask:
         viewer, error = group_member_from_query()
         if error:
             return error
-        if not group_has_book_club(viewer["groupId"]):
-            return jsonify({"error": "Book Club is not enabled for this group."}), 404
         if not db.is_group_admin(viewer["id"], viewer["groupId"]):
             return jsonify({"error": "Only a group admin can create meetings."}), 403
         body = request.get_json(silent=True) or {}
@@ -645,8 +689,6 @@ def create_app() -> Flask:
         viewer, error = group_member_from_query()
         if error:
             return error
-        if not group_has_book_club(viewer["groupId"]):
-            return jsonify({"error": "Book Club is not enabled for this group."}), 404
         return jsonify({
             "meetings": book_club.list_meetings(
                 viewer["groupId"], db.get_all(viewer["groupId"])
@@ -820,8 +862,6 @@ def create_app() -> Flask:
         viewer, error = group_member_from_query()
         if error:
             return error
-        if not group_has_book_club(viewer["groupId"]):
-            return jsonify({"error": "Book Club is not enabled for this group."}), 404
         return jsonify(household_forums.list_recent(viewer["groupId"]))
 
     @app.post("/api/forums")
@@ -833,8 +873,6 @@ def create_app() -> Flask:
         creator = db.get_group_member(creator_id) if creator_id else None
         if creator is None:
             return invalid_user_response()
-        if not group_has_book_club(creator["groupId"]):
-            return jsonify({"error": "Book Club is not enabled for this group."}), 404
         if not title:
             return jsonify({"error": "A forum title is required."}), 400
         if len(title) > MAX_ACTIVITY_LEN:
@@ -1056,11 +1094,7 @@ def create_app() -> Flask:
         module_type = (request.args.get("type") or "all").strip()
         if module_type != "all" and module_type not in module_models.MODULE_TYPES:
             return jsonify({"error": "Unknown module type."}), 400
-        return jsonify(module_models.list_feed(
-            viewer["groupId"],
-            module_type,
-            include_book_club=group_has_book_club(viewer["groupId"]),
-        ))
+        return jsonify(module_models.list_feed(viewer["groupId"], module_type))
 
     @app.patch("/api/modules/<module_type>/<item_id>")
     def edit_module(module_type: str, item_id: str):

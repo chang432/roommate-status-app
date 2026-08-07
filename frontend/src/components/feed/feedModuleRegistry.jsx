@@ -14,10 +14,6 @@ import BookClubMeetingForm from "../book-club/BookClubMeetingForm.jsx";
 import ForumFeature from "./ForumFeature.jsx";
 import ForumForm from "./ForumForm.jsx";
 
-const STANDARD = "standard";
-const SHARED = "shared";
-const BOOK_CLUB = "book-club";
-
 function createFormProps(onChanged, onClose) {
   return {
     onSuccess: onClose,
@@ -32,7 +28,6 @@ export const FEED_MODULE_REGISTRY = {
     label: "Events",
     shortLabel: "Events",
     createLabel: "Create an event",
-    availability: STANDARD,
     ownerField: "proposedById",
     edit: {
       label: "Edit event",
@@ -75,7 +70,6 @@ export const FEED_MODULE_REGISTRY = {
     label: "Requests",
     shortLabel: "Requests",
     createLabel: "Create a request",
-    availability: STANDARD,
     ownerField: "requesterId",
     edit: {
       label: "Edit request",
@@ -109,7 +103,6 @@ export const FEED_MODULE_REGISTRY = {
     label: "Checklists",
     shortLabel: "Lists",
     createLabel: "Create a checklist",
-    availability: STANDARD,
     ownerField: "createdById",
     edit: {
       label: "Edit checklist",
@@ -140,7 +133,6 @@ export const FEED_MODULE_REGISTRY = {
     label: "Polls",
     shortLabel: "Polls",
     createLabel: "Create a poll",
-    availability: SHARED,
     ownerField: "createdById",
     edit: {
       label: "Edit poll",
@@ -172,7 +164,6 @@ export const FEED_MODULE_REGISTRY = {
     label: "TV",
     shortLabel: "TV",
     createLabel: "Add a show",
-    availability: STANDARD,
     ownerField: "createdById",
     edit: {
       label: "Edit show",
@@ -203,7 +194,6 @@ export const FEED_MODULE_REGISTRY = {
     label: "Book Club",
     shortLabel: "Books",
     createLabel: "Create a Book Club meeting",
-    availability: BOOK_CLUB,
     ownerField: null,
     edit: { label: "Edit Book Club meeting" },
     canCreate: ({ canAdministerBookClub }) => canAdministerBookClub,
@@ -250,7 +240,6 @@ export const FEED_MODULE_REGISTRY = {
     label: "Forums",
     shortLabel: "Forums",
     createLabel: "Create a forum",
-    availability: BOOK_CLUB,
     ownerField: "createdById",
     edit: { label: "Edit forum" },
     renderCreate: ({ onChanged, onClose }) => (
@@ -286,15 +275,6 @@ export const FEED_MODULE_TYPES = [
     ({ id, label, shortLabel }) => ({ id, label, shortLabel }),
   ),
 ];
-
-export function isFeedModuleEnabled(
-  definition,
-  { showBookClub, showStandardModules },
-) {
-  if (definition.availability === STANDARD) return showStandardModules;
-  if (definition.availability === BOOK_CLUB) return showBookClub;
-  return showStandardModules || showBookClub;
-}
 
 export function canCreateFeedModule(definition, context) {
   return definition.canCreate?.(context) ?? true;

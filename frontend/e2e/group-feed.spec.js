@@ -123,9 +123,16 @@ async function mockFeedPage(page) {
       } }
     } else if (path === '/api/groups') {
       payload = { groups: [{
-        groupId: 'shire', name: 'The Shire', showFeed: true,
-        showRoster: false, showBookClub: false,
+        groupId: 'shire', name: 'The Shire', joinCode: 'SHIRE12',
+        enabledModules: ['events', 'requests', 'checklists', 'polls', 'tv'],
+        theme: 'system', viewerIsAdmin: true,
       }] }
+    } else if (path === '/api/groups/current') {
+      payload = { group: {
+        groupId: 'shire', name: 'The Shire', joinCode: 'SHIRE12',
+        enabledModules: ['events', 'requests', 'checklists', 'polls', 'tv'],
+        theme: 'system', viewerIsAdmin: true,
+      } }
     } else if (path === '/api/roommates') {
       payload = [
         { id: 'andre', name: 'Andre', role: 'admin', status: 'free' },
@@ -162,6 +169,48 @@ async function expectExpandedCardSettled(cardToggle) {
     ) < 1
   })).toBe(true)
 }
+
+test('uses dismissible bottom trays for profile and active-group settings', async ({ page }) => {
+  await mockFeedPage(page)
+
+  for (const viewport of [
+    { width: 1280, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/')
+
+    await page.getByRole('button', { name: 'Open profile settings' }).click()
+    const profileTray = page.getByRole('dialog', { name: 'Profile settings' })
+    await expect(profileTray.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible()
+    await expect(profileTray.getByRole('heading', { name: 'Notifications' })).toBeVisible()
+    await expect.poll(() => profileTray.evaluate((element) => (
+      element.scrollWidth <= element.clientWidth
+    ))).toBe(true)
+    await profileTray.getByRole('button', { name: 'Close' }).click()
+    await expect(profileTray).toBeHidden()
+
+    await page.getByRole('button', { name: /Open group switcher/ }).click()
+    await page.getByLabel('Your groups').getByRole('button', { name: 'Edit' }).click()
+    const groupTray = page.getByRole('dialog', { name: 'Group settings' })
+    await expect(groupTray.getByText('SHIRE12')).toBeVisible()
+    await expect(groupTray.getByRole('checkbox', { name: /Events/i })).toBeChecked()
+    await expect(groupTray.getByRole('radio', { name: /Forest/i })).toBeEnabled()
+    await expectNoHorizontalOverflow(page)
+
+    const header = groupTray.locator('header').first()
+    await header.dispatchEvent('pointerdown', {
+      pointerId: 7, pointerType: 'touch', button: 0, clientY: 20,
+    })
+    await header.dispatchEvent('pointermove', {
+      pointerId: 7, pointerType: 'touch', clientY: 150,
+    })
+    await header.dispatchEvent('pointerup', {
+      pointerId: 7, pointerType: 'touch', clientY: 150,
+    })
+    await expect(groupTray).toBeHidden()
+  }
+})
 
 test('keeps every registered feed card usable at desktop and phone widths', async ({
   page,

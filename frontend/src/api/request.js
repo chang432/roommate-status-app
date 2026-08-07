@@ -33,7 +33,11 @@ export async function request(path, options = {}) {
 
   if (!response.ok) {
     if (data?.code === "invalid_user") onInvalidUser?.();
-    throw new Error(data?.error || `Request failed: ${response.status}`);
+    const error = new Error(data?.error || `Request failed: ${response.status}`);
+    error.code = data?.code;
+    error.data = data;
+    error.status = response.status;
+    throw error;
   }
   return data;
 }

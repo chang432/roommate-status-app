@@ -13,6 +13,7 @@ export default function GroupSwitcherDrawer({
   onSelect,
   onJoin,
   onCreate,
+  onEdit,
 }) {
   const [mode, setMode] = useState(null);
   const [value, setValue] = useState("");
@@ -66,9 +67,10 @@ export default function GroupSwitcherDrawer({
             <p className={styles.eyebrow}>Your groups</p>
             <h2 className={styles.title}>Home</h2>
           </div>
-          <button type="button" className={styles.close} onClick={onClose} aria-label="Close group switcher">
-            ×
-          </button>
+          <div className={styles.headerActions}>
+            <button type="button" className={styles.edit} onClick={onEdit}>Edit</button>
+            <button type="button" className={styles.close} onClick={onClose} aria-label="Close group switcher">×</button>
+          </div>
         </header>
 
         <section className={styles.section} aria-label="Group memberships">

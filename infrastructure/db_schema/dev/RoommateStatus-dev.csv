@@ -1,5 +1,5 @@
 TABLE RoommateStatus-dev - accounts (one item per account; id is the normalized lowercase username)
-id (S),username (S),name (S),passwordHash (S)
-sheryl,sheryl,Sheryl,scrypt:32768:8:1$Zt9QpKm2vRxL$b1c4e7a9
-andre,andre,Andre,scrypt:32768:8:1$Kd3RmVn7pQwZ$4f81ba2c
-wanda,wanda,Wanda,scrypt:32768:8:1$Aa1BcDe4fGhI$77de91b0
+id (S),username (S),name (S),passwordHash (S),nameSyncTarget (S),nameSyncPrevious (S),nameSyncStartedAt (N)
+sheryl,sheryl,Sheryl,scrypt:32768:8:1$Zt9QpKm2vRxL$b1c4e7a9,,,
+andre,andre,Andre,scrypt:32768:8:1$Kd3RmVn7pQwZ$4f81ba2c,,,
+wanda,wanda,Wanda,scrypt:32768:8:1$Aa1BcDe4fGhI$77de91b0,Wren,Wanda,1720300000000
