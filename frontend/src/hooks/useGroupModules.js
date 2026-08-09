@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getFeed } from "../api/feed.js";
+import { GROUP_FEED_MODULE_IDS } from "../models/groupModules.js";
 import { createModules } from "../models/modules.js";
 
 const FEED_POLL_INTERVAL_MS = 5000;
+const GROUP_FEED_MODULE_ID_SET = new Set(GROUP_FEED_MODULE_IDS);
 
 function typeKey(enabledModuleIds) {
   if (enabledModuleIds === null) return null;
   if (enabledModuleIds === "all") return "all";
-  return [...new Set(enabledModuleIds)].sort().join(",");
+  // Group configuration also contains independently loaded UI modules such as
+  // the roster; only registered feed sources belong in the /api/feed request.
+  return [
+    ...new Set(
+      enabledModuleIds.filter((moduleId) =>
+        GROUP_FEED_MODULE_ID_SET.has(moduleId),
+      ),
+    ),
+  ]
+    .sort()
+    .join(",");
 }
 export default function useGroupModules(
   userId,

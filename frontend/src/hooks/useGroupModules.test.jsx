@@ -69,7 +69,7 @@ describe("useGroupModules", () => {
     );
   });
 
-  it("waits for enabled modules and skips an explicitly empty group", async () => {
+  it("waits for enabled modules and skips groups without feed sources", async () => {
     const view = render(
       <Harness groupId="shire" enabledModuleIds={null} />,
     );
@@ -79,6 +79,15 @@ describe("useGroupModules", () => {
     view.rerender(<Harness groupId="shire" enabledModuleIds={[]} />);
     await waitFor(() => expect(screen.queryByText("loading")).not.toBeInTheDocument());
     expect(getFeed).not.toHaveBeenCalled();
+
+    view.rerender(
+      <Harness
+        groupId="shire"
+        enabledModuleIds={["roster", "unknown-module"]}
+      />,
+    );
+    await waitFor(() => expect(screen.queryByText("loading")).not.toBeInTheDocument());
+    expect(getFeed).not.toHaveBeenCalled();
   });
 
   it("requests only the enabled module types", async () => {
@@ -86,7 +95,7 @@ describe("useGroupModules", () => {
     render(
       <Harness
         groupId="shire"
-        enabledModuleIds={["tv", "events", "spotify"]}
+        enabledModuleIds={["tv", "roster", "events", "spotify"]}
       />,
     );
 

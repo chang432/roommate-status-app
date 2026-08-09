@@ -4,7 +4,10 @@ import {
   FEED_MODULE_TYPES,
   canCreateFeedModule,
 } from "./feedModuleRegistry.jsx";
-import { GROUP_MODULE_IDS } from "../../models/groupModules.js";
+import {
+  GROUP_FEED_MODULE_IDS,
+  GROUP_MODULE_DEFINITIONS,
+} from "../../models/groupModules.js";
 
 describe("feed module registry", () => {
   it("is the complete source for navigable module metadata and UI handlers", () => {
@@ -29,8 +32,14 @@ describe("feed module registry", () => {
 
   it("covers every group module rendered in the feed", () => {
     expect(Object.keys(FEED_MODULE_REGISTRY)).toEqual(
-      GROUP_MODULE_IDS.filter((id) => !["roster", "spotify"].includes(id)),
+      GROUP_FEED_MODULE_IDS.filter((id) => id !== "spotify"),
     );
+  });
+
+  it("declares whether every group module is loaded by the feed", () => {
+    GROUP_MODULE_DEFINITIONS.forEach((definition) => {
+      expect(definition.feedBacked).toEqual(expect.any(Boolean));
+    });
   });
 
   it("keeps module-specific create permission in the module definition", () => {
