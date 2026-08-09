@@ -15,7 +15,7 @@ def _make_poll(client, title="Dinner?", creator="andre", options=None):
 
 
 def test_poll_supports_options_multiselect_votes_and_live_voter_names(client, monkeypatch):
-    monkeypatch.setattr("app.notify_group", lambda *args, **kwargs: {})
+    monkeypatch.setattr("routes.polls.notify_group", lambda *args, **kwargs: {})
     created_response = _make_poll(client)
     assert created_response.status_code == 200
     poll = created_response.get_json()[0]
@@ -42,7 +42,7 @@ def test_poll_supports_options_multiselect_votes_and_live_voter_names(client, mo
 
 
 def test_only_creator_edits_poll_text_but_any_member_manages_lifecycle(client, monkeypatch):
-    monkeypatch.setattr("app.notify_group", lambda *args, **kwargs: {})
+    monkeypatch.setattr("routes.polls.notify_group", lambda *args, **kwargs: {})
     poll = _make_poll(client).get_json()[0]
     option = poll["options"][0]
 
@@ -83,7 +83,7 @@ def test_only_creator_edits_poll_text_but_any_member_manages_lifecycle(client, m
 
 
 def test_poll_allows_title_only_and_rejects_duplicate_options(client, monkeypatch):
-    monkeypatch.setattr("app.notify_group", lambda *args, **kwargs: {})
+    monkeypatch.setattr("routes.polls.notify_group", lambda *args, **kwargs: {})
     empty = _make_poll(client, options=[])
     assert empty.status_code == 200
     poll = empty.get_json()[0]
@@ -104,7 +104,7 @@ def test_poll_allows_title_only_and_rejects_duplicate_options(client, monkeypatc
 
 
 def test_polls_are_returned_in_the_unified_feed(client, monkeypatch):
-    monkeypatch.setattr("app.notify_group", lambda *args, **kwargs: {})
+    monkeypatch.setattr("routes.polls.notify_group", lambda *args, **kwargs: {})
     poll = _make_poll(client).get_json()[0]
     response = client.get("/api/feed?userId=andre&type=polls")
     assert response.status_code == 200
@@ -113,7 +113,7 @@ def test_polls_are_returned_in_the_unified_feed(client, monkeypatch):
 
 
 def test_concurrent_votes_on_one_option_are_not_lost(client, monkeypatch):
-    monkeypatch.setattr("app.notify_group", lambda *args, **kwargs: {})
+    monkeypatch.setattr("routes.polls.notify_group", lambda *args, **kwargs: {})
     poll = _make_poll(client).get_json()[0]
     option_id = poll["options"][0]["id"]
     voters = [("andre", "Andre"), ("kayla", "Kayla"), ("ting", "Ting")]
@@ -141,7 +141,7 @@ def test_concurrent_votes_on_one_option_are_not_lost(client, monkeypatch):
 def test_poll_comments_notify_creator_and_voters_but_not_option_adders(
     client, monkeypatch
 ):
-    monkeypatch.setattr("app.notify_group", lambda *args, **kwargs: {})
+    monkeypatch.setattr("routes.polls.notify_group", lambda *args, **kwargs: {})
     poll = _make_poll(client).get_json()[0]
     option_id = poll["options"][0]["id"]
     client.put(
@@ -179,7 +179,7 @@ def test_poll_comments_notify_creator_and_voters_but_not_option_adders(
 
 
 def test_poll_comment_validation_and_archived_read_only_state(client, monkeypatch):
-    monkeypatch.setattr("app.notify_group", lambda *args, **kwargs: {})
+    monkeypatch.setattr("routes.polls.notify_group", lambda *args, **kwargs: {})
     poll = _make_poll(client).get_json()[0]
     comment_url = f"/api/polls/{poll['id']}/comments"
     assert poll["comments"] == []
@@ -216,7 +216,7 @@ def test_poll_comment_validation_and_archived_read_only_state(client, monkeypatc
 def test_poll_comment_likes_are_idempotent_read_only_when_archived_and_deleted(
     client, monkeypatch
 ):
-    monkeypatch.setattr("app.notify_group", lambda *args, **kwargs: {})
+    monkeypatch.setattr("routes.polls.notify_group", lambda *args, **kwargs: {})
     poll = _make_poll(client).get_json()[0]
     comment_response = client.post(
         f"/api/polls/{poll['id']}/comments",
@@ -265,7 +265,7 @@ def test_poll_comment_likes_are_idempotent_read_only_when_archived_and_deleted(
 
 
 def test_poll_comment_all_mentions_the_group(client, monkeypatch):
-    monkeypatch.setattr("app.notify_group", lambda *args, **kwargs: {})
+    monkeypatch.setattr("routes.polls.notify_group", lambda *args, **kwargs: {})
     poll = _make_poll(client).get_json()[0]
     calls = []
 
@@ -273,7 +273,7 @@ def test_poll_comment_all_mentions_the_group(client, monkeypatch):
         calls.append((group_id, kwargs))
         return {"sent": 0, "pruned": 0, "failed": 0}
 
-    monkeypatch.setattr("app.notify_group", fake_notify_group)
+    monkeypatch.setattr("routes.polls.notify_group", fake_notify_group)
     response = client.post(
         f"/api/polls/{poll['id']}/comments",
         json={"authorId": "kayla", "text": "@all please vote"},
@@ -295,7 +295,7 @@ def test_poll_comment_all_mentions_the_group(client, monkeypatch):
 
 
 def test_concurrent_poll_comment_and_vote_are_both_preserved(client, monkeypatch):
-    monkeypatch.setattr("app.notify_group", lambda *args, **kwargs: {})
+    monkeypatch.setattr("routes.polls.notify_group", lambda *args, **kwargs: {})
     poll = _make_poll(client).get_json()[0]
     option_id = poll["options"][0]["id"]
     with ThreadPoolExecutor(max_workers=2) as executor:

@@ -139,7 +139,7 @@ def test_members_can_update_past_open_meetings_and_notify(client, monkeypatch):
     notifications = []
     monkeypatch.setattr(push, "is_configured", lambda: True)
     monkeypatch.setattr(
-        "app.notify_group",
+        "routes.book_club.notify_group",
         lambda group_id, **kwargs: notifications.append((group_id, kwargs)) or {"sent": 1, "pruned": 0, "failed": 0},
     )
     notified = client.post(

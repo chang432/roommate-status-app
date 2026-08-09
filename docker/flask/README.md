@@ -4,6 +4,10 @@ A small Flask server implementing the API the frontend calls. Data is stored in
 DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 `db.py` so the routes stay storage-agnostic.
 
+`app.py` is the application factory and request-scope boundary. Public handlers
+are grouped into feature blueprints under `routes/`; cross-feature request and
+notification helpers live in `route_helpers.py`.
+
 ## Endpoints
 
 | Method & path                                                | Body                                       | Returns                                                 |

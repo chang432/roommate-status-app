@@ -19,14 +19,17 @@ The former `frontend/src/api/client.js` has been split into domain modules in
 scoping, JSON error handling, and invalid-session handling; callers import the
 specific domain module they use.
 
+## Completed: Flask routes
+
+`docker/flask/app.py` now owns only application assembly and request-scoped
+group handling. Feature routes live in blueprints under `docker/flask/routes/`,
+with shared route validation and notification behavior in `route_helpers.py`.
+
 ## Future improvements
 
-1. **Flask routes:** Split docker/flask/app.py route handlers into
-   feature-oriented Flask blueprints while preserving create_app() as the
-   registration point and retaining its request-scoped group handling.
-2. **Large UI modules:** Extract feature-local hooks and subcomponents from
+1. **Large UI modules:** Extract feature-local hooks and subcomponents from
    GroupFeed, ShowTrackerFeature, and StatusPage without changing UI behavior.
-3. **Reference docs:** Move the PWA proof-of-concept note from mockups/ to
+2. **Reference docs:** Move the PWA proof-of-concept note from mockups/ to
    docs/plans/, leaving mockups/ for visual prototypes only.
 
 ## Guardrails
