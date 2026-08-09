@@ -148,7 +148,7 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
 | `pokeRoommate`                  | `POST /api/roommates/:id/poke`                             |
-| `getFeed`                       | `GET /api/feed?userId=:id&type=:type`                      |
+| `getFeed`                       | `GET /api/feed?userId=:id&type=:type&type=:type`           |
 | `updateModule`                  | `PATCH /api/modules/:type/:id`                             |
 | `getJam`                        | `GET /api/jam?userId=:id`                                  |
 | `getActivities`                 | `GET /api/activities?userId=:id`                           |

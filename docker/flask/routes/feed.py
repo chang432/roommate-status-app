@@ -86,10 +86,17 @@ def get_feed():
     viewer, error = group_member_from_query()
     if error:
         return error
-    module_type = (request.args.get("type") or "all").strip()
-    if module_type != "all" and module_type not in module_models.MODULE_TYPES:
+    requested_types = [
+        value.strip() for value in request.args.getlist("type") if value.strip()
+    ]
+    if not requested_types:
+        requested_types = ["all"]
+    if (
+        "all" in requested_types and requested_types != ["all"]
+    ) or not set(requested_types) <= module_models.MODULE_TYPES | {"all"}:
         return jsonify({"error": "Unknown module type."}), 400
-    return jsonify(module_models.list_feed(viewer["groupId"], module_type))
+    module_types = "all" if requested_types == ["all"] else requested_types
+    return jsonify(module_models.list_feed(viewer["groupId"], module_types))
 
 @bp.patch("/api/modules/<module_type>/<item_id>")
 def edit_module(module_type: str, item_id: str):
@@ -144,4 +151,3 @@ def edit_module(module_type: str, item_id: str):
     return jsonify({"module": feed_item})
 
 # --- Household counters -------------------------------------------------
-

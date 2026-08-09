@@ -687,7 +687,13 @@ def delete(activity_id: str, group_id: str) -> str:
     return DELETE_OK
 
 
-def list_recent(group_id: str, limit: int | None = None, consistent: bool = False) -> list[dict]:
+def list_recent(
+    group_id: str,
+    limit: int | None = None,
+    consistent: bool = False,
+    *,
+    likes_by_activity: dict | None = None,
+) -> list[dict]:
     """Return all activities in active-then-expired display order.
 
     Pass consistent=True for the response that follows a write (propose / join /
@@ -696,9 +702,10 @@ def list_recent(group_id: str, limit: int | None = None, consistent: bool = Fals
     read avoids that. The default (eventual) read is fine for the plain GET feed.
     """
     items = query_group(_get_table(), group_id, consistent=consistent)
-    likes_by_activity = comment_likes.likes_by_parent(
-        group_id, "activityId", consistent=consistent
-    )
+    if likes_by_activity is None:
+        likes_by_activity = comment_likes.likes_by_parent(
+            group_id, "activityId", consistent=consistent
+        )
 
     items = [item for item in items if "createdAt" in item]
     now_ms = int(time.time() * 1000)

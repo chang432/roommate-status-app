@@ -46,7 +46,7 @@ notification helpers live in `route_helpers.py`.
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
 | `POST /api/roommates/<id>/poke`                              | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
-| `GET /api/feed`                                              | `?userId=<id>&type=<type>`                 | active module instances in chronological feed order     |
+| `GET /api/feed`                                              | `?userId=<id>&type=<type>&type=<type>`     | requested module instances in chronological feed order  |
 | `PATCH /api/modules/<type>/<id>`                             | `{ editorId, changes }`                    | normalized updated module                               |
 | `GET /api/activities`                                        | `?userId=<id>`                             | active activity list                                    |
 | `POST /api/activities`                                       | `{ text, proposedById, startAt?, endAt? }` | full updated activity list                              |
@@ -133,7 +133,10 @@ scheduled activity is live once its `startAt` passes and expires when its
 optional `endAt` passes. Manual end is terminal; restart starts immediately and
 clears the old end. Lifecycle is
 derived from server time, so visible apps pick up automatic changes through
-their five-second activity polling without scheduler infrastructure.
+their five-second activity polling without scheduler infrastructure. Feed
+polls use eventual consistency, load only the requested module types, and
+reuse the shared likes and Book Club partitions within each request; mutation
+responses retain strongly consistent read-after-write behavior.
 Push subscriptions and activity participants are associated with stable
 roommate ids. User-triggered notifications always exclude the actor. Every
 household feature is scoped by `groupId`, including roster reads, activities,

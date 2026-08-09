@@ -57,6 +57,9 @@ export default function StatusPage() {
     setSearchParams,
     user,
   });
+  const selectedGroup =
+    groups.find((group) => group.groupId === user.activeGroupId) ?? groups[0];
+  const enabledModules = selectedGroup?.enabledModules ?? null;
   const {
     error,
     loading: roommatesLoading,
@@ -70,7 +73,7 @@ export default function StatusPage() {
     loading: modulesLoading,
     error: modulesError,
     refreshModules,
-  } = useGroupModules(user.id, user.activeGroupId);
+  } = useGroupModules(user.id, user.activeGroupId, enabledModules);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([loadRoommates(), refreshModules()]);
@@ -107,14 +110,11 @@ export default function StatusPage() {
   const showBanner = freeCount >= AVAILABLE_THRESHOLD;
   const liveEvents = activities.filter((activity) => activity.isLive);
   const liveWatchparties = shows.filter((show) => show.isWatchpartyLive);
-  const selectedGroup =
-    groups.find((group) => group.groupId === user.activeGroupId) ?? groups[0];
-  const enabledModules = selectedGroup?.enabledModules ?? [];
-  const enabledModuleSet = new Set(enabledModules);
+  const enabledModuleSet = new Set(enabledModules ?? []);
   const showRoster = enabledModuleSet.has("roster");
   const showBookClub = enabledModuleSet.has("book-club");
   const showSpotify = enabledModuleSet.has("spotify");
-  const hasFeedModules = enabledModules.some((moduleId) =>
+  const hasFeedModules = (enabledModules ?? []).some((moduleId) =>
     ["events", "requests", "checklists", "polls", "counters", "tv", "book-club", "forums"].includes(moduleId),
   );
   const groupDataLoading =
@@ -305,7 +305,7 @@ export default function StatusPage() {
               loading={modulesLoading}
               error={modulesError}
               refreshModules={refreshModules}
-              enabledModuleIds={enabledModules}
+              enabledModuleIds={enabledModules ?? []}
             />
           </div>
         )}

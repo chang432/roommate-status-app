@@ -8,12 +8,13 @@ the same way without forcing all storage into one table.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlencode
 
 import activities
 import book_club
+import comment_likes
 import household_checklists
 import household_counters
 import household_forums
@@ -255,47 +256,103 @@ class ModuleSource:
     """Everything the unified feed needs to load and normalize one module type."""
 
     model: type[BaseModule]
-    list_payloads: Callable[[str], Iterable[dict[str, Any]]]
+    list_payloads: Callable[["FeedReadContext"], Iterable[dict[str, Any]]]
 
 
-def _list_jam(group_id: str) -> Iterable[dict[str, Any]]:
-    active_jam = jam.get_active(group_id)
+_UNLOADED = object()
+
+
+@dataclass
+class FeedReadContext:
+    """Lazily share multi-module partition reads within one feed request."""
+
+    group_id: str
+    consistent: bool = False
+    _like_rows: object = field(default=_UNLOADED, init=False, repr=False)
+    _book_rows: object = field(default=_UNLOADED, init=False, repr=False)
+
+    def likes(self, parent_field: str) -> dict:
+        if self._like_rows is _UNLOADED:
+            self._like_rows = comment_likes.list_for_group(
+                self.group_id, consistent=self.consistent
+            )
+        return comment_likes.group_by_parent(self._like_rows, parent_field)
+
+    def book_rows(self) -> list[dict]:
+        if self._book_rows is _UNLOADED:
+            self._book_rows = book_club.list_rows(
+                self.group_id, consistent=self.consistent
+            )
+        return self._book_rows
+
+
+def _list_jam(context: FeedReadContext) -> Iterable[dict[str, Any]]:
+    active_jam = jam.get_active(
+        context.group_id, consistent=context.consistent
+    )
     return (active_jam,) if active_jam else ()
 
 
 MODULE_SOURCES = {
     "events": ModuleSource(
         EventModule,
-        lambda group_id: activities.list_recent(group_id, consistent=True),
+        lambda context: activities.list_recent(
+            context.group_id,
+            consistent=context.consistent,
+            likes_by_activity=context.likes("activityId"),
+        ),
     ),
     "requests": ModuleSource(
         RequestModule,
-        lambda group_id: household_requests.list_recent(group_id, consistent=True),
+        lambda context: household_requests.list_recent(
+            context.group_id,
+            consistent=context.consistent,
+            likes_by_request=context.likes("requestId"),
+        ),
     ),
     "checklists": ModuleSource(
         ChecklistModule,
-        lambda group_id: household_checklists.list_recent(group_id, consistent=True),
+        lambda context: household_checklists.list_recent(
+            context.group_id, consistent=context.consistent
+        ),
     ),
     "polls": ModuleSource(
         PollModule,
-        lambda group_id: household_polls.list_recent(group_id, consistent=True),
+        lambda context: household_polls.list_recent(
+            context.group_id,
+            consistent=context.consistent,
+            likes_by_poll=context.likes("pollId"),
+        ),
     ),
     "counters": ModuleSource(
         CounterModule,
-        lambda group_id: household_counters.list_recent(group_id, consistent=True),
+        lambda context: household_counters.list_recent(
+            context.group_id, consistent=context.consistent
+        ),
     ),
     "tv": ModuleSource(
         TvModule,
-        lambda group_id: household_shows.list_recent(group_id, consistent=True),
+        lambda context: household_shows.list_recent(
+            context.group_id, consistent=context.consistent
+        ),
     ),
     "spotify": ModuleSource(SpotifyModule, _list_jam),
     "book-club": ModuleSource(
         BookClubMeetingModule,
-        book_club.list_meetings,
+        lambda context: book_club.list_meetings(
+            context.group_id,
+            consistent=context.consistent,
+            rows=context.book_rows(),
+        ),
     ),
     "forums": ModuleSource(
         ForumModule,
-        lambda group_id: household_forums.list_recent(group_id, consistent=True),
+        lambda context: household_forums.list_recent(
+            context.group_id,
+            consistent=context.consistent,
+            rows=context.book_rows(),
+            likes_by_forum=context.likes("forumId"),
+        ),
     ),
 }
 
@@ -313,19 +370,25 @@ def module_from_payload(module_type: str, payload: dict[str, Any]) -> BaseModule
 
 def list_feed(
     group_id: str,
-    module_type: str | None = None,
+    module_types: str | Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
-    requested_types = MODULE_TYPES if not module_type or module_type == "all" else {module_type}
+    if module_types is None or module_types == "all":
+        requested_types = MODULE_TYPES
+    elif isinstance(module_types, str):
+        requested_types = {module_types}
+    else:
+        requested_types = set(module_types)
     if not requested_types <= MODULE_TYPES:
         return []
 
+    context = FeedReadContext(group_id)
     modules: list[BaseModule] = []
     for source_type, source in MODULE_SOURCES.items():
         if source_type not in requested_types:
             continue
         modules.extend(
             source.model.from_payload(item)
-            for item in source.list_payloads(group_id)
+            for item in source.list_payloads(context)
         )
 
     modules.sort(key=lambda module: (module.sort_at, module.created_at, module.type, module.id))

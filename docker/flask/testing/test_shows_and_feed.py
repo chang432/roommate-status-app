@@ -332,5 +332,66 @@ def test_module_feed_sorts_active_instances_and_exposes_archived_modules(client,
     assert all(item["isArchived"] is True for item in archived_feed)
 
 
+def test_feed_accepts_multiple_types_and_rejects_mixed_all(client):
+    _propose(client, "Dinner")
+    _make_show(client)
+
+    response = client.get(
+        grouped_path("/api/feed?type=events&type=tv")
+    )
+
+    assert response.status_code == 200
+    assert {item["type"] for item in response.get_json()} == {"events", "tv"}
+    assert client.get(
+        grouped_path("/api/feed?type=all&type=events")
+    ).status_code == 400
+
+
+def test_feed_reuses_shared_likes_and_book_club_partition_reads(client, monkeypatch):
+    calls = {"likes": 0, "books": 0}
+    original_likes = comment_likes.list_for_group
+    original_books = book_club.list_rows
+
+    def list_likes(group_id, consistent=False):
+        calls["likes"] += 1
+        assert consistent is False
+        return original_likes(group_id, consistent=consistent)
+
+    def list_books(group_id, consistent=False):
+        calls["books"] += 1
+        assert consistent is False
+        return original_books(group_id, consistent=consistent)
+
+    monkeypatch.setattr(comment_likes, "list_for_group", list_likes)
+    monkeypatch.setattr(book_club, "list_rows", list_books)
+
+    response = client.get(
+        grouped_path(
+            "/api/feed?type=events&type=requests&type=polls&type=forums&type=book-club"
+        )
+    )
+
+    assert response.status_code == 200
+    assert calls == {"likes": 1, "books": 1}
+
+
+def test_feed_reads_are_eventual_but_mutation_responses_remain_strong(client, monkeypatch):
+    consistency = []
+    original_query = activities.query_group
+
+    def query(table, group_id, consistent=False):
+        consistency.append(consistent)
+        return original_query(table, group_id, consistent=consistent)
+
+    monkeypatch.setattr(activities, "query_group", query)
+
+    assert _propose(client, "Dinner").status_code == 200
+    assert True in consistency
+    consistency.clear()
+
+    assert client.get(grouped_path("/api/feed?type=events")).status_code == 200
+    assert consistency == [False]
+
+
 def test_every_feed_module_has_a_registered_editor():
     assert set(module_models.MODULE_SOURCES) == set(module_edits.EDITORS)  # noqa: F405

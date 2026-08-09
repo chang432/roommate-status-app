@@ -4,41 +4,96 @@ import { createModules } from "../models/modules.js";
 
 const FEED_POLL_INTERVAL_MS = 5000;
 
-export default function useGroupModules(userId, groupId) {
+function typeKey(enabledModuleIds) {
+  if (enabledModuleIds === null) return null;
+  if (enabledModuleIds === "all") return "all";
+  return [...new Set(enabledModuleIds)].sort().join(",");
+}
+export default function useGroupModules(
+  userId,
+  groupId,
+  enabledModuleIds = "all",
+) {
   const [modules, setModules] = useState([]);
-  const [loadedGroupId, setLoadedGroupId] = useState(null);
+  const [loadedRequestKey, setLoadedRequestKey] = useState(null);
   const [error, setError] = useState("");
-  const activeGroupIdRef = useRef(groupId);
-  activeGroupIdRef.current = groupId;
+  const requestedTypeKey = typeKey(enabledModuleIds);
+  const requestKey =
+    requestedTypeKey === null ? null : `${groupId}:${requestedTypeKey}`;
+  const activeRequestKeyRef = useRef(requestKey);
+  const inFlightRef = useRef(null);
+  activeRequestKeyRef.current = requestKey;
 
   const refreshModules = useCallback(async () => {
-    const requestedGroupId = groupId;
-    try {
-      const nextModules = createModules(
-        await getFeed(userId, "all", requestedGroupId),
-      );
-      if (activeGroupIdRef.current !== requestedGroupId) return false;
-      setModules(nextModules);
+    if (requestKey === null) return false;
+    if (requestedTypeKey === "") {
+      setModules([]);
       setError("");
+      setLoadedRequestKey(requestKey);
       return true;
-    } catch {
-      if (activeGroupIdRef.current !== requestedGroupId) return false;
-      setError("Could not load the group feed.");
-      return false;
-    } finally {
-      if (activeGroupIdRef.current === requestedGroupId) {
-        setLoadedGroupId(requestedGroupId);
-      }
     }
-  }, [groupId, userId]);
+
+    const existing = inFlightRef.current;
+    if (existing?.key === requestKey) {
+      // Coalesce bursts, but preserve one trailing refresh so a mutation that
+      // lands during an older poll cannot be hidden by that poll's response.
+      existing.refreshAgain = true;
+      return existing.promise;
+    }
+
+    const flight = { key: requestKey, promise: null, refreshAgain: false };
+    flight.promise = (async () => {
+      let succeeded = false;
+      try {
+        do {
+          flight.refreshAgain = false;
+          try {
+            const requestedTypes =
+              requestedTypeKey === "all"
+                ? "all"
+                : requestedTypeKey.split(",");
+            const nextModules = createModules(
+              await getFeed(userId, requestedTypes, groupId),
+            );
+            if (activeRequestKeyRef.current !== requestKey) return false;
+            setModules(nextModules);
+            setError("");
+            succeeded = true;
+          } catch {
+            if (activeRequestKeyRef.current !== requestKey) return false;
+            setError("Could not load the group feed.");
+            succeeded = false;
+          }
+        } while (
+          flight.refreshAgain &&
+          activeRequestKeyRef.current === requestKey
+        );
+        return succeeded;
+      } finally {
+        if (inFlightRef.current === flight) inFlightRef.current = null;
+        if (activeRequestKeyRef.current === requestKey) {
+          setLoadedRequestKey(requestKey);
+        }
+      }
+    })();
+    inFlightRef.current = flight;
+    return flight.promise;
+  }, [groupId, requestKey, requestedTypeKey, userId]);
 
   useEffect(() => {
-    setLoadedGroupId(null);
+    setLoadedRequestKey(null);
     setModules([]);
+    setError("");
+    if (requestKey === null) return;
+    if (requestedTypeKey === "") {
+      setLoadedRequestKey(requestKey);
+      return;
+    }
     refreshModules();
-  }, [refreshModules]);
+  }, [refreshModules, requestKey, requestedTypeKey]);
 
   useEffect(() => {
+    if (requestKey === null || requestedTypeKey === "") return undefined;
     let pollId = null;
 
     function startPolling() {
@@ -86,11 +141,11 @@ export default function useGroupModules(userId, groupId) {
         handleServiceWorkerMessage,
       );
     };
-  }, [refreshModules]);
+  }, [refreshModules, requestKey, requestedTypeKey]);
 
   return {
     modules,
-    loading: loadedGroupId !== groupId,
+    loading: requestKey === null || loadedRequestKey !== requestKey,
     error,
     refreshModules,
   };

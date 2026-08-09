@@ -438,10 +438,17 @@ def set_comment_like(
     return LIKE_OK
 
 
-def list_recent(group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False) -> list[dict]:
-    likes_by_request = comment_likes.likes_by_parent(
-        group_id, "requestId", consistent=consistent
-    )
+def list_recent(
+    group_id: str,
+    limit: int = RECENT_LIMIT,
+    consistent: bool = False,
+    *,
+    likes_by_request: dict | None = None,
+) -> list[dict]:
+    if likes_by_request is None:
+        likes_by_request = comment_likes.likes_by_parent(
+            group_id, "requestId", consistent=consistent
+        )
     requests = [
         item
         for item in query_group(_get_table(), group_id, consistent=consistent)

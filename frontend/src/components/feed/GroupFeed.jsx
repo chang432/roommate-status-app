@@ -23,7 +23,11 @@ import styles from "./GroupFeed.module.css";
 
 export default function GroupFeed({ onLoadStateChange, ...props }) {
   const { user } = useAuth();
-  const moduleState = useGroupModules(user.id, user.activeGroupId);
+  const moduleState = useGroupModules(
+    user.id,
+    user.activeGroupId,
+    props.enabledModuleIds ?? "all",
+  );
 
   useEffect(() => {
     onLoadStateChange?.(user.activeGroupId, moduleState.loading);

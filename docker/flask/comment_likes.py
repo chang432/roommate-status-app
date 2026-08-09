@@ -71,8 +71,15 @@ def likes_by_parent(group_id: str, parent_field: str, consistent: bool = False) 
     ``"requestId"``, ``"pollId"``, or ``"forumId"`` — since all share this
     table and each row names its parent.
     """
+    return group_by_parent(
+        list_for_group(group_id, consistent=consistent), parent_field
+    )
+
+
+def group_by_parent(rows: list[dict], parent_field: str) -> dict:
+    """Group preloaded like rows without issuing another partition query."""
     grouped: dict[str, dict[str, set[str]]] = {}
-    for like in list_for_group(group_id, consistent=consistent):
+    for like in rows:
         parent_id = like.get(parent_field)
         if not parent_id:
             continue

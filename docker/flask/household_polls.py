@@ -390,11 +390,16 @@ def delete(poll_id: str, group_id: str) -> dict | None:
 
 
 def list_recent(
-    group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False
+    group_id: str,
+    limit: int = RECENT_LIMIT,
+    consistent: bool = False,
+    *,
+    likes_by_poll: dict | None = None,
 ) -> list[dict]:
-    likes_by_poll = comment_likes.likes_by_parent(
-        group_id, "pollId", consistent=consistent
-    )
+    if likes_by_poll is None:
+        likes_by_poll = comment_likes.likes_by_parent(
+            group_id, "pollId", consistent=consistent
+        )
     polls = [
         item
         for item in query_group(_get_table(), group_id, consistent=consistent)
