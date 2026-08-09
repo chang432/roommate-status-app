@@ -4,6 +4,7 @@ import Brandmark from "../components/ui/Brandmark.jsx";
 import BookClub from "../components/book-club/BookClub.jsx";
 import { GroupFeedView } from "../components/feed/GroupFeed.jsx";
 import JamWidget, { JamShareForm } from "../components/jam/JamWidget.jsx";
+import SpotifyJamButton from "../components/jam/SpotifyJamButton.jsx";
 import GroupSwitcherDrawer from "../components/groups/GroupSwitcherDrawer.jsx";
 import GroupSettings from "../components/groups/GroupSettings.jsx";
 import HouseholdRoster from "../components/household/HouseholdRoster.jsx";
@@ -270,22 +271,33 @@ export default function StatusPage() {
             <HouseholdRoster
               roommates={displayedRoommates}
               groupName={selectedGroup?.name}
+              showSpotifyJam={showSpotify}
+              hasJam={Boolean(jam)}
+              onShareJam={openJamModal}
               onRoommatesChange={setRoommates}
               onError={setError}
             />
           )}
+
+          {/* Spotify is independently configurable, so roster-less groups still
+              need a compact entry point for sharing or replacing a Jam. */}
+          {showSpotify && !showRoster && (
+            <div className={styles.standaloneJamAction}>
+              <SpotifyJamButton
+                hasJam={Boolean(jam)}
+                onClick={openJamModal}
+              />
+            </div>
+          )}
         </main>
 
-        {showSpotify && (
+        {showSpotify && jam && (
           <div hidden={groupDataLoading}>
-            {jam ? (
-              <JamWidget jam={jam} onJamChange={refreshModules} onReplace={openJamModal} />
-            ) : (
-              <section className={styles.jamEmpty}>
-                <div><p>Spotify Jam</p><span>No Jam is active in this group.</span></div>
-                <button type="button" onClick={openJamModal} className="ui-primaryButton">Share Jam</button>
-              </section>
-            )}
+            <JamWidget
+              jam={jam}
+              onJamChange={refreshModules}
+              onReplace={openJamModal}
+            />
           </div>
         )}
 

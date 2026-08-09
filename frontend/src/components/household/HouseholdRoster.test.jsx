@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -49,6 +49,7 @@ function LocationProbe() {
 
 function renderRoster(props = {}, { route = "/" } = {}) {
   const handlers = {
+    onShareJam: vi.fn(),
     onRoommatesChange: vi.fn(),
     onError: vi.fn(),
   };
@@ -125,6 +126,28 @@ describe("HouseholdRoster", () => {
     expect(
       screen.queryByText("Could not notify the shire. Try again."),
     ).toBeNull();
+  });
+
+  it("places the enabled Spotify action after Notify and reflects Jam state", async () => {
+    const { onShareJam } = renderRoster({
+      showSpotifyJam: true,
+      hasJam: true,
+    });
+    const header = screen.getByText("Yorkshire").parentElement;
+    const actions = within(header).getAllByRole("button");
+
+    expect(actions.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Notify all to update",
+      "Replace Spotify Jam",
+    ]);
+    await userEvent.click(actions[1]);
+    expect(onShareJam).toHaveBeenCalledOnce();
+
+    cleanup();
+    renderRoster({ showSpotifyJam: true, hasJam: false });
+    expect(
+      screen.getByRole("button", { name: "Share Spotify Jam" }),
+    ).toBeInTheDocument();
   });
 
   it("saves a status, hands the returned roster up, and closes the editor", async () => {

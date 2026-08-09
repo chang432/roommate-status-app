@@ -63,10 +63,6 @@
   @apply max-w-[680px];
 }
 
-.jamEmpty {
-  @apply my-5 flex items-center justify-between gap-4 rounded-md border border-line bg-card px-5 py-4 shadow-soft max-[480px]:flex-col max-[480px]:items-stretch;
+.standaloneJamAction {
+  @apply my-5 flex items-center;
 }
-
-.jamEmpty p { @apply text-[15px] font-black text-ink; }
-.jamEmpty span { @apply mt-1 block text-[13px] font-semibold text-ink-soft; }
-.jamEmpty button { @apply flex-none px-5 py-3 text-[13px]; }

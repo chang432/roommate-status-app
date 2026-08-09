@@ -10,6 +10,7 @@ import {
 } from "../../api/roommates.js";
 import { avatarColor } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
+import SpotifyJamButton from "../jam/SpotifyJamButton.jsx";
 import styles from "./HouseholdRoster.module.css";
 
 // The household roster: your own status card, the group action header, and a
@@ -20,6 +21,9 @@ import styles from "./HouseholdRoster.module.css";
 export default function HouseholdRoster({
   roommates,
   groupName,
+  showSpotifyJam = false,
+  hasJam = false,
+  onShareJam,
   onRoommatesChange,
   onError,
 }) {
@@ -122,6 +126,9 @@ export default function HouseholdRoster({
         >
           <img src="/megaphone.png" alt="" className={styles.notifyIcon} />
         </button>
+        {showSpotifyJam && (
+          <SpotifyJamButton hasJam={hasJam} onClick={onShareJam} />
+        )}
       </div>
       <div className={styles.memberGrid}>
         {others.map((roommate) => (

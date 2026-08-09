@@ -87,6 +87,7 @@ async function mockBookClub(page, {
   bookClubFeedCount = 0,
   viewerIsAdmin = true,
   crowdedAttendance = false,
+  enabledModules = ALL_GROUP_MODULES,
 } = {}) {
   const { meeting, activeBook, completedBook } = bookClubFixture()
   if (crowdedAttendance) {
@@ -156,11 +157,11 @@ async function mockBookClub(page, {
     if (path === '/api/accounts/andre') {
       payload = { user: { id: 'andre', name: 'Andre', username: 'andre', groupId: 'book-club', hasGroup: true } }
     } else if (path === '/api/groups') {
-      payload = { groups: [{ groupId: 'book-club', name: 'Book Club', enabledModules: ALL_GROUP_MODULES, theme: 'system' }] }
+      payload = { groups: [{ groupId: 'book-club', name: 'Book Club', enabledModules, theme: 'system' }] }
     } else if (path === '/api/groups/current') {
       payload = { group: {
         groupId: 'book-club', name: 'Book Club',
-        enabledModules: ALL_GROUP_MODULES, theme: 'system', viewerIsAdmin,
+        enabledModules, theme: 'system', viewerIsAdmin,
       } }
     } else if (path === '/api/groups/theme' && method === 'PUT') {
       payload = { ok: true }
@@ -344,6 +345,37 @@ async function clickMeetingHeader(toggle) {
   const box = await toggle.boundingBox()
   await toggle.click({ position: { x: box.width - 8, y: 8 } })
 }
+
+test('keeps Spotify accessible when the roster is disabled', async ({ page }, testInfo) => {
+  await mockBookClub(page, {
+    enabledModules: ['spotify', 'book-club', 'forums'],
+  })
+
+  for (const viewport of [
+    { name: 'desktop', width: 1280, height: 900 },
+    { name: 'phone', width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/')
+
+    await expect(page.getByRole('button', { name: 'Notify all to update' })).toHaveCount(0)
+    const spotifyButton = page.getByRole('button', { name: 'Share Spotify Jam' })
+    await expect(spotifyButton).toBeVisible()
+    await expect(page.getByText('No Jam is active in this group.')).toHaveCount(0)
+    await page.screenshot({
+      path: testInfo.outputPath(`spotify-action-${viewport.name}.png`),
+      fullPage: true,
+    })
+
+    await spotifyButton.click()
+    await expect(page.getByRole('dialog', { name: 'Share Spotify Jam' })).toBeVisible()
+    const dimensions = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+    }))
+    expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewport)
+  }
+})
 
 test('uses the household modal for books and reviews', async ({ page }, testInfo) => {
   await mockBookClub(page)
@@ -613,13 +645,16 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
     'xpath=following-sibling::div[1]/div/div',
   )
   const comments = forumPanel.getByText('Comments', { exact: true }).locator('..')
-  const [forumPanelBox, forumBookBox, commentsBox] = await Promise.all([
+  const [forumPanelBox, forumBookBox, expandedForumMetaBox, commentsBox] = await Promise.all([
     forumPanel.boundingBox(),
     forumBookLink.boundingBox(),
+    forumMeta.boundingBox(),
     comments.boundingBox(),
   ])
   expect(Math.abs(forumBookBox.x - forumPanelBox.x)).toBeLessThan(2)
-  expect(forumBookBox.y).toBeGreaterThanOrEqual(forumMetaBox.y + forumMetaBox.height)
+  expect(forumBookBox.y).toBeGreaterThanOrEqual(
+    expandedForumMetaBox.y + expandedForumMetaBox.height,
+  )
   expect(commentsBox.y).toBeGreaterThanOrEqual(forumBookBox.y + forumBookBox.height)
   expect(Math.abs(forumBookBox.height - forumTagBox.height)).toBeLessThan(1)
   expect(await forumBookLink.evaluate((element) => getComputedStyle(element).fontSize))
@@ -638,6 +673,13 @@ test('creates a book-tagged forum with flat comments', async ({ page }, testInfo
   await page.screenshot({ path: testInfo.outputPath('forum-module-desktop.png'), fullPage: true })
 
   await page.setViewportSize({ width: 390, height: 844 })
+  // Resizing can restart the expandable grid transition; measure its phone
+  // geometry only after the card has reached its final layout.
+  await forumCardRoot.evaluate((element) => Promise.all(
+    element.getAnimations({ subtree: true }).map(
+      (animation) => animation.finished.catch(() => undefined),
+    ),
+  ))
   const [
     phoneForumHeaderBox,
     phoneForumTitleBox,
