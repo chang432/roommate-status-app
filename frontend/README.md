@@ -101,6 +101,12 @@ group level. To edit a module, expand its card and use the **Edit** action
 at the bottom. The action is shown only when the current user can edit that
 active instance.
 
+Feed composition is kept separate from its interaction mechanics: preference
+and deep-link state live in feature-local hooks, while swipe transitions and
+sticky category scroll restoration have separate modules. StatusPage likewise
+delegates group membership, roommate loading, and module loading to scoped
+hooks.
+
 ## Backend / API
 
 Backend calls live in domain modules under `src/api/`, which share a request

@@ -7,7 +7,7 @@ import JamWidget, { JamShareForm } from "../components/jam/JamWidget.jsx";
 import GroupSwitcherDrawer from "../components/groups/GroupSwitcherDrawer.jsx";
 import GroupSettings from "../components/groups/GroupSettings.jsx";
 import HouseholdRoster from "../components/household/HouseholdRoster.jsx";
-import LiveEventBanner from "../components/feed/LiveEventBanner.jsx";
+import LiveModuleBanners from "../components/feed/LiveModuleBanners.jsx";
 import ModalShell from "../components/ui/ModalShell.jsx";
 import NotificationBanner from "../components/ui/NotificationBanner.jsx";
 import ProfileSettings from "../components/profile/ProfileSettings.jsx";
@@ -15,10 +15,10 @@ import PullToRefreshIndicator from "../components/ui/PullToRefreshIndicator.jsx"
 import { useAuth } from "../context/AuthContext.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
 import { endActivity, startActivity } from "../api/activities.js";
-import { getGroups } from "../api/groups.js";
-import { getRoommates } from "../api/roommates.js";
 import { endWatchparty } from "../api/shows.js";
 import useGroupModules from "../hooks/useGroupModules.js";
+import useGroupMemberships from "../hooks/useGroupMemberships.js";
+import useRoommateStatuses from "../hooks/useRoommateStatuses.js";
 import { cx } from "../utils/classNames.js";
 import { usePullToRefresh } from "../utils/usePullToRefresh.js";
 import {
@@ -34,21 +34,37 @@ export default function StatusPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const feedRef = useRef(null);
 
-  const [roommates, setRoommates] = useState([]);
-  const [statusLoadedGroupId, setStatusLoadedGroupId] = useState(null);
-  const [error, setError] = useState("");
   const [liveError, setLiveError] = useState("");
   const [transitioningId, setTransitioningId] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
   const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
   const [jamModalOpen, setJamModalOpen] = useState(false);
-  const [groups, setGroups] = useState([]);
-  const [groupsLoading, setGroupsLoading] = useState(true);
-  const [groupsError, setGroupsError] = useState("");
   const [bookClubRefreshToken, setBookClubRefreshToken] = useState(0);
-  const activeGroupIdRef = useRef(user.activeGroupId);
   const { setTheme } = useTheme();
+  const {
+    create: handleCreateGroup,
+    error: groupsError,
+    groups,
+    join: handleJoinGroup,
+    loading: groupsLoading,
+    update: handleGroupChange,
+  } = useGroupMemberships({
+    createGroup,
+    joinGroup,
+    searchParams,
+    selectGroup,
+    setSearchParams,
+    user,
+  });
+  const {
+    error,
+    loading: roommatesLoading,
+    refreshRoommates: loadRoommates,
+    roommates,
+    setError,
+    setRoommates,
+  } = useRoommateStatuses(user.id, user.activeGroupId);
   const {
     modules,
     loading: modulesLoading,
@@ -56,75 +72,12 @@ export default function StatusPage() {
     refreshModules,
   } = useGroupModules(user.id, user.activeGroupId);
 
-  // Ignore a response for a group the user has already left. This keeps an
-  // older, slower request from replacing the newly selected household's data.
-  activeGroupIdRef.current = user.activeGroupId;
-
-  const loadGroups = useCallback(async () => {
-    try {
-      const { groups: memberships } = await getGroups(user.id);
-      setGroups(memberships);
-      setGroupsError("");
-
-      const requestedGroupId = searchParams.get("groupId");
-      const isMember = (groupId) =>
-        memberships.some((group) => group.groupId === groupId);
-      const nextGroupId = isMember(requestedGroupId)
-        ? requestedGroupId
-        : isMember(user.activeGroupId)
-          ? user.activeGroupId
-          : isMember(user.groupId)
-            ? user.groupId
-          : memberships[0]?.groupId;
-      if (nextGroupId && nextGroupId !== user.activeGroupId)
-        selectGroup(nextGroupId);
-      if (requestedGroupId) {
-        const nextParams = new URLSearchParams(searchParams);
-        nextParams.delete("groupId");
-        setSearchParams(nextParams, { replace: true });
-      }
-    } catch (err) {
-      setGroupsError(err.message || "Could not load your groups.");
-    } finally {
-      setGroupsLoading(false);
-    }
-  }, [searchParams, selectGroup, setSearchParams, user.activeGroupId, user.groupId, user.id]);
-
-  useEffect(() => {
-    loadGroups();
-  }, [loadGroups]);
-
-  const loadRoommates = useCallback(async () => {
-    const groupId = user.activeGroupId;
-    try {
-      const nextRoommates = await getRoommates(user.id, groupId);
-      if (activeGroupIdRef.current === groupId) {
-        setRoommates(nextRoommates);
-        setError("");
-      }
-    } catch {
-      if (activeGroupIdRef.current === groupId) {
-        setError("Could not load roommate statuses.");
-      }
-    }
-  }, [user.activeGroupId, user.id]);
-
   const refreshAll = useCallback(async () => {
     await Promise.all([loadRoommates(), refreshModules()]);
     // Book Club owns its fetch so it can advance an overdue meeting. Bump this
     // token after each page refresh to include it in pull-to-refresh as well.
     setBookClubRefreshToken((token) => token + 1);
   }, [loadRoommates, refreshModules]);
-
-  useEffect(() => {
-    let isCurrent = true;
-    loadRoommates().finally(() => {
-      if (isCurrent) setStatusLoadedGroupId(user.activeGroupId);
-    });
-    return () => {
-      isCurrent = false;
-    };
-  }, [loadRoommates, user.activeGroupId]);
 
   const { pull, refreshing, threshold } = usePullToRefresh(refreshAll);
 
@@ -166,18 +119,12 @@ export default function StatusPage() {
   );
   const groupDataLoading =
     groupsLoading ||
-    statusLoadedGroupId !== user.activeGroupId ||
+    roommatesLoading ||
     modulesLoading;
 
   useEffect(() => {
     setTheme(selectedGroup?.theme ?? "system");
   }, [selectedGroup?.groupId, selectedGroup?.theme, setTheme]);
-
-  const handleGroupChange = useCallback((updatedGroup) => {
-    setGroups((currentGroups) => currentGroups.map((group) =>
-      group.groupId === updatedGroup.groupId ? updatedGroup : group,
-    ));
-  }, []);
 
   async function handleLiveTransition(activity, action) {
     if (transitioningId) return;
@@ -218,25 +165,10 @@ export default function StatusPage() {
     (groupId) => {
       setGroupDrawerOpen(false);
       if (groupId === user.activeGroupId) return;
-      setStatusLoadedGroupId(null);
       selectGroup(groupId);
     },
     [selectGroup, user.activeGroupId],
   );
-
-  async function handleJoinGroup(code) {
-    const joined = await joinGroup(code);
-    const { groups: memberships } = await getGroups(joined.id);
-    setGroups(memberships);
-    setGroupsError("");
-  }
-
-  async function handleCreateGroup(name) {
-    const created = await createGroup(name);
-    const { groups: memberships } = await getGroups(created.id);
-    setGroups(memberships);
-    setGroupsError("");
-  }
 
   return (
     <>
@@ -320,42 +252,15 @@ export default function StatusPage() {
 
           {(liveEvents.length > 0 || liveWatchparties.length > 0) && (
             <div className={styles.liveEvents}>
-              {liveEvents.map((liveEvent) => (
-                <LiveEventBanner
-                  key={liveEvent.id}
-                  event={liveEvent}
-                  canEnd={liveEvent.proposedById === user.id}
-                  ending={transitioningId === liveEvent.id}
-                  onEnd={() => handleLiveTransition(liveEvent, "end")}
-                  user={user}
-                  onBannerClick={scrollToFeed}
-                  type="event"
-                />
-              ))}
-              {liveWatchparties.map((show) => (
-                <LiveEventBanner
-                  key={`watchparty:${show.id}`}
-                  event={{
-                    id: show.id,
-                    text: `Watching ${show.title}${
-                      show.watchpartySeason && show.watchpartyEpisode
-                        ? ` S${show.watchpartySeason} E${show.watchpartyEpisode}`
-                        : ""
-                    }`,
-                    proposedBy: show.watchpartyStartedBy || "Someone",
-                    liveStartedAt: show.watchpartyStartedAt,
-                    memberIds: (show.members || []).map((member) => member.id),
-                  }}
-                  canEnd={(show.members || []).some(
-                    (member) => member.id === user.id,
-                  )}
-                  ending={transitioningId === show.id}
-                  onEnd={() => handleWatchpartyEnd(show)}
-                  user={user}
-                  onBannerClick={scrollToFeed}
-                  type="watchparty"
-                />
-              ))}
+              <LiveModuleBanners
+                liveEvents={liveEvents}
+                liveWatchparties={liveWatchparties}
+                onEndEvent={(event) => handleLiveTransition(event, "end")}
+                onEndWatchparty={handleWatchpartyEnd}
+                onOpenFeed={scrollToFeed}
+                transitioningId={transitioningId}
+                user={user}
+              />
             </div>
           )}
 

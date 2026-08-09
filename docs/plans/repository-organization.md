@@ -25,11 +25,16 @@ specific domain module they use.
 group handling. Feature routes live in blueprints under `docker/flask/routes/`,
 with shared route validation and notification behavior in `route_helpers.py`.
 
+## Completed: large UI modules
+
+Feed preferences, deep-link focus, swipe handlers, show progress controls, and
+StatusPage data loading now live in focused hooks or components. The top-level
+feature modules retain composition and user-visible state without duplicating
+the extracted behavior.
+
 ## Future improvements
 
-1. **Large UI modules:** Extract feature-local hooks and subcomponents from
-   GroupFeed, ShowTrackerFeature, and StatusPage without changing UI behavior.
-2. **Reference docs:** Move the PWA proof-of-concept note from mockups/ to
+1. **Reference docs:** Move the PWA proof-of-concept note from mockups/ to
    docs/plans/, leaving mockups/ for visual prototypes only.
 
 ## Guardrails
