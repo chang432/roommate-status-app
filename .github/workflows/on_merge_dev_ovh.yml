@@ -16,8 +16,10 @@ name: Deploy app to OVH "dev" VPS
 #   OVH_OS_PASSWORD     that user's OpenStack password
 #   OVH_OS_PROJECT_ID   Public Cloud project ID (a.k.a. tenant/serviceName)
 #   OVH_OS_REGION_NAME  region the instance lives in (e.g. "GRA11")
-#   OVH_SSH_PASSWORD    root password for SSHing into the instance (the
-#                       instance must allow password auth for root)
+#   OVH_SSH_PASSWORD    password of the instance's "ubuntu" user (OVH Ubuntu
+#                       images disable root login; sshd must allow password
+#                       auth, and "ubuntu" must keep its default passwordless
+#                       sudo or the non-interactive script below will hang)
 #
 # NOTE: manual-trigger only for now. on_merge_dev.yml already deploys every
 # push to dev, and running both pipelines on the same merge would duplicate
@@ -132,9 +134,12 @@ jobs:
           VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
         with:
           host: ${{ steps.find_dev_vps.outputs.dev_vps_ip }}
-          username: root
+          # OVH's stock Ubuntu images disable root login; "ubuntu" is the
+          # default (passwordless-sudo) user, so the script below escalates
+          # with sudo where root is needed.
+          username: ubuntu
           # Password auth (instead of the Hetzner workflow's private key); the
-          # instance's sshd must permit it for root.
+          # instance's sshd must permit it for "ubuntu".
           password: ${{ secrets.OVH_SSH_PASSWORD }}
           port: 22
           envs: REPO_FULL,REPO_NAME,BRANCH,GH_PAT_REPO_READ,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,SITE_DOMAIN,ROOMMATE_TABLE,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY,VAPID_SUBJECT
@@ -153,43 +158,50 @@ jobs:
             # --- Ensure Docker is installed ---------------------------------
             # The "dev" VPS may be a bare box; install Docker + the compose
             # plugin from Docker's apt repo if they aren't already present.
+            # Running as "ubuntu", so every privileged step goes through sudo
+            # (passwordless by default for the cloud image's initial user).
             if ! command -v docker >/dev/null 2>&1; then
               echo "Docker not found; installing…"
               export DEBIAN_FRONTEND=noninteractive
-              apt-get update -y
-              apt-get install -y ca-certificates curl gnupg
-              install -m 0755 -d /etc/apt/keyrings
+              sudo -E apt-get update -y
+              sudo -E apt-get install -y ca-certificates curl gnupg
+              sudo install -m 0755 -d /etc/apt/keyrings
               curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-                | gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg
-              chmod a+r /etc/apt/keyrings/docker.gpg
+                | sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg
+              sudo chmod a+r /etc/apt/keyrings/docker.gpg
               echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
-                > /etc/apt/sources.list.d/docker.list
-              apt-get update -y
-              apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-              systemctl enable --now docker
+                | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+              sudo -E apt-get update -y
+              sudo -E apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+              sudo systemctl enable --now docker
             fi
-            docker --version
-            docker compose version
+            sudo docker --version
+            sudo docker compose version
 
             # --- AWS credentials for the Flask + Caddy containers -----------
-            # docker-compose mounts ${HOME}/.aws (=/root/.aws as root) read-only
-            # into both the Flask container (boto3 -> DynamoDB) and the Caddy
-            # container (route53 DNS-01 -> TLS cert). Materialize the creds
-            # passed from GitHub secrets so that mount is populated.
-            umask 077
-            mkdir -p /root/.aws
-            cat > /root/.aws/credentials <<EOF
+            # docker-compose mounts ${HOME}/.aws read-only into both the Flask
+            # container (boto3 -> DynamoDB) and the Caddy container (route53
+            # DNS-01 -> TLS cert). Compose runs under `sudo -H` below, so HOME
+            # resolves to /root; keep the creds there (root-owned, mode 600)
+            # rather than in ubuntu's home.
+            sudo install -d -m 700 /root/.aws
+            sudo tee /root/.aws/credentials >/dev/null <<EOF
             [default]
             aws_access_key_id=${AWS_ACCESS_KEY_ID}
             aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}
             EOF
-            cat > /root/.aws/config <<EOF
+            sudo tee /root/.aws/config >/dev/null <<EOF
             [default]
             region=${AWS_REGION:-us-east-1}
             EOF
+            sudo chmod 600 /root/.aws/credentials /root/.aws/config
 
             # --- Clone the repo if it isn't already on the VPS --------------
+            # /opt is root-owned; create the app dir owned by ubuntu so git
+            # can run unprivileged (mixed-ownership repos also trip git's
+            # safe.directory check).
             APP_DIR="/opt/${REPO_NAME}"
+            sudo install -d -o "$(id -un)" -g "$(id -gn)" "${APP_DIR}"
             CLONE_URL="https://${GH_PAT_REPO_READ}@github.com/${REPO_FULL}.git"
             if [ -d "${APP_DIR}/.git" ]; then
               # Already cloned: fast-forward to the latest dev so the merge that
@@ -214,8 +226,10 @@ jobs:
             # Clean rebuild + restart on every deploy: tear the old stack down
             # first, then rebuild the images from the freshly pulled source and
             # force-recreate the containers so nothing stale survives.
-            docker compose -f "${COMPOSE_FILE}" down --remove-orphans || true
-            docker compose -f "${COMPOSE_FILE}" up --build -d --force-recreate
+            # -H makes sudo set HOME=/root so the compose file's ${HOME}/.aws
+            # mount resolves to the credentials written above.
+            sudo -H docker compose -f "${COMPOSE_FILE}" down --remove-orphans || true
+            sudo -H docker compose -f "${COMPOSE_FILE}" up --build -d --force-recreate
 
             # --- Confirm the stack actually came up -------------------------
             echo "Waiting for backend health (up to ~4 min)…"
@@ -230,7 +244,7 @@ jobs:
 
             if [ "${ok}" -ne 1 ]; then
               echo "Backend did not become healthy. Recent container logs:"
-              docker compose -f "${COMPOSE_FILE}" logs --tail 60 || true
+              sudo -H docker compose -f "${COMPOSE_FILE}" logs --tail 60 || true
               exit 1
             fi
             echo "Deploy succeeded; the dev stack is running."
