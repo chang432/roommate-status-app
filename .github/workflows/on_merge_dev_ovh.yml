@@ -23,8 +23,8 @@ name: Deploy app to OVH "dev" VPS
 # race). To cut over to OVH, uncomment the push trigger below and remove it
 # from on_merge_dev.yml.
 on:
-  # push:
-  #   branches: [ "dev" ]
+  push:
+    branches: [ "dev" ]
   workflow_dispatch:
 
 permissions:
