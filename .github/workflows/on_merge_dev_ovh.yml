@@ -1,25 +1,21 @@
 name: Deploy app to OVH "dev" VPS
 
-# Variation of on_merge_dev.yml that deploys to an OVH Public Cloud instance
-# instead of a Hetzner VPS, and authenticates SSH with a password (stored as a
-# GitHub secret) instead of a private key. It:
-#   1. Finds the OVH instance named "dev" via the OpenStack CLI (fails the run
-#      if it doesn't exist).
-#   2. SSHes in with a password and clones this repo (only if it isn't already
-#      present).
-#   3. Rebuilds and runs the stack via docker compose (detached).
+# Variation of on_merge_dev.yml that deploys to an OVH machine instead of a
+# Hetzner VPS, and authenticates SSH with a password (stored as a GitHub
+# secret) instead of a private key. There is no API lookup of the server: the
+# machine's public IP comes straight from a repository variable. It:
+#   1. SSHes into the IP in the OVH_DEV_VPS_IP repo variable and clones this
+#      repo (only if it isn't already present).
+#   2. Rebuilds and runs the stack via docker compose (detached).
 #
-# Required repository secrets (OVH Public Cloud is OpenStack-based; the OS_*
-# values come from the "openrc.sh" file OVH generates for an OpenStack user
-# under Public Cloud > Users & Roles):
-#   OVH_OS_USERNAME     OpenStack user (e.g. "user-abc123")
-#   OVH_OS_PASSWORD     that user's OpenStack password
-#   OVH_OS_PROJECT_ID   Public Cloud project ID (a.k.a. tenant/serviceName)
-#   OVH_OS_REGION_NAME  region the instance lives in (e.g. "GRA11")
-#   OVH_SSH_PASSWORD    password of the instance's "ubuntu" user (OVH Ubuntu
-#                       images disable root login; sshd must allow password
-#                       auth, and "ubuntu" must keep its default passwordless
-#                       sudo or the non-interactive script below will hang)
+# Required configuration (Settings > Secrets and variables > Actions):
+#   OVH_DEV_VPS_IP     repository *variable* holding the machine's public
+#                      IPv4 address
+#   OVH_SSH_PASSWORD   repository *secret*: password of the machine's
+#                      "ubuntu" user (OVH Ubuntu images disable root login;
+#                      sshd must allow password auth, and "ubuntu" must keep
+#                      its default passwordless sudo or the non-interactive
+#                      script below will hang)
 #
 # NOTE: manual-trigger only for now. on_merge_dev.yml already deploys every
 # push to dev, and running both pipelines on the same merge would duplicate
@@ -61,57 +57,20 @@ jobs:
   deploy-dev-vps:
     needs: provision
     runs-on: ubuntu-latest
-    # OpenStack auth for every step that talks to OVH. AUTH_URL and the domain
-    # names are the same for all OVH Public Cloud accounts, so only the
-    # per-account values live in secrets.
-    env:
-      OS_AUTH_URL: https://auth.cloud.ovh.net/v3
-      OS_IDENTITY_API_VERSION: "3"
-      OS_USER_DOMAIN_NAME: Default
-      OS_PROJECT_DOMAIN_NAME: Default
-      OS_USERNAME: ${{ secrets.OVH_OS_USERNAME }}
-      OS_PASSWORD: ${{ secrets.OVH_OS_PASSWORD }}
-      OS_PROJECT_ID: ${{ secrets.OVH_OS_PROJECT_ID }}
-      OS_REGION_NAME: ${{ secrets.OVH_OS_REGION_NAME }}
     steps:
-      - name: Setup OpenStack CLI
+      # The SSH action fails opaquely on an empty host, so check the repo
+      # variable up front with a message that says where to set it.
+      - name: Require the VPS IP
+        env:
+          DEV_VPS_IP: ${{ vars.OVH_DEV_VPS_IP }}
         run: |
           set -euo pipefail
 
-          pip install --quiet python-openstackclient
-          openstack --version
-
-      - name: Find the "dev" VPS
-        id: find_dev_vps
-        run: |
-          set -euo pipefail
-
-          # openstack server show accepts a name or id; a non-zero exit means
-          # there is no instance named "dev" in this project/region.
-          if ! openstack server show dev -f json > /tmp/dev_vps.json 2>/dev/null; then
-            echo "::error::No OVH instance named 'dev' exists. Create it before deploying."
-            exit 1
-          fi
-
-          # "addresses" is a mapping of network name -> address list on recent
-          # openstack clients (e.g. {"Ext-Net": ["1.2.3.4", "2001:..."]}), but
-          # a single "Ext-Net=1.2.3.4, 2001:..." string on older ones. Flatten
-          # either shape and keep the first IPv4.
-          DEV_VPS_IP="$(jq -r '
-            .addresses
-            | if type == "object" then [.[][]]
-              elif type == "string" then [splits("=|, ?")]
-              else [] end
-            | map(select(type == "string" and test("^([0-9]{1,3}\\.){3}[0-9]{1,3}$")))
-            | first // empty
-          ' /tmp/dev_vps.json)"
           if [ -z "${DEV_VPS_IP}" ]; then
-            echo "::error::Found a 'dev' instance but it has no public IPv4 address."
+            echo "::error::OVH_DEV_VPS_IP is empty. Set it under Settings > Secrets and variables > Actions > Variables."
             exit 1
           fi
-
           echo "dev VPS public IP: ${DEV_VPS_IP}"
-          echo "dev_vps_ip=${DEV_VPS_IP}" >> "$GITHUB_OUTPUT"
 
       - name: SSH in, clone if needed, rebuild and run
         uses: appleboy/ssh-action@v1.0.3
@@ -133,7 +92,7 @@ jobs:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
         with:
-          host: ${{ steps.find_dev_vps.outputs.dev_vps_ip }}
+          host: ${{ vars.OVH_DEV_VPS_IP }}
           # OVH's stock Ubuntu images disable root login; "ubuntu" is the
           # default (passwordless-sudo) user, so the script below escalates
           # with sudo where root is needed.
