@@ -24,8 +24,8 @@ name: Deploy app to OVH "main" VPS
 # concurrently (which can race). To cut prod over to OVH, uncomment the push
 # trigger below and remove it from on_merge_main.yml.
 on:
-  # push:
-  #   branches: [ "main" ]
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
