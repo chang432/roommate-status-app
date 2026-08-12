@@ -5,8 +5,8 @@ name: Deploy app to Hetzner "main" VPS
 #   2. SSHes in and clones this repo (only if it isn't already present).
 #   3. Rebuilds and runs the stack via docker compose (detached).
 on:
-  push:
-    branches: [ "main" ]
+  # push:
+  #   branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
