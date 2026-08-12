@@ -9,13 +9,14 @@ name: Deploy app to OVH "main" VPS
 #   2. Rebuilds and runs the stack via docker compose (detached).
 #
 # Required configuration (Settings > Secrets and variables > Actions):
-#   OVH_MAIN_VPS_IP        repository *variable* holding the machine's public
-#                          IPv4 address
-#   OVH_MAIN_SSH_PASSWORD  repository *secret*: password of the machine's
-#                          "ubuntu" user (OVH Ubuntu images disable root
-#                          login; sshd must allow password auth, and "ubuntu"
-#                          must keep its default passwordless sudo or the
-#                          non-interactive script below will hang)
+#   OVH_MAIN_VPS_IP    repository *variable* holding the machine's public
+#                      IPv4 address
+#   OVH_SSH_PASSWORD   repository *secret*, shared with on_merge_dev_ovh.yml:
+#                      password of the "ubuntu" user, which must be the same
+#                      on every OVH box (OVH Ubuntu images disable root
+#                      login; sshd must allow password auth, and "ubuntu"
+#                      must keep its default passwordless sudo or the
+#                      non-interactive script below will hang)
 #
 # NOTE: manual-trigger only for now. on_merge_main.yml still deploys every
 # push to main to the Hetzner box, and running both pipelines on the same
@@ -99,7 +100,7 @@ jobs:
           username: ubuntu
           # Password auth (instead of the Hetzner workflow's private key); the
           # instance's sshd must permit it for "ubuntu".
-          password: ${{ secrets.OVH_MAIN_SSH_PASSWORD }}
+          password: ${{ secrets.OVH_SSH_PASSWORD }}
           port: 22
           envs: REPO_FULL,REPO_NAME,BRANCH,GH_PAT_REPO_READ,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,SITE_DOMAIN,ROOMMATE_TABLE,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY,VAPID_SUBJECT
           script: |
