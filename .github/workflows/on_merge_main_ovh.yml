@@ -1,30 +1,30 @@
-name: Deploy app to OVH "dev" VPS
+name: Deploy app to OVH "main" VPS
 
-# Variation of on_merge_dev.yml that deploys to an OVH machine instead of a
+# Variation of on_merge_main.yml that deploys to an OVH machine instead of a
 # Hetzner VPS, and authenticates SSH with a password (stored as a GitHub
 # secret) instead of a private key. There is no API lookup of the server: the
 # machine's public IP comes straight from a repository variable. It:
-#   1. SSHes into the IP in the OVH_DEV_VPS_IP repo variable and clones this
+#   1. SSHes into the IP in the OVH_MAIN_VPS_IP repo variable and clones this
 #      repo (only if it isn't already present).
 #   2. Rebuilds and runs the stack via docker compose (detached).
 #
 # Required configuration (Settings > Secrets and variables > Actions):
-#   OVH_DEV_VPS_IP     repository *variable* holding the machine's public
-#                      IPv4 address
-#   OVH_SSH_PASSWORD   repository *secret*: password of the machine's
-#                      "ubuntu" user (OVH Ubuntu images disable root login;
-#                      sshd must allow password auth, and "ubuntu" must keep
-#                      its default passwordless sudo or the non-interactive
-#                      script below will hang)
+#   OVH_MAIN_VPS_IP        repository *variable* holding the machine's public
+#                          IPv4 address
+#   OVH_MAIN_SSH_PASSWORD  repository *secret*: password of the machine's
+#                          "ubuntu" user (OVH Ubuntu images disable root
+#                          login; sshd must allow password auth, and "ubuntu"
+#                          must keep its default passwordless sudo or the
+#                          non-interactive script below will hang)
 #
-# NOTE: manual-trigger only for now. on_merge_dev.yml already deploys every
-# push to dev, and running both pipelines on the same merge would duplicate
-# the CloudFormation provision and migration jobs concurrently (which can
-# race). To cut over to OVH, uncomment the push trigger below and remove it
-# from on_merge_dev.yml.
+# NOTE: manual-trigger only for now. on_merge_main.yml still deploys every
+# push to main to the Hetzner box, and running both pipelines on the same
+# merge would duplicate the CloudFormation provision and migration jobs
+# concurrently (which can race). To cut prod over to OVH, uncomment the push
+# trigger below and remove it from on_merge_main.yml.
 on:
-  push:
-    branches: [ "dev" ]
+  # push:
+  #   branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
@@ -51,10 +51,10 @@ jobs:
           python-version: "3.13"
       - name: Install dependencies (boto3)
         run: pip install -r infrastructure/requirements.txt
-      - name: Deploy DynamoDB infrastructure (dev)
-        run: python infrastructure/deploy.py --dev
+      - name: Deploy DynamoDB infrastructure (prod)
+        run: python infrastructure/deploy.py --main
 
-  deploy-dev-vps:
+  deploy-main-vps:
     needs: provision
     runs-on: ubuntu-latest
     steps:
@@ -62,44 +62,44 @@ jobs:
       # variable up front with a message that says where to set it.
       - name: Require the VPS IP
         env:
-          DEV_VPS_IP: ${{ vars.OVH_DEV_VPS_IP }}
+          MAIN_VPS_IP: ${{ vars.OVH_MAIN_VPS_IP }}
         run: |
           set -euo pipefail
 
-          if [ -z "${DEV_VPS_IP}" ]; then
-            echo "::error::OVH_DEV_VPS_IP is empty. Set it under Settings > Secrets and variables > Actions > Variables."
+          if [ -z "${MAIN_VPS_IP}" ]; then
+            echo "::error::OVH_MAIN_VPS_IP is empty. Set it under Settings > Secrets and variables > Actions > Variables."
             exit 1
           fi
-          echo "dev VPS public IP: ${DEV_VPS_IP}"
+          echo "main VPS public IP: ${MAIN_VPS_IP}"
 
       - name: SSH in, clone if needed, rebuild and run
         uses: appleboy/ssh-action@v1.0.3
         env:
           REPO_FULL: ${{ github.repository }}
           REPO_NAME: ${{ github.event.repository.name }}
-          BRANCH: dev
+          BRANCH: main
           GH_PAT_REPO_READ: ${{ secrets.GH_PAT_REPO_READ }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           # Public hostname Caddy issues the TLS cert for on this VPS.
-          SITE_DOMAIN: ${{ vars.DEV_SITE_DOMAIN }}
-          # dev deployment uses its own DynamoDB table (dynamodb-table-dev.yaml).
-          ROOMMATE_TABLE: RoommateStatus-dev
+          SITE_DOMAIN: ${{ vars.MAIN_SITE_DOMAIN }}
+          # main deployment uses its own DynamoDB table (dynamodb-table-main.yaml).
+          ROOMMATE_TABLE: RoommateStatus-main
           # Web Push (VAPID) keys; empty => push disabled. Generate with
           # docker/flask/gen_vapid.py and store as repo secrets.
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
         with:
-          host: ${{ vars.OVH_DEV_VPS_IP }}
+          host: ${{ vars.OVH_MAIN_VPS_IP }}
           # OVH's stock Ubuntu images disable root login; "ubuntu" is the
           # default (passwordless-sudo) user, so the script below escalates
           # with sudo where root is needed.
           username: ubuntu
           # Password auth (instead of the Hetzner workflow's private key); the
           # instance's sshd must permit it for "ubuntu".
-          password: ${{ secrets.OVH_SSH_PASSWORD }}
+          password: ${{ secrets.OVH_MAIN_SSH_PASSWORD }}
           port: 22
           envs: REPO_FULL,REPO_NAME,BRANCH,GH_PAT_REPO_READ,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,SITE_DOMAIN,ROOMMATE_TABLE,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY,VAPID_SUBJECT
           script: |
@@ -108,14 +108,14 @@ jobs:
             # --- Require the TLS hostname before doing any work -------------
             # Caddy needs SITE_DOMAIN to issue the cert; fail loudly and early
             # (with a clear message) rather than mid-deploy if the repo var is
-            # missing. Set it under Settings > Variables > DEV_SITE_DOMAIN.
+            # missing. Set it under Settings > Variables > MAIN_SITE_DOMAIN.
             if [ -z "${SITE_DOMAIN:-}" ]; then
-              echo "SITE_DOMAIN is empty. Set the DEV_SITE_DOMAIN repository variable." >&2
+              echo "SITE_DOMAIN is empty. Set the MAIN_SITE_DOMAIN repository variable." >&2
               exit 1
             fi
 
             # --- Ensure Docker is installed ---------------------------------
-            # The "dev" VPS may be a bare box; install Docker + the compose
+            # The "main" VPS may be a bare box; install Docker + the compose
             # plugin from Docker's apt repo if they aren't already present.
             # Running as "ubuntu", so every privileged step goes through sudo
             # (passwordless by default for the cloud image's initial user).
@@ -163,7 +163,7 @@ jobs:
             sudo install -d -o "$(id -un)" -g "$(id -gn)" "${APP_DIR}"
             CLONE_URL="https://${GH_PAT_REPO_READ}@github.com/${REPO_FULL}.git"
             if [ -d "${APP_DIR}/.git" ]; then
-              # Already cloned: fast-forward to the latest dev so the merge that
+              # Already cloned: fast-forward to the latest main so the merge that
               # triggered this run is what actually gets deployed.
               echo "Repo already present at ${APP_DIR}; updating to origin/${BRANCH}."
               cd "${APP_DIR}"
@@ -206,14 +206,14 @@ jobs:
               sudo -H docker compose -f "${COMPOSE_FILE}" logs --tail 60 || true
               exit 1
             fi
-            echo "Deploy succeeded; the dev stack is running."
+            echo "Deploy succeeded; the main stack is running."
 
   # In-place data migrations run *after* the app is redeployed, so the live
   # code already tolerates both the old and new row shapes by the time rows
   # move. A failed migration is auto-reverted and fails this job, but does
   # not roll back the deploy. The runner is a no-op when nothing is pending.
   migrate:
-    needs: deploy-dev-vps
+    needs: deploy-main-vps
     runs-on: ubuntu-latest
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -228,5 +228,5 @@ jobs:
           python-version: "3.13"
       - name: Install dependencies (boto3)
         run: pip install -r infrastructure/requirements.txt
-      - name: Apply pending DynamoDB migrations (dev)
-        run: python infrastructure/migrations/runner.py --env dev
+      - name: Apply pending DynamoDB migrations (prod)
+        run: python infrastructure/migrations/runner.py --env prod
