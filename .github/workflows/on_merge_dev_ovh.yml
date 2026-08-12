@@ -185,10 +185,28 @@ jobs:
             # Clean rebuild + restart on every deploy: tear the old stack down
             # first, then rebuild the images from the freshly pulled source and
             # force-recreate the containers so nothing stale survives.
+            #
+            # Compose interpolates ${SITE_DOMAIN}, ${ROOMMATE_TABLE}, ${VAPID_*}
+            # from *its own* process environment. Running compose under `sudo`
+            # scrubs those vars (sudo's env_reset), so they never reach compose
+            # and it silently falls back to the docker-compose.yml defaults
+            # (dev domain, prod table, push disabled) no matter what this
+            # workflow passed in. Write them to an env file compose reads
+            # directly, which sudo cannot strip.
+            ENV_FILE="${APP_DIR}/docker/deploy.env"
+            umask 077
+            cat > "${ENV_FILE}" <<EOF
+            SITE_DOMAIN=${SITE_DOMAIN}
+            ROOMMATE_TABLE=${ROOMMATE_TABLE}
+            AWS_REGION=${AWS_REGION:-us-east-1}
+            VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+            VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+            VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:andre888chang@gmail.com}
+            EOF
             # -H makes sudo set HOME=/root so the compose file's ${HOME}/.aws
             # mount resolves to the credentials written above.
-            sudo -H docker compose -f "${COMPOSE_FILE}" down --remove-orphans || true
-            sudo -H docker compose -f "${COMPOSE_FILE}" up --build -d --force-recreate
+            sudo -H docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down --remove-orphans || true
+            sudo -H docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up --build -d --force-recreate
 
             # --- Confirm the stack actually came up -------------------------
             echo "Waiting for backend health (up to ~4 min)…"
@@ -203,7 +221,7 @@ jobs:
 
             if [ "${ok}" -ne 1 ]; then
               echo "Backend did not become healthy. Recent container logs:"
-              sudo -H docker compose -f "${COMPOSE_FILE}" logs --tail 60 || true
+              sudo -H docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" logs --tail 60 || true
               exit 1
             fi
             echo "Deploy succeeded; the dev stack is running."
