@@ -48,4 +48,10 @@ describe("API request helper", () => {
       "/feed?userId=andre",
     );
   });
+
+  it("repeats array query parameters", () => {
+    expect(withQuery("/feed", { userId: "andre", type: ["events", "polls"] })).toBe(
+      "/feed?userId=andre&type=events&type=polls",
+    );
+  });
 });

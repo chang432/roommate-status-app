@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -58,7 +58,6 @@ function renderRoster(props = {}, { route = "/" } = {}) {
       <HouseholdRoster
         roommates={ROSTER}
         groupName="Yorkshire"
-        hasJam={false}
         {...handlers}
         {...props}
       />
@@ -129,6 +128,28 @@ describe("HouseholdRoster", () => {
     ).toBeNull();
   });
 
+  it("places the enabled Spotify action after Notify and reflects Jam state", async () => {
+    const { onShareJam } = renderRoster({
+      showSpotifyJam: true,
+      hasJam: true,
+    });
+    const header = screen.getByText("Yorkshire").parentElement;
+    const actions = within(header).getAllByRole("button");
+
+    expect(actions.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Notify all to update",
+      "Replace Spotify Jam",
+    ]);
+    await userEvent.click(actions[1]);
+    expect(onShareJam).toHaveBeenCalledOnce();
+
+    cleanup();
+    renderRoster({ showSpotifyJam: true, hasJam: false });
+    expect(
+      screen.getByRole("button", { name: "Share Spotify Jam" }),
+    ).toBeInTheDocument();
+  });
+
   it("saves a status, hands the returned roster up, and closes the editor", async () => {
     const updated = [...ROSTER, roommate("ting", "Ting")];
     updateStatus.mockResolvedValue(updated);
@@ -172,20 +193,6 @@ describe("HouseholdRoster", () => {
 
     await waitFor(() => expect(pokeRoommate).toHaveBeenCalledWith("kayla", "andre"));
     expect(await screen.findByText("Poked once")).toBeInTheDocument();
-  });
-
-  it("labels the jam button by whether a jam is already live", async () => {
-    const { onShareJam } = renderRoster({ hasJam: true });
-
-    const button = screen.getByRole("button", { name: "Replace Spotify Jam" });
-    await userEvent.click(button);
-    expect(onShareJam).toHaveBeenCalled();
-
-    cleanup();
-    renderRoster({ hasJam: false });
-    expect(
-      screen.getByRole("button", { name: "Share Spotify Jam" }),
-    ).toBeInTheDocument();
   });
 
   it("opens the editor from a poke deep link and consumes the param", async () => {

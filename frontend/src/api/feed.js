@@ -1,7 +1,7 @@
 import { request, withQuery } from "./request.js";
 
-export function getFeed(userId, type = "all", groupId) {
-  return request(withQuery("/feed", { userId, type }), {
+export function getFeed(userId, moduleTypes = "all", groupId) {
+  return request(withQuery("/feed", { userId, type: moduleTypes }), {
     headers: groupId ? { "X-Roomie-Group-ID": groupId } : undefined,
   });
 }

@@ -1,0 +1,37 @@
+.menu {
+  @apply overflow-hidden rounded-md border border-line bg-card;
+}
+
+.row {
+  @apply flex min-h-[68px] w-full items-center justify-between gap-4 border-b border-line px-4 py-3 text-left transition last:border-b-0 hover:bg-surface-hover focus:outline-none focus:ring-4 focus:ring-inset focus:ring-accent-soft;
+}
+
+.copy {
+  @apply min-w-0;
+}
+
+.copy strong,
+.copy small {
+  @apply block;
+}
+
+.copy strong {
+  @apply text-[14px] font-black text-ink;
+}
+
+.copy small {
+  @apply mt-1 text-[12.5px] font-semibold leading-5 text-ink-soft;
+}
+
+.chevron {
+  @apply flex-none text-[26px] font-bold leading-none text-ink-soft;
+}
+
+.danger {
+  @apply bg-danger-soft/50 hover:bg-danger-soft;
+}
+
+.danger .copy strong,
+.danger .chevron {
+  @apply text-status-red;
+}

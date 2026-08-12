@@ -33,7 +33,11 @@ export async function request(path, options = {}) {
 
   if (!response.ok) {
     if (data?.code === "invalid_user") onInvalidUser?.();
-    throw new Error(data?.error || `Request failed: ${response.status}`);
+    const error = new Error(data?.error || `Request failed: ${response.status}`);
+    error.code = data?.code;
+    error.data = data;
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
@@ -41,9 +45,12 @@ export async function request(path, options = {}) {
 export function withQuery(path, params) {
   const search = new URLSearchParams();
   Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      search.set(key, value);
-    }
+    const values = Array.isArray(value) ? value : [value];
+    values.forEach((entry) => {
+      if (entry !== undefined && entry !== null && entry !== "") {
+        search.append(key, entry);
+      }
+    });
   });
   const query = search.toString();
   return query ? `${path}?${query}` : path;

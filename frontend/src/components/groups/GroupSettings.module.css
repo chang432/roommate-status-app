@@ -1,0 +1,38 @@
+.panel { @apply space-y-6; }
+.state { @apply py-10 text-center text-[14px] font-bold text-ink-soft; }
+.groupSummary { @apply flex items-center gap-4 px-1 pb-1; }
+.avatar { @apply grid h-14 w-14 flex-none place-items-center rounded-full bg-solid-accent text-[24px] font-black text-on-strong shadow-soft; }
+.groupTitle { @apply text-[18px] font-black text-ink; }
+.groupRole { @apply mt-1 text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft; }
+.workflow { @apply mx-auto w-full max-w-[600px] py-1; }
+.sectionHeader { @apply mb-4; }
+.sectionHeader h3 { @apply text-[17px] font-black text-ink; }
+.sectionHeader p { @apply mt-1 text-[13px] leading-5 text-ink-soft; }
+.nameForm { @apply flex items-end gap-2 max-[480px]:flex-col max-[480px]:items-stretch; }
+.grow { @apply min-w-0 flex-1; }
+.input { @apply px-3 py-[11px] text-[14px]; }
+.nameButton { @apply mb-0 h-[43px] px-5 text-[13px]; }
+.groupName { @apply text-[18px] font-black text-ink; }
+.codeLabel { @apply mb-2 mt-4 text-[12px] font-black uppercase tracking-[0.05em] text-ink-soft; }
+.codeRow { @apply flex gap-2; }
+.codeRow code { @apply min-w-0 flex-1 rounded-sm border border-line bg-surface-muted px-3 py-[10px] text-center text-[14px] font-black tracking-[0.16em] text-accent-deep; }
+.codeRow button { @apply px-4 text-[13px]; }
+.themeChoices { @apply grid gap-2 sm:grid-cols-2; }
+.themeChoice { @apply rounded-sm border border-line bg-card px-3 py-3 text-left transition hover:border-accent hover:bg-surface-hover disabled:opacity-60; }
+.themeChoiceActive { @apply border-accent bg-accent-soft shadow-soft; }
+.themeChoice strong, .themeChoice small { @apply block; }
+.themeChoice strong { @apply text-[13px] font-black text-ink; }
+.themeChoice small { @apply mt-1 text-[11.5px] font-semibold text-ink-soft; }
+.moduleList, .memberList { @apply space-y-2; }
+.moduleRow { @apply flex items-center justify-between gap-4 rounded-sm bg-surface-muted px-3 py-3; }
+.moduleRow strong, .moduleRow small { @apply block; }
+.moduleRow strong { @apply text-[13px] font-black text-ink; }
+.moduleRow small { @apply mt-1 text-[11.5px] font-semibold leading-4 text-ink-soft; }
+.moduleRow input { @apply h-5 w-5 flex-none accent-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50; }
+.memberRow { @apply flex items-center justify-between gap-3 rounded-sm bg-surface-muted px-3 py-[10px] max-[500px]:flex-col max-[500px]:items-stretch; }
+.memberRow strong, .memberRow small { @apply block; }
+.memberRow strong { @apply text-[14px] font-black text-ink; }
+.memberRow small { @apply mt-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-soft; }
+.memberActions { @apply flex flex-wrap justify-end gap-2; }
+.memberActions button { @apply px-3 py-2 text-[12px] font-black; }
+.removeButton { @apply rounded-sm border border-status-red bg-card px-3 py-2 text-[12px] font-black text-status-red disabled:opacity-50; }

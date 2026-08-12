@@ -4,7 +4,7 @@ Description: >-
   Status app — one table per concern: RoommateStatus-main (roommates/accounts),
   plus the -pushsubs, -spotify-jam, -groups, -memberships, and -migrations
   tables, and the group-partitioned -activities-v2, -requests-v2,
-  -checklists-v2, -polls, -shows-v2, and -comment-likes-v2 feed tables. See the matching
+  -checklists-v2, -polls, -counters, -shows-v2, and -comment-likes-v2 feed tables. See the matching
   Flask modules in docker/flask/ for each table's shape. Table names are fixed per template so the
   dev and main deployments can never accidentally share data (see
   dynamodb-table-dev.yaml for the dev half).
@@ -216,6 +216,46 @@ Resources:
           KeyType: HASH
         - AttributeName: id
           KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: roomie-status
+        - Key: Environment
+          Value: main
+
+  CountersTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: RoommateStatus-main-counters
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: groupId
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: counterKey
+          AttributeType: S
+        - AttributeName: entrySort
+          AttributeType: S
+      KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+        - AttributeName: id
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: CounterHistoryIndex
+          KeySchema:
+            - AttributeName: counterKey
+              KeyType: HASH
+            - AttributeName: entrySort
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
       SSESpecification:
         SSEEnabled: true
       PointInTimeRecoverySpecification:
@@ -500,6 +540,18 @@ Outputs:
     Value: !GetAtt PollsTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-PollsTableArn"
+
+  CountersTableName:
+    Description: Name of the group-partitioned counters DynamoDB table.
+    Value: !Ref CountersTable
+    Export:
+      Name: !Sub "${AWS::StackName}-CountersTableName"
+
+  CountersTableArn:
+    Description: ARN of the group-partitioned counters DynamoDB table.
+    Value: !GetAtt CountersTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CountersTableArn"
 
   ShowsV2TableName:
     Description: Name of the group-partitioned TV shows DynamoDB table.

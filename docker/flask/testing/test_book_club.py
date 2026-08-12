@@ -10,7 +10,7 @@ FUTURE = int(datetime(2030, 8, 7, 23, 30, tzinfo=timezone.utc).timestamp() * 100
 
 
 def enable_book_club():
-    groups.set_display_options("andre", TEST_GROUP_ID, True, True, True)
+    groups.set_enabled_modules("andre", TEST_GROUP_ID, ["book-club", "forums"])
 
 
 def add_book(client, user_id="andre", **overrides):
@@ -139,7 +139,7 @@ def test_members_can_update_past_open_meetings_and_notify(client, monkeypatch):
     notifications = []
     monkeypatch.setattr(push, "is_configured", lambda: True)
     monkeypatch.setattr(
-        "app.notify_group",
+        "routes.book_club.notify_group",
         lambda group_id, **kwargs: notifications.append((group_id, kwargs)) or {"sent": 1, "pruned": 0, "failed": 0},
     )
     notified = client.post(
@@ -519,15 +519,16 @@ def test_only_admins_can_add_current_books(client):
     assert rejected.status_code == 403
 
 
-def test_feed_exposes_meetings_only_when_book_club_is_enabled(client):
+def test_feed_preserves_meetings_when_book_club_ui_is_disabled(client):
     meeting = create_meeting(client).get_json()["meeting"]
     feed = client.get(grouped_path("/api/feed?type=book-club"))
     assert feed.status_code == 200
     assert feed.get_json()[0]["id"] == meeting["id"]
     assert feed.get_json()[0]["type"] == "book-club"
 
-    groups.set_display_options("andre", TEST_GROUP_ID, True, True, False)
-    assert client.get(grouped_path("/api/feed?type=book-club")).get_json() == []
+    groups.set_enabled_modules("andre", TEST_GROUP_ID, [])
+    preserved = client.get(grouped_path("/api/feed?type=book-club")).get_json()
+    assert preserved[0]["id"] == meeting["id"]
 
 
 def test_non_admin_cannot_create_or_complete_meetings(client):
@@ -574,7 +575,7 @@ def test_legacy_open_session_can_be_completed_before_migration(client):
 def test_local_seed_group_remains_book_club_only(client):
     seed.seed_local_groups()
     group = groups.get_group_by_id(seed.BOOK_CLUB_GROUP_ID)
-    assert (group["showRoster"], group["showFeed"], group["showBookClub"]) == (False, False, True)
+    assert group["enabledModules"] == ["spotify", "book-club", "forums"]
 
 
 def test_local_book_club_seed_uses_catalog_book_and_is_idempotent(

@@ -359,6 +359,94 @@ def get_account_by_id(user_id: str) -> dict | None:
     return _to_account_user(item) if item else None
 
 
+def get_account_profile(user_id: str) -> dict | None:
+    """Return the public account plus any incomplete display-name sync state."""
+    normalized = normalize_username(user_id)
+    if not normalized:
+        return None
+    item = _get_table().get_item(Key={"id": normalized}, ConsistentRead=True).get("Item")
+    if not item:
+        return None
+    user = _to_account_user(item)
+    if item.get("nameSyncTarget"):
+        user["nameSyncPending"] = True
+    return user
+
+
+def verify_account_password(user_id: str, password: str) -> bool:
+    normalized = normalize_username(user_id)
+    if not normalized or not password:
+        return False
+    item = _get_table().get_item(Key={"id": normalized}, ConsistentRead=True).get("Item")
+    return bool(item and item.get("passwordHash") and check_password_hash(item["passwordHash"], password))
+
+
+def begin_account_name_update(
+    user_id: str, name: str, password: str
+) -> tuple[dict | None, str | None, str | None]:
+    """Set the canonical name first so concurrent writes use the new value.
+
+    The sync marker makes the subsequent cross-table rewrite resumable. A new
+    target is rejected while another target is pending; retrying the same name
+    continues from the original display name kept on the marker.
+    """
+    normalized = normalize_username(user_id)
+    display_name = (name or "").strip()
+    if not display_name or len(display_name) > 80:
+        return None, None, "invalid_name"
+    table = _get_table()
+    item = table.get_item(Key={"id": normalized}, ConsistentRead=True).get("Item")
+    if not item or not password or not check_password_hash(item.get("passwordHash", ""), password):
+        return None, None, "invalid_password"
+    pending_target = item.get("nameSyncTarget")
+    if pending_target and pending_target != display_name:
+        return _to_account_user(item), item.get("nameSyncPrevious", item["name"]), "sync_pending"
+    previous_name = item.get("nameSyncPrevious", item["name"])
+    if item["name"] == display_name and not pending_target:
+        return _to_account_user(item), previous_name, None
+    table.update_item(
+        Key={"id": normalized},
+        UpdateExpression=(
+            "SET #name = :name, nameSyncTarget = :name, "
+            "nameSyncPrevious = if_not_exists(nameSyncPrevious, :previous), "
+            "nameSyncStartedAt = if_not_exists(nameSyncStartedAt, :started)"
+        ),
+        ExpressionAttributeNames={"#name": "name"},
+        ExpressionAttributeValues={
+            ":name": display_name,
+            ":previous": previous_name,
+            ":started": int(time.time() * 1000),
+        },
+        ConditionExpression="attribute_exists(id)",
+    )
+    return get_account_profile(normalized), previous_name, None
+
+
+def finish_account_name_update(user_id: str) -> dict | None:
+    normalized = normalize_username(user_id)
+    _get_table().update_item(
+        Key={"id": normalized},
+        UpdateExpression="REMOVE nameSyncTarget, nameSyncPrevious, nameSyncStartedAt",
+        ConditionExpression="attribute_exists(id)",
+    )
+    return get_account_profile(normalized)
+
+
+def change_account_password(user_id: str, current_password: str, new_password: str) -> str | None:
+    normalized = normalize_username(user_id)
+    if not new_password or len(new_password) < 6:
+        return "invalid_new_password"
+    if not verify_account_password(normalized, current_password):
+        return "invalid_current_password"
+    _get_table().update_item(
+        Key={"id": normalized},
+        UpdateExpression="SET passwordHash = :passwordHash",
+        ExpressionAttributeValues={":passwordHash": generate_password_hash(new_password)},
+        ConditionExpression="attribute_exists(id)",
+    )
+    return None
+
+
 def get_group_member(user_id: str, expected_group_id: str | None = None) -> dict | None:
     """Return a grouped account, or None for missing/no-group/wrong-group ids."""
     if not user_id:

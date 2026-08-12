@@ -3,14 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <script>
-      // Apply the stored preference before React renders to prevent a light
-      // flash. Named themes pass through unchanged, so future themes need no
-      // bootstrap update; invalid values safely fall back to the root palette.
+      // Use the device palette until the signed-in member's active-group
+      // preference arrives from the API. Themes are group-scoped, so there is
+      // intentionally no global localStorage fallback here.
       try {
-        const preference = localStorage.getItem('roomie-theme') || 'system'
-        const resolved = preference === 'system'
-          ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-          : preference
+        const preference = 'system'
+        const resolved = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
         document.documentElement.dataset.theme = resolved
         document.documentElement.dataset.themePreference = preference
       } catch {

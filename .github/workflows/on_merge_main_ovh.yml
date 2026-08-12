@@ -1,0 +1,233 @@
+name: Deploy app to OVH "main" VPS
+
+# Variation of on_merge_main.yml that deploys to an OVH machine instead of a
+# Hetzner VPS, and authenticates SSH with a password (stored as a GitHub
+# secret) instead of a private key. There is no API lookup of the server: the
+# machine's public IP comes straight from a repository variable. It:
+#   1. SSHes into the IP in the OVH_MAIN_VPS_IP repo variable and clones this
+#      repo (only if it isn't already present).
+#   2. Rebuilds and runs the stack via docker compose (detached).
+#
+# Required configuration (Settings > Secrets and variables > Actions):
+#   OVH_MAIN_VPS_IP    repository *variable* holding the machine's public
+#                      IPv4 address
+#   OVH_SSH_PASSWORD   repository *secret*, shared with on_merge_dev_ovh.yml:
+#                      password of the "ubuntu" user, which must be the same
+#                      on every OVH box (OVH Ubuntu images disable root
+#                      login; sshd must allow password auth, and "ubuntu"
+#                      must keep its default passwordless sudo or the
+#                      non-interactive script below will hang)
+#
+# NOTE: manual-trigger only for now. on_merge_main.yml still deploys every
+# push to main to the Hetzner box, and running both pipelines on the same
+# merge would duplicate the CloudFormation provision and migration jobs
+# concurrently (which can race). To cut prod over to OVH, uncomment the push
+# trigger below and remove it from on_merge_main.yml.
+on:
+  # push:
+  #   branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Provision the DynamoDB infrastructure *before* the app is redeployed:
+  # CloudFormation owns table structure (keys, indexes), and code that reads
+  # a new table or index must not go live before that structure exists, or
+  # every affected request fails outright. A no-op when the templates are
+  # unchanged, so this runs on every merge.
+  provision:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies (boto3)
+        run: pip install -r infrastructure/requirements.txt
+      - name: Deploy DynamoDB infrastructure (prod)
+        run: python infrastructure/deploy.py --main
+
+  deploy-main-vps:
+    needs: provision
+    runs-on: ubuntu-latest
+    steps:
+      # The SSH action fails opaquely on an empty host, so check the repo
+      # variable up front with a message that says where to set it.
+      - name: Require the VPS IP
+        env:
+          MAIN_VPS_IP: ${{ vars.OVH_MAIN_VPS_IP }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${MAIN_VPS_IP}" ]; then
+            echo "::error::OVH_MAIN_VPS_IP is empty. Set it under Settings > Secrets and variables > Actions > Variables."
+            exit 1
+          fi
+          echo "main VPS public IP: ${MAIN_VPS_IP}"
+
+      - name: SSH in, clone if needed, rebuild and run
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          REPO_FULL: ${{ github.repository }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          BRANCH: main
+          GH_PAT_REPO_READ: ${{ secrets.GH_PAT_REPO_READ }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          # Public hostname Caddy issues the TLS cert for on this VPS.
+          SITE_DOMAIN: ${{ vars.MAIN_SITE_DOMAIN }}
+          # main deployment uses its own DynamoDB table (dynamodb-table-main.yaml).
+          ROOMMATE_TABLE: RoommateStatus-main
+          # Web Push (VAPID) keys; empty => push disabled. Generate with
+          # docker/flask/gen_vapid.py and store as repo secrets.
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+        with:
+          host: ${{ vars.OVH_MAIN_VPS_IP }}
+          # OVH's stock Ubuntu images disable root login; "ubuntu" is the
+          # default (passwordless-sudo) user, so the script below escalates
+          # with sudo where root is needed.
+          username: ubuntu
+          # Password auth (instead of the Hetzner workflow's private key); the
+          # instance's sshd must permit it for "ubuntu".
+          password: ${{ secrets.OVH_SSH_PASSWORD }}
+          port: 22
+          envs: REPO_FULL,REPO_NAME,BRANCH,GH_PAT_REPO_READ,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,SITE_DOMAIN,ROOMMATE_TABLE,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY,VAPID_SUBJECT
+          script: |
+            set -euo pipefail
+
+            # --- Require the TLS hostname before doing any work -------------
+            # Caddy needs SITE_DOMAIN to issue the cert; fail loudly and early
+            # (with a clear message) rather than mid-deploy if the repo var is
+            # missing. Set it under Settings > Variables > MAIN_SITE_DOMAIN.
+            if [ -z "${SITE_DOMAIN:-}" ]; then
+              echo "SITE_DOMAIN is empty. Set the MAIN_SITE_DOMAIN repository variable." >&2
+              exit 1
+            fi
+
+            # --- Ensure Docker is installed ---------------------------------
+            # The "main" VPS may be a bare box; install Docker + the compose
+            # plugin from Docker's apt repo if they aren't already present.
+            # Running as "ubuntu", so every privileged step goes through sudo
+            # (passwordless by default for the cloud image's initial user).
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "Docker not found; installing…"
+              export DEBIAN_FRONTEND=noninteractive
+              sudo -E apt-get update -y
+              sudo -E apt-get install -y ca-certificates curl gnupg
+              sudo install -m 0755 -d /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+                | sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg
+              sudo chmod a+r /etc/apt/keyrings/docker.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+                | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+              sudo -E apt-get update -y
+              sudo -E apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+              sudo systemctl enable --now docker
+            fi
+            sudo docker --version
+            sudo docker compose version
+
+            # --- AWS credentials for the Flask container --------------------
+            # docker-compose mounts ${HOME}/.aws read-only into the Flask
+            # container (boto3 -> DynamoDB); Caddy gets its TLS cert via the
+            # HTTP-01 challenge and needs no AWS access. Compose runs under
+            # `sudo -H` below, so HOME resolves to /root; keep the creds there
+            # (root-owned, mode 600) rather than in ubuntu's home.
+            sudo install -d -m 700 /root/.aws
+            sudo tee /root/.aws/credentials >/dev/null <<EOF
+            [default]
+            aws_access_key_id=${AWS_ACCESS_KEY_ID}
+            aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}
+            EOF
+            sudo tee /root/.aws/config >/dev/null <<EOF
+            [default]
+            region=${AWS_REGION:-us-east-1}
+            EOF
+            sudo chmod 600 /root/.aws/credentials /root/.aws/config
+
+            # --- Clone the repo if it isn't already on the VPS --------------
+            # /opt is root-owned; create the app dir owned by ubuntu so git
+            # can run unprivileged (mixed-ownership repos also trip git's
+            # safe.directory check).
+            APP_DIR="/opt/${REPO_NAME}"
+            sudo install -d -o "$(id -un)" -g "$(id -gn)" "${APP_DIR}"
+            CLONE_URL="https://${GH_PAT_REPO_READ}@github.com/${REPO_FULL}.git"
+            if [ -d "${APP_DIR}/.git" ]; then
+              # Already cloned: fast-forward to the latest main so the merge that
+              # triggered this run is what actually gets deployed.
+              echo "Repo already present at ${APP_DIR}; updating to origin/${BRANCH}."
+              cd "${APP_DIR}"
+              git remote set-url origin "${CLONE_URL}"
+              git fetch --no-tags origin "${BRANCH}"
+              git reset --hard "origin/${BRANCH}"
+            else
+              echo "Cloning ${REPO_FULL} (${BRANCH}) into ${APP_DIR}."
+              git clone --branch "${BRANCH}" "${CLONE_URL}" "${APP_DIR}"
+              cd "${APP_DIR}"
+            fi
+
+            # --- Rebuild and run the stack ----------------------------------
+            # Run the compose commands directly (detached) rather than start.sh,
+            # which is built for interactive local dev (it deploys infra, tails
+            # logs in the foreground, and tears the stack down on exit). `up -d`
+            # returns immediately and leaves the stack running.
+            COMPOSE_FILE="${APP_DIR}/docker/docker-compose.yml"
+            # Clean rebuild + restart on every deploy: tear the old stack down
+            # first, then rebuild the images from the freshly pulled source and
+            # force-recreate the containers so nothing stale survives.
+            # -H makes sudo set HOME=/root so the compose file's ${HOME}/.aws
+            # mount resolves to the credentials written above.
+            sudo -H docker compose -f "${COMPOSE_FILE}" down --remove-orphans || true
+            sudo -H docker compose -f "${COMPOSE_FILE}" up --build -d --force-recreate
+
+            # --- Confirm the stack actually came up -------------------------
+            echo "Waiting for backend health (up to ~4 min)…"
+            ok=0
+            for _ in $(seq 1 120); do
+              if curl -fsS http://localhost:8000/api/health >/dev/null 2>&1; then
+                ok=1
+                break
+              fi
+              sleep 2
+            done
+
+            if [ "${ok}" -ne 1 ]; then
+              echo "Backend did not become healthy. Recent container logs:"
+              sudo -H docker compose -f "${COMPOSE_FILE}" logs --tail 60 || true
+              exit 1
+            fi
+            echo "Deploy succeeded; the main stack is running."
+
+  # In-place data migrations run *after* the app is redeployed, so the live
+  # code already tolerates both the old and new row shapes by the time rows
+  # move. A failed migration is auto-reverted and fails this job, but does
+  # not roll back the deploy. The runner is a no-op when nothing is pending.
+  migrate:
+    needs: deploy-main-vps
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies (boto3)
+        run: pip install -r infrastructure/requirements.txt
+      - name: Apply pending DynamoDB migrations (prod)
+        run: python infrastructure/migrations/runner.py --env prod

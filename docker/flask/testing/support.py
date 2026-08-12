@@ -20,6 +20,7 @@ import comment_likes
 import db
 import groups
 import household_checklists
+import household_counters
 import household_forums
 import household_polls
 import household_requests
@@ -27,8 +28,10 @@ import household_shows
 import jam
 import module_models
 import push
+import profile_names
 import seed
-from app import _activity_status_overrides, create_app, mentions_all, resolve_mentions
+from app import create_app
+from route_helpers import _activity_status_overrides, mentions_all, resolve_mentions
 
 TEST_GROUP_ID = db.DEFAULT_GROUP_ID
 TEST_USER_ID = "andre"

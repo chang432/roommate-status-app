@@ -35,6 +35,8 @@ const ROOMMATES = [
   { id: "kayla", name: "Kayla" },
 ];
 const MODULE_PREFERENCE_KEY = "roomie-module-preferences:andre:shire";
+const DEFAULT_ENABLED_MODULES = ["events", "requests", "checklists", "polls", "tv"];
+const BOOK_ENABLED_MODULES = [...DEFAULT_ENABLED_MODULES, "book-club", "forums"];
 
 function feedItem(type, id = `${type}-1`, isArchived = false) {
   const common = {
@@ -146,7 +148,11 @@ function renderFeed(initialUrl, items, props = {}) {
   getFeed.mockResolvedValue(items);
   return render(
     <MemoryRouter initialEntries={[initialUrl]}>
-      <GroupFeed roommates={ROOMMATES} {...props} />
+      <GroupFeed
+        roommates={ROOMMATES}
+        enabledModuleIds={DEFAULT_ENABLED_MODULES}
+        {...props}
+      />
       <LocationProbe />
     </MemoryRouter>,
   );
@@ -251,7 +257,7 @@ describe("GroupFeed module focus", () => {
     renderFeed(
       "/",
       [feedItem("tv"), feedItem("book-club")],
-      { showBookClub: true },
+      { enabledModuleIds: BOOK_ENABLED_MODULES },
     );
     const user = userEvent.setup();
 
@@ -276,7 +282,7 @@ describe("GroupFeed module focus", () => {
     renderFeed(
       "/",
       [feedItem("events"), feedItem("book-club")],
-      { showStandardModules: false, showBookClub: true },
+      { enabledModuleIds: ["book-club"] },
     );
 
     expect(await screen.findByText("The Left Hand of Darkness")).toBeInTheDocument();
@@ -289,11 +295,11 @@ describe("GroupFeed module focus", () => {
     expect(screen.queryByRole("tab", { name: /Events/ })).not.toBeInTheDocument();
   });
 
-  it("makes polls available in a Book Club-only group", async () => {
+  it("allows polls to be enabled independently alongside Book Club", async () => {
     renderFeed(
       "/",
       [feedItem("events"), feedItem("polls"), feedItem("book-club")],
-      { showStandardModules: false, showBookClub: true },
+      { enabledModuleIds: ["polls", "book-club"] },
     );
 
     expect(await screen.findByText("Dinner?")).toBeInTheDocument();
@@ -312,7 +318,7 @@ describe("GroupFeed module focus", () => {
     renderFeed(
       "/",
       [feedItem("events"), feedItem("book-club")],
-      { showBookClub: true },
+      { enabledModuleIds: BOOK_ENABLED_MODULES },
     );
 
     expect(
@@ -320,7 +326,7 @@ describe("GroupFeed module focus", () => {
     ).toBeInTheDocument();
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(MODULE_PREFERENCE_KEY));
-      expect(stored.version).toBe(5);
+      expect(stored.version).toBe(6);
       expect(stored.allTypes).toContain("book-club");
       expect(stored.allTypes).toContain("polls");
     });
@@ -328,7 +334,7 @@ describe("GroupFeed module focus", () => {
 
   it("preserves an explicit Book Club exclusion from All after remounting", async () => {
     const items = [feedItem("events"), feedItem("book-club")];
-    const view = renderFeed("/", items, { showBookClub: true });
+    const view = renderFeed("/", items, { enabledModuleIds: BOOK_ENABLED_MODULES });
     const user = userEvent.setup();
 
     expect(
@@ -343,12 +349,12 @@ describe("GroupFeed module focus", () => {
     expect(screen.queryByText("The Left Hand of Darkness")).not.toBeInTheDocument();
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(MODULE_PREFERENCE_KEY));
-      expect(stored.version).toBe(5);
+      expect(stored.version).toBe(6);
       expect(stored.allTypes).not.toContain("book-club");
     });
 
     view.unmount();
-    renderFeed("/", items, { showBookClub: true });
+    renderFeed("/", items, { enabledModuleIds: BOOK_ENABLED_MODULES });
     expect(await screen.findByText("Movie night")).toBeInTheDocument();
     expect(screen.queryByText("The Left Hand of Darkness")).not.toBeInTheDocument();
   });
@@ -711,7 +717,7 @@ describe("GroupFeed module focus", () => {
     renderFeed(
       "/",
       [feedItem("tv"), feedItem("book-club")],
-      { showBookClub: true },
+      { enabledModuleIds: BOOK_ENABLED_MODULES },
     );
     const user = userEvent.setup();
 
@@ -1154,7 +1160,7 @@ describe("GroupFeed module focus", () => {
       renderFeed(
         "/?module=tv",
         [feedItem("events"), feedItem("tv"), feedItem("book-club")],
-        { showBookClub: true },
+        { enabledModuleIds: BOOK_ENABLED_MODULES },
       );
 
       const activeTab = await screen.findByRole("tab", {
@@ -1205,7 +1211,7 @@ describe("GroupFeed module focus", () => {
     [
       "last",
       "/?module=forums",
-      { showBookClub: true },
+      { enabledModuleIds: BOOK_ENABLED_MODULES },
       /^Forums/,
       null,
       560,

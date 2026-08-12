@@ -4,8 +4,8 @@ CloudFormation + a deploy script for the app's AWS resources.
 
 | File                       | Purpose                                                        |
 | -------------------------- | -------------------------------------------------------------- |
-| `dynamodb-table-dev.yaml`  | CloudFormation template: the **dev** tables (`RoommateStatus-dev` + `-pushsubs` + `-spotify-jam` + `-groups` + `-memberships` + `-migrations` + the `-activities-v2` / `-requests-v2` / `-checklists-v2` / `-polls` / `-shows-v2` / `-comment-likes-v2` feed tables)  |
-| `dynamodb-table-main.yaml` | CloudFormation template: the **main** tables (`RoommateStatus-main` + `-pushsubs` + `-spotify-jam` + `-groups` + `-memberships` + `-migrations` + the `-activities-v2` / `-requests-v2` / `-checklists-v2` / `-polls` / `-shows-v2` / `-comment-likes-v2` feed tables) |
+| `dynamodb-table-dev.yaml`  | CloudFormation template for the isolated dev tables, including feed modules and counter history. |
+| `dynamodb-table-main.yaml` | CloudFormation template for the isolated production tables, including feed modules and counter history. |
 | `deploy.py`                | Creates/updates a stack via boto3 and prints outputs           |
 | `requirements.txt`         | Python deps (`boto3`) — used by `deploy.py` and `migrations/runner.py` |
 | `migrations/`              | In-place DynamoDB **data** migrations + the runner (see `migrations/README.md`) |
@@ -16,11 +16,11 @@ CloudFormation + a deploy script for the app's AWS resources.
 ## DynamoDB tables
 
 There are two independent deployments, each with its own template and stack so
-dev and main can never share data. Each stack provisions **thirteen** tables — the
+dev and main can never share data. Each stack provisions **fourteen** tables — the
 roommate table, a groups table, a memberships table, a Web Push subscriptions
-table, a Spotify Jam table, a Book Club table, the six group-partitioned feed tables
-(`-activities-v2`, `-requests-v2`, `-checklists-v2`, `-polls`, `-shows-v2`,
-`-comment-likes-v2`), and a data-migration ledger (`-migrations`, written by
+table, a Spotify Jam table, a Book Club table, the seven group-partitioned feed tables
+(`-activities-v2`, `-requests-v2`, `-checklists-v2`, `-polls`, `-counters`,
+`-shows-v2`, `-comment-likes-v2`), and a data-migration ledger (`-migrations`, written by
 `migrations/runner.py`, not the app):
 
 | Deployment | Stack                  | Account table        | Groups table              | Memberships table                    | Push subscriptions table       | Activities table                | Shows table                | Migrations ledger              |
@@ -45,14 +45,18 @@ secondary index for reusable invite-code lookup. The push subscriptions
 table holds one item per browser Web Push subscription, keyed by a hash of the
 push endpoint and associated with a roommate `userId` (see
 `docker/flask/push.py`), found by its `UserIdIndex` so a notification reads only
-the recipients' devices. The six feed tables are each keyed
+the recipients' devices. The feed tables are each keyed
 `(groupId HASH, id RANGE)`, so reading a household's feed is a single Query over
 its own partition and no row can be addressed from another household; the
 `-v2` suffix is historical, from replacing id-keyed tables whose key schema
 could not be altered in place. The shows table holds one item per tracked TV
 show, with watchers (and their season / episode) embedded on the item. Activity schedules and lifecycle timestamps are
 schemaless attributes needing no secondary index or coordination record. The
-migrations ledger records which in-place data migrations have run per
+counters table stores summary and history rows together; `CounterHistoryIndex`
+provides a date-ordered access path for history entries. Each counter stores
+its creator-selected IANA timezone so date boundaries are shared by all members.
+The migrations
+ledger records which in-place data migrations have run per
 environment (see [Data migrations](#data-migrations) below). The Book Club
 table stores group-scoped configuration, books, meeting modules, member
 responses, completed-book reviews, and standalone book-tagged forums. All tables use

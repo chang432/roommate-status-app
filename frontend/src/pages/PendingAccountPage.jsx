@@ -1,14 +1,13 @@
 import { Navigate, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import Brandmark from "../components/ui/Brandmark.jsx";
-import ModalShell from "../components/ui/ModalShell.jsx";
 import ProfileSettings from "../components/profile/ProfileSettings.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { cx } from "../utils/classNames.js";
 import styles from "./PendingAccountPage.module.css";
 
 export default function PendingAccountPage() {
-  const { user, joinGroup, logout, deleteAccount } = useAuth();
+  const { user, joinGroup } = useAuth();
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -79,17 +78,10 @@ export default function PendingAccountPage() {
           Profile settings
         </button>
         {settingsOpen && (
-          <ModalShell
-            title="Profile settings"
+          <ProfileSettings
             onClose={() => setSettingsOpen(false)}
             widthClassName={styles.settingsModal}
-          >
-            <ProfileSettings
-              user={user}
-              onSignOut={logout}
-              onDeleteAccount={deleteAccount}
-            />
-          </ModalShell>
+          />
         )}
       </section>
     </main>

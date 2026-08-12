@@ -254,8 +254,20 @@ def summary(group_id: str, members: list[dict]) -> dict:
     }
 
 
-def list_meetings(group_id: str, members: list[dict] | None = None) -> list[dict]:
-    rows = query_group(_get_table(), group_id, consistent=True)
+def list_rows(group_id: str, consistent: bool = False) -> list[dict]:
+    """Load the shared Book Club partition for request-local reuse."""
+    return query_group(_get_table(), group_id, consistent=consistent)
+
+
+def list_meetings(
+    group_id: str,
+    members: list[dict] | None = None,
+    *,
+    consistent: bool = True,
+    rows: list[dict] | None = None,
+) -> list[dict]:
+    if rows is None:
+        rows = list_rows(group_id, consistent=consistent)
     books = {row.get("bookId"): row for row in rows if row.get("id", "").startswith("book#")}
     meetings = [
         _project_meeting(row, members, books.get(row.get("bookId")))

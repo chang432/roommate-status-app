@@ -10,17 +10,19 @@ import {
 } from "../../api/roommates.js";
 import { avatarColor } from "../../utils/avatar.js";
 import { cx } from "../../utils/classNames.js";
+import SpotifyJamButton from "../jam/SpotifyJamButton.jsx";
 import styles from "./HouseholdRoster.module.css";
 
 // The household roster: your own status card, the group action header, and a
 // grid of everyone else. Roster state is *controlled* — `roommates` is owned by
-// the page because GroupFeed reads it for mentions and ProfileSettings mutates
-// it when an admin removes a member, so any roster change is handed back up
+// the page because GroupFeed reads it for mentions and GroupSettings mutates it
+// when an admin removes a member, so any roster change is handed back up
 // through onRoommatesChange rather than refetched here.
 export default function HouseholdRoster({
   roommates,
   groupName,
-  hasJam,
+  showSpotifyJam = false,
+  hasJam = false,
   onShareJam,
   onRoommatesChange,
   onError,
@@ -124,15 +126,9 @@ export default function HouseholdRoster({
         >
           <img src="/megaphone.png" alt="" className={styles.notifyIcon} />
         </button>
-        <button
-          type="button"
-          onClick={onShareJam}
-          aria-label={hasJam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-          title={hasJam ? "Replace Spotify Jam" : "Share Spotify Jam"}
-          className={cx("ui-iconPrimary", styles.jamButton)}
-        >
-          <img src="/spotify.png" alt="" className={styles.spotifyIcon} />
-        </button>
+        {showSpotifyJam && (
+          <SpotifyJamButton hasJam={hasJam} onClick={onShareJam} />
+        )}
       </div>
       <div className={styles.memberGrid}>
         {others.map((roommate) => (

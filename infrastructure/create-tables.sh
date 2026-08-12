@@ -68,6 +68,34 @@ create_group_table "$ROOMMATE_TABLE-polls"
 create_group_table "$ROOMMATE_TABLE-shows-v2"
 create_group_table "$ROOMMATE_TABLE-comment-likes-v2"
 
+if aws dynamodb describe-table \
+    --table-name "$ROOMMATE_TABLE-counters" \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null 2>&1; then
+  echo "  table '$ROOMMATE_TABLE-counters' already exists — leaving as-is"
+else
+  aws dynamodb create-table \
+    --table-name "$ROOMMATE_TABLE-counters" \
+    --attribute-definitions \
+      AttributeName=groupId,AttributeType=S \
+      AttributeName=id,AttributeType=S \
+      AttributeName=counterKey,AttributeType=S \
+      AttributeName=entrySort,AttributeType=S \
+    --key-schema AttributeName=groupId,KeyType=HASH AttributeName=id,KeyType=RANGE \
+    --global-secondary-indexes '[
+      {
+        "IndexName":"CounterHistoryIndex",
+        "KeySchema":[
+          {"AttributeName":"counterKey","KeyType":"HASH"},
+          {"AttributeName":"entrySort","KeyType":"RANGE"}
+        ],
+        "Projection":{"ProjectionType":"ALL"}
+      }
+    ]' \
+    --billing-mode PAY_PER_REQUEST \
+    --endpoint-url "$DYNAMODB_ENDPOINT" >/dev/null
+  echo "  created table '$ROOMMATE_TABLE-counters'"
+fi
+
 # Book Club is group-partitioned too, with a bookId index for a book's related
 # records. Configuration and member-response rows omit bookId; meeting forums
 # carry it for historical context but are read by meeting-key prefix.

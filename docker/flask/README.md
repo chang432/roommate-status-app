@@ -4,18 +4,26 @@ A small Flask server implementing the API the frontend calls. Data is stored in
 DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 `db.py` so the routes stay storage-agnostic.
 
+`app.py` is the application factory and request-scope boundary. Public handlers
+are grouped into feature blueprints under `routes/`; cross-feature request and
+notification helpers live in `route_helpers.py`.
+
 ## Endpoints
 
 | Method & path                                                | Body                                       | Returns                                                 |
 | ------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------------------- |
 | `POST /api/login`                                            | `{ username, password }`                   | `{ user: { id, name, username, groupId, hasGroup } }`   |
 | `POST /api/accounts`                                         | `{ username, name, password }`             | new no-group `{ user }`                                 |
+| `PATCH /api/accounts/<id>`                                   | `{ name, password }`                       | renamed `{ user }`, with historical snapshots updated  |
+| `PUT /api/accounts/<id>/password`                            | `{ currentPassword, newPassword }`         | `{ ok: true }`                                          |
 | `DELETE /api/accounts/<id>`                                  | `{ password }`                             | `{ ok: true }` after password verification              |
 | `POST /api/groups/join`                                      | `{ userId, code }`                         | `{ user, group }`                                       |
 | `POST /api/groups`                                           | `{ userId, name }`                         | newly created `{ user, group }`                         |
 | `GET  /api/groups`                                           | `?userId=<id>`                             | every selectable group                                  |
 | `GET  /api/groups/current`                                   | `?userId=<id>`                             | selected group metadata, including `viewerIsAdmin`      |
-| `PUT  /api/groups/display`                                   | `?userId=<id>` + `{ showRoster, showFeed, showBookClub }` | updated admin-managed group display settings |
+| `PATCH /api/groups/current`                                  | `?userId=<id>` + `{ name }`                | renamed active group (admin only)                       |
+| `PUT /api/groups/modules`                                    | `?userId=<id>` + `{ enabledModules }`       | active group's enabled UI modules (admin only)          |
+| `PUT /api/groups/theme`                                      | `?userId=<id>` + `{ theme }`                | current member's theme for the active group             |
 | `GET /api/book-club`                                         | `?userId=<id>`                             | owner lists, active book, open meeting, and next suggested date |
 | `POST /api/book-club/meetings`                               | `?userId=<id>` + meeting fields | admin-created meeting for the configured current book |
 | `GET /api/book-club/meetings`                                | `?userId=<id>`                             | all meeting summaries and member responses              |
@@ -38,7 +46,7 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `PUT  /api/roommates/<id>/status`                            | `{ status, statusText }`                   | full updated household list                             |
 | `POST /api/roommates/notify`                                 | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
 | `POST /api/roommates/<id>/poke`                              | `{ requesterId }`                          | `{ sent, pruned, failed }`                              |
-| `GET /api/feed`                                              | `?userId=<id>&type=<type>`                 | active module instances in chronological feed order     |
+| `GET /api/feed`                                              | `?userId=<id>&type=<type>&type=<type>`     | requested module instances in chronological feed order  |
 | `PATCH /api/modules/<type>/<id>`                             | `{ editorId, changes }`                    | normalized updated module                               |
 | `GET /api/activities`                                        | `?userId=<id>`                             | active activity list                                    |
 | `POST /api/activities`                                       | `{ text, proposedById, startAt?, endAt? }` | full updated activity list                              |
@@ -73,6 +81,14 @@ DynamoDB (see `../../infrastructure/`); all datastore access is encapsulated in
 | `POST /api/polls/<id>/archive`                               | `{ userId }`                               | full updated poll list                                  |
 | `POST /api/polls/<id>/restore`                               | `{ userId }`                               | full updated poll list                                  |
 | `DELETE /api/polls/<id>`                                     | `{ userId }`                               | full updated poll list                                  |
+| `POST /api/counters`                                         | title, mode, creator, date, and starting state | created counter                                     |
+| `GET /api/counters/<id>`                                     | `?userId=<id>&cursor=<cursor>&limit=20`     | counter detail with paginated history                   |
+| `POST /api/counters/<id>/entries`                            | `{ userId, occurredDate?, delta?, note? }`  | updated counter                                         |
+| `PATCH /api/counters/<id>/entries/<entryId>`                 | `{ userId, changes }`                       | corrected counter                                       |
+| `DELETE /api/counters/<id>/entries/<entryId>`                | `{ userId }`                                | counter with the entry removed                          |
+| `POST /api/counters/<id>/archive`                            | `{ userId }`                                | archived counter                                        |
+| `POST /api/counters/<id>/restore`                            | `{ userId }`                                | restored counter                                        |
+| `DELETE /api/counters/<id>`                                  | `{ userId }`                                | deleted creator-owned counter                           |
 | `GET /api/shows`                                             | `?userId=<id>`                             | full show list                                          |
 | `POST /api/shows`                                            | `{ title, createdById }`                   | full updated show list                                  |
 | `POST /api/shows/<id>/join`                                  | `{ userId }`                               | full updated show list                                  |
@@ -101,7 +117,7 @@ their stable id (for example `andre`) and demo password **`roomie`**. Newly
 created accounts are valid sign-in accounts but have `groupId = null`, so they
 cannot see or use household features until they join a group with a reusable
 invite code. The current seeded household uses `groupId = "yorkshire"`.
-The module feed (`/api/feed`) normalizes events, requests, checklists, polls,
+The module feed (`/api/feed`) normalizes events, requests, checklists, polls, counters,
 TV shows, Book Club meetings for enabled groups, and the singleton Spotify Jam
 into `{ id, type, createdAt, updatedAt,
 sortAt, title, subtitle, actor, isArchived, payload }` records sorted oldest-to-newest by
@@ -117,7 +133,10 @@ scheduled activity is live once its `startAt` passes and expires when its
 optional `endAt` passes. Manual end is terminal; restart starts immediately and
 clears the old end. Lifecycle is
 derived from server time, so visible apps pick up automatic changes through
-their five-second activity polling without scheduler infrastructure.
+their five-second activity polling without scheduler infrastructure. Feed
+polls use eventual consistency, load only the requested module types, and
+reuse the shared likes and Book Club partitions within each request; mutation
+responses retain strongly consistent read-after-write behavior.
 Push subscriptions and activity participants are associated with stable
 roommate ids. User-triggered notifications always exclude the actor. Every
 household feature is scoped by `groupId`, including roster reads, activities,

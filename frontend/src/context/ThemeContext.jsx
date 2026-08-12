@@ -7,17 +7,7 @@ import {
 } from 'react'
 import { isThemeId } from '../models/themes.js'
 
-const THEME_KEY = 'roomie-theme'
 const ThemeContext = createContext(null)
-
-function safeStoredTheme() {
-  try {
-    const stored = localStorage.getItem(THEME_KEY)
-    return isThemeId(stored) ? stored : 'system'
-  } catch {
-    return 'system'
-  }
-}
 
 function systemTheme() {
   if (typeof window === 'undefined') return 'light'
@@ -38,7 +28,7 @@ function applyBrowserTheme(resolvedTheme, preference) {
 }
 
 export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState(safeStoredTheme)
+  const [theme, setThemeState] = useState('system')
   const [resolvedTheme, setResolvedTheme] = useState(() => (
     theme === 'system' ? systemTheme() : theme
   ))
@@ -66,11 +56,6 @@ export function ThemeProvider({ children }) {
     setTheme(nextTheme) {
       const safeTheme = isThemeId(nextTheme) ? nextTheme : 'system'
       setThemeState(safeTheme)
-      try {
-        localStorage.setItem(THEME_KEY, safeTheme)
-      } catch {
-        // The selected theme still applies for this session if storage is unavailable.
-      }
     },
   }), [resolvedTheme, theme])
 

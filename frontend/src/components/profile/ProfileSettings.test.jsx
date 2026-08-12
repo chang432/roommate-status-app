@@ -1,189 +1,78 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ProfileSettings from "./ProfileSettings.jsx";
-import { ThemeProvider } from "../../context/ThemeContext.jsx";
-import {
-  getCurrentGroup,
-  removeGroupMember,
-  setGroupMemberRole,
-  updateGroupDisplay,
-} from "../../api/groups.js";
 
-vi.mock("../../api/groups.js", async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    getCurrentGroup: vi.fn(),
-    removeGroupMember: vi.fn(),
-    setGroupMemberRole: vi.fn(),
-    updateGroupDisplay: vi.fn(),
-  };
-});
+const auth = vi.hoisted(() => ({
+  user: { id: "andre", name: "Andre", username: "andre", hasGroup: true },
+  updateProfile: vi.fn(),
+  updatePassword: vi.fn(),
+  logout: vi.fn(),
+  deleteAccount: vi.fn(),
+}));
 
-const USER = { id: "andre", name: "Andre", username: "andre", hasGroup: true };
+vi.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => auth }));
+vi.mock("./EnableNotifications.jsx", () => ({
+  default: () => <button type="button">Enable notifications</button>,
+}));
 
-function roster(andreRole) {
-  return [
-    { id: "andre", name: "Andre", role: andreRole },
-    { id: "kayla", name: "Kayla", role: "member" },
-    { id: "sheryl", name: "Sheryl", role: "admin" },
-  ];
-}
-
-function renderPanel(roommates, onRoommatesChange = vi.fn(), onGroupChange = vi.fn()) {
-  render(
-    <ThemeProvider>
-      <ProfileSettings
-        user={USER}
-        roommates={roommates}
-        onRoommatesChange={onRoommatesChange}
-        onGroupChange={onGroupChange}
-        onSignOut={vi.fn()}
-        onDeleteAccount={vi.fn()}
-      />
-    </ThemeProvider>,
-  );
-  return { onRoommatesChange, onGroupChange };
-}
-
-describe("ProfileSettings member administration", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    getCurrentGroup.mockResolvedValue({
-      group: { groupId: "shire", name: "Shire", joinCode: "SHIRE12" },
-    });
-  });
-
+describe("ProfileSettings", () => {
+  beforeEach(() => vi.clearAllMocks());
   afterEach(cleanup);
 
-  it("badges the identity card only when you administer this group", () => {
-    renderPanel(roster("admin"));
-    expect(screen.getByText("Group admin")).toBeInTheDocument();
+  it("updates the display name after verifying the current password", async () => {
+    auth.updateProfile.mockResolvedValue({ ...auth.user, name: "Andre T" });
+    const onProfileChanged = vi.fn();
+    render(<ProfileSettings onClose={vi.fn()} onProfileChanged={onProfileChanged} />);
 
-    cleanup();
-    renderPanel(roster("member"));
-    expect(screen.queryByText("Group admin")).toBeNull();
-  });
+    await userEvent.click(screen.getByRole("button", { name: /Profile Update your display name/i }));
 
-  it("hides every member action from a plain member", () => {
-    renderPanel(roster("member"));
-
-    expect(screen.getByText("Kayla")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Make admin" })).toBeNull();
-  });
-
-  it("lets an admin remove a plain member and re-renders the returned roster", async () => {
-    const next = [{ id: "andre", name: "Andre", role: "admin" }];
-    removeGroupMember.mockResolvedValue(next);
-    const { onRoommatesChange } = renderPanel(roster("admin"));
-
-    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
-    expect(removeGroupMember).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "Remove member" }));
-
-    await waitFor(() => expect(onRoommatesChange).toHaveBeenCalledWith(next));
-    expect(removeGroupMember).toHaveBeenCalledWith("andre", "kayla");
-  });
-
-  it("offers no remove button for a fellow admin or for yourself", () => {
-    renderPanel(roster("admin"));
-
-    // Kayla is the only plain member, so hers is the only Remove button:
-    // admins are peers and must be demoted first.
-    expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Revoke admin" })).toHaveLength(2);
-  });
-
-  it("promotes a member through the role endpoint", async () => {
-    setGroupMemberRole.mockResolvedValue(roster("admin"));
-    renderPanel(roster("admin"));
-
-    await userEvent.click(screen.getByRole("button", { name: "Make admin" }));
+    await userEvent.clear(screen.getByLabelText("Display name"));
+    await userEvent.type(screen.getByLabelText("Display name"), "  Andre T  ");
+    await userEvent.type(screen.getByLabelText("Current password"), "roomie");
+    await userEvent.click(screen.getByRole("button", { name: "Save profile" }));
 
     await waitFor(() =>
-      expect(setGroupMemberRole).toHaveBeenCalledWith("andre", "kayla", "admin"),
+      expect(auth.updateProfile).toHaveBeenCalledWith("Andre T", "roomie"),
     );
+    expect(onProfileChanged).toHaveBeenCalledWith({ ...auth.user, name: "Andre T" });
+    expect(screen.getByText("Display name updated everywhere.")).toBeInTheDocument();
   });
 
-  it("surfaces a rejected admin action instead of changing the roster", async () => {
-    setGroupMemberRole.mockRejectedValue(
-      new Error("Promote another admin before stepping down."),
-    );
-    const { onRoommatesChange } = renderPanel(roster("admin"));
+  it("validates matching passwords before updating credentials", async () => {
+    render(<ProfileSettings onClose={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: /Change password Choose/i }));
+    await userEvent.type(screen.getByLabelText("Current password"), "roomie");
+    await userEvent.type(screen.getByLabelText("New password"), "new-roomie");
+    await userEvent.type(screen.getByLabelText("Confirm new password"), "different");
+    await userEvent.click(screen.getByRole("button", { name: "Update password" }));
 
-    await userEvent.click(screen.getAllByRole("button", { name: "Revoke admin" })[0]);
-
-    expect(
-      await screen.findByText("Promote another admin before stepping down."),
-    ).toBeInTheDocument();
-    expect(onRoommatesChange).not.toHaveBeenCalled();
+    expect(screen.getByText("New passwords do not match.")).toBeInTheDocument();
+    expect(auth.updatePassword).not.toHaveBeenCalled();
   });
 
-  it("lets every admin change the shared roster and feed visibility", async () => {
-    const updatedGroup = {
-      groupId: "shire",
-      name: "Shire",
-      joinCode: "SHIRE12",
-      showRoster: false,
-      showFeed: true,
-      showBookClub: true,
-    };
-    updateGroupDisplay.mockResolvedValue({ group: updatedGroup });
-    const { onGroupChange } = renderPanel(roster("admin"));
+  it("keeps workflows behind options while sign out remains direct", async () => {
+    render(<ProfileSettings onClose={vi.fn()} />);
 
-    await userEvent.click(
-      await screen.findByRole("checkbox", { name: /Household roster/i }),
-    );
-
-    await waitFor(() =>
-      expect(updateGroupDisplay).toHaveBeenCalledWith("andre", false, true, true),
-    );
-    expect(onGroupChange).toHaveBeenCalledWith(updatedGroup);
+    expect(screen.queryByRole("button", { name: "Enable notifications" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Notifications Manage/i }));
+    expect(screen.getByRole("button", { name: "Enable notifications" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Back to settings" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Sign out/ }));
+    expect(auth.logout).toHaveBeenCalledOnce();
+    expect(screen.queryByText("Enabled modules")).not.toBeInTheDocument();
   });
 
-  it("hides group display controls from plain members", () => {
-    renderPanel(roster("member"));
+  it("opens account deletion as a separate confirmed workflow", async () => {
+    auth.deleteAccount.mockResolvedValue(undefined);
+    render(<ProfileSettings onClose={vi.fn()} />);
 
-    expect(screen.queryByRole("checkbox", { name: /Household roster/i })).toBeNull();
-    expect(screen.queryByRole("checkbox", { name: /Group feed/i })).toBeNull();
-    expect(screen.queryByRole("checkbox", { name: /Book Club/i })).toBeNull();
-  });
+    await userEvent.click(screen.getByRole("button", { name: /Delete account Permanently/i }));
+    await userEvent.type(screen.getByLabelText("Current password"), "roomie");
+    await userEvent.click(screen.getByRole("button", { name: "Delete account" }));
+    const confirmation = screen.getByRole("dialog", { name: "Delete your account?" });
+    await userEvent.click(within(confirmation).getByRole("button", { name: "Delete account" }));
 
-  it("uses the current group permission while the roster is still refreshing", async () => {
-    getCurrentGroup.mockResolvedValue({
-      group: {
-        groupId: "shire",
-        name: "Shire",
-        joinCode: "SHIRE12",
-        viewerIsAdmin: true,
-      },
-    });
-    renderPanel(roster("member"));
-
-    expect(
-      await screen.findByRole("checkbox", { name: /Household roster/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("lets an admin hide the shared Book Club section", async () => {
-    updateGroupDisplay.mockResolvedValue({
-      group: {
-        groupId: "shire",
-        name: "Shire",
-        joinCode: "SHIRE12",
-        showRoster: true,
-        showFeed: true,
-        showBookClub: false,
-      },
-    });
-    renderPanel(roster("admin"));
-
-    await userEvent.click(await screen.findByRole("checkbox", { name: /Book Club/i }));
-
-    await waitFor(() =>
-      expect(updateGroupDisplay).toHaveBeenCalledWith("andre", true, true, false),
-    );
+    await waitFor(() => expect(auth.deleteAccount).toHaveBeenCalledWith("roomie"));
   });
 });

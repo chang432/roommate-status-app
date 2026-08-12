@@ -289,12 +289,19 @@ def delete(forum_id: str, group_id: str) -> dict | None:
 
 
 def list_recent(
-    group_id: str, limit: int = RECENT_LIMIT, consistent: bool = False
+    group_id: str,
+    limit: int = RECENT_LIMIT,
+    consistent: bool = False,
+    *,
+    rows: list[dict] | None = None,
+    likes_by_forum: dict | None = None,
 ) -> list[dict]:
-    rows = query_group(_table(), group_id, consistent=consistent)
-    likes_by_forum = comment_likes.likes_by_parent(
-        group_id, "forumId", consistent=consistent
-    )
+    if rows is None:
+        rows = query_group(_table(), group_id, consistent=consistent)
+    if likes_by_forum is None:
+        likes_by_forum = comment_likes.likes_by_parent(
+            group_id, "forumId", consistent=consistent
+        )
     books = {
         row["bookId"]: book_club.project_book(row)
         for row in rows

@@ -30,16 +30,16 @@ def seed_local_groups() -> None:
     groups, and Kayla demonstrates a non-admin Book Club member.
     """
     groups.ensure_default_group()
-    groups.set_display_options(
-        "andre", db.DEFAULT_GROUP_ID, show_roster=True, show_feed=True, show_book_club=False
+    groups.set_enabled_modules(
+        "andre",
+        db.DEFAULT_GROUP_ID,
+        ["roster", "events", "requests", "checklists", "polls", "tv", "spotify"],
     )
     groups.ensure_seed_group(
         BOOK_CLUB_GROUP_ID,
         BOOK_CLUB_GROUP_NAME,
         BOOK_CLUB_GROUP_JOIN_CODE,
-        show_roster=False,
-        show_feed=False,
-        show_book_club=True,
+        enabled_modules=["spotify", "book-club", "forums"],
     )
     for user_id, role in (("andre", db.ROLE_ADMIN), ("kayla", db.ROLE_MEMBER)):
         account = db.get_account_by_id(user_id)

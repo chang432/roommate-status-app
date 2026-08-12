@@ -40,17 +40,28 @@ describe("module preferences", () => {
     localStorage.setItem(
       KEY,
       JSON.stringify({
-        version: 5,
+        version: 6,
         order: [
           "events",
           "requests",
           "checklists",
           "polls",
+          "counters",
           "tv",
           "book-club",
           "forums",
         ],
         allTypes: ["events"],
+        knownTypes: [
+          "events",
+          "requests",
+          "checklists",
+          "polls",
+          "counters",
+          "tv",
+          "book-club",
+          "forums",
+        ],
       }),
     );
     expect(readModulePreferences("andre", "shire").allTypes).toEqual([

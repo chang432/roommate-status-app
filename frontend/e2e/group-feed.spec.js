@@ -24,6 +24,18 @@ function feedFixture() {
     isArchived: false,
   }
   return [
+    feedItem('counters', {
+      ...base,
+      id: 'counter-1',
+      title: 'Days without a kitchen spill',
+      mode: 'automatic',
+      createdBy: 'Andre',
+      createdById: 'andre',
+      lastIncidentDate: new Date(Date.now() - (6 * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10),
+      timeZone: 'UTC',
+      currentValue: 6,
+      version: 1,
+    }),
     feedItem('events', {
       ...base,
       id: 'event-1',
@@ -123,9 +135,16 @@ async function mockFeedPage(page) {
       } }
     } else if (path === '/api/groups') {
       payload = { groups: [{
-        groupId: 'shire', name: 'The Shire', showFeed: true,
-        showRoster: false, showBookClub: false,
+        groupId: 'shire', name: 'The Shire', joinCode: 'SHIRE12',
+        enabledModules: ['events', 'requests', 'checklists', 'polls', 'counters', 'tv'],
+        theme: 'system', viewerIsAdmin: true,
       }] }
+    } else if (path === '/api/groups/current') {
+      payload = { group: {
+        groupId: 'shire', name: 'The Shire', joinCode: 'SHIRE12',
+        enabledModules: ['events', 'requests', 'checklists', 'polls', 'counters', 'tv'],
+        theme: 'system', viewerIsAdmin: true,
+      } }
     } else if (path === '/api/roommates') {
       payload = [
         { id: 'andre', name: 'Andre', role: 'admin', status: 'free' },
@@ -133,6 +152,21 @@ async function mockFeedPage(page) {
       ]
     } else if (path === '/api/feed') {
       payload = feedFixture()
+    } else if (path === '/api/counters/counter-1') {
+      const counter = feedFixture().find((item) => item.type === 'counters').payload
+      payload = {
+        counter,
+        entries: [{
+          id: 'incident-1',
+          kind: 'incident',
+          occurredDate: counter.lastIncidentDate,
+          createdAt: counter.createdAt,
+          createdById: 'andre',
+          createdBy: 'Andre',
+          note: 'Mopped and reset the tracker',
+        }],
+        nextCursor: null,
+      }
     } else {
       payload = {}
     }
@@ -151,6 +185,12 @@ async function expectNoHorizontalOverflow(page) {
   expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewport)
 }
 
+async function waitForAnimations(locator) {
+  await locator.evaluate((element) => Promise.all(
+    element.getAnimations({ subtree: true }).map((animation) => animation.finished.catch(() => undefined)),
+  ))
+}
+
 async function expectExpandedCardSettled(cardToggle) {
   await expect(cardToggle).toHaveAttribute('aria-expanded', 'true')
   await expect.poll(() => cardToggle.locator('xpath=..').evaluate((card) => {
@@ -162,6 +202,91 @@ async function expectExpandedCardSettled(cardToggle) {
     ) < 1
   })).toBe(true)
 }
+
+test('uses dismissible bottom trays for profile and active-group settings', async ({ page }, testInfo) => {
+  await mockFeedPage(page)
+
+  for (const viewport of [
+    { width: 1280, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/')
+
+    await page.getByRole('button', { name: 'Open profile settings' }).click()
+    const profileTray = page.getByRole('dialog', { name: 'Profile settings' })
+    await expect(profileTray).toHaveAttribute('data-expanded', 'false')
+    await expect(profileTray.getByRole('button', { name: /Profile Update your display name/i })).toBeVisible()
+    await expect(profileTray.getByLabel('Display name')).toBeHidden()
+    await waitForAnimations(profileTray)
+    await page.screenshot({
+      path: testInfo.outputPath(`profile-settings-menu-${viewport.width}.png`),
+    })
+
+    const profileHeader = profileTray.locator('header').first()
+    await profileHeader.dispatchEvent('pointerdown', {
+      pointerId: 6, pointerType: 'touch', button: 0, clientY: 140,
+    })
+    await profileHeader.dispatchEvent('pointermove', {
+      pointerId: 6, pointerType: 'touch', clientY: 40,
+    })
+    await profileHeader.dispatchEvent('pointerup', {
+      pointerId: 6, pointerType: 'touch', clientY: 40,
+    })
+    await expect(profileTray).toHaveAttribute('data-expanded', 'true')
+    await expect.poll(() => profileTray.evaluate((element) => (
+      Math.round(element.getBoundingClientRect().height)
+    ))).toBe(viewport.height)
+
+    await profileTray.getByRole('button', { name: /Change password Choose/i }).click()
+    await expect(profileTray.getByLabel('New password', { exact: true })).toBeVisible()
+    await page.screenshot({
+      path: testInfo.outputPath(`profile-settings-expanded-${viewport.width}.png`),
+    })
+    await expect.poll(() => profileTray.evaluate((element) => (
+      element.scrollWidth <= element.clientWidth
+    ))).toBe(true)
+    await profileTray.getByRole('button', { name: 'Back to settings' }).click()
+    await expect(profileTray).toHaveAttribute('data-expanded', 'false')
+    await profileTray.getByRole('button', { name: 'Close' }).click()
+    await expect(profileTray).toBeHidden()
+
+    await page.getByRole('button', { name: /Open group switcher/ }).click()
+    await page.getByLabel('Your groups').getByRole('button', { name: 'Edit' }).click()
+    const groupTray = page.getByRole('dialog', { name: 'Group settings' })
+    await expect(groupTray.getByText('SHIRE12')).toBeHidden()
+    await waitForAnimations(groupTray)
+    await waitForAnimations(page.getByLabel('Your groups'))
+    await page.screenshot({
+      path: testInfo.outputPath(`group-settings-menu-${viewport.width}.png`),
+    })
+    await groupTray.getByRole('button', { name: /Group details/i }).click()
+    await expect(groupTray.getByText('SHIRE12')).toBeVisible()
+    await expect(groupTray).toHaveAttribute('data-expanded', 'true')
+    await groupTray.getByRole('button', { name: 'Back to settings' }).click()
+    await groupTray.getByRole('button', { name: /Enabled modules/i }).click()
+    await expect(groupTray.getByRole('checkbox', { name: /Events/i })).toBeChecked()
+    await groupTray.getByRole('button', { name: 'Back to settings' }).click()
+    await groupTray.getByRole('button', { name: /Appearance Current theme/i }).click()
+    await expect(groupTray.getByRole('radio', { name: /Forest/i })).toBeEnabled()
+    await page.screenshot({
+      path: testInfo.outputPath(`group-settings-expanded-${viewport.width}.png`),
+    })
+    await expectNoHorizontalOverflow(page)
+
+    const header = groupTray.locator('header').first()
+    await header.dispatchEvent('pointerdown', {
+      pointerId: 7, pointerType: 'touch', button: 0, clientY: 20,
+    })
+    await header.dispatchEvent('pointermove', {
+      pointerId: 7, pointerType: 'touch', clientY: 150,
+    })
+    await header.dispatchEvent('pointerup', {
+      pointerId: 7, pointerType: 'touch', clientY: 150,
+    })
+    await expect(groupTray).toBeHidden()
+  }
+})
 
 test('keeps every registered feed card usable at desktop and phone widths', async ({
   page,
@@ -179,6 +304,7 @@ test('keeps every registered feed card usable at desktop and phone widths', asyn
     { tab: 'Requests', card: 'Pick up milk' },
     { tab: 'Checklists', card: 'Kitchen reset' },
     { tab: 'Polls', card: 'Dinner?' },
+    { tab: 'Counters', card: 'Days without a kitchen spill' },
     { tab: 'TV', card: 'Severance' },
   ]) {
     await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click()
@@ -262,4 +388,46 @@ test('keeps every registered feed card usable at desktop and phone widths', asyn
     path: testInfo.outputPath('poll-card-phone.png'),
     fullPage: true,
   })
+})
+
+test('keeps counter tracking and history usable at desktop and phone widths', async ({
+  page,
+}, testInfo) => {
+  await mockFeedPage(page)
+
+  for (const viewport of [
+    { width: 1280, height: 900, name: 'desktop' },
+    { width: 390, height: 844, name: 'phone' },
+  ]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/')
+    await page.getByRole('tab', { name: /^Counters/ }).click()
+
+    const counterCard = page.getByRole('button', { name: /Days without a kitchen spill/ })
+    await expect(counterCard).toContainText('6 days')
+    await counterCard.click()
+    await expectExpandedCardSettled(counterCard)
+    await expect(page.getByRole('region', { name: 'Counter history' })).toContainText(
+      'Mopped and reset the tracker',
+    )
+    await expect(page.getByRole('button', { name: 'Log incident' })).toBeVisible()
+    await expect(page.getByLabel('Incident date')).toHaveAttribute('type', 'date')
+    await expectNoHorizontalOverflow(page)
+    await page.screenshot({
+      path: testInfo.outputPath(`counter-history-${viewport.name}.png`),
+      fullPage: true,
+    })
+
+    await page.getByRole('button', { name: 'Create a counter' }).click()
+    const createDialog = page.getByRole('dialog', { name: 'Create a counter' })
+    await createDialog.getByRole('radio', { name: /Manual count/ }).check()
+    await expect(createDialog.getByLabel('Starting value')).toBeVisible()
+    await expect(createDialog.getByLabel('Starting date')).toHaveAttribute('type', 'date')
+    await waitForAnimations(createDialog)
+    await expectNoHorizontalOverflow(page)
+    await page.screenshot({
+      path: testInfo.outputPath(`counter-create-${viewport.name}.png`),
+      fullPage: true,
+    })
+  }
 })

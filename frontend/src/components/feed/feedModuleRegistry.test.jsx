@@ -3,8 +3,11 @@ import {
   FEED_MODULE_REGISTRY,
   FEED_MODULE_TYPES,
   canCreateFeedModule,
-  isFeedModuleEnabled,
 } from "./feedModuleRegistry.jsx";
+import {
+  GROUP_FEED_MODULE_IDS,
+  GROUP_MODULE_DEFINITIONS,
+} from "../../models/groupModules.js";
 
 describe("feed module registry", () => {
   it("is the complete source for navigable module metadata and UI handlers", () => {
@@ -27,24 +30,16 @@ describe("feed module registry", () => {
     });
   });
 
-  it("keeps standard, shared, and Book Club availability declarative", () => {
-    const standardOnly = {
-      showStandardModules: true,
-      showBookClub: false,
-    };
-    const bookClubOnly = {
-      showStandardModules: false,
-      showBookClub: true,
-    };
+  it("covers every group module rendered in the feed", () => {
+    expect(Object.keys(FEED_MODULE_REGISTRY)).toEqual(
+      GROUP_FEED_MODULE_IDS.filter((id) => id !== "spotify"),
+    );
+  });
 
-    expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY.events, standardOnly)).toBe(true);
-    expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY.events, bookClubOnly)).toBe(false);
-    expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY.polls, standardOnly)).toBe(true);
-    expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY.polls, bookClubOnly)).toBe(true);
-    expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY["book-club"], standardOnly)).toBe(false);
-    expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY["book-club"], bookClubOnly)).toBe(true);
-    expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY.forums, standardOnly)).toBe(false);
-    expect(isFeedModuleEnabled(FEED_MODULE_REGISTRY.forums, bookClubOnly)).toBe(true);
+  it("declares whether every group module is loaded by the feed", () => {
+    GROUP_MODULE_DEFINITIONS.forEach((definition) => {
+      expect(definition.feedBacked).toEqual(expect.any(Boolean));
+    });
   });
 
   it("keeps module-specific create permission in the module definition", () => {

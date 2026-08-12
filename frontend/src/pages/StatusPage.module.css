@@ -60,5 +60,9 @@
 }
 
 .settingsModal {
-  @apply max-w-[560px];
+  @apply max-w-[680px];
+}
+
+.standaloneJamAction {
+  @apply my-5 flex items-center;
 }

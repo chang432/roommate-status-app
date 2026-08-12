@@ -9,11 +9,11 @@ availability to hang out. Built from the mockups in `../mockups`.
   on `/signup`.
 - **Pending accounts** can sign in but cannot use household features until a
   group code assigns them to a household.
-- **Profile settings** keep account actions in one place, including sign out,
-  account deletion, System/Light/Dark/Forest appearance preferences, and the
-  current household invite code for grouped users. Group admins can also choose
-  whether the household roster, Book Club, and group feed are shown to everyone
-  in that group. Theme choices are stored on the current device.
+- **Profile and group settings** open as compact option trays, then expand to
+  full height when swiped up or when an option is selected. Profile, notification,
+  password, account deletion, group details, appearance, module, and member
+  workflows each have a focused in-tray screen. Group admins choose which modules
+  appear for everyone, while each member's theme follows them across devices.
 - **View** the whole household's current statuses at a glance.
 - **Set your status**: _Available to hang_, _Busy with smth_, or a custom
   message.
@@ -66,6 +66,9 @@ availability to hang out. Built from the mockups in `../mockups`.
   polls. Everyone can add options and vote; creators edit poll and option text,
   while any current member can archive, restore, or delete. Poll panels also
   support comments, mentions, likes, and inspectable voter lists.
+- **Counters**: groups can opt into automatic calendar-day trackers or shared
+  manual counters. Expanded cards show paginated history and allow roommates
+  to correct mistaken entries while naming and deletion remain creator-owned.
 
 ## Tech
 
@@ -91,11 +94,18 @@ name as username (for example `andre`) with the demo password **`roomie`**.
 
 ## Module feed behavior
 
-The **All** filter is customizable per user and group. Book Club starts
-selected after a one-time preference upgrade; explicit exclusions made after
-that remain saved. To edit a module, expand its card and use the **Edit** action
+The **All** filter is customizable per user and group. Newly registered feed
+types, including Counters, are selected once during preference upgrade;
+explicit exclusions made after that remain saved. Counters remain opt-in at the
+group level. To edit a module, expand its card and use the **Edit** action
 at the bottom. The action is shown only when the current user can edit that
 active instance.
+
+Feed composition is kept separate from its interaction mechanics: preference
+and deep-link state live in feature-local hooks, while swipe transitions and
+sticky category scroll restoration have separate modules. StatusPage likewise
+delegates group membership, roommate loading, and module loading to scoped
+hooks.
 
 ## Backend / API
 
@@ -106,10 +116,14 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | ------------------------------- | ---------------------------------------------------------- |
 | `login`                         | `POST /api/login`                                          |
 | `createAccount`                 | `POST /api/accounts`                                       |
+| `updateAccount`                 | `PATCH /api/accounts/:id`                                 |
+| `updatePassword`                | `PUT /api/accounts/:id/password`                          |
 | `deleteAccount`                 | `DELETE /api/accounts/:id`                                 |
 | `joinGroup`                     | `POST /api/groups/join`                                    |
 | `getCurrentGroup`               | `GET /api/groups/current?userId=:id`                       |
-| `updateGroupDisplay`            | `PUT /api/groups/display?userId=:id`                       |
+| `renameGroup`                   | `PATCH /api/groups/current?userId=:id`                     |
+| `updateGroupModules`            | `PUT /api/groups/modules?userId=:id`                       |
+| `updateGroupTheme`              | `PUT /api/groups/theme?userId=:id`                         |
 | `getBookClub`                   | `GET /api/book-club?userId=:id`                            |
 | `createBookClubMeeting`         | `POST /api/book-club/meetings?userId=:id`                  |
 | `getBookClubMeetings`           | `GET /api/book-club/meetings?userId=:id`                   |
@@ -134,7 +148,7 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `updateStatus`                  | `PUT /api/roommates/:id/status`                            |
 | `notifyRoommatesToUpdateStatus` | `POST /api/roommates/notify`                               |
 | `pokeRoommate`                  | `POST /api/roommates/:id/poke`                             |
-| `getFeed`                       | `GET /api/feed?userId=:id&type=:type`                      |
+| `getFeed`                       | `GET /api/feed?userId=:id&type=:type&type=:type`           |
 | `updateModule`                  | `PATCH /api/modules/:type/:id`                             |
 | `getJam`                        | `GET /api/jam?userId=:id`                                  |
 | `getActivities`                 | `GET /api/activities?userId=:id`                           |
@@ -172,6 +186,14 @@ helper and target the Flask server (`../docker/flask`) under `/api`:
 | `archivePoll`                   | `POST /api/polls/:id/archive`                              |
 | `restorePoll`                   | `POST /api/polls/:id/restore`                              |
 | `deletePoll`                    | `DELETE /api/polls/:id`                                    |
+| `createCounter`                 | `POST /api/counters`                                       |
+| `getCounter`                    | `GET /api/counters/:id?userId=:id`                         |
+| `addCounterEntry`               | `POST /api/counters/:id/entries`                           |
+| `updateCounterEntry`            | `PATCH /api/counters/:id/entries/:entryId`                 |
+| `deleteCounterEntry`            | `DELETE /api/counters/:id/entries/:entryId`                |
+| `archiveCounter`                | `POST /api/counters/:id/archive`                           |
+| `restoreCounter`                | `POST /api/counters/:id/restore`                           |
+| `deleteCounter`                 | `DELETE /api/counters/:id`                                 |
 
 In dev, Vite proxies `/api` to the backend (default `http://localhost:8000`).
 Point at a different server with `VITE_API_TARGET`:

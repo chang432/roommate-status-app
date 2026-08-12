@@ -80,8 +80,10 @@ def _active_jam_id(group_id: str) -> str:
     return f"activeJam#{group_id}"
 
 
-def get_active(group_id: str) -> dict | None:
-    item = _get_table().get_item(Key={"id": _active_jam_id(group_id)}, ConsistentRead=True).get("Item")
+def get_active(group_id: str, consistent: bool = True) -> dict | None:
+    item = _get_table().get_item(
+        Key={"id": _active_jam_id(group_id)}, ConsistentRead=consistent
+    ).get("Item")
     return _project(item)
 
 

@@ -1,5 +1,5 @@
-"TABLE RoommateStatus-main-groups - households / groups (one item per household). The JoinCodeIndex GSI (partition key joinCode, ProjectionType ALL) powers join-by-code lookups. showRoster, showFeed, and showBookClub are group-wide admin controls; absent values on pre-existing rows are read as true. Local seed data includes yorkshire / YORKSHIRE (roster + feed) and book-club / BOOKCLUB (Book Club only)."
-groupId (S),joinCode (S),name (S),createdAt (N),showRoster (BOOL),showFeed (BOOL),showBookClub (BOOL)
-yorkshire,YORKSHIRE,Yorkshire,1720200000000,true,true,false
-book-club,BOOKCLUB,Book Club,1720201000000,false,false,true
-cedar-house,CEDAR7X,Cedar House,1720260000000,true,false,true
+"TABLE RoommateStatus-main-groups - households / groups (one item per household). The JoinCodeIndex GSI (partition key joinCode, ProjectionType ALL) powers join-by-code lookups. enabledModules is the group-wide admin-managed list of visible UI surfaces; disabling one preserves its data."
+groupId (S),joinCode (S),name (S),createdAt (N),enabledModules (L of S)
+yorkshire,YORKSHIRE,Yorkshire,1720200000000,"[""roster"",""events"",""requests"",""checklists"",""polls"",""tv"",""spotify""]"
+book-club,BOOKCLUB,Book Club,1720201000000,"[""spotify"",""book-club"",""forums""]"
+cedar-house,CEDAR7X,Cedar House,1720260000000,"[""roster"",""spotify"",""book-club"",""forums""]"

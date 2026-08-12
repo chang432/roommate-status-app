@@ -1,0 +1,7 @@
+.button {
+  @apply h-9 w-9;
+}
+
+.icon {
+  @apply h-full w-full object-contain;
+}
