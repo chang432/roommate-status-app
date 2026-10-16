@@ -1,0 +1,92 @@
+ACTIONS NEEDED — one-VPS, two-cluster deployment
+================================================
+
+Context: dev and prod now run as separate compose clusters on a single OVH
+VPS, behind a shared edge proxy that owns 80/443. See docs/deployment.md for
+the architecture. The steps below are the manual (outside-the-repo) changes
+that the code change cannot make for itself. Until step 1 is done, deploys
+fail fast with "OVH_VPS_IP is empty".
+
+Delete this file once every box is checked.
+
+
+1. GitHub repository VARIABLES
+   Settings > Secrets and variables > Actions > Variables
+
+   [ ] Add     OVH_VPS_IP         public IPv4 of the one VPS that will host
+                                  both clusters (pick whichever of the two
+                                  existing OVH boxes you want to keep)
+   [ ] Delete  OVH_DEV_VPS_IP     replaced by OVH_VPS_IP
+   [ ] Delete  OVH_MAIN_VPS_IP    replaced by OVH_VPS_IP
+   [ ] Confirm DEV_SITE_DOMAIN    dev hostname, e.g. dev.roomie-status.in
+   [ ] Confirm MAIN_SITE_DOMAIN   prod hostname, e.g. roomie-status.in
+   [ ] Confirm VAPID_SUBJECT      mailto: contact for Web Push
+
+   DEV_SITE_DOMAIN and MAIN_SITE_DOMAIN are now BOTH required on EVERY
+   deploy, including a dev-only one: the shared edge proxy configures both
+   sites from one Caddyfile, and Caddy cannot parse an empty site address.
+   A missing one fails the deploy before it touches the box.
+
+
+2. GitHub repository SECRETS
+   Settings > Secrets and variables > Actions > Secrets
+
+   [ ] Confirm OVH_SSH_PASSWORD   password of the "ubuntu" user on the VPS
+                                  kept in step 1. Only one box is used now,
+                                  so the passwords no longer have to match
+                                  across machines.
+   [ ] Confirm GH_PAT_REPO_READ, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+       AWS_REGION, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY  — unchanged by this
+       work; listed only so a fresh box isn't missing any.
+
+
+3. DNS
+   [ ] Point the A record for DEV_SITE_DOMAIN  at OVH_VPS_IP
+   [ ] Point the A record for MAIN_SITE_DOMAIN at OVH_VPS_IP
+
+   Certificates are issued over HTTP-01, so issuance only succeeds once both
+   names resolve to this box. Do this BEFORE the first deploy if you can: a
+   deploy still succeeds without it (the cluster health check passes), but
+   the public-path smoke test will log a warning and that site serves no
+   valid cert until DNS propagates.
+
+
+4. VPS firewall / OVH security group
+   [ ] Allow inbound TCP 80 and 443 (edge proxy: HTTP-01 challenge, the
+       HTTP->HTTPS redirect, and the TLS-served sites)
+   [ ] Allow inbound TCP 22 (the deploy SSHes in)
+   [ ] Do NOT open 8000 or 8001. The backends are published on 127.0.0.1
+       only, for the deploy's health check; they must stay unreachable from
+       the internet.
+
+
+5. First deploy
+   [ ] Merge to dev (or run the "Deploy dev" workflow manually), watch it go
+       green, then merge to main / run "Deploy prod".
+
+   Nothing to do by hand on the box. The pipeline installs Docker if needed,
+   creates the external roomie-edge network, and removes the pre-split
+   single-cluster stack (/opt/roommate-status-app and the old roomie-backend
+   / roomie-frontend containers) which would otherwise keep holding 80/443.
+
+
+6. Verify
+   [ ] curl -fsS https://$DEV_SITE_DOMAIN/api/health
+   [ ] curl -fsS https://$MAIN_SITE_DOMAIN/api/health
+   [ ] On the box: sudo docker ps --format '{{.Names}}\t{{.Ports}}'
+       Expect exactly these five containers:
+         roomie-edge              0.0.0.0:80->80, 0.0.0.0:443->443
+         roomie-dev-frontend      (no published ports)
+         roomie-dev-backend       127.0.0.1:8001->8000
+         roomie-prod-frontend     (no published ports)
+         roomie-prod-backend      127.0.0.1:8000->8000
+   [ ] Confirm the two sites show different data (dev reads
+       RoommateStatus-dev*, prod reads RoommateStatus-main*).
+
+
+7. Decommission
+   [ ] Once BOTH sites are verified healthy on the one box, destroy the
+       now-unused second OVH VPS and remove any DNS records still aimed at
+       it. Keep it until then: it is the rollback path.
+   [ ] The Hetzner boxes, if any still exist, are also unused — their
+       workflows were deleted in this change.

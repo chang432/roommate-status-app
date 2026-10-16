@@ -85,6 +85,10 @@ from one Caddyfile, and Caddy cannot parse an empty site address. Point both
 hostnames' DNS at `OVH_VPS_IP` — the certs are issued over HTTP-01, so issuance
 only succeeds once DNS resolves to the box.
 
+While the move to one VPS is still in progress, [`../ACTIONS_NEEDED.txt`](../ACTIONS_NEEDED.txt)
+is the checklist of the outside-the-repo steps (variables, DNS, firewall,
+decommissioning the second box); delete it once it is all done.
+
 | Secret                                            | Purpose                             |
 | ------------------------------------------------- | ----------------------------------- |
 | `OVH_SSH_PASSWORD`                                | Password for the VPS `ubuntu` user  |
