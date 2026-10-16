@@ -19,8 +19,10 @@
 #   - roomie-infra : infrastructure/docker-compose.dynamodb-local.yml — the
 #     in-memory DynamoDB Local + a one-off table-creator. Can be run on its own.
 #   - roomie-app   : docker/docker-compose.yml + docker-compose.local.yml — the
-#     app (plain-HTTP Caddy locally), pointed at the DB via DYNAMODB_ENDPOINT and
-#     attached to the shared network.
+#     app cluster, pointed at the DB via DYNAMODB_ENDPOINT and attached to the
+#     shared network. It is the same cluster definition the VPS deploys, minus
+#     the edge proxy: DEPLOY_ENV defaults to "local" (so images/containers are
+#     named roomie-local-*) and the local override publishes :80 and :8000.
 # http://localhost is still a browser secure context, so service workers / the
 # push API work locally; the real iPhone push test needs the VPS deploy.
 #
@@ -53,11 +55,6 @@ INFRA_PROJECT="roomie-infra"
 # Absolute path to infrastructure/, consumed by its compose file to mount the
 # table-creator script regardless of the compose project directory.
 export INFRA_DIR="$ROOT_DIR/infrastructure"
-
-# The base compose file requires SITE_DOMAIN (for the VPS's TLS cert). Locally
-# the override serves plain HTTP and ignores it, but the variable still has to
-# be set so the base file's interpolation guard passes — give it a placeholder.
-export SITE_DOMAIN="${SITE_DOMAIN:-localhost}"
 
 # Table name the local tables are created under (plus the -activities and
 # -pushsubs suffixes the app derives). Exported so the infra table-creator, the

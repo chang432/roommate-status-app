@@ -2,3 +2,8 @@
 venv
 frontend/playwright-report/
 frontend/test-results/
+
+# Compose env files the deploy writes on the VPS (hold AWS/VAPID values; see
+# docs/deployment.md). Never committed, but keep them unstageable by accident.
+docker/deploy.env
+docker/edge/deploy.env

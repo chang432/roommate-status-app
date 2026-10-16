@@ -1,0 +1,39 @@
+# Deploy-time overlay for one app cluster on the shared VPS. Layer it on the
+# base file (which deliberately publishes nothing and knows no hostname):
+#
+#   docker compose -p roomie-dev \
+#     -f docker/docker-compose.yml -f docker/docker-compose.deploy.yml up -d
+#
+# It adds the two things a co-located cluster needs:
+#
+#   1. Caddy joins the external `roomie-edge` network under a stable,
+#      per-environment DNS alias. That alias is the only name the shared edge
+#      proxy (docker/edge/) knows this cluster by, so it must match the
+#      upstreams in docker/edge/Caddyfile.
+#   2. Flask is published on loopback only, on a per-environment port, so the
+#      deploy can health-check the backend directly without exposing it to the
+#      internet or colliding with the other cluster's port.
+#
+# Used by .github/workflows/deploy_vps.yml; DEPLOY_ENV and BACKEND_PORT are
+# required (the base file's defaults are for local dev, where neither applies).
+
+# Owned by neither cluster: created once with `docker network create roomie-edge`
+# and shared with the edge project, so tearing a cluster down leaves it intact.
+networks:
+  roomie-edge:
+    external: true
+
+services:
+  flask:
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:?BACKEND_PORT is required (dev 8001, prod 8000)}:8000"
+
+  caddy:
+    networks:
+      # `default` is the cluster-internal network Caddy reaches flask on. It has
+      # to be named explicitly: declaring any network for a service replaces the
+      # implicit default rather than adding to it.
+      default: {}
+      roomie-edge:
+        aliases:
+          - "roomie-${DEPLOY_ENV:?DEPLOY_ENV is required (dev or prod)}-frontend"

@@ -1,24 +1,33 @@
-# Builds and runs the full Roomie Status stack: the Flask backend and the
-# Caddy container that serves the React frontend, proxies /api to Flask, and
-# terminates HTTPS with a Let's Encrypt cert issued via HTTP-01.
+# Builds and runs one Roomie Status app *cluster*: the Flask backend and the
+# Caddy container that serves the React frontend and proxies /api to Flask.
 #
-# SITE_DOMAIN must be set to the public hostname the cert is issued for, e.g.
-#   SITE_DOMAIN=dev.example.com docker compose up --build
-# then open https://$SITE_DOMAIN
+# A cluster publishes no host ports and terminates no TLS. Public HTTPS belongs
+# to the shared edge proxy (docker/edge/docker-compose.yml), which routes by
+# hostname into each cluster — that is what lets the dev and prod clusters live
+# on the same VPS. Everything that must not collide between two clusters on one
+# host (image tags, container names) is keyed by DEPLOY_ENV, and the clusters
+# are kept apart by their compose project names:
+#
+#   DEPLOY_ENV=dev BACKEND_PORT=8001 docker compose -p roomie-dev \
+#     -f docker/docker-compose.yml -f docker/docker-compose.deploy.yml \
+#     up -d --build
+#
+# Local dev layers docker-compose.local.yml instead, which publishes the ports
+# and points the app at DynamoDB Local; see start.sh.
 
 services:
   flask:
     build:
       # Flask Dockerfile and source live in docker/flask.
       context: ./flask
-    image: roomie-backend
-    container_name: roomie-backend
+    # Tag per cluster: a dev build must never move the tag whose image the prod
+    # containers were created from (and vice versa).
+    image: roomie-backend:${DEPLOY_ENV:-local}
+    container_name: roomie-${DEPLOY_ENV:-local}-backend
     expose:
-      # Reachable to other compose services (caddy) as flask:8000. Also mapped
-      # to the host below for direct backend access / debugging.
+      # Reachable to other services in this cluster (caddy) as flask:8000. The
+      # deploy overlay also publishes it on loopback for health checks.
       - "8000"
-    ports:
-      - "8000:8000"
     environment:
       # DynamoDB table the backend reads/writes. Defaults to the production
       # table (infrastructure/dynamodb-table-main.yaml); the dev deployment
@@ -37,7 +46,7 @@ services:
     volumes:
       # Mount the host's AWS credentials read-only so boto3 in the Flask app can
       # use them. The container runs as root, so they land in /root/.aws where
-      # the AWS SDK looks by default.
+      # the AWS SDK looks by default. Both clusters share one credentials file.
       - "${HOME}/.aws:/root/.aws:ro"
     restart: unless-stopped
 
@@ -47,26 +56,12 @@ services:
       # Caddyfile under docker/caddy.
       context: ..
       dockerfile: docker/caddy/Dockerfile
-    image: roomie-frontend
-    container_name: roomie-frontend
-    ports:
-      # 80 for the automatic HTTP->HTTPS redirect, 443 for the TLS-served site.
-      - "80:80"
-      - "443:443"
-    environment:
-      # Public hostname the TLS cert is issued for. Required; the stack refuses
-      # to start without it so Caddy never tries to provision a cert for a
-      # placeholder. Each VPS sets its own (dev. vs apex).
-      - SITE_DOMAIN=${SITE_DOMAIN:-dev.roomie-status.in}
-    volumes:
-      # Persist issued certs + ACME account across rebuilds so every deploy
-      # doesn't re-issue (and risk hitting Let's Encrypt rate limits).
-      - "caddy_data:/data"
-      - "caddy_config:/config"
+    image: roomie-frontend:${DEPLOY_ENV:-local}
+    container_name: roomie-${DEPLOY_ENV:-local}-frontend
+    expose:
+      # Plain HTTP, reached by the edge proxy (deploy) or published to the host
+      # (local). Nothing here listens on 443.
+      - "80"
     depends_on:
       - flask
     restart: unless-stopped
-
-volumes:
-  caddy_data:
-  caddy_config:

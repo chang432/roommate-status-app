@@ -1,0 +1,24 @@
+# Shared edge proxy for every Roomie Status cluster on the VPS.
+#
+# This is the only Caddy on the box bound to the host's 80/443. It terminates
+# TLS (Let's Encrypt, HTTP-01 on port 80) for both public hostnames and forwards
+# each one to the matching app cluster's Caddy over the external `roomie-edge`
+# network, addressing it by the alias docker/docker-compose.deploy.yml registers
+# (`roomie-<env>-frontend`).
+#
+# The hostnames come from the environment (set by the deploy workflow from the
+# DEV_SITE_DOMAIN / MAIN_SITE_DOMAIN repository variables) so no domain is
+# hard-coded here. Upstream names are resolved per request, not at startup, so
+# the edge comes up and keeps serving one site while the other cluster is down,
+# mid-redeploy, or not created yet — a dev deploy can never take prod offline.
+#
+# Compression is left to the cluster's own Caddy: the client's Accept-Encoding
+# is forwarded as-is, so responses are compressed once, at the origin.
+
+{$DEV_SITE_DOMAIN} {
+	reverse_proxy roomie-dev-frontend:80
+}
+
+{$MAIN_SITE_DOMAIN} {
+	reverse_proxy roomie-prod-frontend:80
+}
