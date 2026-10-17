@@ -98,15 +98,17 @@ Already-applied earlier migrations are left in place.
 
 ## Pipeline
 
-`.github/workflows/on_merge_{dev,main}.yml` run a `provision-and-migrate` job
-that `needs:` the app-deploy job, so it runs **after** the app is redeployed to
-the VPS. That job first runs `deploy.py` (CloudFormation create/update — a no-op
-when the templates are unchanged) so the tables exist, then runs the migration
-runner. The runner is a no-op when nothing is pending, so it always runs — you
-never wire a migration into CI by hand. Because the app is already live when
-migrations run, write migrations backward-compatibly (deploy tolerant code
-first, migrate after); a failed migration is auto-reverted and fails the job but
-does not roll back the deploy.
+`.github/workflows/on_merge_{dev,main}.yml` both call the shared
+`deploy_vps.yml` pipeline, whose three jobs run in order: `provision` →
+`deploy` → `migrate`. `provision` runs `deploy.py` (CloudFormation
+create/update — a no-op when the templates are unchanged) so the tables exist
+before the new code can read them; `migrate` `needs:` the deploy job, so the
+runner only moves rows **after** the app cluster is redeployed on the VPS. The
+runner is a no-op when nothing is pending, so it always runs — you never wire a
+migration into CI by hand. Because the app is already live when migrations run,
+write migrations backward-compatibly (deploy tolerant code first, migrate
+after); a failed migration is auto-reverted and fails the job but does not roll
+back the deploy.
 
 ## Tests
 

@@ -1,0 +1,53 @@
+# The shared edge proxy: the only cluster on the VPS that binds the host's
+# 80/443, and the only one that holds TLS certs.
+#
+# It is a separate compose project on purpose. Redeploying the dev or prod app
+# cluster must not recreate the container that owns the public ports and the
+# Let's Encrypt certs for *both* sites, so the edge has its own lifecycle and is
+# only ever brought `up` (never `down`) by a deploy. Run it as:
+#
+#   docker network create roomie-edge     # once; external, owned by no project
+#   DEV_SITE_DOMAIN=dev.example.com MAIN_SITE_DOMAIN=example.com \
+#     docker compose -p roomie-edge -f docker/edge/docker-compose.yml up -d
+#
+# The app clusters join the same external network and are reached by the
+# per-environment aliases set in docker/docker-compose.deploy.yml. Editing the
+# Caddyfile needs no recreate — the deploy reloads Caddy in place, which keeps
+# both sites serving.
+
+networks:
+  roomie-edge:
+    external: true
+
+services:
+  caddy:
+    # Plain upstream image: there is nothing to build here, only config.
+    image: caddy:2.10-alpine
+    container_name: roomie-edge
+    ports:
+      # 80 for the automatic HTTP->HTTPS redirect and the ACME HTTP-01
+      # challenge, 443 for the TLS-served sites.
+      - "80:80"
+      - "443:443"
+    environment:
+      # Public hostnames the certs are issued for, one per cluster. Required:
+      # Caddy cannot parse a site block with an empty address, so a missing
+      # variable fails the deploy here rather than half-configuring the edge.
+      - DEV_SITE_DOMAIN=${DEV_SITE_DOMAIN:?DEV_SITE_DOMAIN is required}
+      - MAIN_SITE_DOMAIN=${MAIN_SITE_DOMAIN:?MAIN_SITE_DOMAIN is required}
+    volumes:
+      # Mounted, not baked, so a config change is a reload instead of a rebuild.
+      # Relative to this compose file's directory.
+      - "./Caddyfile:/etc/caddy/Caddyfile:ro"
+      # Persist issued certs + the ACME account across restarts so every deploy
+      # doesn't re-issue (and risk hitting Let's Encrypt rate limits). One store
+      # for both sites, since one Caddy issues both.
+      - "caddy_data:/data"
+      - "caddy_config:/config"
+    networks:
+      - roomie-edge
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

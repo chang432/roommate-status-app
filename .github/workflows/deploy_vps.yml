@@ -1,0 +1,371 @@
+name: Deploy a cluster to the OVH VPS
+
+# Reusable deploy pipeline, called once per environment by on_merge_dev.yml and
+# on_merge_main.yml. Both environments live on the *same* OVH machine (the IP in
+# the OVH_VPS_IP repo variable) as two independent compose clusters:
+#
+#   roomie-edge   docker/edge/docker-compose.yml  — the only container bound to
+#                 the host's 80/443; terminates TLS for both hostnames and
+#                 routes by Host into the clusters below. Brought up (never
+#                 down) by every deploy, so neither environment's redeploy can
+#                 take the other's site offline.
+#   roomie-dev    /opt/<repo>-dev   + DEPLOY_ENV=dev,  backend on 127.0.0.1:8001
+#   roomie-prod   /opt/<repo>-prod  + DEPLOY_ENV=prod, backend on 127.0.0.1:8000
+#
+# Everything that would otherwise collide between the two is keyed by the
+# environment: the compose project name, the checkout directory, the image tags
+# and container names (DEPLOY_ENV, see docker/docker-compose.yml), the loopback
+# backend port, and the DynamoDB table. The deploy job also takes a VPS-wide
+# concurrency lock so a dev and a prod merge can't drive docker on the box at
+# the same time.
+#
+# Required configuration (Settings > Secrets and variables > Actions):
+#   OVH_VPS_IP         repository *variable*: the machine's public IPv4 address
+#   DEV_SITE_DOMAIN    repository *variables*: public hostnames for the two
+#   MAIN_SITE_DOMAIN   clusters. Both are required on every run, because the
+#                      shared edge proxy configures both sites at once.
+#   VAPID_SUBJECT      repository *variable*: mailto: contact for Web Push
+#   OVH_SSH_PASSWORD   repository *secret*: password of the machine's "ubuntu"
+#                      user (OVH Ubuntu images disable root login; sshd must
+#                      allow password auth, and "ubuntu" must keep its default
+#                      passwordless sudo or the non-interactive script below
+#                      will hang)
+#   GH_PAT_REPO_READ   repository *secret*: read-only PAT used to clone
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION  repository
+#                      *secrets*: DynamoDB access for CloudFormation, the
+#                      migration runner, and the Flask containers
+#   VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY  repository *secrets*; empty disables
+#                      push (the app still runs)
+
+on:
+  workflow_call:
+    inputs:
+      deploy_env:
+        description: 'Which cluster to deploy: "dev" or "prod".'
+        required: true
+        type: string
+      branch:
+        description: "Branch to check out on the VPS."
+        required: true
+        type: string
+      backend_port:
+        description: "Loopback port this cluster's Flask is published on (dev 8001, prod 8000)."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # Provision the DynamoDB infrastructure *before* the app is redeployed:
+  # CloudFormation owns table structure (keys, indexes), and code that reads
+  # a new table or index must not go live before that structure exists, or
+  # every affected request fails outright. A no-op when the templates are
+  # unchanged, so this runs on every merge.
+  provision:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies (boto3)
+        run: pip install -r infrastructure/requirements.txt
+      - name: Deploy DynamoDB infrastructure
+        # The dev deployment's stack/tables are -dev, the prod one's are -main.
+        run: python infrastructure/deploy.py ${{ inputs.deploy_env == 'prod' && '--main' || '--dev' }}
+
+  deploy:
+    needs: provision
+    runs-on: ubuntu-latest
+    # One deploy at a time on the shared machine: two runs installing packages,
+    # writing /root/.aws and driving docker concurrently can race. The group is
+    # deliberately not per-environment, and queued runs wait rather than cancel
+    # so a merge is never silently dropped.
+    concurrency:
+      group: ovh-vps-deploy
+      cancel-in-progress: false
+    steps:
+      # The SSH action fails opaquely on an empty host, so check the repo
+      # variable up front with a message that says where to set it.
+      - name: Require the VPS IP
+        env:
+          VPS_IP: ${{ vars.OVH_VPS_IP }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VPS_IP}" ]; then
+            echo "::error::OVH_VPS_IP is empty. Set it under Settings > Secrets and variables > Actions > Variables."
+            exit 1
+          fi
+          echo "VPS public IP: ${VPS_IP}"
+
+      - name: SSH in, clone if needed, rebuild and run
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          REPO_FULL: ${{ github.repository }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          BRANCH: ${{ inputs.branch }}
+          GH_PAT_REPO_READ: ${{ secrets.GH_PAT_REPO_READ }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          # Names this cluster's project, checkout dir, images and containers.
+          DEPLOY_ENV: ${{ inputs.deploy_env }}
+          # Loopback-only port the backend is published on for the health check.
+          BACKEND_PORT: ${{ inputs.backend_port }}
+          # Both hostnames: the shared edge proxy serves both sites from one
+          # config, so a deploy of either cluster rewrites the whole edge.
+          DEV_SITE_DOMAIN: ${{ vars.DEV_SITE_DOMAIN }}
+          MAIN_SITE_DOMAIN: ${{ vars.MAIN_SITE_DOMAIN }}
+          # This cluster's own hostname, used only to smoke-test through the edge.
+          SITE_DOMAIN: ${{ inputs.deploy_env == 'prod' && vars.MAIN_SITE_DOMAIN || vars.DEV_SITE_DOMAIN }}
+          # Each cluster has its own DynamoDB tables; they can never share data.
+          ROOMMATE_TABLE: ${{ inputs.deploy_env == 'prod' && 'RoommateStatus-main' || 'RoommateStatus-dev' }}
+          # Web Push (VAPID) keys; empty => push disabled. Generate with
+          # docker/flask/gen_vapid.py and store as repo secrets.
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+        with:
+          host: ${{ vars.OVH_VPS_IP }}
+          # OVH's stock Ubuntu images disable root login; "ubuntu" is the
+          # default (passwordless-sudo) user, so the script below escalates
+          # with sudo where root is needed.
+          username: ubuntu
+          # Password auth; the instance's sshd must permit it for "ubuntu".
+          password: ${{ secrets.OVH_SSH_PASSWORD }}
+          port: 22
+          envs: REPO_FULL,REPO_NAME,BRANCH,GH_PAT_REPO_READ,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,DEPLOY_ENV,BACKEND_PORT,DEV_SITE_DOMAIN,MAIN_SITE_DOMAIN,SITE_DOMAIN,ROOMMATE_TABLE,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY,VAPID_SUBJECT
+          script: |
+            set -euo pipefail
+
+            # --- Require both TLS hostnames before doing any work -----------
+            # The edge proxy owns a site block per cluster and Caddy cannot
+            # parse an empty site address, so a deploy of *either* cluster
+            # needs both names. Fail loudly and early rather than mid-deploy.
+            if [ -z "${DEV_SITE_DOMAIN:-}" ] || [ -z "${MAIN_SITE_DOMAIN:-}" ]; then
+              echo "DEV_SITE_DOMAIN and MAIN_SITE_DOMAIN must both be set as repository variables." >&2
+              exit 1
+            fi
+
+            # --- Ensure Docker is installed ---------------------------------
+            # The VPS may be a bare box; install Docker + the compose plugin
+            # from Docker's apt repo if they aren't already present. Running as
+            # "ubuntu", so every privileged step goes through sudo (passwordless
+            # by default for the cloud image's initial user).
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "Docker not found; installing…"
+              export DEBIAN_FRONTEND=noninteractive
+              sudo -E apt-get update -y
+              sudo -E apt-get install -y ca-certificates curl gnupg
+              sudo install -m 0755 -d /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+                | sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg
+              sudo chmod a+r /etc/apt/keyrings/docker.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+                | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+              sudo -E apt-get update -y
+              sudo -E apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+              sudo systemctl enable --now docker
+            fi
+            sudo docker --version
+            sudo docker compose version
+
+            # --- AWS credentials for the Flask containers -------------------
+            # docker-compose mounts ${HOME}/.aws read-only into the Flask
+            # container (boto3 -> DynamoDB); the edge gets its TLS certs via the
+            # HTTP-01 challenge and needs no AWS access. Compose runs under
+            # `sudo -H` below, so HOME resolves to /root; keep the creds there
+            # (root-owned, mode 600) rather than in ubuntu's home. Both clusters
+            # use the same credentials — they are isolated by table name.
+            sudo install -d -m 700 /root/.aws
+            sudo tee /root/.aws/credentials >/dev/null <<EOF
+            [default]
+            aws_access_key_id=${AWS_ACCESS_KEY_ID}
+            aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}
+            EOF
+            sudo tee /root/.aws/config >/dev/null <<EOF
+            [default]
+            region=${AWS_REGION:-us-east-1}
+            EOF
+            sudo chmod 600 /root/.aws/credentials /root/.aws/config
+
+            # --- Retire the pre-split single-cluster stack ------------------
+            # Before dev and prod shared this box, a deploy ran one unnamed
+            # compose project out of /opt/<repo> whose Caddy bound the host's
+            # 80/443 and whose containers had fixed names. Left running it would
+            # keep the edge proxy from binding those ports, so remove it once.
+            # Idempotent: a no-op on a box that never had it.
+            LEGACY_DIR="/opt/${REPO_NAME}"
+            if [ -f "${LEGACY_DIR}/docker/docker-compose.yml" ]; then
+              echo "Removing the pre-split stack at ${LEGACY_DIR}."
+              sudo -H docker compose -f "${LEGACY_DIR}/docker/docker-compose.yml" down --remove-orphans || true
+              sudo rm -rf "${LEGACY_DIR}"
+            fi
+            for legacy_container in roomie-backend roomie-frontend; do
+              sudo docker rm -f "${legacy_container}" >/dev/null 2>&1 || true
+            done
+
+            # --- Clone the repo if it isn't already on the VPS --------------
+            # One checkout per cluster: dev tracks the dev branch and prod main,
+            # so they must not share a working tree. /opt is root-owned; create
+            # the app dir owned by ubuntu so git can run unprivileged (mixed-
+            # ownership repos also trip git's safe.directory check).
+            APP_DIR="/opt/${REPO_NAME}-${DEPLOY_ENV}"
+            sudo install -d -o "$(id -un)" -g "$(id -gn)" "${APP_DIR}"
+            CLONE_URL="https://${GH_PAT_REPO_READ}@github.com/${REPO_FULL}.git"
+            if [ -d "${APP_DIR}/.git" ]; then
+              # Already cloned: fast-forward to the latest branch tip so the
+              # merge that triggered this run is what actually gets deployed.
+              echo "Repo already present at ${APP_DIR}; updating to origin/${BRANCH}."
+              cd "${APP_DIR}"
+              git remote set-url origin "${CLONE_URL}"
+              git fetch --no-tags origin "${BRANCH}"
+              git reset --hard "origin/${BRANCH}"
+            else
+              echo "Cloning ${REPO_FULL} (${BRANCH}) into ${APP_DIR}."
+              git clone --branch "${BRANCH}" "${CLONE_URL}" "${APP_DIR}"
+              cd "${APP_DIR}"
+            fi
+
+            # --- Compose environment ----------------------------------------
+            # Compose interpolates ${DEPLOY_ENV}, ${ROOMMATE_TABLE}, ${VAPID_*}
+            # and friends from *its own* process environment. Running compose
+            # under `sudo` scrubs those vars (sudo's env_reset), so they never
+            # reach compose and it silently falls back to the compose files'
+            # defaults (local container names, prod table, push disabled) no
+            # matter what this workflow passed in. Write them to env files
+            # compose reads directly, which sudo cannot strip.
+            umask 077
+            ENV_FILE="${APP_DIR}/docker/deploy.env"
+            cat > "${ENV_FILE}" <<EOF
+            DEPLOY_ENV=${DEPLOY_ENV}
+            BACKEND_PORT=${BACKEND_PORT}
+            ROOMMATE_TABLE=${ROOMMATE_TABLE}
+            AWS_REGION=${AWS_REGION:-us-east-1}
+            VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+            VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+            VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:andre888chang@gmail.com}
+            EOF
+            EDGE_ENV_FILE="${APP_DIR}/docker/edge/deploy.env"
+            cat > "${EDGE_ENV_FILE}" <<EOF
+            DEV_SITE_DOMAIN=${DEV_SITE_DOMAIN}
+            MAIN_SITE_DOMAIN=${MAIN_SITE_DOMAIN}
+            EOF
+
+            # --- The shared edge proxy --------------------------------------
+            # Owns the host's 80/443 and the certs for both sites, in its own
+            # compose project so redeploying an app cluster never recreates it.
+            # The network is external and created once; both the edge and the
+            # clusters attach to it.
+            #
+            # The edge config comes from *this* cluster's checkout, so whichever
+            # environment deployed last defines the routing for both sites.
+            # That is fine while docker/edge/ is identical on dev and main, and
+            # it means an edge change must be merged to main before dev can be
+            # trusted not to roll it back.
+            sudo docker network create roomie-edge >/dev/null 2>&1 || true
+            EDGE_COMPOSE_FILE="${APP_DIR}/docker/edge/docker-compose.yml"
+            edge_compose() {
+              sudo -H docker compose -p roomie-edge --env-file "${EDGE_ENV_FILE}" -f "${EDGE_COMPOSE_FILE}" "$@"
+            }
+            # `up -d` with no --force-recreate: compose only recreates when the
+            # image or the hostname env actually changed, so a routine app
+            # deploy leaves the live edge container (and its ports) alone.
+            edge_compose up -d
+            # The Caddyfile is a bind mount, so edits to it don't change the
+            # container config and don't trigger a recreate. Reload Caddy in
+            # place instead — unlike a restart, this never drops either site.
+            # Falls back to a restart if the admin API reload fails.
+            edge_compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
+              || edge_compose restart caddy
+
+            # --- Rebuild and run this cluster -------------------------------
+            # Run the compose commands directly (detached) rather than start.sh,
+            # which is built for interactive local dev (it deploys infra, tails
+            # logs in the foreground, and tears the stack down on exit). `up -d`
+            # returns immediately and leaves the stack running.
+            #
+            # -p scopes every container, network and volume to this cluster, so
+            # the `down` below tears down only this environment and leaves the
+            # other one serving. -H makes sudo set HOME=/root so the compose
+            # file's ${HOME}/.aws mount resolves to the credentials above.
+            COMPOSE_FILE="${APP_DIR}/docker/docker-compose.yml"
+            DEPLOY_COMPOSE_FILE="${APP_DIR}/docker/docker-compose.deploy.yml"
+            app_compose() {
+              sudo -H docker compose -p "roomie-${DEPLOY_ENV}" --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" -f "${DEPLOY_COMPOSE_FILE}" "$@"
+            }
+            # Clean rebuild + restart on every deploy: tear the old cluster down
+            # first, then rebuild the images from the freshly pulled source and
+            # force-recreate the containers so nothing stale survives.
+            app_compose down --remove-orphans || true
+            app_compose up --build -d --force-recreate
+
+            # --- Confirm the cluster actually came up -----------------------
+            echo "Waiting for the ${DEPLOY_ENV} backend on 127.0.0.1:${BACKEND_PORT} (up to ~4 min)…"
+            ok=0
+            for _ in $(seq 1 120); do
+              if curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
+                ok=1
+                break
+              fi
+              sleep 2
+            done
+
+            if [ "${ok}" -ne 1 ]; then
+              echo "Backend did not become healthy. Recent container logs:"
+              app_compose logs --tail 60 || true
+              exit 1
+            fi
+
+            # --- Smoke-test the public path through the edge -----------------
+            # Resolves the hostname to this box so the check exercises the real
+            # edge -> cluster route (TLS, Host matching, the alias) without
+            # depending on where public DNS currently points. A warning, not a
+            # failure: on a first deploy the cert can still be mid-issuance, and
+            # the cluster itself is already proven healthy above.
+            echo "Checking https://${SITE_DOMAIN}/api/health through the edge proxy…"
+            edge_ok=0
+            for _ in $(seq 1 15); do
+              if curl -fsS --resolve "${SITE_DOMAIN}:443:127.0.0.1" "https://${SITE_DOMAIN}/api/health" >/dev/null 2>&1; then
+                edge_ok=1
+                break
+              fi
+              sleep 4
+            done
+            if [ "${edge_ok}" -ne 1 ]; then
+              echo "::warning::The edge proxy did not serve https://${SITE_DOMAIN}/api/health yet (DNS must point at this box for the cert to issue). Recent edge logs:"
+              edge_compose logs --tail 40 || true
+            fi
+
+            echo "Deploy succeeded; the ${DEPLOY_ENV} cluster is running."
+
+  # In-place data migrations run *after* the app is redeployed, so the live
+  # code already tolerates both the old and new row shapes by the time rows
+  # move. A failed migration is auto-reverted and fails this job, but does
+  # not roll back the deploy. The runner is a no-op when nothing is pending.
+  migrate:
+    needs: deploy
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies (boto3)
+        run: pip install -r infrastructure/requirements.txt
+      - name: Apply pending DynamoDB migrations
+        run: python infrastructure/migrations/runner.py --env ${{ inputs.deploy_env }}

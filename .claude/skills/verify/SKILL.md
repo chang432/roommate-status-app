@@ -13,7 +13,9 @@ projects joined by the external `roomie-shared` network:
   (infrastructure/docker-compose.dynamodb-local.yml). Data is wiped when
   this project restarts, and reseeded by `./start.sh`.
 - `roomie-app` — Flask + Caddy (docker/docker-compose.yml +
-  docker-compose.local.yml).
+  docker-compose.local.yml). Same cluster definition the VPS deploys; the
+  local override publishes :80/:8000 and `DEPLOY_ENV` defaults to `local`,
+  so the containers are `roomie-local-backend` / `roomie-local-frontend`.
 
 ## Launch / redeploy
 
@@ -24,7 +26,7 @@ If the stack is already running and you changed backend or frontend code,
 rebuild just the app project (DB and seeded data survive):
 
 ```bash
-SITE_DOMAIN=localhost ROOMMATE_TABLE=RoommateStatus-dev \
+ROOMMATE_TABLE=RoommateStatus-dev \
   docker compose -p roomie-app \
   -f docker/docker-compose.yml -f docker/docker-compose.local.yml \
   up -d --build --force-recreate

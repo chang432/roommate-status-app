@@ -1,12 +1,15 @@
-# Caddy site config for the Roomie Status app.
+# Caddy site config for one Roomie Status app cluster.
 #
-# Serves the static React/Vite bundle, proxies /api to the Flask backend, and
-# terminates TLS with a Let's Encrypt cert obtained by Caddy's default HTTP-01
-# challenge. The public hostname comes from the SITE_DOMAIN env var so the same
-# image can serve the dev and main VPSs (dev. vs apex domain).
+# Serves the static React/Vite bundle and proxies /api to the Flask container.
+# Plain HTTP on :80 only: TLS and the public hostname are terminated one hop
+# earlier by the shared edge proxy (docker/edge/), which is what lets the dev
+# and prod clusters run side by side on one VPS without fighting over port 443
+# or over a cert. Locally this is also what http://localhost hits, so there is
+# one config for both.
 
-{$SITE_DOMAIN} {
-	# Compress responses; zstd preferred, gzip fallback.
+:80 {
+	# Compress responses; zstd preferred, gzip fallback. The edge forwards the
+	# client's Accept-Encoding untouched, so compression happens here, once.
 	encode zstd gzip
 
 	# API calls go to the Flask container (service name from docker-compose).
